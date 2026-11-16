@@ -45,7 +45,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaValueSpec FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaNominalSpec FlambdaNominalProofs
   FlambdaContextSpec FlambdaContextProofs FlambdaNormaliseSpec
-  FlambdaNormaliseProofs FlambdaStubCallsSpec.
+  FlambdaNormaliseProofs FlambdaEquivarianceTactic FlambdaStubCallsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -338,143 +338,22 @@ Proof. intros e. apply demote_in_stubs_refines_aux. Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
-Lemma demote_call_renamed (r : renaming) (ids : list code_id)
-    (ap : apply_expr) :
-  demote_call ids (rename_apply r ap) = rename_apply r (demote_call ids ap).
-Proof.
-  unfold demote_call. cbn [rename_apply ap_call_kind].
-  destruct (ap_call_kind ap) as [code | ] eqn:Hkind; [ | reflexivity ].
-  destruct (among code ids); [ | reflexivity ].
-  unfold rename_apply. cbn. reflexivity.
-Qed.
-
-Fixpoint demote_calls_renamed (r : renaming) (ids : list code_id) (e : expr)
-    {struct e} :
-  demote_calls ids (rename_expr r e) = rename_expr r (demote_calls ids e)
-with demote_calls_in_handler_renamed (r : renaming) (ids : list code_id)
-    (h : continuation_handler) {struct h} :
-  demote_calls_in_handler ids (rename_handler r h)
-  = rename_handler r (demote_calls_in_handler ids h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr demote_calls]; try reflexivity.
-    + rewrite (demote_calls_renamed r ids body). reflexivity.
-    + rewrite (demote_calls_renamed r ids body). reflexivity.
-    + rewrite (demote_calls_in_handler_renamed r ids h),
-        (demote_calls_renamed r ids body).
-      reflexivity.
-    + assert (Hhandlers :
-        map (fun '(k, h) => (k, demote_calls_in_handler ids h))
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        = map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-            (map (fun '(k, h) => (k, demote_calls_in_handler ids h))
-               handlers)).
-      { induction handlers as [ | [k h] handlers IH]; cbn [map];
-          [ reflexivity | ].
-        rewrite (demote_calls_in_handler_renamed r ids h), IH. reflexivity. }
-      rewrite (demote_calls_renamed r ids body), Hhandlers. reflexivity.
-    + rewrite demote_call_renamed. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler demote_calls_in_handler].
-    rewrite (demote_calls_renamed r ids handler). reflexivity.
-Qed.
-
-Lemma demote_in_stub_binding_renamed (r : renaming) (ids : list code_id)
-    (binding : static_binding) :
-  demote_in_stub_binding ids (rename_static_binding r binding)
-  = rename_static_binding r (demote_in_stub_binding ids binding).
-Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata code_body] | id | sym const];
-    cbn [rename_static_binding rename_code demote_in_stub_binding
-           code_is_stub];
-    [ | reflexivity | reflexivity ].
-  destruct (cm_is_stub metadata); [ | reflexivity ].
-  cbn [demote_calls_in_code rename_static_binding rename_code].
-  rewrite demote_calls_renamed. reflexivity.
-Qed.
-
-Fixpoint demote_in_stubs_renamed (r : renaming) (ids : list code_id)
-    (e : expr) {struct e} :
-  demote_in_stubs ids (rename_expr r e) = rename_expr r (demote_in_stubs ids e)
-with demote_in_stubs_of_handler_renamed (r : renaming) (ids : list code_id)
-    (h : continuation_handler) {struct h} :
-  demote_in_stubs_of_handler ids (rename_handler r h)
-  = rename_handler r (demote_in_stubs_of_handler ids h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr demote_in_stubs]; try reflexivity.
-    + rewrite (demote_in_stubs_renamed r ids body). reflexivity.
-    + rewrite (demote_in_stubs_renamed r ids body), !map_map.
-      f_equal. apply map_ext. intros binding.
-      apply demote_in_stub_binding_renamed.
-    + rewrite (demote_in_stubs_of_handler_renamed r ids h),
-        (demote_in_stubs_renamed r ids body).
-      reflexivity.
-    + assert (Hhandlers :
-        map (fun '(k, h) => (k, demote_in_stubs_of_handler ids h))
-          (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-             handlers)
-        = map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
-            (map (fun '(k, h) => (k, demote_in_stubs_of_handler ids h))
-               handlers)).
-      { induction handlers as [ | [k h] handlers IH]; cbn [map];
-          [ reflexivity | ].
-        rewrite (demote_in_stubs_of_handler_renamed r ids h), IH.
-        reflexivity. }
-      rewrite (demote_in_stubs_renamed r ids body), Hhandlers. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler demote_in_stubs_of_handler].
-    rewrite (demote_in_stubs_renamed r ids handler). reflexivity.
-Qed.
-
-Lemma binding_non_stub_code_renamed (r : renaming) (binding : static_binding) :
-  binding_non_stub_code (rename_static_binding r binding)
-  = binding_non_stub_code binding.
-Proof.
-  destruct binding
-    as [id [params my_closure ret exn metadata code_body] | id | sym const];
-    reflexivity.
-Qed.
-
-Fixpoint non_stub_code_renamed (r : renaming) (e : expr) {struct e} :
-  non_stub_code (rename_expr r e) = non_stub_code e
-with handler_non_stub_code_renamed (r : renaming) (h : continuation_handler)
-    {struct h} :
-  handler_non_stub_code (rename_handler r h) = handler_non_stub_code h.
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      cbn [rename_expr non_stub_code]; try reflexivity.
-    + apply non_stub_code_renamed.
-    + rewrite (non_stub_code_renamed r body). f_equal.
-      induction bindings as [ | binding bindings IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite binding_non_stub_code_renamed, IH. reflexivity.
-    + rewrite (handler_non_stub_code_renamed r h),
-        (non_stub_code_renamed r body).
-      reflexivity.
-    + rewrite (non_stub_code_renamed r body). f_equal.
-      induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
-        [ reflexivity | ].
-      rewrite (handler_non_stub_code_renamed r h), IH. reflexivity.
-  - destruct h as [params metadata handler].
-    cbn [rename_handler handler_non_stub_code].
-    apply non_stub_code_renamed.
-Qed.
+(* The law of the rewrite is proved from the definitions by the tactic
+   of FlambdaEquivarianceTactic.v, which states and proves by itself
+   the laws of the functions that the rewrite is made of. It needs one
+   step here. [non_stub_code] gives code ids, which a renaming does
+   not change, and at a recursive [Let_cont] it appends those of the
+   handlers and those of the body: the two lists are compared part by
+   part first, so that the tactic makes no induction on the handlers
+   for the append. *)
+#[local] Ltac eqv_extra ::=
+  lazymatch goal with
+  | |- _ ++ _ = _ ++ _ => f_equal
+  end.
 
 Theorem demote_stub_calls_equivariant :
   demote_stub_calls_equivariant_statement.
-Proof.
-  intros r e. unfold demote_stub_calls.
-  rewrite non_stub_code_renamed. apply demote_in_stubs_renamed.
-Qed.
+Proof. equivariance. Qed.
 
 (* ======================================================================== *)
 (* A unit, and a call                                                       *)
