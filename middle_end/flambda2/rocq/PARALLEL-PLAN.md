@@ -7,7 +7,7 @@ and the rules the agents follow so that they do not.
 
 Read first: `rocq/HACKING.md` ("The semantics of Flambda 2"),
 `ROCQ-REVIEW-GUIDE.md`, and the header comment of each `*Spec.v` file in
-this directory and in `../types/rocq/`.
+the folders of this directory (`README.md` has the tree).
 
 ## 1. Where things stand
 
@@ -25,14 +25,14 @@ About 14,000 lines of Rocq, 82 proved statements, no admitted proofs.
 - **Validation.** `FlambdaValidateSpec.validate_unit` is one extracted
   function: it normalises the term before and the term after Simplify by
   proved rewrites (`FlambdaNormalise*`, `FlambdaUnusedStatics*`,
-  `../types/rocq/FlambdaAliases*`), and compares them
+  `types/naive/FlambdaAliases*`), and compares them
   (`FlambdaCompare*`). `validate_unit_sound` says that what it accepts is
   a correct simplification of the unit run from empty environments.
 - **Tests.** `../tests/semantics/` holds `.fl` examples;
   `../tests/tools/flsemantics.ml` runs the real Simplify on each and
   calls `validate_unit`. Fifteen of eighteen are validated; the other
   three are deliberately not checkable.
-- **Types.** `../types/rocq/` is a first, naive model: four type
+- **Types.** `types/naive/` is a first, naive model: four type
   constructors, a typing environment as a list, alias following.
 
 What is missing, roughly in order of how much it limits us:
@@ -229,7 +229,7 @@ parallel; they still land one at a time. C4 and C5 should follow.
 
 The types library needs the *values* of the machine and little else, so
 it can run in parallel with the core changes. It lives in
-`types/rocq/`, library `OxCamlFlambda2Types`. The aim is a full,
+`types/` here, library `OxCamlFlambda2Types`. The aim is a full,
 standalone formalisation: grammar, meaning, environment, meet, join,
 provers, each extracted and compared with the OCaml.
 

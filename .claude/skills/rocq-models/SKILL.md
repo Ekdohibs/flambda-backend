@@ -1,6 +1,6 @@
 ---
 name: rocq-models
-description: Change or add a Rocq model of a compiler pass (the .v files under rocq/, backend/rocq/, backend/ssa/rocq/, backend/ssa/loop/rocq/, middle_end/flambda2/rocq/ and middle_end/flambda2/types/rocq/), regenerate the extracted OCaml, or fix a proof after a change to the modelled code.
+description: Change or add a Rocq model of a compiler pass (the .v files under rocq/, backend/rocq/, backend/ssa/rocq/, backend/ssa/loop/rocq/ and the folders of middle_end/flambda2/rocq/), regenerate the extracted OCaml, or fix a proof after a change to the modelled code.
 allowed-tools: Bash(make -C rocq all), Bash(make -C rocq clean), Bash(make -s boot-compiler), Bash(make -s fmt), Bash(git diff:*)
 ---
 

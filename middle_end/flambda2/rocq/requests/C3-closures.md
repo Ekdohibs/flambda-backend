@@ -579,7 +579,7 @@ none changes on the old ones.
   function_decls`), as `eval_named` now asks.
 - `FlambdaUnusedStaticsSpec.v`: `value_avoids`, `named_avoids`,
   `static_const_avoids`, `allocated_free_of`.
-- `types/rocq/FlambdaAliasesSpec.v`: `canonical_named`,
+- `rocq/types/naive/FlambdaAliasesSpec.v`: `canonical_named`,
   `canonical_static_const`, `typing_env_under_let`.
 
 Two of them do more than repeat a case. `symbols_of` records that a
@@ -1089,8 +1089,8 @@ Rocq, other owners:
   `FlambdaUnusedStaticsSpec.v` +24 −1,
   `FlambdaUnusedStaticsProofs.v` +199 −8.
   `FlambdaValidate*` build as they are.
-- T3: `types/rocq/FlambdaAliasesSpec.v` +12 −1,
-  `FlambdaAliasesProofs.v` +14 −3. `types/rocq/FlambdaTypes*`
+- T3: `rocq/types/naive/FlambdaAliasesSpec.v` +12 −1,
+  `FlambdaAliasesProofs.v` +14 −3. `rocq/types/naive/FlambdaTypes*`
   (T1) build as they are on the integration branch.
 - T1, on files that are not on the integration branch yet: its copies
   of `closure_in_set` and `project_function_slot`, which match on
@@ -1510,7 +1510,7 @@ Simplify. They are in the last commit.
   - no statement of an S stream is about `Set_of_closures` or
     `Project_value_slot` by name. Those that are (today
     `project_static_closure_statement` of `FlambdaStaticSpec.v`, and
-    the closure type of `types/rocq/FlambdaTypesSpec.v`, which says `v =
+    the closure type of `rocq/types/naive/FlambdaTypesSpec.v`, which says `v =
     Value_closure code slot_values`) are restated for the named forms
     in the request, which lists them;
   - C1's and C2's epochs have landed, since it renames constructors

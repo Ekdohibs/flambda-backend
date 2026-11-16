@@ -8,7 +8,7 @@ type keeps. It is for review by R1, and for T5 and T5b (the join), T2
 (the environment) and T1 (the types) to check what is asked of them.
 Section 14 says what changed since the first request.
 
-Files, in `middle_end/flambda2/types/rocq/`:
+Files, in `middle_end/flambda2/rocq/`:
 
 - `FlambdaMeetSpec.v`: the contract. To be reviewed.
 - `FlambdaMeetProofs.v`: its five closed statements, proved.

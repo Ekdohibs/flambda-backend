@@ -30,28 +30,28 @@ added and removed.
 
 | File | Owner | Lines | What changes |
 |------|-------|-------|--------------|
-| `rocq/FlambdaValueSpec.v` | C0 | +29 -1 | `location`; `Value_location` in `value`; `cell`, `heap`, `empty_heap`, `cell_of`. No observation changes: each has a wildcard, so a location is no closure, block, boxed number or string, and is not allocated. |
-| `rocq/FlambdaPrimitiveModel.v` | C1 (P1 adds to it) | +30 -1 | `cell_mutability`, `init_or_assign`, `heap_primitive` (two constructors, `Make_block_with_identity` and `Block_set`), and `Heap` in `prim`. `mutability`, `equality_comparison`, `Block_load` with its mutability and `Phys_equal` are P1's, and are used as they are. |
-| `rocq/FlambdaPrimitiveSpec.v` | C1 (the signature of `eval_prim` and the laws are C0's; neither changes) | +27 -1 | `result_kind_of_heap_primitive`, and a case of `prim_result_kind`. `access_in_range` and `heap_primitive_in_range`, and a case of `prim_in_range`: a primitive of the heap carries the numbers of the `Make_block` or the access that it stands for. `value_in_range`: a location is in range (it holds no number). `eval_prim` has a wildcard already: it has no value on `Heap _`, and treats a location as any value that no observation reads. |
-| `rocq/FlambdaPrimitiveProofs.v` | C1 | +8 -6 | `eval_prim_arity`: a fourth branch (`Heap`: no value). `eval_prim_static_values`, `eval_prim_statics_extend`: a fourth pattern in the destruct on `prim`. `eval_is_null_statics_extend`: a seventh pattern in the destruct on `value`. |
-| `rocq/FlambdaSemanticsProofs.v` | C0 | +3 -3 | `closure_in_set_of`, `closure_in_set_slot`, `project_function_slot_defined`: one more name in the pattern of the destruct on `value`; the existing catch-all branches take it. |
-| `rocq/FlambdaClosuresSpec.v` | C3 | +5 -2 | `value_valid`: a location is valid (there is nothing in it). `value_sets_are`: a location holds no closure, so the property of the closures in a value holds of it. |
-| `rocq/FlambdaClosuresProofs.v` | C3 | +6 -6 | Six destructs on `value` (among them `closure_in_set_valid`): one more name in the pattern; the existing catch-all branches take it. |
-| `rocq/FlambdaValidatorEquivarianceProofs.v` | N3 | +1 -1 | `block_made_equivariant`: a fourth pattern in the destruct on `prim`. |
-| `rocq/FlambdaBlockLoadProofs.v` | V2 | +2 -2 | `block_made_spec`, `unary_applied_spec`: a fourth pattern in the destruct on `prim`. |
-| `rocq/FlambdaIdentitiesProofs.v` | P1 | +2 -2 | `binary_applied_spec`, `identity_named_equivariant`: a fourth pattern in the destruct on `prim`. |
-| `rocq/FlambdaLiftProofs.v` | V3 | +4 -4 | `lift_named_lifted`, `lift_named_no_code`, `lift_named_rename`: a fourth pattern in the destruct on `prim`; in the first, one more pattern in a destruct on `value`. |
-| `rocq/FlambdaMyClosureProofs.v` | V3 | +5 -4 | `value_free` (a definition of the proofs: a value free of a code id): a location is free of it, as a constant is. `closure_of_free`, `closure_in_set_free`, `project_function_slot_free`: one more name in the pattern of the destruct on `value`. |
-| `rocq/FlambdaUnusedSlotsProofs.v` | V3 | +4 -2 | `closure_of_drop`, `closure_in_set_drop`: one more name in the pattern of the destruct on `value`. |
-| `rocq/FlambdaStaticsOrderProofs.v` | V2 | +2 -1 | `value_avoids_nothing`: one more name in the pattern of the destruct on `value`. C0 made this repair when it merged the series: the file came to the integration branch after the series was cut. |
-| `rocq/FlambdaUnusedStaticsSpec.v` | V1 (unassigned) | +1 | `value_avoids`: a location avoids every name. |
-| `rocq/FlambdaUnusedStaticsProofs.v` | V1 (unassigned) | +6 -3 | `closure_of_erased`, `closure_in_set_erased`, `project_function_slot_erased`: one more name in the pattern, and one more branch, that of a boxed number (no closure, nothing erased). |
-| `types/rocq/FlambdaTypeMeaningBoolSpec.v` | T1 | +1 | `value_eqb`: two locations are equal when they are the same location. Without it `value_eqb_decides_equality_statement` would be false: a location would not be equal to itself. |
-| `types/rocq/FlambdaTypeMeaningBoolProofs.v` | T1 | +11 -7 | `value_induction`: a hypothesis and a case for a location. `value_eqb_eq`: a branch for two locations. Three destructs on `value` (`is_poison_b_eq`, `relation_holds_b_eq`, `naked_numbers_satisfied_b_eq`): one more pattern. |
-| `types/rocq/FlambdaTypeMeaningProofs.v` | T1 | +13 -13 | Ten destructs on `value`: one more pattern, and one more empty branch where the destruct lists the branches. |
-| `rocq/FlambdaWellKindedSpec.v` | C2 | +3 -1 | `value_well_kinded`: a location is well kinded (there is nothing in it; the fields of its cell are for the heap's own condition, when the heap is in `state`). |
-| `rocq/FlambdaWellKindedProofs.v` | C2 | +3 -3 | Three destructs on `value`: one more name in the pattern; the existing catch-all branches take it. |
-| `types/rocq/FlambdaProversProofs.v` | T6 | +3 -3 | `tagged_immediate_of_value`, `eval_is_null_cases`: one more pattern in three destructs on `value`. |
+| `rocq/semantics/FlambdaValueSpec.v` | C0 | +29 -1 | `location`; `Value_location` in `value`; `cell`, `heap`, `empty_heap`, `cell_of`. No observation changes: each has a wildcard, so a location is no closure, block, boxed number or string, and is not allocated. |
+| `rocq/terms/FlambdaPrimitiveModel.v` | C1 (P1 adds to it) | +30 -1 | `cell_mutability`, `init_or_assign`, `heap_primitive` (two constructors, `Make_block_with_identity` and `Block_set`), and `Heap` in `prim`. `mutability`, `equality_comparison`, `Block_load` with its mutability and `Phys_equal` are P1's, and are used as they are. |
+| `rocq/semantics/FlambdaPrimitiveSpec.v` | C1 (the signature of `eval_prim` and the laws are C0's; neither changes) | +27 -1 | `result_kind_of_heap_primitive`, and a case of `prim_result_kind`. `access_in_range` and `heap_primitive_in_range`, and a case of `prim_in_range`: a primitive of the heap carries the numbers of the `Make_block` or the access that it stands for. `value_in_range`: a location is in range (it holds no number). `eval_prim` has a wildcard already: it has no value on `Heap _`, and treats a location as any value that no observation reads. |
+| `rocq/semantics/FlambdaPrimitiveProofs.v` | C1 | +8 -6 | `eval_prim_arity`: a fourth branch (`Heap`: no value). `eval_prim_static_values`, `eval_prim_statics_extend`: a fourth pattern in the destruct on `prim`. `eval_is_null_statics_extend`: a seventh pattern in the destruct on `value`. |
+| `rocq/semantics/FlambdaSemanticsProofs.v` | C0 | +3 -3 | `closure_in_set_of`, `closure_in_set_slot`, `project_function_slot_defined`: one more name in the pattern of the destruct on `value`; the existing catch-all branches take it. |
+| `rocq/semantics/FlambdaClosuresSpec.v` | C3 | +5 -2 | `value_valid`: a location is valid (there is nothing in it). `value_sets_are`: a location holds no closure, so the property of the closures in a value holds of it. |
+| `rocq/semantics/FlambdaClosuresProofs.v` | C3 | +6 -6 | Six destructs on `value` (among them `closure_in_set_valid`): one more name in the pattern; the existing catch-all branches take it. |
+| `rocq/validation/names/FlambdaValidatorEquivarianceProofs.v` | N3 | +1 -1 | `block_made_equivariant`: a fourth pattern in the destruct on `prim`. |
+| `rocq/rewrites/lets/FlambdaBlockLoadProofs.v` | V2 | +2 -2 | `block_made_spec`, `unary_applied_spec`: a fourth pattern in the destruct on `prim`. |
+| `rocq/rewrites/lets/FlambdaIdentitiesProofs.v` | P1 | +2 -2 | `binary_applied_spec`, `identity_named_equivariant`: a fourth pattern in the destruct on `prim`. |
+| `rocq/rewrites/lifting/FlambdaLiftProofs.v` | V3 | +4 -4 | `lift_named_lifted`, `lift_named_no_code`, `lift_named_rename`: a fourth pattern in the destruct on `prim`; in the first, one more pattern in a destruct on `value`. |
+| `rocq/rewrites/closures/FlambdaMyClosureProofs.v` | V3 | +5 -4 | `value_free` (a definition of the proofs: a value free of a code id): a location is free of it, as a constant is. `closure_of_free`, `closure_in_set_free`, `project_function_slot_free`: one more name in the pattern of the destruct on `value`. |
+| `rocq/rewrites/closures/FlambdaUnusedSlotsProofs.v` | V3 | +4 -2 | `closure_of_drop`, `closure_in_set_drop`: one more name in the pattern of the destruct on `value`. |
+| `rocq/rewrites/statics/FlambdaStaticsOrderProofs.v` | V2 | +2 -1 | `value_avoids_nothing`: one more name in the pattern of the destruct on `value`. C0 made this repair when it merged the series: the file came to the integration branch after the series was cut. |
+| `rocq/rewrites/statics/FlambdaUnusedStaticsSpec.v` | V1 (unassigned) | +1 | `value_avoids`: a location avoids every name. |
+| `rocq/rewrites/statics/FlambdaUnusedStaticsProofs.v` | V1 (unassigned) | +6 -3 | `closure_of_erased`, `closure_in_set_erased`, `project_function_slot_erased`: one more name in the pattern, and one more branch, that of a boxed number (no closure, nothing erased). |
+| `rocq/types/grammar/FlambdaTypeMeaningBoolSpec.v` | T1 | +1 | `value_eqb`: two locations are equal when they are the same location. Without it `value_eqb_decides_equality_statement` would be false: a location would not be equal to itself. |
+| `rocq/types/grammar/FlambdaTypeMeaningBoolProofs.v` | T1 | +11 -7 | `value_induction`: a hypothesis and a case for a location. `value_eqb_eq`: a branch for two locations. Three destructs on `value` (`is_poison_b_eq`, `relation_holds_b_eq`, `naked_numbers_satisfied_b_eq`): one more pattern. |
+| `rocq/types/grammar/FlambdaTypeMeaningProofs.v` | T1 | +13 -13 | Ten destructs on `value`: one more pattern, and one more empty branch where the destruct lists the branches. |
+| `rocq/wellformed/FlambdaWellKindedSpec.v` | C2 | +3 -1 | `value_well_kinded`: a location is well kinded (there is nothing in it; the fields of its cell are for the heap's own condition, when the heap is in `state`). |
+| `rocq/wellformed/FlambdaWellKindedProofs.v` | C2 | +3 -3 | Three destructs on `value`: one more name in the pattern; the existing catch-all branches take it. |
+| `rocq/types/provers/FlambdaProversProofs.v` | T6 | +3 -3 | `tagged_immediate_of_value`, `eval_is_null_cases`: one more pattern in three destructs on `value`. |
 | `rocq/Makefile` | C0 | +2 | `FlambdaHeapProofs.v` and `FlambdaHeapSpec.v` in `FLAMBDA2` (the commit of lines for the shared lists). |
 | `tests/tools/flsemantics.ml` | C0 (the tool stays C0's for now) | +6 | An observation `Location`, printed `<location n>`; a case of `print_prim` for `Heap`, which the converter never makes. No expected output changes. |
 | `tests/semantics/types/types_difftest.ml` | T7 | +5 -3 | Four matches on a value of the model. A location is no tagged immediate and not the contents of a boxed number, so the generator of values for a type makes none from it; it has no parts; it is printed `<location n>`. The tests make no location, and no expected output changes. |
@@ -266,7 +266,7 @@ how it is run.
 
 ### The change
 
-In `rocq/FlambdaSemanticsSpec.v`: `state` has a fifth field,
+In `rocq/semantics/FlambdaSemanticsSpec.v`: `state` has a fifth field,
 `state_heap : heap`, last. `Exit k vs hp` and `Exits k vs hp` carry
 the heap, last. `call_code`, `run_call`, `apply_cont_value`,
 `apply_continuation` and `call_function` take it as their last
@@ -346,7 +346,7 @@ The script edits the text of the `.v` files, and compiles nothing. On
   `_` at its position;
 - the eleven definitions that take the heap gain the parameter: the
   five of `FlambdaSemanticsSpec.v`, the five of C5's machine, and
-  `rest_valid` of `types/rocq/FlambdaSimplifyPruningProofs.v`;
+  `rest_valid` of `rocq/simplify/FlambdaSimplifyPruningProofs.v`;
 - the three constructors, the field, four comparisons of two exits,
   four patterns that take a state apart, the three exits of decision
   12, and four variables of sections.
@@ -387,7 +387,7 @@ The rehearsals corrected the script six times:
 - a sentence that declares several groups of variables of a section,
   one of them the static environment, gains `(hp : heap)` after that
   group. Before, the state that `merging_inv` of
-  `types/rocq/FlambdaSimplifySwitchMergeProofs.v` builds was given
+  `rocq/simplify/FlambdaSimplifySwitchMergeProofs.v` builds was given
   `empty_heap`, which made two proofs fail for a good reason;
 - decision 14. Before, the existential of `head_bound` bound a heap,
   and its proof and the proof that uses it failed.
@@ -402,24 +402,24 @@ Seven edits are not the script's, because each is a choice. The first
 six are exact replacements made after the script; the seventh is among
 the repairs by hand. Their owners have agreed to them.
 
-- C0: the tactic `simpl_state` of `rocq/FlambdaSemanticsProofs.v`
+- C0: the tactic `simpl_state` of `rocq/semantics/FlambdaSemanticsProofs.v`
   reduces `state_heap` as it reduces the other four projections.
-- C4: four lemmas of `rocq/FlambdaHeapProofs.v` that say that the
+- C4: four lemmas of `rocq/heap/FlambdaHeapProofs.v` that say that the
   heap's own machine agrees with `step` say it of a state whose heap
   is the heap of that machine.
 - C5: the invariant between the machine that goes by names and the
-  machine with a stack (`inv` of `rocq/FlambdaTrapProofs.v`) says
+  machine with a stack (`inv` of `rocq/wellformed/FlambdaTrapProofs.v`) says
   that the two states have the same heap.
 - V3: decision 13, with the two proofs that use the three lemmas.
 - C0 (V1's file): the tactic `rewrite_code_cases` of
-  `rocq/FlambdaNormaliseProofs.v` introduces the heaps of
+  `rocq/rewrites/common/FlambdaNormaliseProofs.v` introduces the heaps of
   `expr_refines` and of `handler_refines_at`. A tactic is not a
   proof: neither the script nor the rules read it.
-- C0: `empty_heap` is in the list of what `rocq/FlambdaExtract.v`
+- C0: `empty_heap` is in the list of what `rocq/validation/checks/FlambdaExtract.v`
   extracts, before `empty_static_env`: the test tool builds the
   initial state of a run with it. The OCaml checks on the tree after
   the sweep showed that it was missing.
-- N1: `forget_with_heap` of `rocq/FlambdaHeapEquivarianceProofs.v`
+- N1: `forget_with_heap` of `rocq/nominal/FlambdaHeapEquivarianceProofs.v`
   takes the premise that the heap given is the heap of the state. A
   state has a heap now, so the lemma is false without it; its two
   uses discharge the premise by computation.
@@ -451,52 +451,52 @@ make 562 edits. What the rules are:
 
 25 proofs are left. Two of them (`bind_prim_sound` and
 `merge_arms_refines` of
-`types/rocq/FlambdaSimplifySwitchMergeProofs.v`) failed by the
+`rocq/simplify/FlambdaSimplifySwitchMergeProofs.v`) failed by the
 script's fault and pass since its fifth correction. The other 23 are
 repaired by hand. None changes a statement of a `Spec` file. By owner
 and file:
 
-- C0, 3. `rocq/FlambdaContextProofs.v`:
+- C0, 3. `rocq/semantics/FlambdaContextProofs.v`:
   `related_states_refines_from`, `related_states_refines`,
   `let_static_code_refines_where`. The heap at its place in
   applications by position of lemmas of a section, and in the binders
   of two functions given as arguments.
-- C2, 2. `rocq/FlambdaWellKindedProofs.v`: `run_exit`,
+- C2, 2. `rocq/wellformed/FlambdaWellKindedProofs.v`: `run_exit`,
   `exit_well_kinded_here`. The heap of an exit named in the patterns;
   `(state_heap s)` where a state is read by its projections.
-- C3, 1. `rocq/FlambdaClosuresProofs.v`:
+- C3, 1. `rocq/semantics/FlambdaClosuresProofs.v`:
   `project_function_slot_let_closures`. The heap at its place in the
   applications of two lemmas.
-- C5, 2. `rocq/FlambdaTrapProofs.v`: `step_related` (an assertion is
+- C5, 2. `rocq/wellformed/FlambdaTrapProofs.v`: `step_related` (an assertion is
   stated at the heap of the state, where no variable for it is in
   scope), `unwind_equivariant` (an exit carries its own heap and
   `unwind` goes on with it, so the induction is general in the heap).
-- N1, 3. `rocq/FlambdaHeapEquivarianceProofs.v`: `forget_with_heap`
+- N1, 3. `rocq/nominal/FlambdaHeapEquivarianceProofs.v`: `forget_with_heap`
   (above), `heap_state_of_renamed_expr`.
-  `rocq/FlambdaStateSupportProofs.v`: `state_finitely_supported` (the
+  `rocq/nominal/FlambdaStateSupportProofs.v`: `state_finitely_supported` (the
   combinator of four arguments is given the constructor of a state
   with its heap fixed). N1 wrote them.
-- T6, 4. `rocq/FlambdaUnboxParamsProofs.v`: `ahead_exit`,
+- T6, 4. `rocq/rewrites/unboxing/FlambdaUnboxParamsProofs.v`: `ahead_exit`,
   `ahead_ends`, `lockstep_answers`.
-  `rocq/FlambdaUnboxVariantsProofs.v`: `certain_step_refines`. The
+  `rocq/rewrites/unboxing/FlambdaUnboxVariantsProofs.v`: `certain_step_refines`. The
   heap of an exit named in the patterns and given to the witnesses;
   the heap at its place in an `intros`.
-- V3 (S5's files), 3. `rocq/FlambdaKnownSymbolsProofs.v`:
+- V3 (S5's files), 3. `rocq/rewrites/statics/FlambdaKnownSymbolsProofs.v`:
   `fold_step_components` (the heap at its place in an application of
-  a lemma of a section). `rocq/FlambdaLiftProofs.v`: `lifted_step`
+  a lemma of a section). `rocq/rewrites/lifting/FlambdaLiftProofs.v`: `lifted_step`
   (the heap named where the relation on states is taken apart),
   `lift_simulates` (the heap of an exit named in a pattern and given
   to a witness).
-- V4, 5. `rocq/FlambdaContAlikeProofs.v`: `applies_alike_carries`.
-  `rocq/FlambdaLoopifyProofs.v`: `loops_step`.
-  `rocq/FlambdaUnusedParamsProofs.v`: `drops_step`,
+- V4, 5. `rocq/semantics/FlambdaContAlikeProofs.v`: `applies_alike_carries`.
+  `rocq/rewrites/loops/FlambdaLoopifyProofs.v`: `loops_step`.
+  `rocq/rewrites/params/FlambdaUnusedParamsProofs.v`: `drops_step`,
   `drops_round_expr`, `drops_round`. The heap named in patterns and
   given in applications; a third part where two exits are compared;
   one more component in an existential; in `drops_round` the relation
   is taken apart, since the two states that it relates have one heap.
 
 One more since, on b859e1bdef: T2's `let_refines_value` of
-`types/rocq/FlambdaSimplifyPassProofs.v`, which is new there. Its
+`rocq/simplify/FlambdaSimplifyPassProofs.v`, which is new there. Its
 statement has no state, and its proof runs a probe, which now starts
 from `empty_heap`; T2 has been told.
 
@@ -577,7 +577,7 @@ moves, so that those are few.
 
 ### The test tool and the extracted files
 
-`rocq/FlambdaExtract.v` extracts `empty_heap` (the edits that are
+`rocq/validation/checks/FlambdaExtract.v` extracts `empty_heap` (the edits that are
 choices). `tests/tools/flsemantics.ml` changes in two places: the
 pattern of an exit has a third component, and the record of the
 initial state has `state_heap = Values.empty_heap`. The extracted

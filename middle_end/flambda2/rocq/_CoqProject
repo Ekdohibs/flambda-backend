@@ -1,0 +1,40 @@
+# For an editor that steps through a .v file of this folder: the flags that
+# rocq/Makefile gives to Rocq, with the directories written from here.
+# Build first (make -C rocq all, at the root of the repository): an editor
+# needs the compiled files of what a file requires. make -C rocq all stops
+# if the lines below are not the flags of rocq/Makefile: the same
+# directories under the same libraries.
+-Q ../../../rocq OxCamlStdlib
+-Q ../../../backend/rocq OxCamlBackend
+-Q ../../../backend/ssa/rocq OxCamlSsa
+-Q ../../../backend/ssa/loop/rocq OxCamlLoop
+-Q terms OxCamlFlambda2
+-Q semantics OxCamlFlambda2
+-Q wellformed OxCamlFlambda2
+-Q heap OxCamlFlambda2
+-Q regions/machine OxCamlFlambda2
+-Q regions/erasure OxCamlFlambda2
+-Q regions/check OxCamlFlambda2
+-Q regions/ends OxCamlFlambda2
+-Q nominal OxCamlFlambda2
+-Q rewrites/common OxCamlFlambda2
+-Q rewrites/calls OxCamlFlambda2
+-Q rewrites/closures OxCamlFlambda2
+-Q rewrites/statics OxCamlFlambda2
+-Q rewrites/lifting OxCamlFlambda2
+-Q rewrites/continuations OxCamlFlambda2
+-Q rewrites/switches OxCamlFlambda2
+-Q rewrites/params OxCamlFlambda2
+-Q rewrites/loops OxCamlFlambda2
+-Q rewrites/unboxing OxCamlFlambda2
+-Q rewrites/lets OxCamlFlambda2
+-Q validation/checks OxCamlFlambda2
+-Q validation/names OxCamlFlambda2
+-Q types/grammar OxCamlFlambda2Types
+-Q types/env OxCamlFlambda2Types
+-Q types/aliases OxCamlFlambda2Types
+-Q types/meet OxCamlFlambda2Types
+-Q types/join OxCamlFlambda2Types
+-Q types/provers OxCamlFlambda2Types
+-Q types/naive OxCamlFlambda2Types
+-Q simplify OxCamlFlambda2Types

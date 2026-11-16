@@ -10,7 +10,7 @@ for the typing environment: its renaming, its free names, and that its
 functions commute with renaming. The owner of the environment had none
 of it and left it to this stream.
 
-Files (new, mine): `middle_end/flambda2/types/rocq/FlambdaEnvRenameSpec.v`
+Files (new, mine): `middle_end/flambda2/rocq/types/env/FlambdaEnvRenameSpec.v`
 and `FlambdaEnvRenameProofs.v`; for the meet, four files of lemmas,
 `FlambdaEnvRenameMeetProofs.v`, `FlambdaEnvRenameMeetPartsProofs.v`,
 `FlambdaEnvRenameMeetProductsProofs.v` and

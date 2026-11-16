@@ -231,7 +231,7 @@ the premise `code_is_tupled c = false`:
   `over_application_split_statement`;
 - `FlambdaWellKindedSpec.call_at_wrong_kinds_undefined_statement`, in
   its cases that compare the arity of the call with that of the code;
-- `inline_identity_statement` (`types/rocq/FlambdaTypesSpec.v`, the
+- `inline_identity_statement` (`rocq/types/naive/FlambdaTypesSpec.v`, the
   stream of types): the premise `cm_is_tupled metadata = false`, which
   `inlinable` now asks.
 
@@ -328,7 +328,7 @@ slot. `tests/semantics/ocaml/tupled_function.ml` is not there yet: its
 code projects its own function slot, so its closures are converted as
 closures of sets at named slots, and a call of a variable bound to
 such a closure is not made direct
-(`../types/rocq/FlambdaAliasesSpec.typing_env_under_let`). The
+(`types/naive/FlambdaAliasesSpec.typing_env_under_let`). The
 equivalence is not used yet (`inline_known_apply`, for a callee that
 is a symbol).
 

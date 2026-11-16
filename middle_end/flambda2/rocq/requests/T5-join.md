@@ -1,7 +1,7 @@
 # T5: the contract of the n-way join, and how to divide the work
 
 Branch `flambda2-rocq/T5-join`. For the reviewer, the orchestrator
-and the human. The contract is `types/rocq/FlambdaJoinSpec.v`; this
+and the human. The contract is `rocq/types/join/FlambdaJoinSpec.v`; this
 note explains it, says what is not settled, and proposes how to split
 the transcription. Paths are from `middle_end/flambda2/`.
 

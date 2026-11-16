@@ -652,11 +652,11 @@ to be compared by equality only.
 
 Of this, what is a theorem is the first part, of the source alone
 (`no_source_commutes_statement`, in
-`types/rocq/FlambdaEnvRenameJoinSpec.v`). That the join of typing
+`rocq/types/join/FlambdaEnvRenameJoinSpec.v`). That the join of typing
 environments with one source does not commute with every renaming is
 the argument above applied to it. It is proved of one join of the
 model, by computation
-(`types/rocq/FlambdaJoinMeetRenameExampleSpec.v`): the join makes a
+(`rocq/types/join/FlambdaJoinMeetRenameExampleSpec.v`): the join makes a
 variable, and the renaming that exchanges it with a variable which is
 nowhere in the inputs leaves the inputs as they are and changes the
 answer. It is not proved of every source.
@@ -673,10 +673,10 @@ avoid are every name that the answer may later stand beside, not only
 the names of the arguments.
 
 For the join of typing environments the premise is `avoids_known`
-(`types/rocq/FlambdaJoinSpec.v`): the variables to avoid include
+(`rocq/types/join/FlambdaJoinSpec.v`): the variables to avoid include
 every variable that the source or a use knows. It is enough where
 every use knows exactly the variables of the source
-(`uses_know_the_source`, `types/rocq/FlambdaJoinInTermsSpec.v`): no
+(`uses_know_the_source`, `rocq/types/join/FlambdaJoinInTermsSpec.v`): no
 variable is then known to two uses without being one variable of the
 source. Uses that are made from a source in which a meet may be
 made, by going one scope further and then by steps that make a
@@ -684,7 +684,7 @@ variable equal to a `Simple` or give it a type (`made_from`, which
 has the conditions of each step), are such, and with variables to
 avoid that include those of the source they have the premise
 (`uses_made_from_source_statement`,
-`types/rocq/FlambdaJoinUsesSpec.v`): no step defines a variable. Of
+`rocq/types/join/FlambdaJoinUsesSpec.v`): no step defines a variable. Of
 inputs in which a use knows a variable that the source
 does not, the part about valuations is not stated: the join takes a
 variable that two uses know for one variable, and a caller that gives
@@ -739,7 +739,7 @@ Simplify that rewrites a term from the types (below); that of a term
 in which something was lifted applies it so too, once, between its
 rounds and the same rounds again. What the two call is
 `simplify_by_types_carried`
-(`types/rocq/FlambdaSimplifyCarriedSpec.v`), which carries what is
+(`rocq/simplify/FlambdaSimplifyCarriedSpec.v`), which carries what is
 known of the typing environment in place of a test of it at every
 `Let`, and which is that function, of every term
 (`simplify_by_types_carried_eq_statement`): so what is stated of
@@ -747,14 +747,14 @@ that function under renaming holds of what is called.
 Where that function rewrites the handler of a continuation under what
 is known at its one application, the application may be in the handler
 of another continuation of the body (`find_one_use`,
-`types/rocq/FlambdaSimplifyPassSpec.v`): it makes no name, it compares
+`rocq/simplify/FlambdaSimplifyPassSpec.v`): it makes no name, it compares
 names only to keep the rewritten handler where no binder passed on the
 way to the application is free in it, and the environment and the
 binders that it answers are renamed with the term
 (`find_one_use_equivariant_statement`). With pruning, the test
 `find_one_use_keeps_fit` answers the same on renamed arguments
 (`find_one_use_keeps_fit_equivariant_statement`,
-`types/rocq/FlambdaSimplifyPruningRenamingSpec.v`).
+`rocq/simplify/FlambdaSimplifyPruningRenamingSpec.v`).
 
 Rewrites that have both compose and iterate, a rewrite that commutes
 with renaming has the first, and the comparison answers the same on
@@ -808,20 +808,20 @@ answers up to a renaming of the names made, and says less. The join
 of typing environments is such a function: it defines the variables
 that it makes in the environment that it answers. It owes the first,
 and has it, by the third prover
-(`types/rocq/FlambdaEnvRenameJoinSpec.v`): what a renaming does to
+(`rocq/types/join/FlambdaEnvRenameJoinSpec.v`): what a renaming does to
 the source of new names and to the state of the join; that no source
 commutes with every renaming; the equation for the two functions that
 ask the source; and the equation of the join as a whole, for two sets
 of parameters that the renaming relates, as the model's parameters
 and the same with the source renamed are. With it
-(`types/rocq/FlambdaJoinMeetRenameSpec.v`) the meet of the model with
+(`rocq/types/join/FlambdaJoinMeetRenameSpec.v`) the meet of the model with
 its own join, and the join that Simplify calls, answer the renamed
 answer with the renamed source. The traversal of types that the join
-calls (`types/rocq/FlambdaJoinTypes.v`) makes no name and compares no
+calls (`rocq/types/join/FlambdaJoinTypes.v`) makes no name and compares no
 two variables itself: the variables that it finds in types it hands
 to the functions that it is given. Each of its functions gives the
 renamed answer on renamed arguments when those do (lemmas of
-`types/rocq/FlambdaEnvRenameJoinTypesProofs.v`). The second is not
+`rocq/types/join/FlambdaEnvRenameJoinTypesProofs.v`). The second is not
 stated for the join: it needs that two sources give answers that
 differ by a renaming of the variables made. Nothing calls it today.
 Its caller would be a pass that calls the join on renamed inputs with

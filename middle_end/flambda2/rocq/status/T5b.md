@@ -63,7 +63,7 @@ arguments of the traversal, and `FlambdaJoinMeet.v` gives them
 ("Decided overnight"). (My work on slices of the
 meet, for T4, has a status file of its own,
 `status/T5b-meet.md`.) Files, all in
-`middle_end/flambda2/types/rocq/`:
+`middle_end/flambda2/rocq/`:
 
 - `FlambdaJoinTypes.v`: the join functions of
   `types/meet_and_n_way_join.ml` and their helpers. Definitions only.

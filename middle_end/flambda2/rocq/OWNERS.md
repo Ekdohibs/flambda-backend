@@ -12,7 +12,11 @@ How to read it and keep it current:
   orchestrator says when one does, and the integrator records it here,
   with the stream's branch.
 - A pattern such as `FlambdaNormalise*` covers the files that match it
-  now and later, in the directory given.
+  now and later, in the folder given. Where the files of a pattern are
+  in several folders, `**/` stands for any folders under the one before
+  it. The names of the files are unique under
+  `middle_end/flambda2/rocq/`; `README.md` there says which folder holds
+  what.
 - A new file is its creator's. Add it to your own stream's section in the
   commit that creates it, unless a pattern there covers it already. Edit
   no section but your own: two streams then never change the same lines
@@ -28,23 +32,23 @@ Paths are from the root of the repository.
 
 Owner: C0. Phase 0 was done as C0, and what it created is C0's.
 
-- `middle_end/flambda2/rocq/FlambdaModel.v`
-- `middle_end/flambda2/rocq/FlambdaKindModel.v` (the kinds, moved out of
+- `middle_end/flambda2/rocq/terms/FlambdaModel.v`
+- `middle_end/flambda2/rocq/terms/FlambdaKindModel.v` (the kinds, moved out of
   `FlambdaModel.v` by the change that made the primitives data)
-- `middle_end/flambda2/rocq/FlambdaValue*` (the values of the machine
+- `middle_end/flambda2/rocq/semantics/FlambdaValue*` (the values of the machine
   and their observations, moved out of `FlambdaSemanticsSpec.v` by the
   same change)
-- `middle_end/flambda2/rocq/FlambdaSemantics*`
+- `middle_end/flambda2/rocq/semantics/FlambdaSemantics*`
 - the signature of `eval_prim` and the statements of the laws of
-  `middle_end/flambda2/rocq/FlambdaPrimitiveSpec.v`. The file is C1's,
+  `middle_end/flambda2/rocq/semantics/FlambdaPrimitiveSpec.v`. The file is C1's,
   and a primitive is added there without asking; a change to the
   signature or to a law is a core change
-- `middle_end/flambda2/rocq/FlambdaContext*` (but not
+- `middle_end/flambda2/rocq/semantics/FlambdaContext*` (but not
   `FlambdaContextMemoryProofs.v`, which is C4's)
-- `middle_end/flambda2/rocq/FlambdaWellFormed*`
-- `middle_end/flambda2/rocq/FlambdaMap*` (Phase 0: finite maps and sets
+- `middle_end/flambda2/rocq/wellformed/FlambdaWellFormed*`
+- `middle_end/flambda2/rocq/terms/FlambdaMap*` (Phase 0: finite maps and sets
   of names)
-- `middle_end/flambda2/rocq/FlambdaExtract.v` (a stream asks for names
+- `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v` (a stream asks for names
   in its list with a commit of its own: `rocq/HACKING.md`, "Adding a
   module")
 - `middle_end/flambda2/rocq/OWNERS.md` (Phase 0: its layout; see above)
@@ -74,10 +78,10 @@ until the stream in brackets, whose subject they are, has an owner; then
 they are that stream's, and the integrator moves the line to its
 section:
 
-- `middle_end/flambda2/rocq/FlambdaControlFlow*` (S3, with S2 for the
+- `middle_end/flambda2/rocq/semantics/FlambdaControlFlow*` (S3, with S2 for the
   switches)
-- `middle_end/flambda2/rocq/FlambdaApply*` (S4)
-- `middle_end/flambda2/rocq/FlambdaStatic*` (S5)
+- `middle_end/flambda2/rocq/semantics/FlambdaApply*` (S4)
+- `middle_end/flambda2/rocq/**/FlambdaStatic*` (S5)
 
 ## C1 to C5: core changes
 
@@ -92,14 +96,14 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/requests/C1-primitives.md` (the request)
     and `requests/C1-int-ops.py` beside it (the generator of the
     examples that compare the integer primitives with a reference)
-  - `middle_end/flambda2/rocq/FlambdaPrimitive*` (the primitives, what
+  - `middle_end/flambda2/rocq/**/FlambdaPrimitive*` (the primitives, what
     they compute and the laws they obey; adding a primitive changes
     these files and no other `.v` file; see C0's section for what of
     them is the core's)
   - the conversion of primitives and of constants in
     `middle_end/flambda2/tests/tools/flsemantics.ml`, until V3 has an
     owner
-  - `middle_end/flambda2/rocq/FlambdaRange*` (what a unit whose numbers
+  - `middle_end/flambda2/rocq/wellformed/FlambdaRange*` (what a unit whose numbers
     are in range gains; the check itself is in C0's
     `FlambdaWellFormedSpec.v`)
 - C2, kinds and well-formed terms. Owner: C2, on
@@ -107,15 +111,15 @@ design out; that is the request, not the change.
   `flambda2-rocq/C2-binders` (the second series) and
   `flambda2-rocq/C2-kinds` (the prototype).
   - `middle_end/flambda2/rocq/requests/C2-kinds.md` (the request)
-  - `middle_end/flambda2/rocq/FlambdaWellKinded*` (the check of kinds
+  - `middle_end/flambda2/rocq/wellformed/FlambdaWellKinded*` (the check of kinds
     and its statements)
-  - `middle_end/flambda2/rocq/FlambdaStaticsInScope*` (the check that
+  - `middle_end/flambda2/rocq/wellformed/FlambdaStaticsInScope*` (the check that
     the static names of a unit are in scope where they are mentioned,
     row 4 of the conditions of a well-formed unit, and what it gives
     of a run; the conjunct of `well_formed_unit` is C0's to wire)
   - `middle_end/flambda2/tests/semantics/kinds_*.fl` and their
     `.expected` files
-  - `middle_end/flambda2/rocq/FlambdaRegions*` (a machine with
+  - `middle_end/flambda2/rocq/regions/**/FlambdaRegions*` (a machine with
     regions beside that of `FlambdaSemanticsSpec.v`, which says where
     a value allocated in a region is used after the region is gone,
     and its statements; on `flambda2-rocq/C2-regions`)
@@ -139,53 +143,53 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/requests/C3-closures.md`
   - `middle_end/flambda2/rocq/requests/C3-partial-application.md`
   - `middle_end/flambda2/rocq/requests/C3-tupled-functions.md`
-  - `middle_end/flambda2/rocq/FlambdaClosures*` (first facts about sets
+  - `middle_end/flambda2/rocq/semantics/FlambdaClosures*` (first facts about sets
     of closures; S4's once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaPartialApplication*` (what a call
+  - `middle_end/flambda2/rocq/semantics/FlambdaPartialApplication*` (what a call
     with fewer or more arguments than parameters comes to)
-  - `middle_end/flambda2/rocq/FlambdaTupled*` (what a call that gives
+  - `middle_end/flambda2/rocq/semantics/FlambdaTupled*` (what a call that gives
     tupled code a tuple comes to)
-  - `middle_end/flambda2/rocq/FlambdaKnownSlots*` (a value slot that
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaKnownSlots*` (a value slot that
     every set of closures of the unit gives the same symbol or
     constant is read as that, in code too, for the validator; S4's
     once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaStubCalls*` (in the code of a
+  - `middle_end/flambda2/rocq/rewrites/calls/FlambdaStubCalls*` (in the code of a
     stub, the direct calls of the unit's other code are made indirect,
     for the validator; S4's once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaCopyCode*` (code of the unit
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaCopyCode*` (code of the unit
     copied under new code ids for static sets of closures that
     Simplify gave new code, for the validator; S4's once it is
     staffed)
-  - `middle_end/flambda2/rocq/FlambdaCopyLets*` (code of the unit
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaCopyLets*` (code of the unit
     copied under new code ids for sets of closures that a `Let`
     makes and that Simplify gave new code, for the validator; S4's
     once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaClosureCalls*` (a call of a
+  - `middle_end/flambda2/rocq/rewrites/calls/FlambdaClosureCalls*` (a call of a
     closure that a `Let` in sight makes is made direct, for the
     validator; S4's once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaSetsOfCode*` (what every set of
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaSetsOfCode*` (what every set of
     closures of a unit that has a code at a function slot has, kept
-    by a run) and `middle_end/flambda2/rocq/FlambdaClosureOfCode*`
+    by a run) and `middle_end/flambda2/rocq/rewrites/closures/FlambdaClosureOfCode*`
     (in the body of code, what `my_closure` is known to be from its
     code is used, for the validator; S4's once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaSlotsOfCode*` (the code of the
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaSlotsOfCode*` (the code of the
     closure that every set of closures of a unit with a code at a
     function slot gives a value slot, where each of them gives it a
     closure in sight of one code, with a property of states that a
     step keeps; for the second pass of
     `FlambdaClosureOfCodeSpec.know_own_closures`; S4's once it is
     staffed)
-  - `middle_end/flambda2/rocq/FlambdaRegionsErasedProofs.v` and
-    `middle_end/flambda2/rocq/FlambdaRegionsPlainStepProofs.v` (for
+  - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedProofs.v` and
+    `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
     machine of regions and the state that runs the erased term, and
     the steps at the expressions where that machine does what `step`
     does; the other `FlambdaRegions*` files are C2's, but for
     `FlambdaRegionsCalls*`, which are C5's, and for the three of the
     next item)
-  - `middle_end/flambda2/rocq/FlambdaRegionsErasedReadsProofs.v`,
-    `middle_end/flambda2/rocq/FlambdaRegionsErasedCallsProofs.v` and
-    `middle_end/flambda2/rocq/FlambdaRegionsNoStepProofs.v` (for C2's
+  - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedReadsProofs.v`,
+    `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedCallsProofs.v` and
+    `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsNoStepProofs.v` (for C2's
     soundness of the check of regions: where the state that runs the
     erased term has a value, the machine of regions has one, and
     where it has a step that machine does not stop because `step` has
@@ -199,33 +203,33 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/requests/C4-heap.md` (the request) and
     `requests/C4-heap-fallout.md` (what each step costs the other
     owners)
-  - `middle_end/flambda2/rocq/FlambdaHeapSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaHeapProofs.v` (the primitives of
+  - `middle_end/flambda2/rocq/heap/FlambdaHeapSpec.v` and
+    `middle_end/flambda2/rocq/heap/FlambdaHeapProofs.v` (the primitives of
     the heap, their effects and coeffects, closed memories; they come
     before the semantics)
-  - `middle_end/flambda2/rocq/FlambdaHeapMachineSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaHeapMachineProofs.v` (the
+  - `middle_end/flambda2/rocq/heap/FlambdaHeapMachineSpec.v` and
+    `middle_end/flambda2/rocq/heap/FlambdaHeapMachineProofs.v` (the
     prototype: a machine that runs those primitives, beside the machine
     that exists; `FlambdaHeapEquivariance*` are N1's)
-  - `middle_end/flambda2/rocq/FlambdaContextMemoryProofs.v` (a handler
+  - `middle_end/flambda2/rocq/semantics/FlambdaContextMemoryProofs.v` (a handler
     that refines another where it is entered, under a condition on the
     static environment, the heap and the read record that a step and
     the executor keep; lemmas only, for the passes that keep a fact
     about what a cell holds)
-  - `middle_end/flambda2/rocq/FlambdaExitWorldSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaExitWorldProofs.v` (what a run
+  - `middle_end/flambda2/rocq/semantics/FlambdaExitWorldSpec.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaExitWorldProofs.v` (what a run
     leaves at an exit, with the static environment of its last state,
     and refinement with two such worlds related)
-  - `middle_end/flambda2/rocq/FlambdaRunUnderSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaRunUnderProofs.v` (a unit run
+  - `middle_end/flambda2/rocq/semantics/FlambdaRunUnderSpec.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaRunUnderProofs.v` (a unit run
     under a continuation environment is the unit run on its own and
     then what the environment binds the continuation of its exit to)
-  - `middle_end/flambda2/rocq/FlambdaObserversSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaObserversProofs.v` (what may
+  - `middle_end/flambda2/rocq/semantics/FlambdaObserversSpec.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaObserversProofs.v` (what may
     follow a unit, and two exits that nothing that may follow tells
     apart)
-  - `middle_end/flambda2/rocq/FlambdaValidateRelatedSpec.v` and
-    `middle_end/flambda2/rocq/FlambdaValidateRelatedProofs.v` (a second
+  - `middle_end/flambda2/rocq/validation/checks/FlambdaValidateRelatedSpec.v` and
+    `middle_end/flambda2/rocq/validation/checks/FlambdaValidateRelatedProofs.v` (a second
     check of a unit against the unit it came from, for the units whose
     exits a lifting changes: nothing that may follow a unit tells the
     two exits apart; the test tool asks it only of a unit that it
@@ -235,25 +239,25 @@ design out; that is the request, not the change.
 - C5, exceptions. Owner: C5, on `flambda2-rocq/C5-epoch`.
   - `middle_end/flambda2/rocq/requests/C5-exceptions.md` (the request)
   - `middle_end/flambda2/rocq/requests/C5-imported-symbols.md`
-  - `middle_end/flambda2/rocq/FlambdaTrap*` (examples of the checks of
+  - `middle_end/flambda2/rocq/wellformed/FlambdaTrap*` (examples of the checks of
     exception handlers and of trap actions, which are in
     `FlambdaWellFormedSpec.v`; later, what is proved of them)
-  - `middle_end/flambda2/rocq/FlambdaImports*` (the static environment
+  - `middle_end/flambda2/rocq/semantics/FlambdaImports*` (the static environment
     of a unit that imports symbols, and what a primitive does with an
     imported symbol; a prototype)
-  - `middle_end/flambda2/rocq/FlambdaValidateImports*` (the validation
+  - `middle_end/flambda2/rocq/validation/**/FlambdaValidateImports*` (the validation
     of a unit run from its imports: which verdicts hold of it)
-  - `middle_end/flambda2/rocq/FlambdaDemote*` (the demotion of an
+  - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaDemote*` (the demotion of an
     exception handler that no call can raise to, as a rewrite, with
     what it keeps)
   - `middle_end/flambda2/rocq/requests/C5-never-returns.md` (a
     request: calls that never return)
-  - `middle_end/flambda2/rocq/FlambdaNeverReturns*` (the rewrite of
+  - `middle_end/flambda2/rocq/rewrites/calls/FlambdaNeverReturns*` (the rewrite of
     the term before that gives a call of code that never returns a
     return continuation whose handler is `Invalid`)
   - `middle_end/flambda2/rocq/requests/C5-imports-with-contents.md`
     (a request: a unit run after the units it depends on)
-  - `middle_end/flambda2/rocq/FlambdaRegionsCalls*` (calls on C2's
+  - `middle_end/flambda2/rocq/regions/machine/FlambdaRegionsCalls*` (calls on C2's
     machine of regions: code cannot end a region of its caller, and
     what follows of the values that a run exits with; C5's, though
     the names match the pattern of C2's files)
@@ -265,104 +269,105 @@ design out; that is the request, not the change.
 
 ## T1 to T7: types
 
-All in `middle_end/flambda2/types/rocq/`, library `OxCamlFlambda2Types`.
+In the folders of `middle_end/flambda2/rocq/types/`, library
+`OxCamlFlambda2Types`, unless an entry gives another folder.
 
 - T1, grammar and meaning. Owner: T1, on `flambda2-rocq/T1-grammar`.
-  - `middle_end/flambda2/types/rocq/FlambdaTypes*` (today's naive model,
+  - `middle_end/flambda2/rocq/types/naive/FlambdaTypes*` (today's naive model,
     which T1 replaces)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeGrammar*` (the grammar
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeGrammar*` (the grammar
     of types)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeMeaning*` (what a type
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeMeaning*` (what a type
     means: `type_satisfied`; `FlambdaTypeMeaningBool*` is the meaning
     as a test)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeWellFormed*` (when a
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeWellFormed*` (when a
     type is well formed)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeEqual*` (when two types
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeEqual*` (when two types
     are the same type, after `Type_grammar.equal`)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeAliasKinds*` (the
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeAliasKinds*` (the
     aliases of a type with their kinds)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeRename*` (renaming the
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeRename*` (renaming the
     variables of a type, and the names that a type mentions)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeNominal*` (types as
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeNominal*` (types as
     things that contain names)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeAccess*` (what the
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeAccess*` (what the
     provers and reification read of a type)
-  - `middle_end/flambda2/types/rocq/FlambdaTypeCreators*` (what the
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeCreators*` (what the
     other creation functions of types make)
-  - `middle_end/flambda2/types/rocq/FlambdaMeetTermination*` (the fuel
+  - `middle_end/flambda2/rocq/types/meet/FlambdaMeetTermination*` (the fuel
     of the meet: more fuel changes no answer, and what it is for the
     fuel to be enough; T1's by agreement with T4, though the names
     match T4's pattern)
-  - `middle_end/flambda2/types/rocq/FlambdaMeetDepth*` (the fuel of
+  - `middle_end/flambda2/rocq/types/meet/FlambdaMeetDepth*` (the fuel of
     the meet of types with no name inside: their depth is enough;
     T1's by the same agreement)
-  - `middle_end/flambda2/types/rocq/FlambdaMeetRelationFuel*` (the
+  - `middle_end/flambda2/rocq/types/meet/FlambdaMeetRelationFuel*` (the
     fuel of the meet for an arm of a `Switch` whose scrutinee is the
     result of a relation; T1's by the same agreement)
 - T2, typing environment. Owner: T2, on `flambda2-rocq/T2-env`.
-  - `middle_end/flambda2/types/rocq/FlambdaBindingTime.v` (binding times
+  - `middle_end/flambda2/rocq/types/env/FlambdaBindingTime.v` (binding times
     and name modes, after `types/env/binding_time.ml` and
     `nominal/name_mode.ml`; written first on T3's branch, which needs it)
-  - `middle_end/flambda2/types/rocq/FlambdaTypingEnv*` (the typing
+  - `middle_end/flambda2/rocq/types/env/FlambdaTypingEnv*` (the typing
     environment, after `types/env/typing_env.ml`, `typing_env_level.ml`,
     `cached_level.ml` and `typing_env_extension.ml`; what satisfies one)
   - `middle_end/flambda2/rocq/requests/T2-join-call.md` (a request:
     the call of the join in the rewrites from the types)
 - T3, aliases. Owner: T3, on `flambda2-rocq/T3-aliases`.
-  - `middle_end/flambda2/types/rocq/FlambdaAliases*` (today's, which T3
+  - `middle_end/flambda2/rocq/types/naive/FlambdaAliases*` (today's, which T3
     replaces; `follow_aliases` is used by the validator, so a change to
     it is agreed with V1)
-  - `middle_end/flambda2/types/rocq/FlambdaEnvAliases*` (the aliases of
+  - `middle_end/flambda2/rocq/types/aliases/FlambdaEnvAliases*` (the aliases of
     the typing environment, after `types/env/aliases.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaTypingEnvExtension*` (the
+  - `middle_end/flambda2/rocq/types/env/FlambdaTypingEnvExtension*` (the
     extensions of a typing environment, after
     `types/env/typing_env_extension.ml`; T3's by agreement with T2,
     though the names match T2's pattern)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyValueSlots*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyValueSlots*` (the
     projection of a value slot replaced by the `Simple` that a prover
     answers, a slice of the rewrites through types, by agreement with
     T2, who puts the rewrites together)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyStatics*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyStatics*` (the
     types that Simplify gives the symbols of a `Let_static`, after
     `simplify/simplify_static_const.ml`; the same agreement)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyCodeEnv*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyCodeEnv*` (the
     environment in which the body of code is rewritten, with the
     types of the symbols, after `Typing_env.closure_env`; the same
     agreement)
-  - `middle_end/flambda2/rocq/FlambdaValidateKnowing*` (the validation
+  - `middle_end/flambda2/rocq/validation/checks/FlambdaValidateKnowing*` (the validation
     asked again with the new `follow_aliases` in front of each round;
     T3's by agreement with the owner of the validator, whose files it
     leaves as they are)
 - T4, meet. Owner: T4, on `flambda2-rocq/T4-meet`.
-  - `middle_end/flambda2/types/rocq/FlambdaExpandHead*` (expanded
+  - `middle_end/flambda2/rocq/types/meet/FlambdaExpandHead*` (expanded
     types and `expand_head`, after `types/expand_head.ml`, and what
     expanding keeps)
-  - `middle_end/flambda2/types/rocq/FlambdaMeet*` (the environment of a
+  - `middle_end/flambda2/rocq/types/meet/FlambdaMeet*` (the environment of a
     meet, after `types/env/meet_env.ml`; the contract of meet; the meet,
     after `types/meet_and_n_way_join.ml` and `types/meet.ml`)
   - `middle_end/flambda2/rocq/requests/T4-meet.md`
 - T5, the n-way join. Owner: T5, on `flambda2-rocq/T5-join`.
-  - `middle_end/flambda2/types/rocq/FlambdaJoin*` (the n-way join of
+  - `middle_end/flambda2/rocq/types/join/FlambdaJoin*` (the n-way join of
     typing environments and of types, after `types/env/join_env.ml`,
     `types/join_levels.ml` and the join functions of
     `types/meet_and_n_way_join.ml`; what a join guarantees).
     `FlambdaJoinTypes*` are T5b's, on `flambda2-rocq/T5b-join-types`.
-  - `middle_end/flambda2/types/rocq/FlambdaTypeProject.v`
+  - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeProject.v`
     (`Type_grammar.project_variables_out`)
   - `middle_end/flambda2/rocq/requests/T5-join.md`
 - T6, provers and reification. Owner: T6, on `flambda2-rocq/T6-provers`.
   - `middle_end/flambda2/rocq/requests/T6-provers.md` (the plan: the
     provers, the shape of their statements, the order)
-  - `middle_end/flambda2/types/rocq/FlambdaProvers*` (the provers,
+  - `middle_end/flambda2/rocq/types/provers/FlambdaProvers*` (the provers,
     after `types/provers.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaReify*` (reification, after
+  - `middle_end/flambda2/rocq/types/provers/FlambdaReify*` (reification, after
     `types/reify.ml`)
   - `middle_end/flambda2/rocq/requests/T6-unboxing.md`,
-    `middle_end/flambda2/rocq/FlambdaUnboxParams*`,
-    `middle_end/flambda2/rocq/FlambdaUnboxVariants*`,
-    `middle_end/flambda2/rocq/FlambdaUnboxInScope*`,
-    `middle_end/flambda2/rocq/FlambdaUnboxLoops*` and
-    `middle_end/flambda2/rocq/FlambdaUnboxTogether*` (S6, the unboxing
+    `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxParams*`,
+    `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxVariants*`,
+    `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxInScope*`,
+    `middle_end/flambda2/rocq/rewrites/loops/FlambdaUnboxLoops*` and
+    `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxTogether*` (S6, the unboxing
     of continuation parameters on the validator's side, after
     `simplify/unboxing/`, its use in code and in loops with the
     static blocks in scope known, the parameters of a loop that
@@ -387,122 +392,122 @@ pass into the validator.
 
 - S1, primitives through types. Owner of the first slice: T2, on
   `flambda2-rocq/T2-env`; the rest unassigned.
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyPrimitives*` (a
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyPrimitives*` (a
     primitive replaced by a constant, or the term by `Invalid`, on the
     answer of a prover about the types of its arguments; after
     `simplify/simplify_primitive.ml`, `simplify_unary_primitive.ml` and
     `simplify_binary_primitive.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyProjections*` (a
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyProjections*` (a
     load from a block or a projection from a closure replaced by the
     `Simple` that a prover answers, and the type of a block that is
     made; after `simplify/simplify_unary_primitive.ml` and
     `simplify_variadic_primitive.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyBoxing*` (the types
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyBoxing*` (the types
     of a number that is tagged or boxed, and the unboxing primitive
     replaced by the `Simple` that a prover answers for the number
     inside; after `simplify/simplify_unary_primitive.ml` and
     `simplify/unboxing/unboxing_epa.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyArith*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyArith*` (the
     arithmetic of tagged immediates replaced by a constant, by one of
     its arguments or by `Invalid`, and the types of its result; after
     `simplify/simplify_binary_primitive.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyPass*` (one function
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyPass*` (one function
     on terms that carries a typing environment down a term and applies
     the rewrites of the files above, with the proof that its answer
     refines the term; for the validator to run)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyPrimitivesRenaming*`
-    and `middle_end/flambda2/types/rocq/FlambdaSimplifyPassRenaming*`
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyPrimitivesRenaming*`
+    and `middle_end/flambda2/rocq/simplify/FlambdaSimplifyPassRenaming*`
     (that function and its parts commute with renaming)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyHandlers*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyHandlers*` (the
     environment under which the handler of a continuation is
     rewritten, at the kinds that the handler gives its parameters;
     after `simplify/simplify_let_cont_expr.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyUses*` (the handler
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyUses*` (the handler
     of a continuation rewritten under the environment of its one
     application, and under any environment that has the guarantees of
     the join of the environments of its applications; after
     `simplify/join_points.ml`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyPruning*` (a second
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyPruning*` (a second
     function, which also removes the arms of a `Switch` that the type
     of the scrutinee excludes; its theorem is of the states of the run
     of a unit whose sets of closures are well formed; and that it
     commutes with renaming, `FlambdaSimplifyPruningRenaming*`)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyCarried*` (the
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyCarried*` (the
     first function without the test of the environment at every
     `Let`: it carries what is known of the environment, as the second
     does, and is proved equal to the first; the validation calls it)
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyArms*` (the arms of
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyArms*` (the arms of
     a `Switch`, each rewritten under what its arm knows)
 - S2, switch. Owner of the first three slices: T1, on
   `flambda2-rocq/T1-grammar`; the rest unassigned.
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifySwitch*` (the arms
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifySwitch*` (the arms
     of a `Switch` that the type of its scrutinee excludes are removed,
     those that are kept are rewritten in the environment that the
     meet answers for each, and arms that all apply one continuation
     are merged into that application, with arguments computed from
     the scrutinee; after `simplify/simplify_switch_expr.ml`)
-  - `middle_end/flambda2/rocq/FlambdaMergeSwitches*` (that merging as
+  - `middle_end/flambda2/rocq/rewrites/switches/FlambdaMergeSwitches*` (that merging as
     a rewrite of a whole term, for the validator: the arguments that
     differ from arm to arm are the number of the arm tagged, or that
     negated, and the variable of the scrutinee is bound again)
-  - `middle_end/flambda2/rocq/FlambdaMergeTables*` (the same where
+  - `middle_end/flambda2/rocq/rewrites/switches/FlambdaMergeTables*` (the same where
     the argument is loaded from a static table that is in scope, and
     that it keeps scope; T1's)
 - S3, continuations. Owner: unassigned.
 - S4, calls. Owner of the first slice: T4, on
   `flambda2-rocq/T4-meet-rename`; the rest unassigned.
-  - `middle_end/flambda2/types/rocq/FlambdaSimplifyApply*` (an indirect
+  - `middle_end/flambda2/rocq/simplify/FlambdaSimplifyApply*` (an indirect
     call of a callee whose type a prover shows to be a closure of known
     code is made the direct call of that code; after
     `simplify/simplify_apply_expr.ml`)
 - S5, lets, CSE and lifting. Owner: unassigned.
-  - `middle_end/flambda2/rocq/FlambdaLift*` (lifting a `Let` of a
+  - `middle_end/flambda2/rocq/rewrites/**/FlambdaLift*` (lifting a `Let` of a
     closure, a block or a boxed number to a static binding, for the
     validator; written on `flambda2-rocq/V3-lifting` by the stream that
     the roster calls V3, which is not the converter of the section V3
     below; S5's once it is staffed)
-  - `middle_end/flambda2/rocq/FlambdaMyClosure*` (in the code of a
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaMyClosure*` (in the code of a
     closure that is a symbol, `my_closure` is the symbol; same stream)
-  - `middle_end/flambda2/rocq/FlambdaUnusedSlots*` (the value slots of
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaUnusedSlots*` (the value slots of
     a static set of closures that nothing projects are removed; same
     stream)
-  - `middle_end/flambda2/rocq/FlambdaKnownSymbols*` (a primitive or a
+  - `middle_end/flambda2/rocq/rewrites/statics/FlambdaKnownSymbols*` (a primitive or a
     projection applied to symbols that the unit binds to constants is
     replaced by its value; same stream)
-  - `middle_end/flambda2/rocq/FlambdaKnownClosures*` (a value slot of a
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaKnownClosures*` (a value slot of a
     static closure whose binding is in sight is read, and a call of
     one is made direct; same stream)
-  - `middle_end/flambda2/rocq/FlambdaFloatCode*` (the bindings of code
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaFloatCode*` (the bindings of code
     moved up to the head of what they are in; same stream)
-  - `middle_end/flambda2/rocq/FlambdaGroupsUp*` (a group of static
+  - `middle_end/flambda2/rocq/rewrites/statics/FlambdaGroupsUp*` (a group of static
     bindings at the head of the body of a continuation binding bound
     before it; same stream)
-  - `middle_end/flambda2/rocq/FlambdaHoistCode*` (all the code of a unit
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaHoistCode*` (all the code of a unit
     bound first, for a unit run on its own; same stream)
-  - `middle_end/flambda2/rocq/FlambdaLiftFromCode*` (a closure or a block
+  - `middle_end/flambda2/rocq/rewrites/lifting/FlambdaLiftFromCode*` (a closure or a block
     that mentions no variable lifted out of the code of a function; same
     stream)
-  - `middle_end/flambda2/rocq/FlambdaLiftFromArms*` (a closure or a block
+  - `middle_end/flambda2/rocq/rewrites/lifting/FlambdaLiftFromArms*` (a closure or a block
     that mentions no variable lifted out of the arm of a toplevel test,
     to the head of the unit; same stream)
-  - `middle_end/flambda2/rocq/FlambdaHoistStatics*` (the static bindings
+  - `middle_end/flambda2/rocq/rewrites/statics/FlambdaHoistStatics*` (the static bindings
     that need nothing from around them bound first, for a unit run on
     its own; same stream)
-  - `middle_end/flambda2/rocq/FlambdaSharedReads*` (in code, a second
+  - `middle_end/flambda2/rocq/rewrites/statics/FlambdaSharedReads*` (in code, a second
     read, from symbols, of a variable that one group of static bindings
     put in two places of its constants is the variable of the first
     read; same stream)
-  - `middle_end/flambda2/rocq/FlambdaHeapFree*` (a term with no
+  - `middle_end/flambda2/rocq/heap/FlambdaHeapFree*` (a term with no
     primitive of the heap in it exits with the empty heap: the guard of
     the four liftings until decision D40 is taken; same stream)
-  - `middle_end/flambda2/rocq/FlambdaSimulationProofs.v` (simulations in
+  - `middle_end/flambda2/rocq/semantics/FlambdaSimulationProofs.v` (simulations in
     which one step is answered by one or more; same stream, and used by
     the loops of V4)
-  - `middle_end/flambda2/rocq/FlambdaUnitFromProofs.v` (the two facts
+  - `middle_end/flambda2/rocq/semantics/FlambdaUnitFromProofs.v` (the two facts
     of `FlambdaWellFormedSpec.v` about the run of a well-formed unit,
     for a run from a static environment that holds no code and binds
     no name that the unit binds; same stream)
-  - `middle_end/flambda2/rocq/FlambdaExitBound*` (where the target of
+  - `middle_end/flambda2/rocq/semantics/FlambdaExitBound*` (where the target of
     a refinement of two units passes three tests, the symbols at its
     exit are bound in its static environment, which a refinement
     alone does not say; same stream)
@@ -514,12 +519,12 @@ pass into the validator.
 
 Owner: unassigned. The only stream besides C0 that edits these.
 
-- `middle_end/flambda2/rocq/FlambdaValidate*`
-- `middle_end/flambda2/rocq/FlambdaCompare*`
-- `middle_end/flambda2/rocq/FlambdaNormalise*`
-- `middle_end/flambda2/rocq/FlambdaUnusedStatics*`
-- `middle_end/flambda2/rocq/FlambdaUnusedHeadStatics*`
-- `middle_end/flambda2/rocq/FlambdaSameComparison*`
+- `middle_end/flambda2/rocq/validation/**/FlambdaValidate*`
+- `middle_end/flambda2/rocq/nominal/FlambdaCompare*`
+- `middle_end/flambda2/rocq/rewrites/common/FlambdaNormalise*`
+- `middle_end/flambda2/rocq/rewrites/statics/FlambdaUnusedStatics*`
+- `middle_end/flambda2/rocq/rewrites/statics/FlambdaUnusedHeadStatics*`
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaSameComparison*`
 
 ## V2: corpus and harness
 
@@ -533,42 +538,42 @@ stays C0's for now.
 - `middle_end/flambda2/tests/semantics/ocaml/` (units made from OCaml
   sources: the sources, the terms, the expected files, the script that
   makes a term and the dune rules)
-- `middle_end/flambda2/rocq/FlambdaBlockLoad*` (a normalisation for the
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaBlockLoad*` (a normalisation for the
   validator, written for the corpus: the load of a field of a block
   that is known; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaUnusedConts*` (another: removing a
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaUnusedConts*` (another: removing a
   continuation that is not used; S3's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaUnboxSpec.v` and
-  `middle_end/flambda2/rocq/FlambdaUnboxProofs.v` (another: unboxing a
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxSpec.v` and
+  `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUnboxProofs.v` (another: unboxing a
   number that is known to be boxed, untagging one that is known to be
   tagged; S1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaCse*` (another: a primitive already
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaCse*` (another: a primitive already
   computed is not computed again; S5's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaShareProjections*` (another: a
+- `middle_end/flambda2/rocq/rewrites/closures/FlambdaShareProjections*` (another: a
   value slot already projected is not projected again; S5's once it
   is staffed)
-- `middle_end/flambda2/rocq/FlambdaRecoverComparison*` (another: a
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaRecoverComparison*` (another: a
   test against 0 of the result of a three-way comparison becomes the
   comparison of its operands; T5b's, on `flambda2-rocq/T5b-compare`;
   reviewer R5; S1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaStaticsOrder*` (another: the
+- `middle_end/flambda2/rocq/rewrites/statics/FlambdaStaticsOrder*` (another: the
   bindings of a group of static bindings put in the order in which
   another term has them; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaRenameApart*` (another: every binder
+- `middle_end/flambda2/rocq/nominal/FlambdaRenameApart*` (another: every binder
   of a term given a name of its own; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaAliasLets*` (another: in the term
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaAliasLets*` (another: in the term
   after, a `Let` of a variable to the variable that the `Let` around it
   has just bound is made one `Let` with it)
-- `middle_end/flambda2/rocq/FlambdaInlineSiblings*` (another: in the
+- `middle_end/flambda2/rocq/rewrites/calls/FlambdaInlineSiblings*` (another: in the
   body of code, the direct calls of the other code of its group are
   inlined, for the term before; a refinement)
-- `middle_end/flambda2/rocq/FlambdaKnownSiblings*` (another: the same
+- `middle_end/flambda2/rocq/rewrites/calls/FlambdaKnownSiblings*` (another: the same
   calls, where the callee is a symbol that the group binds to a closure
   of the code called, inlined as an equivalence, for the term after)
-- `middle_end/flambda2/rocq/FlambdaInlineCallsAt*` (another: the
+- `middle_end/flambda2/rocq/rewrites/calls/FlambdaInlineCallsAt*` (another: the
   direct calls that stand at given places of a term are inlined, for
   the term before; a refinement)
-- `middle_end/flambda2/rocq/FlambdaUnusedProjections*` (another: in the
+- `middle_end/flambda2/rocq/rewrites/closures/FlambdaUnusedProjections*` (another: in the
   term after, the `Let` of the projection of a function slot that
   nothing uses, from a closure that a `Let` around it has made, is
   removed)
@@ -592,29 +597,29 @@ it. Leaf work in C1's files
 (`FlambdaPrimitive*` and the conversion of primitives in the test
 tool), delegated by the orchestrator, and:
 
-- `middle_end/flambda2/rocq/FlambdaIdentities*` (a normalisation for
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaIdentities*` (a normalisation for
   the validator: the identities of integer arithmetic that Simplify
   applies; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaArrayLoad*` (another: the length
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaArrayLoad*` (another: the length
   of an immutable array that is known from the term, and a load from
   it at a constant index; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaValidateReading*` other than
+- `middle_end/flambda2/rocq/validation/**/FlambdaValidateReading*` other than
   `FlambdaValidateReadingRename*` (the validation asked of the term
   before with its known arrays read; V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaReadsAfter*` (two normalisations
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaReadsAfter*` (two normalisations
   that are equivalences, for the term after Simplify: the read of a
   known block where the read is sure to have a value, and the removal
   of an allocation of constants that nothing uses; V1's once it is
   staffed)
-- `middle_end/flambda2/rocq/FlambdaMadeLengths*` (another, an
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaMadeLengths*` (another, an
   equivalence, for the term after Simplify: the length of a mutable
   array that a `Let` in scope has made is its constant, which is one
   rule of the sharing of primitives of `FlambdaCseSpec.v`, alone;
   V1's once it is staffed)
-- `middle_end/flambda2/rocq/FlambdaExtcall*` (what some C functions
+- `middle_end/flambda2/rocq/semantics/FlambdaExtcall*` (what some C functions
   of the runtime compute, as a table that nothing uses; whoever owns
   calls of C functions once they have a meaning)
-- `middle_end/flambda2/rocq/FlambdaNoArrayValue*` (what the immutable
+- `middle_end/flambda2/rocq/heap/FlambdaNoArrayValue*` (what the immutable
   array as a value leaves as it was: the states that hold none stay
   so, and the relations of the heap and of the lifting relate, where
   none is held, what they related; and, in
@@ -647,29 +652,29 @@ tool), delegated by the orchestrator, and:
 Owner: V4, on `flambda2-rocq/V4-loops`: what the validator needs for
 units with loops (`while`, `for`, tail-recursive functions).
 
-- `middle_end/flambda2/rocq/FlambdaRecHandlers*` (applying a rewrite to
+- `middle_end/flambda2/rocq/rewrites/loops/FlambdaRecHandlers*` (applying a rewrite to
   the handlers of recursive continuations)
-- `middle_end/flambda2/rocq/FlambdaContAlikeProofs.v` (a tool of proof:
+- `middle_end/flambda2/rocq/semantics/FlambdaContAlikeProofs.v` (a tool of proof:
   continuations that apply alike may stand for each other)
-- `middle_end/flambda2/rocq/FlambdaSinkConts*` (moving a continuation to
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaSinkConts*` (moving a continuation to
   the handler that alone uses it)
-- `middle_end/flambda2/rocq/FlambdaShortcut*` (an arm of a switch that
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaShortcut*` (an arm of a switch that
   applies a continuation which only applies another)
-- `middle_end/flambda2/rocq/FlambdaSameHandlers*` (a continuation
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaSameHandlers*` (a continuation
   whose handler is that of a continuation bound around it applies that
   one)
-- `middle_end/flambda2/rocq/FlambdaUnusedParams*` (removing the
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaUnusedParams*` (removing the
   parameters of a continuation that its handler does not use)
-- `middle_end/flambda2/rocq/FlambdaLoopAliases*` (following, inside a
+- `middle_end/flambda2/rocq/rewrites/loops/FlambdaLoopAliases*` (following, inside a
   loop, the aliases and constants bound outside it)
-- `middle_end/flambda2/rocq/FlambdaLoopify*` (loopify: the self tail
+- `middle_end/flambda2/rocq/rewrites/loops/FlambdaLoopify*` (loopify: the self tail
   calls of a function become jumps to a recursive continuation)
-- `middle_end/flambda2/rocq/FlambdaLoopLets*` (removing, inside a loop
+- `middle_end/flambda2/rocq/rewrites/loops/FlambdaLoopLets*` (removing, inside a loop
   too, the unused `Let`s whose defining expression has a value)
-- `middle_end/flambda2/rocq/FlambdaParamAliases*` (binding, at the start
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaParamAliases*` (binding, at the start
   of a handler, a parameter that every application gives the same
   thing)
-- `middle_end/flambda2/rocq/FlambdaForward*` (an application of a
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaForward*` (an application of a
   continuation whose handler only applies another;
   `FlambdaForwardJumps*` is the case of no parameters, which is an
   equivalence, and `FlambdaForwardKinded*` that of arguments known to
@@ -677,49 +682,49 @@ units with loops (`while`, `for`, tail-recursive functions).
   `FlambdaForwardArm*` is an application that gives a number to the
   parameter that the handler tests, which goes to the arm of that
   number)
-- `middle_end/flambda2/rocq/FlambdaRoundsProofs.v` (a tool of proof:
+- `middle_end/flambda2/rocq/semantics/FlambdaRoundsProofs.v` (a tool of proof:
   simulations by rounds of one or more steps of each run)
-- `middle_end/flambda2/rocq/FlambdaInlineTail*` (that
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaInlineTail*` (that
   `inline_tail_conts` is an equivalence)
-- `middle_end/flambda2/rocq/FlambdaDeadParams*` (removing the
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaDeadParams*` (removing the
   parameters of a loop that are only passed round it)
-- `middle_end/flambda2/rocq/FlambdaCodeLets*` (removing, in the body
+- `middle_end/flambda2/rocq/rewrites/closures/FlambdaCodeLets*` (removing, in the body
   of code, the unused `Let`s of its parameters)
-- `middle_end/flambda2/rocq/FlambdaSinkUses*` (moving a continuation
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaSinkUses*` (moving a continuation
   down past the bindings under it)
 
 ## N1: nominal loose ends
 
 Owner: N1.
 
-- `middle_end/flambda2/rocq/FlambdaNominal*` and
-  `middle_end/flambda2/rocq/FlambdaAlpha*` (C0's until the step that
+- `middle_end/flambda2/rocq/nominal/FlambdaNominal*` and
+  `middle_end/flambda2/rocq/nominal/FlambdaAlpha*` (C0's until the step that
   retired one bisimulation)
-- `middle_end/flambda2/rocq/FlambdaCompareAlpha*`
-- `middle_end/flambda2/rocq/FlambdaBinders*` (the free names of a term,
+- `middle_end/flambda2/rocq/nominal/FlambdaCompareAlpha*`
+- `middle_end/flambda2/rocq/terms/FlambdaBinders*` (the free names of a term,
   and the checks of rows 3, 5 and 6 of well-formedness; that they are
   conjuncts of `well_formed_unit` is C0's to write)
-- `middle_end/flambda2/rocq/FlambdaScope*`
-- `middle_end/flambda2/rocq/FlambdaFreeNames*`
-- `middle_end/flambda2/rocq/FlambdaNameAbstraction*`
-- `middle_end/flambda2/rocq/FlambdaEquivariance*`
-- `middle_end/flambda2/rocq/FlambdaNominalInstances*`
-- `middle_end/flambda2/rocq/FlambdaCanonicalFreeNames*`
-- `middle_end/flambda2/rocq/FlambdaStateSupport*`
-- `middle_end/flambda2/rocq/FlambdaHeapEquivariance*` (N1's, though the
+- `middle_end/flambda2/rocq/**/FlambdaScope*`
+- `middle_end/flambda2/rocq/nominal/FlambdaFreeNames*`
+- `middle_end/flambda2/rocq/nominal/FlambdaNameAbstraction*`
+- `middle_end/flambda2/rocq/nominal/FlambdaEquivariance*`
+- `middle_end/flambda2/rocq/nominal/FlambdaNominalInstances*`
+- `middle_end/flambda2/rocq/nominal/FlambdaCanonicalFreeNames*`
+- `middle_end/flambda2/rocq/nominal/FlambdaStateSupport*`
+- `middle_end/flambda2/rocq/nominal/FlambdaHeapEquivariance*` (N1's, though the
   name matches the pattern of the heap's files: the renamings of
   variables and continuations on the machine with a heap)
-- `middle_end/flambda2/rocq/FlambdaLocations*` (the locations of the
+- `middle_end/flambda2/rocq/nominal/FlambdaLocations*` (the locations of the
   heap as a sort of names: the action of their permutations, and the
   primitives and the machine under it; by agreement with the heap's
   owner)
-- `middle_end/flambda2/rocq/FlambdaExitWorldActions*` (the renamings
+- `middle_end/flambda2/rocq/nominal/FlambdaExitWorldActions*` (the renamings
   and the permutations of locations on what a run leaves at an exit;
   the files of the exit itself are not N1's)
-- `middle_end/flambda2/rocq/FlambdaObserversActions*` (the renamings
+- `middle_end/flambda2/rocq/nominal/FlambdaObserversActions*` (the renamings
   and the permutations of locations on what may follow a unit; the
   files of what may follow a unit are not N1's)
-- `middle_end/flambda2/types/rocq/FlambdaEnvRenameJoinTypesProofs.v`
+- `middle_end/flambda2/rocq/types/join/FlambdaEnvRenameJoinTypesProofs.v`
   (N1's, though it is in the types library and its name matches the
   pattern of N3's files on the join under renaming: lemmas only, the
   traversal of types of the join on renamed arguments, which N3's
@@ -730,37 +735,37 @@ Owner: N1.
 
 Owner: N2.
 
-- `middle_end/flambda2/rocq/FlambdaFreshQuantifier*`
-- `middle_end/flambda2/rocq/FlambdaFreshAbstraction*`
-- `middle_end/flambda2/rocq/FlambdaFreshBinders*`
-- `middle_end/flambda2/rocq/FlambdaCompareConverse*` (N2's, though it
+- `middle_end/flambda2/rocq/nominal/FlambdaFreshQuantifier*`
+- `middle_end/flambda2/rocq/nominal/FlambdaFreshAbstraction*`
+- `middle_end/flambda2/rocq/nominal/FlambdaFreshBinders*`
+- `middle_end/flambda2/rocq/nominal/FlambdaCompareConverse*` (N2's, though it
   matches the pattern of V1's section: the converse of the comparison,
   which N1 left to N2)
-- `middle_end/flambda2/rocq/FlambdaAlphaFresh*` and
-  `middle_end/flambda2/rocq/FlambdaAlphaGroup*` (N2's, though they
+- `middle_end/flambda2/rocq/nominal/FlambdaAlphaFresh*` and
+  `middle_end/flambda2/rocq/nominal/FlambdaAlphaGroup*` (N2's, though they
   match the pattern of N1's section: alpha-equivalence at each binder
   by the quantifier, N1 agreeing)
-- `middle_end/flambda2/rocq/FlambdaInlineFresh*`
-- `middle_end/flambda2/rocq/FlambdaContextWhere*` (N2's, though it
+- `middle_end/flambda2/rocq/rewrites/calls/FlambdaInlineFresh*`
+- `middle_end/flambda2/rocq/semantics/FlambdaContextWhere*` (N2's, though it
   matches the pattern of C0's section: rewriting in a handler or in the
   body of code from the states that have a predicate that a step
   keeps. Its lemmas are in C0's `FlambdaContextProofs.v`, which N2
   changed for it by C0's leave; that file stays C0's)
-- `middle_end/flambda2/rocq/FlambdaGuardScope*` (N2's, though it is
+- `middle_end/flambda2/rocq/rewrites/common/FlambdaGuardScope*` (N2's, though it is
   run by the validation: a rewrite made to keep scope by a test)
-- `middle_end/flambda2/rocq/FlambdaKeepsScope*` (N2's, though it is
+- `middle_end/flambda2/rocq/validation/names/FlambdaKeepsScope*` (N2's, though it is
   about V1's and V2's rewrites: each keeps scope, which the statements
   of N3's `FlambdaValidatorEquivarianceSpec.v` about rewrites that make
   names ask of a rewrite)
-- `middle_end/flambda2/rocq/FlambdaLoopsScope*` (N2's, though it is
+- `middle_end/flambda2/rocq/validation/names/FlambdaLoopsScope*` (N2's, though it is
   about V4's rewrites for loops: each keeps scope)
-- `middle_end/flambda2/rocq/FlambdaScopedProofs.v` (N2's, though it
+- `middle_end/flambda2/rocq/rewrites/common/FlambdaScopedProofs.v` (N2's, though it
   matches the pattern of N1's section, N1 agreeing: lemmas only, about
   a term that keeps the scope of another, for the proofs that a rewrite
   of the validation keeps scope)
-- `middle_end/flambda2/rocq/FlambdaValidateScope*` (N2's, though it is
+- `middle_end/flambda2/rocq/validation/names/FlambdaValidateScope*` (N2's, though it is
   about the rounds of `FlambdaValidateSpec.v`: each keeps scope)
-- `middle_end/flambda2/rocq/FlambdaLiftConts*` (N2's, though it is a
+- `middle_end/flambda2/rocq/rewrites/continuations/FlambdaLiftConts*` (N2's, though it is a
   normalisation written for the validation, which does not apply it:
   the continuations that a handler binds on its way to its `Switch`,
   bound outside the handler)
@@ -771,103 +776,103 @@ Owner: N2.
 Owner: N3, on `flambda2-rocq/N3-equivariance` for the validator and on
 `flambda2-rocq/N3-types` for the types. N1 leads the work on names.
 
-- `middle_end/flambda2/rocq/FlambdaValidatorEquivariance*` (each
+- `middle_end/flambda2/rocq/validation/names/FlambdaValidatorEquivariance*` (each
   rewrite and each check of the validator commutes with renaming:
   what `NAMES.md`, section 7, owes for the files of V1 and V2 and for
   the checks of `FlambdaWellFormedSpec.v`)
-- `middle_end/flambda2/rocq/FlambdaStaticsScope*` (the rewrites that
+- `middle_end/flambda2/rocq/validation/names/FlambdaStaticsScope*` (the rewrites that
   the check of the validation applies to the term before, other than
   those of a round, keep scope: what the statement about
   `validate_unit` in the files above rests on, with
   `FlambdaKeepsScope*`)
-- `middle_end/flambda2/rocq/FlambdaUnaliasParams*` (a parameter of a
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaUnaliasParams*` (a parameter of a
   continuation that every application gives one variable is that
   variable: an equivalence, written for the validation to apply to
   either of its terms; and the lemmas for its laws of renaming and of
   scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaBindConstParams*` (a parameter of
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaBindConstParams*` (a parameter of
   a continuation that every application gives one symbol or one
   constant is that symbol or that constant: an equivalence, written
   for the validation to apply to either of its terms; and the lemmas
   for its laws of renaming and of scope, which are stated in the
   files above)
-- `middle_end/flambda2/rocq/FlambdaUnaliasRecParams*` (a parameter of
+- `middle_end/flambda2/rocq/rewrites/loops/FlambdaUnaliasRecParams*` (a parameter of
   a loop that every turn passes on, and that the loop is given one
   variable for, is that variable: an equivalence, written for the
   validation to apply to either of its terms; and the lemmas for its
   laws of renaming and of scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaWrapReturns*` (a parameter that
+- `middle_end/flambda2/rocq/rewrites/params/FlambdaWrapReturns*` (a parameter that
   its handler does not use, of a continuation that a call returns to,
   is removed, and the call returns to a wrapper, as Simplify makes
   it: a refinement, for the term before; and the lemmas for its laws
   of renaming and of scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaUntagParams*` (parameters of
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUntagParams*` (parameters of
   continuations that hold a tagged immediate and are only untagged or
   passed on, as a flag kept in a reference and set in a loop is, are
   untagged where they are given, for a set of positions at once, as
   Simplify has them: a refinement, for the term before; and the
   lemmas for its laws of renaming and of scope, which are stated in
   the files above)
-- `middle_end/flambda2/rocq/FlambdaGiveScrutinee*` (an argument of a
+- `middle_end/flambda2/rocq/rewrites/switches/FlambdaGiveScrutinee*` (an argument of a
   continuation that is the number of the arm that it is in, of a
   `Switch` on a variable, is made that variable where the parameter
   can then be taken away, as for the flag of a `while` loop: an
   equivalence, for both terms; and the lemmas for its laws of renaming
   and of scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaArmNumbers*` (the scrutinee of a
+- `middle_end/flambda2/rocq/rewrites/switches/FlambdaArmNumbers*` (the scrutinee of a
   `Switch` is made the number of the arm where the arm, and the
   handler that only that arm applies, read it, and the variable that
   it is the untagging of the tagged number, as Simplify has them for
   a flag that a loop tests before it sets it: an equivalence, for
   both terms; and the lemmas for its laws of renaming and of scope,
   which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaShadowParams*` (the parameters of
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaShadowParams*` (the parameters of
   continuations that hold a tagged immediate and are untagged are
   bound again to themselves at the head of their handlers, which
   gives the rewrite that makes names a binder to name: an
   equivalence, for the term before; and the lemmas for its laws of
   renaming and of scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaTwinParams*` (a parameter of a
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaTwinParams*` (a parameter of a
   continuation that holds a tagged immediate, and that the head of
   its handler binds again, gets a twin that holds the number, as
   Simplify has it for a flag that a loop both tests and keeps: a
   refinement, for the term before; and the lemmas for its laws of
   renaming and of scope, which are stated in the files above)
-- `middle_end/flambda2/rocq/FlambdaLaggingProofs.v` (a way of proving
+- `middle_end/flambda2/rocq/semantics/FlambdaLaggingProofs.v` (a way of proving
   a refinement in which the first run takes steps that the second
   does not answer, with a number that bounds them; proofs only)
-- `middle_end/flambda2/rocq/FlambdaValidateImportsRename*` (the tests
+- `middle_end/flambda2/rocq/validation/names/FlambdaValidateImportsRename*` (the tests
   by which a verdict of the validation holds of a unit run from its
   imports answer of renamed terms what they answer of the terms;
   the tests are those of `FlambdaValidateImportsSpec.v`, which stays
   its owner's)
-- `middle_end/flambda2/rocq/FlambdaValidateRelatedRename*` (the
+- `middle_end/flambda2/rocq/validation/names/FlambdaValidateRelatedRename*` (the
   second check of a unit, of `FlambdaValidateRelatedSpec.v`, answers
   of renamed units what it answers of the units, and its liftings
   made in turn keep scope and commute with renaming up to the names
   that the rounds make; the check and its files stay their owner's)
-- `middle_end/flambda2/rocq/FlambdaCseEquivalent*` (the sharing of
+- `middle_end/flambda2/rocq/rewrites/lets/FlambdaCseEquivalent*` (the sharing of
   primitives of `FlambdaCseSpec.v` gives a term that is equivalent to
   the one it is given, which is what a rewrite of the term after
   Simplify owes; `FlambdaCseSpec.v` and its proofs stay V2's)
-- `middle_end/flambda2/rocq/FlambdaValidateReadingRename*` (the
+- `middle_end/flambda2/rocq/validation/names/FlambdaValidateReadingRename*` (the
   validation asked of the term before with its known arrays read, of
   `FlambdaValidateReadingSpec.v`, answers of a renamed pair what it
   answers of the pair, and what it is made of keeps scope and commutes
   with renaming, up to the names made where the rounds make names; the
   functions and their files stay their owner's)
-- `middle_end/flambda2/types/rocq/FlambdaEnvRename*` (the action of a
+- `middle_end/flambda2/rocq/types/**/FlambdaEnvRename*` (the action of a
   renaming on a typing environment and on its levels, their free
   variables, and that the functions of `FlambdaTypingEnv.v` commute
   with it; the file of the environment and its statements stay T2's)
-- `middle_end/flambda2/types/rocq/FlambdaJoinMeetRename*` (the join
+- `middle_end/flambda2/rocq/types/join/FlambdaJoinMeetRename*` (the join
   that Simplify calls and the meet of the model with its own join, on
   renamed arguments with the source of new names renamed; and an
   example in which the join with the one source of the model does not
   answer the renamed answer)
-- `middle_end/flambda2/types/rocq/FlambdaTypeProjectRenameProofs.v`
+- `middle_end/flambda2/rocq/types/grammar/FlambdaTypeProjectRenameProofs.v`
   (lemmas only: the removal of variables from a type under renaming)
-- `middle_end/flambda2/rocq/FlambdaRegionsEnds*` (on
+- `middle_end/flambda2/rocq/regions/ends/FlambdaRegionsEnds*` (on
   `flambda2-rocq/N3-regions-ends`: a second verdict of the check of
   regions, about ends. The check `ends_check`, which stands beside
   `FlambdaRegionsCheckSpec.region_check` and reads the same

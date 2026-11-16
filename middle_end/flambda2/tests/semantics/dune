@@ -1,6 +1,6 @@
 ;; Simplify checked against the Rocq semantics of Flambda 2: each example
 ;; X.fl is run before and after Simplify on the machine extracted from
-;; middle_end/flambda2/rocq/FlambdaSemanticsSpec.v, and what the two runs
+;; middle_end/flambda2/rocq/semantics/FlambdaSemanticsSpec.v, and what the two runs
 ;; come to is compared (see ../tools/flsemantics.ml). The tool fails if
 ;; they differ; what it prints is kept in X.expected, beside X.fl.
 ;;

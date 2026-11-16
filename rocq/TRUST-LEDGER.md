@@ -33,8 +33,9 @@ between the heading "Flambda 2" and the next heading of its level.
 
 ## Flambda 2
 
-The libraries `OxCamlFlambda2` (`middle_end/flambda2/rocq/`) and
-`OxCamlFlambda2Types` (`middle_end/flambda2/types/rocq/`).
+The libraries `OxCamlFlambda2` and `OxCamlFlambda2Types`, both in the
+folders of `middle_end/flambda2/rocq/` (the second is `types/` and
+`simplify/` there).
 
 ### Axioms
 
@@ -42,7 +43,7 @@ None. No statement of these libraries depends on an axiom: none uses
 classical logic, Rocq's primitive integers or the models of OxCaml's
 types below. (There were seven, all about the primitives, which the model
 left abstract. The primitives are now data,
-`middle_end/flambda2/rocq/FlambdaPrimitiveModel.v`, and what they compute
+`middle_end/flambda2/rocq/terms/FlambdaPrimitiveModel.v`, and what they compute
 is a definition, `FlambdaPrimitiveSpec.v`.)
 
 ### Trusted OCaml
@@ -1015,7 +1016,7 @@ it gave back.
   agreement supplied by the validation.
 - **The check of regions**, in the same file (`keep_regions`,
   `check_regions`, `run_regions`), with the machine of
-  `middle_end/flambda2/rocq/FlambdaRegionsSpec.v`. After everything
+  `middle_end/flambda2/rocq/regions/machine/FlambdaRegionsSpec.v`. After everything
   else, the two terms of a unit that was compared are converted once
   more with regions kept; a unit that is not checked, or whose check
   failed, is not looked at. If that conversion was refused, the tool
@@ -1554,7 +1555,7 @@ it gave back.
   this entry is assumed: a symbol of another unit is an import, as
   the entry "Symbols that a unit does not define" says.
 - **The extraction**: Rocq's extraction to OCaml, by
-  `middle_end/flambda2/rocq/FlambdaExtract.v`. It has no directive that
+  `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v`. It has no directive that
   realises a definition of the model by hand-written OCaml. The extracted
   modules are in `middle_end/flambda2/tests/semantics/extracted/`.
 - **What the tool reports**, in the same file (`check`, `run`,
@@ -1995,7 +1996,7 @@ it gave back.
   - the examples of the join (`examples_of_joins`): that an example
     marked with the name of a statement has the inputs and the answer
     of that statement of
-    `middle_end/flambda2/types/rocq/FlambdaJoinTypesExamplesSpec.v` as
+    `middle_end/flambda2/rocq/types/join/FlambdaJoinTypesExamplesSpec.v` as
     the file was when the example was written (the variables, slots
     and code ids are those of the tests); that one marked as having
     another answer has the inputs of the statement; a difference is
@@ -2026,7 +2027,7 @@ it gave back.
     has the name of a statement of FlambdaMeetMatchExamplesSpec.v,
     FlambdaMeetTagExamplesSpec.v, FlambdaMeetProjectionExamplesSpec.v
     or FlambdaMeetExamplesSpec.v
-    (`middle_end/flambda2/types/rocq/`), and the steps, the two types
+    (`middle_end/flambda2/rocq/types/meet/`), and the steps, the two types
     and what that statement says of the type answered and of the
     variables, as the file was when the example was written; that
     where the statement speaks of two meets the example says which;

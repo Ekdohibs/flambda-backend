@@ -300,7 +300,7 @@ continuations). `FlambdaSemanticsSpec.v`: `cont_values_all` (the
 traversal of where a state holds values): the remaining values, and
 the two continuations. `FlambdaClosuresSpec.v`: `value_valid` (the
 callee and the arguments are valid). The types
-(`types/rocq/FlambdaTypeMeaning*`) read a value through observations
+(`rocq/types/grammar/FlambdaTypeMeaning*`) read a value through observations
 and need no case in a definition; their proofs by cases on a value
 need one more branch.
 
@@ -363,7 +363,7 @@ related, goes through one of the two, or unfolds `call_function` or
 `FlambdaUnusedStaticsProofs.v`, `FlambdaNominalProofs.v`,
 `FlambdaNormaliseProofs.v`, `FlambdaApplyProofs.v`,
 `FlambdaControlFlowProofs.v`, `FlambdaClosuresProofs.v`,
-`types/rocq/FlambdaAliasesProofs.v`), and the proof of the traversal
+`rocq/types/naive/FlambdaAliasesProofs.v`), and the proof of the traversal
 of values. Each gets the same shape: a lemma about
 `call_function_returning` that assumes what is wanted of
 `return_partial`; the fact about `apply_cont_value` by induction on the

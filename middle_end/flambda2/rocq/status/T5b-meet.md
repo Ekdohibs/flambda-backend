@@ -6,7 +6,7 @@ cut loose, in files of my own, to statements that T4 fixes. Reviewer
 of the meet: R1. (My own stream, the type traversal of the n-way
 join, is `status/T5b.md`.)
 
-Files, in `middle_end/flambda2/types/rocq/`:
+Files, in `middle_end/flambda2/rocq/`:
 
 - `FlambdaMeetProductsSpec.v`, `FlambdaMeetProductsProofs.v`: slice 1.
 - `FlambdaMeetHeadsSpec.v`, `FlambdaMeetHeadsProofs.v`: slice 3.

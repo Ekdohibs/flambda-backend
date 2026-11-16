@@ -232,7 +232,7 @@ and the cases of the existing statements).
   (`is_applied_with_traps`).
 - `FlambdaUnusedStaticsSpec.v`: `apply_avoids` has the extra arguments;
   `cont_free_of` has the case of `Extra_args`.
-- `types/rocq/FlambdaAliasesSpec.v`: `canonical_apply_cont` keeps the
+- `rocq/types/naive/FlambdaAliasesSpec.v`: `canonical_apply_cont` keeps the
   trap action; `canonical_apply` follows the aliases of the extra
   arguments. `FlambdaTypesSpec.v`: `None` and `[]` in the statements
   that build an `Apply_cont` or an `Apply`.
@@ -481,7 +481,7 @@ removed. `FlambdaTrapSpec.v` is 401 lines. By owner:
   `apply_cont_value_match` by induction), `FlambdaNormalise*` (six
   small repairs), `FlambdaUnusedStatics*` (a constructor of
   `cont_erased`).
-- T1 and T3: `types/rocq/FlambdaTypes*` and `FlambdaAliases*`: nine
+- T1 and T3: `rocq/types/naive/FlambdaTypes*` and `FlambdaAliases*`: nine
   `None`, one `[]`, three lines of proof.
 - C2, C3, C4, N1 on their branches: each relation or predicate on
   `cont_value` gains the case of `Extra_args`, and each place that

@@ -1,5 +1,5 @@
 ;; The machine of the Flambda 2 semantics, extracted from Rocq by
-;; rocq/Makefile (see middle_end/flambda2/rocq/FlambdaExtract.v). For tests
+;; rocq/Makefile (see middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v). For tests
 ;; only: no part of the compiler depends on it.
 
 (library

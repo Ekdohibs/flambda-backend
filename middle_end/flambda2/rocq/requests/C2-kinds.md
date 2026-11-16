@@ -1077,7 +1077,7 @@ be reworded by their owners when it lands:
   writing a rewrite could gain the paragraph "For a pass that is being
   written now" above.
 - `DECISIONS.md`, the line of D10: "the machine does not test yet".
-- `types/rocq/FlambdaTypingEnvRefinementSpec.v`, the paragraph "Kinds"
+- `rocq/types/env/FlambdaTypingEnvRefinementSpec.v`, the paragraph "Kinds"
   of its header ("the machine looks at neither: it binds the value
   that it is given, of whatever kind") and the comments before
   `let_refines_under_statement` and

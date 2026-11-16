@@ -1,5 +1,5 @@
 ;; The types of the compiler against their Rocq model
-;; (middle_end/flambda2/types/rocq/), extracted with the machine of the
+;; (middle_end/flambda2/rocq/types/), extracted with the machine of the
 ;; semantics (../extracted/).
 ;;
 ;; The library is the converter between [Type_grammar.t] and the model's

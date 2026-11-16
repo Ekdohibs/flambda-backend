@@ -7,7 +7,7 @@
 #   make review   typeset what a reviewer reads as rocq/review.pdf
 #   make clean    remove everything generated
 #
-# The sources live in six directories, each a Rocq library:
+# The sources live in five directories. Four are each a Rocq library:
 #
 #   rocq/                   OxCamlStdlib: models of OxCaml's own types (int,
 #                           Int64, lists, exceptions as options), generic
@@ -25,12 +25,16 @@
 #                           extraction (Extract.v, one .ml per model); the
 #                           passes using them are backend/ssa/loop/
 #                           delete_empty_loops.ml and bounds_check_elim.ml
-#   middle_end/flambda2/rocq/  OxCamlFlambda2: the terms of Flambda 2 and
-#                           their semantics, with rewrites proved against
-#                           it; extracted for tests only (FlambdaExtract.v)
-#   middle_end/flambda2/types/rocq/  OxCamlFlambda2Types: Flambda types and
-#                           typing environments, and refinement relative to
-#                           a typing environment; extracted likewise
+#
+# The fifth, middle_end/flambda2/rocq/, holds two libraries, in folders by
+# subject (README.md there has the tree and the rules of a folder):
+#
+#   OxCamlFlambda2          the terms of Flambda 2 and their semantics, with
+#                           rewrites proved against it; extracted for tests
+#                           only (validation/checks/FlambdaExtract.v)
+#   OxCamlFlambda2Types     its folders types/ and simplify/: Flambda types
+#                           and typing environments, and refinement relative
+#                           to a typing environment; extracted likewise
 #
 # The extracted files are run through ocamlformat so that they satisfy the
 # repository's `make fmt` check like any other source under backend/ssa/.
@@ -788,9 +792,89 @@ MODULES := $(patsubst $(STDLIB_DIR)/%.v,OxCamlStdlib.%,$(STDLIB)) \
   $(patsubst %.v,OxCamlFlambda2Types.%,$(notdir $(FLAMBDA2_TYPES)))
 DEPS := $(STDLIB_DIR)/.rocqdeps.d
 
-.PHONY: all assumptions claims review clean
+.PHONY: all assumptions claims layout review clean
 
-all: $(SOURCES:.v=.vo) claims
+all: layout $(SOURCES:.v=.vo) claims
+
+# The folders of middle_end/flambda2/rocq/ (README.md there). A .v file under
+# it that is in neither list above would not be compiled, and nothing else
+# would say so; a file that is not directly in a folder of its library would
+# have no name, or the name of the other library; and two files of one name,
+# in two folders, would be one module to Rocq. So each of these is an error
+# here, with the name of the file, and so is a .v file in
+# middle_end/flambda2/types/rocq/, where the files of types/ and simplify/
+# were. A folder in both lists of folders, and a folder of the lists inside
+# another, are errors with the name of the folder. The lines of _CoqProject
+# there, which an editor reads, must be the flags of FLAGS: the same
+# directories under the same libraries. The recipe itself does not run Rocq.
+FLAMBDA2_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2) \
+  $(FLAMBDA2_EXTRACT))
+FLAMBDA2_TYPES_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2_TYPES))
+
+layout:
+	@set -eu; \
+	  layout_dir=$$(mktemp -d); \
+	  trap 'rm -rf "$$layout_dir"' 0; \
+	  cd $(FLAMBDA2_DIR); \
+	  bad=0; \
+	  for f in ../types/rocq/*.v; do \
+	    [ -e "$$f" ] || continue; bad=1; \
+	    echo "error: $$f: no .v file is in that directory any more; the" \
+	      "folders types/ and simplify/ of $(FLAMBDA2_DIR) hold them" >&2; \
+	  done; \
+	  for f in $(FLAMBDA2_LISTED); do \
+	    case " $(FLAMBDA2_FOLDERS) " in *" $${f%/*} "*) ;; *) bad=1; \
+	      echo "error: $$f: not in a folder of FLAMBDA2_FOLDERS" >&2;; \
+	    esac; \
+	  done; \
+	  for f in $(FLAMBDA2_TYPES_LISTED); do \
+	    case " $(FLAMBDA2_TYPES_FOLDERS) " in *" $${f%/*} "*) ;; *) bad=1; \
+	      echo "error: $$f: not in a folder of FLAMBDA2_TYPES_FOLDERS" >&2;; \
+	    esac; \
+	  done; \
+	  for d in $(FLAMBDA2_FOLDERS); do \
+	    case " $(FLAMBDA2_TYPES_FOLDERS) " in *" $$d "*) bad=1; \
+	      echo "error: the folder $$d is in FLAMBDA2_FOLDERS and in" \
+	        "FLAMBDA2_TYPES_FOLDERS: a folder is of one library" >&2;; \
+	    esac; \
+	  done; \
+	  for d in $(FLAMBDA2_FOLDERS) $(FLAMBDA2_TYPES_FOLDERS); do \
+	    for e in $(FLAMBDA2_FOLDERS) $(FLAMBDA2_TYPES_FOLDERS); do \
+	      case "$$e" in "$$d"/*) bad=1; \
+	        echo "error: the folder $$e is inside the folder $$d: the" \
+	          "folders given to Rocq are not nested" >&2;; \
+	      esac; \
+	    done; \
+	  done; \
+	  printf '%s\n' $(FLAMBDA2_LISTED) $(FLAMBDA2_TYPES_LISTED) \
+	    | LC_ALL=C sort > "$$layout_dir/listed"; \
+	  find . -name '*.v' | sed 's,^\./,,' | LC_ALL=C sort \
+	    > "$$layout_dir/found"; \
+	  LC_ALL=C comm -13 "$$layout_dir/listed" "$$layout_dir/found" \
+	    > "$$layout_dir/unlisted"; \
+	  if [ -s "$$layout_dir/unlisted" ]; then bad=1; \
+	    echo "error: .v files under $(FLAMBDA2_DIR) that are in neither" \
+	      "FLAMBDA2 nor FLAMBDA2_TYPES of rocq/Makefile:" >&2; \
+	    sed 's/^/  /' "$$layout_dir/unlisted" >&2; \
+	  fi; \
+	  for name in $$(sed 's,.*/,,' "$$layout_dir/found" | LC_ALL=C sort \
+	      | uniq -d); do bad=1; \
+	    echo "error: more than one file is called $$name:" >&2; \
+	    grep -e "/$$name\$$" -e "^$$name\$$" "$$layout_dir/found" \
+	      | sed 's/^/  /' >&2; \
+	  done; \
+	  set -- $(FLAGS); \
+	  while [ $$# -ge 3 ]; do echo "$$2 $$3"; shift 3; done \
+	    | sed 's,^$(FLAMBDA2_DIR)/,,; s,^$(ROOT)/,../../../,' \
+	    | LC_ALL=C sort > "$$layout_dir/flags"; \
+	  sed -n 's/^-Q  *//p' _CoqProject | LC_ALL=C sort \
+	    > "$$layout_dir/project"; \
+	  if ! cmp -s "$$layout_dir/flags" "$$layout_dir/project"; then bad=1; \
+	    echo "error: the lines of $(FLAMBDA2_DIR)/_CoqProject are not the" \
+	      "flags of rocq/Makefile (< Makefile, > _CoqProject):" >&2; \
+	    diff "$$layout_dir/flags" "$$layout_dir/project" | grep '^[<>]' >&2; \
+	  fi; \
+	  [ $$bad = 0 ]
 
 # The review document, rocq/review.pdf: ROCQ-REVIEW-GUIDE.md, in parts, with
 # every reviewed .v file (definitions and statements; the implementation and
