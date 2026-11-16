@@ -24,14 +24,14 @@
   flambda2_rocq_semantics))
 
 ;; The generator of types and the differential tests, of the types and of the
-;; provers, and the tool that runs the comparisons of one type on the types
-;; that Simplify computes.
+;; provers (with the table of the provers, prover_table.ml), and the tool that
+;; runs the comparisons of one type on the types that Simplify computes.
 
 (executables
  (names types_difftest provers_difftest types_of_compilations)
  (modes native)
- (modules type_comparisons type_generator types_difftest provers_difftest
-   types_of_compilations)
+ (modules type_comparisons type_generator prover_table types_difftest
+   provers_difftest types_of_compilations)
  (libraries
   ocamlfrontend
   ocamloptcomp
