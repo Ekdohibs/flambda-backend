@@ -107,11 +107,19 @@ Lemma twin_apply_cont_renamed : equivariance_of twin_apply_cont.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite twin_apply_cont_renamed : equivariance.
 
-Lemma twin_names_renamed : equivariance_of twin_names.
+Lemma twin_names_renamed (r : renaming) (e : expr) :
+  ∀ pending : list variable,
+    twin_names (map (rename_variable r) pending) (rename_expr r e)
+    = map (rename_variable r) (twin_names pending e).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite twin_names_renamed : equivariance.
 
-Lemma renamed_from_renamed : equivariance_of renamed_from.
+Lemma renamed_from_renamed (r : renaming) (ts : list nat)
+    (params : list variable) :
+  ∀ (i : nat) (names : list variable),
+    renamed_from ts i (map (rename_variable r) params)
+      (map (rename_variable r) names)
+    = map (rename_variable r) (renamed_from ts i params names).
 Proof. equivariance. Qed.
 #[local] Hint Rewrite renamed_from_renamed : equivariance.
 
@@ -123,7 +131,11 @@ Lemma twin_expr_renamed : equivariance_of twin_expr.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite twin_expr_renamed : equivariance.
 
-Lemma head_ok_renamed : equivariance_of head_ok.
+Lemma head_ok_renamed (r : renaming) (avoid : list variable) (e : expr) :
+  ∀ pending : list variable,
+    head_ok (map (rename_variable r) avoid) (map (rename_variable r) pending)
+      (rename_expr r e)
+    = head_ok avoid pending e.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite head_ok_renamed : equivariance.
 
@@ -183,7 +195,10 @@ Proof. equivariance. Qed.
 (* The positions that the validation uses commute with renaming             *)
 (* ======================================================================== *)
 
-Lemma head_positions_renamed : equivariance_of head_positions.
+Lemma head_positions_renamed (r : renaming) (params : list variable) :
+  ∀ (kinds : list flambda_kind) (i : nat) (e : expr),
+    head_positions i (map (rename_variable r) params) kinds (rename_expr r e)
+    = head_positions i params kinds e.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite head_positions_renamed : equivariance.
 
