@@ -3295,6 +3295,102 @@ The two terms are given, as they are in memory, to the check of the
 tool (`Flsemantics.check`), which prints what it prints in the first
 way, under the name `X.fl`.
 
+In the first hook the program keeps the term, and converts and checks
+nothing. In the second it makes a child process, and the child asks
+what the tool asks, in the tool's order: whether the term before is
+well-formed (`well_formed_before`), and, if that answers yes, as it
+does also of a term that the conversion refuses, the check of the two
+terms. The process that compiles waits for the child and takes its
+status; it performs no check itself. Until it was mended the program
+made the check in the process that compiles, and that could change the
+compilation, in three ways, all since its first commit (4a7e56fa78):
+
+- It asked in the first hook whether the term before is well-formed
+  (discrepancy X2-18). To answer, the term is converted; the
+  conversion opens the binders of the term, and opening a binder makes
+  names. The names that Simplify then made had later numbers than in a
+  compilation by the compiler, and what Simplify makes can depend on
+  those numbers. So the pair that the program checked was not always
+  the pair that the compiler makes.
+- The check that it made in the second hook, where the first question
+  had answered yes, made names too, before the compiler makes what the
+  `.cmx` file of the unit has: the names in the types of the results
+  of exported code could have later numbers than in the compiler's
+  file (discrepancy V2-7).
+- In that check, to ask which units the compilation has read, it has
+  `Compilenv` build the description of the unit being compiled, and
+  building that adds a section to those that the `.cmx` file of the
+  unit will have (V2-7 again): the file that the program then wrote
+  had one section more than the compiler's.
+
+That was measured outside the tree, with the compiler installed from
+d3d722dc9f (no file of the compiler differs at 364b8d0708), each unit
+compiled to the end (`-c`, without `-stop-after middle_end`) by the
+compiler and by the program, with the same command line and in the
+same directory. Of the 553 units that this directory has at those two
+commits, the program of d3d722dc9f wrote another object file than the
+compiler for 26 at the default flags and for 27 with `-O3`, and
+another `.cmx` file for each of the 553 at both; with `-Oclassic`,
+where the compiler does not run Simplify, it wrote the compiler's
+files. A program that is in no tree, with the first question moved to
+the second hook and the section taken away, and the check still in the
+process that compiles, wrote the compiler's object files, and not the
+compiler's `.cmx` file for three units with `-O3`
+(`data_string_in_module_and_functor.ml`, `f2_one_inlined_one_not.ml`,
+`fct_local_mutual_both_to_inlined.ml`): hence the child. The mended
+program, built at 364b8d0708, wrote the compiler's object file, `.cmx`
+file and `.cmi` file, byte for byte, for each of the 553 at the
+default flags, with `-O3` and with `-Oclassic`, and for each of the 20
+units of `library/` and two of `script/` (`library_function.ml`,
+`library_function_not.ml`), compiled with the standard library, at the
+default flags and with `-O3`. What it printed of each of those units,
+and its status, were what the program of d3d722dc9f printed, at each
+of those settings. Nothing in the tree makes that measure again. Seven
+rules of `../own_run/` (`same_object.sh`) compare the three files of
+seven compilations, by the program and by the compiler that the main
+context builds (`oxcaml_main_native.exe`, made of the libraries that
+the program is made of): `boxed_constant_twice.ml` at the default
+flags and with `-Oclassic`, `compose_chains.ml`,
+`data_string_in_module_and_functor.ml` with `-O3`, and, with the
+standard library that the main context is built with,
+`script/library_function.ml` and `../own_run/reads_a_section.ml`, the
+last a second time with the standard input closed. They are rules of
+the main context, as the program is built there only. The compiler
+that builds the main context is another build of the same sources, and
+is not the one compared: of `compose_chains.ml` it writes a `.cmx`
+file of other bytes than the installed compiler does, of which
+`ocamlobjinfo` prints the same but the CRC.
+
+What the child still shares with the process that compiles is the open
+files, each with its position. The child writes on the standard output
+and the standard error and on no other file; it may read the `.cmx`
+file of another unit, which the compiler keeps open, and that moves
+the position of the file. So the process that compiles takes the
+position of each of its descriptors that has one before the child is
+made, and puts back those that have moved when the child is known to
+have ended; it leaves alone the standard output and the standard
+error, and any other descriptor of their files. The three standard
+descriptors are open before the compiler starts: one that is closed is
+given `/dev/null`, so that no file of the compiler takes its number.
+Where the descriptors cannot be listed (`/proc/self/fd`, or
+`/dev/fd`), no child is made and the check is not made. Of the units
+measured above the child moved no position. Of
+`../own_run/reads_a_section.ml`, which calls `Format.asprintf`, it
+moved one: the check read the code of that function in a `.cmx` file
+that is longer than the buffer of a channel (seen with a program that
+counts, which is in no tree). No compilation was seen to go wrong
+where the position is not put back. That a read of the parent can then
+fail was shown in a program of its own, outside the tree: a child
+reads through a channel that it inherits, and the next read of the
+parent through that channel fails unless the position is put back.
+
+What follows from the child: a limit of processor time is counted for
+it apart, so that a unit can take up to twice the limit. And a signal
+that kills the check does not by itself stop compilation. The program
+says in a line that the check stopped, and lets the compiler continue;
+it exits with 2 if compilation succeeds, and if compilation fails the
+compiler's status wins. So too where no child can be made.
+
 It differs from the first way in three things:
 
 - No text. The first way checks the term that the reader makes of
@@ -3331,24 +3427,31 @@ about (those whose `.cmx` file the compilation has read).
 So a verdict printed in this way is of the pair that the compiler
 made: of two terms, as a verdict of the first way is, with the same
 labels and the theorems that those labels have. Like a verdict of the
-first way it rests on the conversion. It does not rest on the
-printer, on the reader or on the tool's run of Simplify being the
-compiler's; in their place it rests on the two hooks being given the
-terms that the compiler goes on with. What a verdict of the first way
-does not say ("What a validation does not say"), this one does not
-say either, but for the losses of the text. And it says nothing of
-what the compiler then makes of the term after: the reaper, where
-that is enabled, the translation to Cmm, the back end and the link
-are not looked at. Of a unit on which the compiler does not run
-Simplify (`-Oclassic`, or an attribute of the unit) the program says
-"not checked".
+first way it rests on the conversion. It does not rest on the printer,
+on the reader or on the tool's run of Simplify being the compiler's;
+in their place it rests on the two hooks being given the terms that
+the compiler goes on with, and on this: no conversion or checking of
+the terms takes place in the process that compiles, and opening any
+closed standard descriptors on `/dev/null`, retaining the first term,
+starting and waiting for the child, putting back the positions of the
+open files, and reporting its status do not change the compiler's
+compilation. What a verdict of the first way does not say ("What a
+validation does not say"), this one does not say either, but for the
+losses of the text. And it says nothing of what the compiler then
+makes of the term after: the reaper, where that is enabled, the
+translation to Cmm, the back end and the link are not looked at. Of a
+unit on which the compiler does not run Simplify (`-Oclassic`, or an
+attribute of the unit) the program says "not checked".
 
 What it finds of the 347 units of this directory at 87cdbf3e01. It
 was measured with the program of this section on the tree at that
 commit, at the default flags; no `X.own_expected` is in the tree, so
-no rule of the tree makes the measure again. The units of `pairs/`
-are not run: `own_run.sh` does not give the program the `.cmx` file
-of a first unit.
+no rule of the tree makes the measure again. The program was then as
+it was before it was mended (above): what follows is of compilations
+in which the names that Simplify made had later numbers than in the
+compiler's, and it has not been measured again with the program as
+it is. The units of `pairs/` are not run: `own_run.sh` does not give
+the program the `.cmx` file of a first unit.
 
 - Of the 325 units that the first way validated at that commit (283, the
   14 counted apart for T4-13 and 28 with their imports, by the tables

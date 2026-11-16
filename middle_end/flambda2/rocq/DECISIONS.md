@@ -1225,6 +1225,24 @@ says so. Only the labels that this tree cites are listed.
   inlined; the tool's Simplify, to which the functor is a function,
   compares it with the thresholds for functions and may leave the call.
   The pair validated is then not the pair that the compiler made.
+- **V2-7.** A fault of a tool of the tests, not of the compiler. The
+  driver of the compiler's own run
+  (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) made
+  its check in the process that compiles, and where the check ran (when
+  Simplify had returned, if the first question of the driver,
+  `well_formed_before`, had answered yes) it could change the `.cmx`
+  file that the compilation then wrote, in two ways. To give the units
+  whose `.cmx` file the compilation has read, `Compilenv` builds the
+  description of the unit being compiled, and building it adds a section
+  to those of that unit's `.cmx` file: the driver's file had one section
+  more than the one that `ocamlopt` writes of the same source with the
+  same command line. And the names that the check made came before those
+  that the compiler makes for what the `.cmx` file has: the types of the
+  results of exported code could have other numbers in their names. The
+  driver now makes the check in a child process, and no conversion or
+  checking of the terms takes place in the process that compiles; the
+  `.cmx` file is then the compiler's, byte for byte, for the units
+  compared.
 - **V3-2.** Simplify lifts a closed constant out of a function or a
   loop, and shares equal constants: the number of allocations changes.
 - **V4-1.** Loopify makes a self tail call a jump without comparing the
@@ -1241,6 +1259,21 @@ says so. Only the labels that this tree cites are listed.
   call of it as a call of code that does not exist.
 - **X2-10.** The kinds of unboxed 8-bit and 16-bit integers are printed
   in the text of a term and are not in the grammar of the reader.
+- **X2-18.** A fault of a tool of the tests, not of the compiler. The
+  driver of the compiler's own run
+  (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) did
+  not make the compilation that `ocamlopt` makes of the same source
+  with the same command line. Seen in the object files: a constant
+  that Simplify lifts had another number in its name, and a unit whose
+  simplified code changes with the name of the unit (with
+  `-flambda2-match-in-match`) gave, from the driver and from
+  `ocamlopt`, two programs that print differently under 15 of 24
+  names of the unit. The driver's hook asked whether the term given
+  to Simplify is well-formed before Simplify ran, and to answer it
+  the term is converted, which makes names. The hook now keeps the
+  term, and nothing is asked of it until Simplify has returned; the
+  two compilations then have the same symbols and the two programs
+  print the same under all 24 names.
 - **X3-5.** The n-way join of two variants that carry only a relation
   answers unknown and drops the relation it has just joined.
 - **X4-1.** The output of Simplify binds the same variable in two

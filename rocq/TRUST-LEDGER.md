@@ -458,16 +458,32 @@ it gave back.
   the compiler's driver with two hooks registered
   (`driver/compiler_hooks.mli`), and gives the two terms of the
   compiler's own run, as they are in memory, to the check of the
-  tool (`Flsemantics.check`). No rule of the tree runs it on a unit
-  of the examples; one control runs it
-  (`middle_end/flambda2/tests/semantics/own_run/`). A verdict that
+  tool (`Flsemantics.check`). No unit of the examples has an
+  expected file of what it prints, so no rule of the tree runs it
+  for that; the controls of
+  `middle_end/flambda2/tests/semantics/own_run/` run it: one gives
+  it a second unit in a process, and seven compare the files that
+  it writes of a unit with those that the compiler writes. A verdict that
   it prints does not rest on the entry above: there is no text, no
   reader and no second run of Simplify. In its place it rests on
   the two hooks: that `Raw_flambda2` is given the term that the
   compiler gives to Simplify and `Flambda2` the term that the
   compiler's Simplify returned, and that these are the terms that
   the compiler goes on with (`flambda_to_flambda0` in
-  `middle_end/flambda2/flambda2.ml`). The entries below are trusted
+  `middle_end/flambda2/flambda2.ml`); and on this: no conversion
+  or checking of the terms takes place in the process that
+  compiles (the check is made in a child process, when Simplify
+  has returned), and opening any closed standard descriptors on
+  `/dev/null`, retaining the first term, starting and waiting for
+  the child, putting back the positions of the open files, which
+  the child shares, and reporting its status do not change the
+  compiler's compilation. Until it was mended it made the
+  check in the process that compiles, and asked a question of the
+  first term before Simplify ran: the compilation that it checked
+  was not always the compiler's (discrepancy X2-18), and the
+  `.cmx` file that it wrote could differ from the compiler's
+  (discrepancy V2-7). The rules of the tree compare these files
+  for those seven compilations only. The entries below are trusted
   of it as they are of the tool, with one difference: the `.cmx`
   files of other units are looked for on the compiler's load path
   (`Compmisc.init_path`), not only in the directories given with

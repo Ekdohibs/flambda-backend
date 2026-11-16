@@ -27,3 +27,121 @@
   (= %{context_name} "main"))
  (action
   (diff two_units.expected two_units.output)))
+
+;; same_object: the driver compiles as the compiler does. Its first hook keeps
+;; the term and asks nothing, and the check is made in a child process when
+;; Simplify has returned, so that nothing that the check does is in the
+;; process that compiles. So some units of ../ocaml/, and one of this
+;; directory, are compiled to the end by the compiler and by the driver, with
+;; the same command line and in the same directory, and the object file, the
+;; .cmx file and the .cmi file must be the same bytes (same_object.sh).
+;;
+;; The compiler is the one that this context builds (oxcaml_main_native.exe,
+;; at the root): it is made of the libraries that the driver is made of. It is
+;; not %{ocamlopt}, the compiler that builds this context, which is another
+;; build of the same sources: of a unit that exports code, compose_chains for
+;; one, the two builds do not write the same bytes in the .cmx file.
+;;
+;; boxed_constant_twice: Simplify lifts a constant to a symbol whose name has
+;; the number of a variable in it; a check made before Simplify gave it another
+;; number, in the object file. compose_chains: closures, and no such symbol.
+;; data_string_in_module_and_functor with -O3: the .cmx file has the types of
+;; the results of code, with names that the compiler makes after Simplify; a
+;; check made in the process that compiles, between the two, gave them other
+;; numbers. library_function: a unit that calls a function of the standard
+;; library (the one that this context is built with), so that the compilation
+;; reads the .cmx file of another unit and records it among its imports.
+;; boxed_constant_twice with -Oclassic: the compiler does not run Simplify, and
+;; the driver asks nothing at all. Of every one of the first four, a check made
+;; in the process that compiles left a section more in the .cmx file.
+;; reads_a_section: the check reads, in the child, a section of the .cmx file
+;; of another unit, which moves the position of a file that the compilation has
+;; open; the driver puts the position back. And the same with the standard
+;; input closed: the first file that the compiler opens then takes descriptor
+;; 0, where the driver gives /dev/null to a standard descriptor that is closed
+;; before the compiler starts.
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps ../ocaml/boxed_constant_twice.mli)
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:../ocaml/boxed_constant_twice.ml} -nopervasives -nostdlib)))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps ../ocaml/compose_chains.mli)
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:../ocaml/compose_chains.ml} -nopervasives -nostdlib)))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps ../ocaml/data_string_in_module_and_functor.mli)
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:../ocaml/data_string_in_module_and_functor.ml} -nopervasives
+   -nostdlib -O3)))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps
+  (glob_files %{ocaml_where}/*.cmi)
+  (glob_files %{ocaml_where}/*.cmx))
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:../ocaml/script/library_function.ml} -nostdlib -I %{ocaml_where})))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps ../ocaml/boxed_constant_twice.mli)
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:../ocaml/boxed_constant_twice.ml} -nopervasives -nostdlib
+   -Oclassic)))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps
+  (glob_files %{ocaml_where}/*.cmi)
+  (glob_files %{ocaml_where}/*.cmx))
+ (action
+  (run sh %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:reads_a_section.ml} -nostdlib -I %{ocaml_where})))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps
+  (glob_files %{ocaml_where}/*.cmi)
+  (glob_files %{ocaml_where}/*.cmx))
+ (action
+  (run sh -c "exec sh \"$0\" \"$@\" <&-" %{dep:same_object.sh}
+   %{dep:../../../../../oxcaml_main_native.exe}
+   %{dep:../../tools/ownrun/flsemantics_ownrun.exe}
+   %{dep:reads_a_section.ml} -nostdlib -I %{ocaml_where})))
