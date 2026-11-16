@@ -110,22 +110,26 @@ same. Where what a line says is known and has a label, `labels` gives
 the label of the unit, which is put at the end of its line; no line
 has one now.
 
-- "not simplified", eleven units: in each of the three runs Simplify
-  stops with an exception. The script records that, and not what the
-  exception says, which need not be the same in the three. Each is a
-  unit that the check of the directory above does not give to
-  Simplify, and says "not checked" of: a term that is not well-formed
+- "not simplified": in each of the three runs Simplify stops with an
+  exception. The script records that, and not what the exception
+  says, which need not be the same in the three. When the test was
+  written there were eleven such units, and each was a unit that the
+  check of the directory above does not give to Simplify, and says
+  "not checked" of: a term that is not well-formed
   (`set_duplicate_slot`, `set_shared_code`,
   `set_static_group_one_function`, `set_static_group_shared_code`,
   `static_in_loop`), or a call of unknown arity that returns to a
   continuation whose parameters are not one value, where the text does
   not supply the arity of the result that is required (the six
-  others).
+  others). A line of this kind that is added is to be held to the
+  same: if the check of the directory gives the unit to Simplify, and
+  Simplify stops on it here, that is something else, to be looked
+  into before the line is recorded.
 - "not compared: the result with K = 0, read twice, differs: a code
-  ID", three units: the text of the result names code that it does not
-  bind, the reader makes a new code ID for such a name at each
-  reading, and the comparison takes two code IDs that no unit binds
-  for the same only if they are equal. In
+  ID", three units when the test was written: the text of the result
+  names code that it does not bind, the reader makes a new code ID
+  for such a name at each reading, and the comparison takes two code
+  IDs that no unit binds for the same only if they are equal. In
   `kinds_call_unbound_written` it is the code of the direct call,
   which the unit does not bind either. In `closure_at_own_slot` and
   `closure_at_other_slot`, which are terms that Simplify made, it is
@@ -143,9 +147,9 @@ has one now.
 No unit is known of which the test says "differs". That it would was
 tried once by hand, with a change of Simplify that is not kept: with
 the arguments of an integer addition put in the order of the
-identifiers of two variables, of the 187 units, 24 that had said "the
-same" come to say "differs: a variable" or "differs: a constant", for
-one K or for both.
+identifiers of two variables, of the 187 units that there were then,
+24 that had said "the same" came to say "differs: a variable" or
+"differs: a constant", for one K or for both.
 
 ## What a difference would mean
 
@@ -159,5 +163,5 @@ two orders of the arguments of an addition do.
 
 The test is over small units at the default options. The units that
 were compared across the three numberings all say "the same". That
-says nothing of the fourteen other units, of a unit that is not here,
-or of another option.
+says nothing of the units that have a line in the expected file, of a
+unit that is not here, or of another option.
