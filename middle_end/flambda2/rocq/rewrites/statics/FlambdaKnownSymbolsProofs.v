@@ -57,7 +57,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsProofs FlambdaNominalSpec FlambdaNormaliseSpec
   FlambdaClosuresProofs FlambdaUnusedStaticsSpec FlambdaUnusedSlotsProofs
   FlambdaWellFormedSpec FlambdaImportsSpec FlambdaObserversSpec
-  FlambdaUnitFromProofs FlambdaKnownSymbolsSpec.
+  FlambdaUnitFromProofs FlambdaKnownSymbolsSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1879,21 +1879,25 @@ Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* The law of the pass is proved from the definitions by [equivariance]
+   (FlambdaEquivarianceTactic.v), and so are the laws of the tests and of
+   the three folds that read a symbol. Three lemmas stay by hand: a
+   simple or a defining expression that is known mentions no variable,
+   so renaming leaves it as it is, and what it folds to with it. That is
+   a fact about what passed a test, not a law of renaming; the third is
+   given to the tactic to rewrite with, as are the laws of the folds. *)
+
 Lemma rename_known_simple (r : renaming) (statics : static_env) (s : simple) :
   simple_known statics s = true -> rename_simple r s = s.
 Proof. destruct s; simpl; [ discriminate | reflexivity | reflexivity ]. Qed.
 
 Lemma simple_known_rename (r : renaming) (statics : static_env) (s : simple) :
   simple_known statics (rename_simple r s) = simple_known statics s.
-Proof. destruct s; reflexivity. Qed.
+Proof. equivariance. Qed.
 
 Lemma named_known_rename (r : renaming) (statics : static_env) (d : named) :
   named_known statics (rename_named r d) = named_known statics d.
-Proof.
-  destruct d; simpl; try reflexivity; try apply simple_known_rename.
-  f_equal. induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite simple_known_rename, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma rename_known_named (r : renaming) (statics : static_env) (d : named) :
   named_known statics d = true -> rename_named r d = d.
@@ -1919,96 +1923,29 @@ Proof.
   destruct (eval_named statics [] d) as [[] | ]; try reflexivity;
     exact (rename_known_named r statics d Hknown).
 Qed.
+#[local] Hint Rewrite fold_known_named_rename : equivariance.
 
 (* The projection of a function slot that is folded is from a symbol. *)
 Lemma fold_function_slot_rename (r : renaming) (sets : static_env)
     (d : named) :
   rename_named r (fold_function_slot sets d)
   = fold_function_slot sets (rename_named r d).
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    try reflexivity.
-  destruct closure as [x | s | c]; try reflexivity.
-  unfold fold_function_slot. cbn [rename_named rename_simple].
-  destruct (eval_named sets [] _) as [w | ]; [ | reflexivity ].
-  destruct w; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite fold_function_slot_rename : equivariance.
 
 (* The load of a field that is folded is from a symbol. *)
 Lemma fold_block_load_rename (r : renaming) (sets : static_env) (d : named) :
   rename_named r (fold_block_load sets d)
   = fold_block_load sets (rename_named r d).
-Proof.
-  destruct d as [s | p args | code slots | fslot decls slots | slot closure
-    | pfrom slot closure | move_from move_to closure];
-    try reflexivity.
-  destruct p as [p | p | p | p | rp]; try reflexivity.
-  destruct p; try reflexivity.
-  destruct args as [ | [x | s | c] [ | arg args]];
-    try (destruct mut; reflexivity).
-  unfold fold_block_load. cbn [rename_named rename_simple map].
-  destruct mut; try reflexivity;
-    (destruct (eval_named sets [] _) as [w | ]; [ | reflexivity ]);
-    destruct w; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite fold_block_load_rename : equivariance.
 
 Lemma fold_known_apply_rename (r : renaming) (sets : static_env)
     (ap : apply_expr) :
   rename_apply r (fold_known_apply sets ap)
   = fold_known_apply sets (rename_apply r ap).
-Proof.
-  unfold fold_known_apply.
-  replace (ap_call_kind (rename_apply r ap)) with (ap_call_kind ap)
-    by reflexivity.
-  replace (ap_callee (rename_apply r ap))
-    with (rename_simple r (ap_callee ap)) by reflexivity.
-  destruct (ap_call_kind ap) as [named | ]; [ reflexivity | ].
-  destruct (ap_callee ap) as [x | s | c]; try reflexivity.
-  cbn [rename_simple].
-  destruct (closure_of sets (Value_symbol s)) as [[code slots] | ];
-    reflexivity.
-Qed.
-
-Fixpoint fold_known_rename (r : renaming) (statics sets : static_env)
-    (e : expr) {struct e} :
-  rename_expr r (fold_known statics sets e)
-  = fold_known statics sets (rename_expr r e)
-with fold_known_handler_rename (r : renaming) (statics sets : static_env)
-    (h : continuation_handler) {struct h} :
-  rename_handler r (fold_known_handler statics sets h)
-  = fold_known_handler statics sets (rename_handler r h)
-with fold_known_binding_rename (r : renaming) (statics sets : static_env)
-    (binding : static_binding) {struct binding} :
-  rename_static_binding r (fold_known_binding statics sets binding)
-  = fold_known_binding statics sets (rename_static_binding r binding)
-with fold_known_code_rename (r : renaming) (statics sets : static_env)
-    (c : code) {struct c} :
-  rename_code r (fold_known_code statics sets c)
-  = fold_known_code statics sets (rename_code r c).
-Proof.
-  - destruct e
-      as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      simpl; try reflexivity.
-    + rewrite fold_block_load_rename, fold_function_slot_rename,
-        fold_known_named_rename, fold_known_rename.
-      reflexivity.
-    + rewrite fold_known_rename. f_equal. rewrite !map_map.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite fold_known_binding_rename, IH. reflexivity.
-    + rewrite fold_known_handler_rename, fold_known_rename. reflexivity.
-    + rewrite fold_known_rename. f_equal. rewrite !map_map.
-      induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite fold_known_handler_rename, IH. reflexivity.
-    + rewrite fold_known_apply_rename. reflexivity.
-  - destruct h as [params metadata handler]. simpl. rewrite fold_known_rename.
-    reflexivity.
-  - destruct binding as [id c | id | sym const]; simpl; try reflexivity.
-    rewrite fold_known_code_rename. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite fold_known_rename. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite fold_known_apply_rename : equivariance.
 
 Theorem fold_known_equivariant : fold_known_equivariant_statement.
-Proof. exact fold_known_rename. Qed.
+Proof. equivariance. Qed.
