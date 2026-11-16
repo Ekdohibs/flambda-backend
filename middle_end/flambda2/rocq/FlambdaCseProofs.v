@@ -37,7 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaBindersSpec FlambdaNominalSpec FlambdaNominalProofs
   FlambdaApplyProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaHeapSpec
-  FlambdaHeapProofs FlambdaCseSpec.
+  FlambdaHeapProofs FlambdaCseSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -709,17 +709,36 @@ Qed.
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
+(* The laws of this section are proved from the definitions
+   ([equivariance], of FlambdaEquivarianceTactic.v), but for three
+   things that the tactic is given.
+
+   The test of two lists of simples ([same_simples]) is made by a
+   decision procedure on lists, of which the database has no law: its
+   law is proved by hand, from the injectivity of renaming, and given
+   to the database.
+
+   Computation is kept from unfolding [var_in_simples] and
+   [same_simples] here, so that their laws apply where the tactic
+   meets them in a test.
+
+   The law of [forget_computed] is not left to the tactic from its
+   start: the two definitions are unfolded and the database rewrites
+   the filter of a mapped list, one step by hand goes under the [map]
+   that both sides then begin with, and the tactic closes what is
+   left. The tactic does not go under it itself: the type of the
+   entries is written in two ways on the two sides ([variable] in
+   [computed], the type that it is defined as in the test of the
+   definition).
+
+   A law that another file uses by its name is stated; a law that is
+   stated is given to the database, and is not derived again. *)
+
 Lemma var_in_simples_renamed (r : renaming) (x : variable)
     (args : list simple) :
   var_in_simples (rename_variable r x) (map (rename_simple r) args)
   = var_in_simples x args.
-Proof.
-  unfold var_in_simples.
-  induction args as [ | s args IH]; simpl; [ reflexivity | ].
-  rewrite IH.
-  destruct s as [y | sym | c]; simpl; [ rewrite rename_variable_eqb | | ];
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma rename_simple_injective (r : renaming) (s s' : simple) :
   rename_simple r s = rename_simple r s' -> s = s'.
@@ -760,182 +779,73 @@ Proof.
     exact (rename_simples_injective r args args' Hsame).
 Qed.
 
+#[local] Arguments var_in_simples : simpl never.
+#[local] Arguments same_simples : simpl never.
+#[export] Hint Rewrite same_simples_renamed : equivariance.
+
 Lemma computed_by_renamed (r : renaming) (known : computed) (p : prim)
     (args : list simple) :
   computed_by (rename_computed r known) p (map (rename_simple r) args)
   = option_map (rename_variable r) (computed_by known p args).
-Proof.
-  induction known as [ | [x [p' args']] known IH]; simpl; [ reflexivity | ].
-  rewrite same_simples_renamed.
-  destruct (prim_eqb p p' && same_simples args args');
-    [ reflexivity | exact IH ].
-Qed.
-
-Lemma made_length_renamed (r : renaming) (known : computed) (x : variable) :
-  made_length (rename_computed r known) (rename_variable r x)
-  = made_length known x.
-Proof.
-  induction known as [ | [y [p args]] known IH]; [ reflexivity | ].
-  change
-    (made_length
-       ((rename_variable r y, (p, map (rename_simple r) args))
-        :: rename_computed r known)
-       (rename_variable r x)
-     = made_length ((y, (p, args)) :: known) x).
-  cbn [made_length].
-  destruct p as [ | | | hprim | ]; try exact IH.
-  destruct hprim as [ | | kind | ]; try exact IH.
-  rewrite rename_variable_eqb, length_map, IH. reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite computed_by_renamed : equivariance.
 
 Lemma made_length_named_renamed (r : renaming) (known : computed) (d : named) :
   made_length_named (rename_computed r known) (rename_named r d)
   = option_map (rename_named r) (made_length_named known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [u | | | | ]; try reflexivity.
-  destruct u; try reflexivity.
-  destruct args as [ | [x | sym | c] [ | arg args]]; try reflexivity.
-  cbn [rename_named map rename_simple made_length_named].
-  rewrite made_length_renamed.
-  destruct (made_length known x) as [n | ]; [ | reflexivity ].
-  destruct (in_range (int_width Standard_tagged_immediate) n); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite made_length_named_renamed : equivariance.
 
 Lemma share_named_renamed (r : renaming) (known : computed) (d : named) :
   share_named (rename_computed r known) (rename_named r d)
   = rename_named r (share_named known d).
-Proof.
-  unfold share_named. rewrite made_length_named_renamed.
-  destruct (made_length_named known d) as [d' | ]; [ reflexivity | ].
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [option_map rename_named]. rewrite computed_by_renamed.
-  destruct (shareable p); [ | reflexivity ].
-  destruct (computed_by known p args); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite share_named_renamed : equivariance.
 
 Lemma forget_computed_renamed (r : renaming) (x : variable)
     (known : computed) :
   forget_computed (rename_variable r x) (rename_computed r known)
   = rename_computed r (forget_computed x known).
 Proof.
-  induction known as [ | [y [p args]] known IH]; [ reflexivity | ].
-  change
-    ((if
-        negb (Pos.eqb (rename_variable r x) (rename_variable r y))
-        && negb
-             (var_in_simples (rename_variable r x)
-                (map (rename_simple r) args))
-      then
-        (rename_variable r y, (p, map (rename_simple r) args))
-        :: forget_computed (rename_variable r x) (rename_computed r known)
-      else forget_computed (rename_variable r x) (rename_computed r known))
-     = rename_computed r
-         (if negb (Pos.eqb x y) && negb (var_in_simples x args)
-          then (y, (p, args)) :: forget_computed x known
-          else forget_computed x known)).
-  rewrite rename_variable_eqb, var_in_simples_renamed, IH.
-  destruct (negb (Pos.eqb x y) && negb (var_in_simples x args)); reflexivity.
+  unfold forget_computed, rename_computed.
+  autorewrite with equivariance. f_equal. eqv_core.
 Qed.
+#[export] Hint Rewrite forget_computed_renamed : equivariance.
 
 Lemma forget_computed_vars_renamed (r : renaming) (xs : list variable) :
   ∀ known : computed,
     forget_computed_vars (map (rename_variable r) xs)
       (rename_computed r known)
     = rename_computed r (forget_computed_vars xs known).
-Proof.
-  induction xs as [ | x xs IH]; intros known; simpl; [ reflexivity | ].
-  rewrite forget_computed_renamed. apply IH.
-Qed.
-
-Lemma tagged_again_renamed (r : renaming) (x : variable) (p : prim)
-    (args : list simple) :
-  tagged_again (rename_variable r x) p (map (rename_simple r) args)
-  = map
-      (fun entry =>
-         (rename_variable r (fst entry),
-          (fst (snd entry), map (rename_simple r) (snd (snd entry)))))
-      (tagged_again x p args).
-Proof.
-  unfold tagged_again.
-  destruct p as [u | | | | ]; try reflexivity.
-  destruct u; try reflexivity.
-  destruct args as [ | [t | s | c] [ | arg args]]; reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite forget_computed_vars_renamed : equivariance.
 
 Lemma computed_under_let_renamed (r : renaming) (known : computed)
     (x : variable) (d : named) :
   computed_under_let (rename_computed r known) (rename_variable r x)
     (rename_named r d)
   = rename_computed r (computed_under_let known x d).
-Proof.
-  unfold computed_under_let. rewrite forget_computed_renamed.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  simpl. rewrite var_in_simples_renamed.
-  destruct (shareable p && negb (var_in_simples x args)); [ | reflexivity ].
-  unfold rename_computed. rewrite map_cons, map_app. cbn [fst snd].
-  f_equal. f_equal. apply tagged_again_renamed.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite computed_under_let_renamed : equivariance.
 
 Lemma array_made_under_let_renamed (r : renaming) (x : variable) (d : named) :
   array_made_under_let (rename_variable r x) (rename_named r d)
   = rename_computed r (array_made_under_let x d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct p as [ | | | hprim | ]; try reflexivity.
-  destruct hprim as [ | | kind | ]; try reflexivity.
-  cbn [rename_named array_made_under_let]. rewrite var_in_simples_renamed.
-  destruct (var_in_simples x args); reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite array_made_under_let_renamed : equivariance.
 
 Lemma computed_or_made_under_let_renamed (r : renaming) (known : computed)
     (x : variable) (d : named) :
   computed_or_made_under_let (rename_computed r known) (rename_variable r x)
     (rename_named r d)
   = rename_computed r (computed_or_made_under_let known x d).
-Proof.
-  unfold computed_or_made_under_let.
-  rewrite array_made_under_let_renamed, computed_under_let_renamed.
-  unfold rename_computed. rewrite map_app. reflexivity.
-Qed.
-
-Fixpoint share_primitives_knowing_equivariant_aux (r : renaming) (e : expr) :
-  ∀ known : computed,
-    share_primitives_knowing (rename_computed r known) (rename_expr r e)
-    = rename_expr r (share_primitives_knowing known e)
-with share_primitives_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : computed,
-    share_primitives_in_handler (rename_computed r known)
-      (rename_handler r h)
-    = rename_handler r (share_primitives_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; simpl; try reflexivity.
-    + rewrite share_named_renamed, computed_or_made_under_let_renamed,
-        share_primitives_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite share_primitives_knowing_equivariant_aux. reflexivity.
-    + rewrite share_primitives_in_handler_equivariant,
-        share_primitives_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite share_primitives_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known. simpl.
-    rewrite forget_computed_vars_renamed,
-      share_primitives_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
+#[export] Hint Rewrite computed_or_made_under_let_renamed : equivariance.
 
 Theorem share_primitives_knowing_equivariant :
   share_primitives_knowing_equivariant_statement.
-Proof.
-  intros r known e. apply share_primitives_knowing_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem share_known_primitives_equivariant :
   share_known_primitives_equivariant_statement.
-Proof.
-  intros r e. exact (share_primitives_knowing_equivariant_aux r e []).
-Qed.
+Proof. intros r e. exact (share_primitives_knowing_equivariant r [] e). Qed.
