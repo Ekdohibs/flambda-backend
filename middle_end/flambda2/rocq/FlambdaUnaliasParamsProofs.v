@@ -39,7 +39,8 @@
    FlambdaSimulationProofs.stuttering_refines. That the term refines
    the result is by [lagging_refines], a simulation in which the first
    run may take a step that the second answers one step later. The
-   pass is then by the context lemmas of FlambdaContextProofs.v.
+   pass is then the walk of that rewrite
+   (FlambdaSpineWalkProofs.walk_spine_equivalent).
 
    The one parameter is proved for a parameter that every application
    gives one simple, a variable, a symbol or a constant
@@ -67,7 +68,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaSimulationProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedParamsProofs
-  FlambdaUnaliasParamsSpec.
+  FlambdaSpineWalkSpec FlambdaSpineWalkProofs FlambdaUnaliasParamsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1541,50 +1542,23 @@ Proof.
       (unalias_param_equivalent i k h body h' body' Hparam) (IH k h' body')).
 Qed.
 
-(* Each layer is a context around what the induction gives; then the
-   parameters of the [Let_cont] are looked at. *)
-Fixpoint unalias_params_equivalent_aux (e : expr) :
-  expr_equivalent e (unalias_params e).
+(* The rewrite of one node; the pass is then the walk, by
+   FlambdaSpineWalkProofs.walk_spine_equivalent. *)
+Lemma unalias_node_equivalent (e : expr) :
+  expr_equivalent e (unalias_node e).
 Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    cbn [unalias_params];
+  destruct e as [ | | k [params metadata handler] body | | | | | ];
     try (intros vars conts statics hp rd; apply equivalent_refl).
-  - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
-      (unalias_params_equivalent_aux body)).
-  - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)
-      (unalias_params_equivalent_aux body)).
-  - assert (Hlayers :
-      expr_equivalent
-        (Let_cont_non_recursive k (Handler params metadata handler) body)
-        (Let_cont_non_recursive k
-           (Handler params metadata (unalias_params handler))
-           (unalias_params body))).
-    { apply (expr_equivalent_trans _
-        (Let_cont_non_recursive k
-           (Handler params metadata (unalias_params handler)) body)).
-      - exact (plug_equivalent
-          (Let_cont_non_recursive_handler k params metadata Hole body) _ _
-          (not_many _) (unalias_params_equivalent_aux handler)).
-      - exact (plug_equivalent
-          (Let_cont_non_recursive_body k
-             (Handler params metadata (unalias_params handler)) Hole)
-          _ _ (not_many _) (unalias_params_equivalent_aux body)). }
-    pose proof
-      (unalias_from_equivalent (length params) k
-         (Handler params metadata (unalias_params handler))
-         (unalias_params body))
-      as Hfrom.
-    destruct
-      (unalias_from (length params) k
-         (Handler params metadata (unalias_params handler))
-         (unalias_params body))
-      as [h' body'].
-    exact (expr_equivalent_trans _ _ _ Hlayers Hfrom).
-  - exact (plug_equivalent (Let_cont_recursive_body handlers Hole) _ _
-      (not_many _) (unalias_params_equivalent_aux body)).
+  cbn [unalias_node].
+  pose proof
+    (unalias_from_equivalent (length params) k
+       (Handler params metadata handler) body)
+    as Hfrom.
+  destruct
+    (unalias_from (length params) k (Handler params metadata handler) body)
+    as [h' body'].
+  exact Hfrom.
 Qed.
 
 Theorem unalias_params_equivalent : unalias_params_equivalent_statement.
-Proof. exact unalias_params_equivalent_aux. Qed.
+Proof. exact (walk_spine_equivalent _ unalias_node_equivalent). Qed.

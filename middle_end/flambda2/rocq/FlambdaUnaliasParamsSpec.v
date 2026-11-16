@@ -112,9 +112,11 @@
      parameter is not at another position of the handler too.
    The positions are tried from the last to the first ([unalias_from]),
    in every non-recursive [Let_cont] of the term, the innermost first
-   ([unalias_params]). The handlers of recursive continuations and the
-   bodies of code are not gone into: FlambdaNormaliseSpec.rewrite_code
-   and [rewrite_rec_handlers] take a pass there.
+   ([unalias_params], which is FlambdaSpineWalkSpec.walk_spine of the
+   rewrite of one [Let_cont], [unalias_node]). The handlers of
+   recursive continuations and the bodies of code are not gone into:
+   FlambdaNormaliseSpec.rewrite_code and [rewrite_rec_handlers] take a
+   pass there.
 
    The result is equivalent to the term
    ([unalias_params_equivalent_statement]), under all environments.
@@ -134,7 +136,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaSemanticsSpec.
+  FlambdaMapSpec FlambdaSemanticsSpec FlambdaSpineWalkSpec.
 Import ListNotations.
 
 (* A list without its element at a position. *)
@@ -326,22 +328,24 @@ Fixpoint unalias_from (i : nat) (k : continuation)
     end
   end.
 
-(* The pass: every non-recursive [Let_cont] of a term, its handler and
-   its body first. The handlers of recursive continuations and the
-   bodies of code are left as they are. *)
-Fixpoint unalias_params (e : expr) {struct e} : expr :=
+(* The pass at one node: the parameters of a non-recursive [Let_cont],
+   the last first. Any other term is left as it is. *)
+Definition unalias_node (e : expr) : expr :=
   match e with
-  | Let x kind d body => Let x kind d (unalias_params body)
-  | Let_static bindings body => Let_static bindings (unalias_params body)
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
-    let h := Handler params metadata (unalias_params handler) in
-    let body := unalias_params body in
-    let '(h, body) := unalias_from (length params) k h body in
+    let '(h, body) :=
+      unalias_from (length params) k (Handler params metadata handler) body
+    in
     Let_cont_non_recursive k h body
-  | Let_cont_recursive handlers body =>
-    Let_cont_recursive handlers (unalias_params body)
-  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
+  | Let _ _ _ _ | Let_static _ _ | Let_cont_recursive _ _ | Apply _
+  | Apply_cont _ | Switch _ _ | Invalid => e
   end.
+
+(* The pass: that step at every non-recursive [Let_cont] of a term, its
+   handler and its body first (FlambdaSpineWalkSpec.walk_spine). The
+   handlers of recursive continuations and the bodies of code are left
+   as they are. *)
+Definition unalias_params (e : expr) : expr := walk_spine unalias_node e.
 
 (* The result behaves as the term does, under all environments. *)
 Definition unalias_params_equivalent_statement : Prop :=
