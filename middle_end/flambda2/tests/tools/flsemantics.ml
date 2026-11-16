@@ -5354,7 +5354,7 @@ let result_arity_lost (unit : Fexpr.flambda_unit) : bool =
           _
         } ->
       List.mem k.txt others
-    | Apply _ | Apply_cont _ | Invalid -> false
+    | Apply _ | Apply_cont _ | Invalid _ -> false
     | Switch { scrutinee = _; cases } ->
       List.exists
         (fun ((_, case) : int * Fexpr.apply_or_inlined_cont) ->

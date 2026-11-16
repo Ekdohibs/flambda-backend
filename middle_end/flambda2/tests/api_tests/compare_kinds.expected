@@ -138,3 +138,64 @@ a method call on the symbol that the unit binds:
 an effect performed on the symbol that the unit binds:
   two units that have it: the same
   a unit that has it and one that jumps, the first and the unit given: the same
+the kind of an invalid expression made from Body_of_unreachable_continuation: Body_of_unreachable_continuation
+the kind of an invalid expression made from Apply_cont_of_unreachable_continuation: Apply_cont_of_unreachable_continuation
+the kind of an invalid expression made from Defining_expr_of_let: Defining_expr_of_let
+the kind of an invalid expression made from Closure_type_was_invalid: Closure_type_was_invalid
+the kind of an invalid expression made from Direct_application_parameter_kind_mismatch: Direct_application_parameter_kind_mismatch
+the kind of an invalid expression made from Application_argument_kind_mismatch: Application_argument_kind_mismatch
+the kind of an invalid expression made from Application_result_kind_mismatch: Application_result_kind_mismatch
+the kind of an invalid expression made from Application_result_kind_mismatch_in_lambda: Application_result_kind_mismatch_in_lambda
+the kind of an invalid expression made from Partial_application_mode_mismatch: Partial_application_mode_mismatch
+the kind of an invalid expression made from Partial_application_mode_mismatch_in_lambda: Partial_application_mode_mismatch_in_lambda
+the kind of an invalid expression made from Calling_local_returning_closure_with_normal_apply: Calling_local_returning_closure_with_normal_apply
+the kind of an invalid expression made from Zero_switch_arms: Zero_switch_arms
+the kind of an invalid expression made from Code_not_rebuilt: Code_not_rebuilt
+the kind of an invalid expression made from To_cmm_dummy_body: To_cmm_dummy_body
+the kind of an invalid expression made from Application_never_returns: Application_never_returns
+the kind of an invalid expression made from Over_application_never_returns: Over_application_never_returns
+the kind of an invalid expression made from Message, of a sentence: none
+the kind of an invalid expression made from Message, of nothing: none
+the kind of an invalid expression made from Message, of the message of another: Body_of_unreachable_continuation
+the kind of an invalid expression made from Message, of a name that no constructor has: Not_yet
+two invalid expressions of one kind, about two continuations: the same
+two invalid expressions of two kinds: different
+two invalid expressions with two sentences: the same
+an invalid expression with a sentence and one of a kind: different
+an invalid expression of a kind and one made from its message: the same
+two invalid expressions of one name that no constructor has: the same
+two invalid expressions of two names that no constructor has: different
+an invalid expression whose message is the word Message and one with a sentence: different
+the kind Body_of_unreachable_continuation, written and read back: "invalid Body_of_unreachable_continuation", the same
+the kind Apply_cont_of_unreachable_continuation, written and read back: "invalid Apply_cont_of_unreachable_continuation", the same
+the kind Defining_expr_of_let, written and read back: "invalid Defining_expr_of_let", the same
+the kind Closure_type_was_invalid, written and read back: "invalid Closure_type_was_invalid", the same
+the kind Direct_application_parameter_kind_mismatch, written and read back: "invalid Direct_application_parameter_kind_mismatch", the same
+the kind Application_argument_kind_mismatch, written and read back: "invalid Application_argument_kind_mismatch", the same
+the kind Application_result_kind_mismatch, written and read back: "invalid Application_result_kind_mismatch", the same
+the kind Application_result_kind_mismatch_in_lambda, written and read back: "invalid Application_result_kind_mismatch_in_lambda", the same
+the kind Partial_application_mode_mismatch, written and read back: "invalid Partial_application_mode_mismatch", the same
+the kind Partial_application_mode_mismatch_in_lambda, written and read back: "invalid Partial_application_mode_mismatch_in_lambda", the same
+the kind Calling_local_returning_closure_with_normal_apply, written and read back: "invalid Calling_local_returning_closure_with_normal_apply", the same
+the kind Zero_switch_arms, written and read back: "invalid Zero_switch_arms", the same
+the kind Code_not_rebuilt, written and read back: "invalid Code_not_rebuilt", the same
+the kind To_cmm_dummy_body, written and read back: "invalid To_cmm_dummy_body", the same
+the kind Application_never_returns, written and read back: "invalid Application_never_returns", the same
+the kind Over_application_never_returns, written and read back: "invalid Over_application_never_returns", the same
+the kind Message, written and read back: "invalid Message", the same
+the kind Not_yet, written and read back: "invalid Not_yet", the same
+the kind Block (a keyword of the text), written and read back: "invalid `Block`", the same
+the kind Value_array (a keyword of the text), written and read back: "invalid `Value_array`", the same
+the kind Int_array (a keyword of the text), written and read back: "invalid `Int_array`", the same
+the kind Int8_array (a keyword of the text), written and read back: "invalid `Int8_array`", the same
+the kind Int16_array (a keyword of the text), written and read back: "invalid `Int16_array`", the same
+the kind Int32_array (a keyword of the text), written and read back: "invalid `Int32_array`", the same
+the kind Int64_array (a keyword of the text), written and read back: "invalid `Int64_array`", the same
+the kind Nativeint_array (a keyword of the text), written and read back: "invalid `Nativeint_array`", the same
+the kind Float_array (a keyword of the text), written and read back: "invalid `Float_array`", the same
+the kind Float32_array (a keyword of the text), written and read back: "invalid `Float32_array`", the same
+the kind Vec128_array (a keyword of the text), written and read back: "invalid `Vec128_array`", the same
+the kind Vec256_array (a keyword of the text), written and read back: "invalid `Vec256_array`", the same
+the kind Vec512_array (a keyword of the text), written and read back: "invalid `Vec512_array`", the same
+the kind Float_block (a keyword of the text), written and read back: "invalid `Float_block`", the same
+the kind Empty_array (a keyword of the text), written and read back: "invalid `Empty_array`", the same

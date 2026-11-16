@@ -603,9 +603,9 @@ inlined_expr:
 ;
 
 atomic_expr:
-  | KWD_HCF { Invalid }
-  | KWD_UNREACHABLE { Invalid }
-  | KWD_INVALID { Invalid }
+  | KWD_HCF { Invalid None }
+  | KWD_UNREACHABLE { Invalid None }
+  | KWD_INVALID; kind = option(IDENT) { Invalid kind }
   | KWD_CONT; ac = apply_cont_expr { Apply_cont ac }
   | KWD_APPLY e = apply_expr { Apply e }
   | LPAREN; e = expr; RPAREN { e }

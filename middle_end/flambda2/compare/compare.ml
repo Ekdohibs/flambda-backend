@@ -1635,6 +1635,83 @@ let recursive_handlers_bind_alike handlers1 handlers2 =
     kinds_of_invariant_params2
   && Int.equal num_continuations1 num_continuations2
 
+(* The kind of an invalid expression is a name read from its message. The term
+   keeps only the message that [Flambda.Invalid.to_string] made: for a
+   constructor other than [Message], the name of the constructor alone if it has
+   no argument, and "(" followed by the name if it has; for [Message], its text
+   as it is. The name is read back from a message of one of those two forms, and
+   what follows it (names of continuations, printed terms, debugging
+   information) is not read. So for a constructor other than [Message] the kind
+   is the name of the constructor. For [Message], a text of one of the two forms
+   gives the name in that text, which may be that of another constructor
+   (Simplify makes an invalid expression again from the message of the one it
+   was given) or a name that no constructor has today. The word "Message" is
+   recognised as a name too. Any other text gives no name, and all such messages
+   are one kind, [None]: nothing in them can be relied on to tell two apart.
+
+   [Flambda2_parser.Invalid_kind.of_message] is the same function, for the text
+   of a term; the test compare_kinds checks that the two agree. *)
+let kind_of_invalid_message message =
+  let length = String.length message in
+  let start = if length > 0 && Char.equal message.[0] '(' then 1 else 0 in
+  let is_in_name c =
+    match c with
+    | 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_' | '\'' -> true
+    | _ -> false
+  in
+  let rec end_of_name i =
+    if i < length && is_in_name message.[i] then end_of_name (i + 1) else i
+  in
+  let stop = end_of_name start in
+  let begins_with_capital =
+    stop > start && match message.[start] with 'A' .. 'Z' -> true | _ -> false
+  in
+  let ends_the_name =
+    stop = length
+    || start = 1
+       &&
+       match message.[stop] with
+       | ' ' | '\n' | '\t' | ')' -> true
+       | _ -> false
+  in
+  if begins_with_capital && ends_the_name
+  then Some (String.sub message start (stop - start))
+  else None
+
+(* The name of the kind of each constructor. This match has no wildcard, so the
+   build stops when a constructor is added to [Flambda.Invalid.t]: give it its
+   name here, and a value of it to the test compare_kinds, which checks that
+   [kind_of_invalid_message] reads every name here back from the message that
+   the constructor makes. *)
+let name_of_invalid (invalid : Invalid.t) =
+  match invalid with
+  | Body_of_unreachable_continuation _ ->
+    Some "Body_of_unreachable_continuation"
+  | Apply_cont_of_unreachable_continuation _ ->
+    Some "Apply_cont_of_unreachable_continuation"
+  | Defining_expr_of_let _ -> Some "Defining_expr_of_let"
+  | Closure_type_was_invalid _ -> Some "Closure_type_was_invalid"
+  | Direct_application_parameter_kind_mismatch _ ->
+    Some "Direct_application_parameter_kind_mismatch"
+  | Application_argument_kind_mismatch _ ->
+    Some "Application_argument_kind_mismatch"
+  | Application_result_kind_mismatch _ ->
+    Some "Application_result_kind_mismatch"
+  | Application_result_kind_mismatch_in_lambda _ ->
+    Some "Application_result_kind_mismatch_in_lambda"
+  | Partial_application_mode_mismatch _ ->
+    Some "Partial_application_mode_mismatch"
+  | Partial_application_mode_mismatch_in_lambda _ ->
+    Some "Partial_application_mode_mismatch_in_lambda"
+  | Calling_local_returning_closure_with_normal_apply _ ->
+    Some "Calling_local_returning_closure_with_normal_apply"
+  | Zero_switch_arms -> Some "Zero_switch_arms"
+  | Code_not_rebuilt -> Some "Code_not_rebuilt"
+  | To_cmm_dummy_body -> Some "To_cmm_dummy_body"
+  | Application_never_returns _ -> Some "Application_never_returns"
+  | Over_application_never_returns _ -> Some "Over_application_never_returns"
+  | Message _ -> None
+
 let rec exprs env e1 e2 : Expr.t Comparison.t =
   log Expr.print e1 e2 (fun () ->
       match Expr.descr e1, Expr.descr e2 with
@@ -1648,8 +1725,10 @@ let rec exprs env e1 e2 : Expr.t Comparison.t =
       | Switch switch1, Switch switch2 -> switch_exprs env switch1 switch2
       | Invalid { message = message1 }, Invalid { message = message2 } ->
         if
-          check env "an invalid expression: its message"
-            (String.equal message1 message2)
+          check env "an invalid expression: its kind"
+            (Option.equal String.equal
+               (kind_of_invalid_message message1)
+               (kind_of_invalid_message message2))
         then Equivalent
         else Different { approximant = e1 }
       | _, _ ->

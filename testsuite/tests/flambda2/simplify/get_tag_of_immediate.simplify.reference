@@ -57,7 +57,7 @@ let code loopify(never) size(11) newer_version_of(tag_of_parameter_2)
      | 0 -> k (0)
      | 1 -> k2)
     where k2 cold =
-      invalid
+      invalid Defining_expr_of_let
 in
 let $camlGet_tag_of_immediate__tag_of_parameter_3 =
   closure tag_of_parameter_2_1 @tag_of_parameter &toplevel
@@ -72,7 +72,7 @@ let code loopify(never) size(11) newer_version_of(tag_of_constant_3)
      | 0 -> k (0)
      | 1 -> k2)
     where k2 cold =
-      invalid
+      invalid Defining_expr_of_let
 in
 let $camlGet_tag_of_immediate__tag_of_constant_4 =
   closure tag_of_constant_3_1 @tag_of_constant &toplevel
@@ -88,7 +88,7 @@ let code loopify(never) size(11) newer_version_of(switch_on_tag_of_parameter_4)
      | 0 -> k (0)
      | 1 -> k2)
     where k2 cold =
-      invalid
+      invalid Defining_expr_of_let
 in
 let $camlGet_tag_of_immediate__switch_on_tag_of_parameter_5 =
   closure switch_on_tag_of_parameter_4_1 @switch_on_tag_of_parameter
@@ -104,7 +104,7 @@ let code loopify(never) size(11) newer_version_of(switch_on_tag_of_constant_5)
      | 0 -> k (0)
      | 1 -> k2)
     where k2 cold =
-      invalid
+      invalid Defining_expr_of_let
 in
 let $camlGet_tag_of_immediate__switch_on_tag_of_constant_6 =
   closure switch_on_tag_of_constant_5_1 @switch_on_tag_of_constant &toplevel

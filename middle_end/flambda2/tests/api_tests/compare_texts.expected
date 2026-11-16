@@ -21,3 +21,7 @@ function_slots_collision: different (a function slot); the unit given is printed
 float_block: the same
 float_block_other: different (a static constant); the unit given is printed
 float_block_array: different (a static constant); the unit given is printed
+invalid_kind: the same
+invalid_other_kind: different (an invalid expression: its kind); the unit given is printed
+invalid_free: the same
+invalid_free_and_kind: different (an invalid expression: its kind); the unit given is printed

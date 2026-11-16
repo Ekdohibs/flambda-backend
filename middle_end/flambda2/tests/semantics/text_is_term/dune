@@ -33,6 +33,9 @@
 ;; call_not_in_tail_position: a call that the source marks [@nontail], and the
 ;; text says so of the call. The text is the term.
 ;;
+;; match_on_a_known_constructor: the term has an invalid expression, and the
+;; text writes its kind. The text is the term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -132,6 +135,23 @@
   (= %{context_name} "main"))
  (action
   (diff call_not_in_tail_position.expected call_not_in_tail_position.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   match_on_a_known_constructor.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:match_on_a_known_constructor.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff match_on_a_known_constructor.expected
+   match_on_a_known_constructor.output)))
 
 (rule
  (enabled_if

@@ -893,7 +893,7 @@ let rec expr env (e : Model.expr) : F.expr =
               int_of_z discriminant, Named_cont (apply_cont env ac))
             arms
       }
-  | Invalid -> F.Invalid
+  | Invalid -> F.Invalid None
 
 and let_ env x k (defining_expr : F.named) body : F.expr =
   F.Let

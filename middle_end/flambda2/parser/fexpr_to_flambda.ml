@@ -995,7 +995,15 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ~relative_history:Inlining_history.Relative.empty
     in
     acc, Flambda.Expr.create_apply apply
-  | Invalid -> acc, Flambda.Expr.create_invalid (Message "Invalid from fexpr")
+  | Invalid None ->
+    acc, Flambda.Expr.create_invalid (Message "Invalid from fexpr")
+  | Invalid (Some kind) ->
+    (* The name alone is a message of that kind: it is what
+       [Flambda.Invalid.to_string] makes of a constructor with no argument. *)
+    if not (Invalid_kind.is_name kind)
+    then
+      Misc.fatal_errorf "Not the name of a kind of invalid expression: %s" kind;
+    acc, Flambda.Expr.create_invalid (Message kind)
 
 and inlined_goto env acc (handler_body : Fexpr.expr) =
   let acc, handler = expr env acc handler_body in
@@ -1087,7 +1095,7 @@ let bind_all_code_ids_and_function_slots env (unit : Fexpr.flambda_unit) =
           bindings
       in
       go env fs_size_of_code_ids code_ids_of_slots body
-    | Apply _ | Apply_cont _ | Switch _ | Invalid ->
+    | Apply _ | Apply_cont _ | Switch _ | Invalid _ ->
       env, fs_size_of_code_ids, code_ids_of_slots
   in
   let env, fs_size_of_code_ids, code_ids_of_slots =

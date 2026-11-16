@@ -50,9 +50,26 @@
    fields (which is not compared, as no other debugging information is), and a
    group of two recursive continuations.
 
-   Last, the unit that the comparison gives for two different units, where the
+   Then the unit that the comparison gives for two different units, where the
    kind of a call of the first unit has a name that the second unit binds under
-   another name. *)
+   another name.
+
+   Last, invalid expressions, which are compared by their kind: a name read from
+   the message that the term keeps, which for a constructor of
+   [Flambda.Invalid.t] other than [Message] is the name of the constructor. A
+   value of each of those sixteen constructors is built, and four of [Message]:
+   of a sentence, of nothing, of the message of another constructor, and of a
+   name that no constructor has. For each of the twenty the kind read from its
+   message is printed, with a word if the function of the parser that reads the
+   kind for the text of a term reads another; and, for the sixteen, with a word
+   if it is not the name that the comparison has for the constructor. Then pairs
+   of invalid expressions are compared. Then a unit that is one invalid
+   expression is written by the printer of texts and read back by the reader,
+   for each of these names: the sixteen, [Message], a name that no constructor
+   has, and the fifteen words that begin with a capital and are keywords of the
+   text,
+   which the printer must write in backquotes. The one argument of the test is
+   a text with code, for the constructor that takes the metadata of code. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -538,3 +555,200 @@ let () =
         known_arity );
       "a method call on the symbol that the unit binds", method_call;
       "an effect performed on the symbol that the unit binds", effect_ ]
+
+(* The message that an invalid expression keeps of what it was made from. *)
+let message_of reason =
+  match Flambda.Expr.descr (Flambda.Expr.create_invalid reason) with
+  | Invalid { message } -> message
+  | Let _ | Let_cont _ | Apply _ | Apply_cont _ | Switch _ -> assert false
+
+(* The metadata of the first code that a unit binds at toplevel. *)
+let rec metadata_of_some_code expr =
+  match Flambda.Expr.descr expr with
+  | Let let_expr -> (
+    let of_body () =
+      Flambda.Let.pattern_match let_expr ~f:(fun _ ~body ->
+          metadata_of_some_code body)
+    in
+    match Flambda.Let.defining_expr let_expr with
+    | Static_consts group -> (
+      match
+        List.find_map
+          (fun (const : Flambda.Static_const_or_code.t) ->
+            match const with
+            | Code code -> Some (Code.code_metadata code)
+            | Deleted_code | Static_const _ -> None)
+          (Flambda.Static_const_group.to_list group)
+      with
+      | Some metadata -> metadata
+      | None -> of_body ())
+    | Simple _ | Prim _ | Set_of_closures _ | Rec_info _ -> of_body ())
+  | Let_cont _ | Apply _ | Apply_cont _ | Switch _ | Invalid _ ->
+    failwith "no code"
+
+(* A unit that is one invalid expression. *)
+let invalid reason =
+  unit
+    (fun
+      ~return_continuation:_ ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      Flambda.Expr.create_invalid reason)
+
+(* A unit that is one invalid expression whose message is the given name,
+   written by the printer of texts and read back by the reader: the text, and
+   what the comparison says of the unit and the unit read. *)
+let written_and_read_back name =
+  let unit1 = invalid (Message name) in
+  let text =
+    Flambda2_ui.Flambda_colours.without_colours ~f:(fun () ->
+        Format.asprintf "%a" Flambda2_parser.Print_fexpr.flambda_unit
+          (Flambda2_parser.Flambda_to_fexpr.conv unit1))
+  in
+  let file = Filename.temp_file "compare_kinds" ".fl" in
+  Out_channel.with_open_bin file (fun channel ->
+      Out_channel.output_string channel text);
+  let read =
+    match Flambda2_parser.Parse_flambda.parse file with
+    | Ok unit2 -> answer unit1 unit2
+    | Error _ -> "NOT READ BACK"
+    | exception exn -> "STOPPED: " ^ Printexc.to_string exn
+  in
+  Sys.remove file;
+  String.trim text, read
+
+(* The words that begin with a capital and are keywords of the text: the names
+   of the static constants. *)
+let keywords_with_a_capital =
+  [ "Block";
+    "Value_array";
+    "Int_array";
+    "Int8_array";
+    "Int16_array";
+    "Int32_array";
+    "Int64_array";
+    "Nativeint_array";
+    "Float_array";
+    "Float32_array";
+    "Vec128_array";
+    "Vec256_array";
+    "Vec512_array";
+    "Float_block";
+    "Empty_array" ]
+
+let () =
+  let continuation1 = Continuation.create () in
+  let continuation2 = Continuation.create () in
+  let apply =
+    Flambda.Apply.create ~callee:(Some argument)
+      ~continuation:(Return continuation1)
+      (Exn_continuation.create ~exn_handler:continuation2 ~extra_args:[])
+      ~args:[argument] ~args_arity:any ~return_arity:any
+      ~call_kind:Call_kind.indirect_function_call_unknown_arity
+      ~return_mode:
+        (Alloc_mode.For_applications.not_alloc_stack
+           ~alloc_region:(Variable.create "region" K.region))
+      Debuginfo.none ~inlined:Default_inlined
+      ~inlining_state:(Inlining_state.default ~round:0)
+      ~probe:None ~position:Normal
+      ~relative_history:Inlining_history.Relative.empty
+  in
+  let bound =
+    Bound_pattern.singleton
+      (Bound_var.create
+         (Variable.create "bound" K.value)
+         Flambda_debug_uid.none Name_mode.normal)
+  in
+  let code_metadata =
+    match Flambda2_parser.Parse_flambda.parse Sys.argv.(1) with
+    | Ok unit -> metadata_of_some_code (Flambda_unit.body unit)
+    | Error _ -> failwith ("cannot read " ^ Sys.argv.(1))
+  in
+  let reasons : (string * Flambda.Invalid.t) list =
+    [ "", Body_of_unreachable_continuation continuation1;
+      "", Apply_cont_of_unreachable_continuation continuation1;
+      "", Defining_expr_of_let (bound, Flambda.Named.create_simple argument);
+      "", Closure_type_was_invalid apply;
+      ( "",
+        Direct_application_parameter_kind_mismatch
+          { params_arity = any; args_arity = any; apply } );
+      "", Application_argument_kind_mismatch (Flambda_arity.unarize_t any, apply);
+      "", Application_result_kind_mismatch (any, apply);
+      "", Application_result_kind_mismatch_in_lambda somewhere;
+      "", Partial_application_mode_mismatch (apply, code_metadata);
+      "", Partial_application_mode_mismatch_in_lambda somewhere;
+      "", Calling_local_returning_closure_with_normal_apply apply;
+      "", Zero_switch_arms;
+      "", Code_not_rebuilt;
+      "", To_cmm_dummy_body;
+      "", Application_never_returns apply;
+      "", Over_application_never_returns apply;
+      "Message, of a sentence", Message "Dead variable in apply cont: k (x)";
+      "Message, of nothing", Message "";
+      ( "Message, of the message of another",
+        Message (message_of (Body_of_unreachable_continuation continuation1)) );
+      "Message, of a name that no constructor has", Message "(Not_yet 1)" ]
+  in
+  List.iter
+    (fun (what, reason) ->
+      let message = message_of reason in
+      let name = Flambda2_compare.Compare.name_of_invalid reason in
+      let kind = Flambda2_compare.Compare.kind_of_invalid_message message in
+      let for_the_text = Flambda2_parser.Invalid_kind.of_message message in
+      let show kind = match kind with Some name -> name | None -> "none" in
+      Printf.printf "the kind of an invalid expression made from %s: %s%s%s\n"
+        (match name with Some name -> name | None -> what)
+        (show kind)
+        (match name with
+        | Some _ when not (Option.equal String.equal name kind) ->
+          " (NOT THE NAME OF THE CONSTRUCTOR)"
+        | Some _ | None -> "")
+        (if Option.equal String.equal kind for_the_text
+         then ""
+         else " (THE PARSER READS ANOTHER)"))
+    reasons;
+  Printf.printf
+    "two invalid expressions of one kind, about two continuations: %s\n"
+    (answer
+       (invalid (Body_of_unreachable_continuation continuation1))
+       (invalid (Body_of_unreachable_continuation continuation2)));
+  Printf.printf "two invalid expressions of two kinds: %s\n"
+    (answer
+       (invalid (Body_of_unreachable_continuation continuation1))
+       (invalid (Apply_cont_of_unreachable_continuation continuation1)));
+  Printf.printf "two invalid expressions with two sentences: %s\n"
+    (answer
+       (invalid (Message "Dead variable in apply cont: k (x)"))
+       (invalid (Message "Invalid from fexpr")));
+  Printf.printf "an invalid expression with a sentence and one of a kind: %s\n"
+    (answer (invalid (Message "Invalid from fexpr")) (invalid Zero_switch_arms));
+  Printf.printf
+    "an invalid expression of a kind and one made from its message: %s\n"
+    (answer
+       (invalid (Body_of_unreachable_continuation continuation1))
+       (invalid
+          (Message (message_of (Body_of_unreachable_continuation continuation2)))));
+  Printf.printf
+    "two invalid expressions of one name that no constructor has: %s\n"
+    (answer (invalid (Message "(Not_yet 1)")) (invalid (Message "Not_yet")));
+  Printf.printf
+    "two invalid expressions of two names that no constructor has: %s\n"
+    (answer
+       (invalid (Message "(Not_yet 1)"))
+       (invalid (Message "(Nor_this 1)")));
+  Printf.printf
+    "an invalid expression whose message is the word Message and one with a \
+     sentence: %s\n"
+    (answer
+       (invalid (Message "Message"))
+       (invalid (Message "Invalid from fexpr")));
+  List.iter
+    (fun name ->
+      let text, read = written_and_read_back name in
+      Printf.printf "the kind %s%s, written and read back: \"%s\", %s\n" name
+        (if Flambda2_parser.Flambda_lex.is_keyword name
+         then " (a keyword of the text)"
+         else "")
+        text read)
+    (List.filter_map
+       (fun (_, reason) -> Flambda2_compare.Compare.name_of_invalid reason)
+       reasons
+    @ ["Message"; "Not_yet"] @ keywords_with_a_capital)

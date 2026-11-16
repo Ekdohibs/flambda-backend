@@ -80,7 +80,12 @@
 
    float_block: the two have the same static float block. They are the same.
    float_block_other: the second has another number in it. float_block_array:
-   the second has a static float array of the same numbers. They are
+   the second has a static float array of the same numbers. They are different.
+
+   invalid_kind: the two are an invalid expression of one kind. invalid_free:
+   the two are an invalid expression with no kind, written with two of the words
+   that the grammar has for it. They are the same. invalid_other_kind: of two
+   kinds. invalid_free_and_kind: one has a kind and the other has none. They are
    different. *)
 
 module P = Flambda2_parser

@@ -342,7 +342,9 @@ type expr =
       { scrutinee : simple;
         cases : (int * apply_or_inlined_cont) list
       }
-  | Invalid
+  | Invalid of string option
+      (** The kind of the invalid expression, if its message has one: see
+          [Invalid_kind]. *)
 
 and apply_or_inlined_cont =
   | Inlined_goto of expr

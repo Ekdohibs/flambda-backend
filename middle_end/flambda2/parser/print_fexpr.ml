@@ -737,9 +737,13 @@ let parens ~if_scope_is scope ppf f =
   | (Outer | Where_body | Continuation_body), _ -> f scope ppf
 
 let rec expr scope ppf = function
-  | Invalid ->
-    Format.fprintf ppf "%tinvalid%t" Flambda_colours.invalid_keyword
+  | Invalid kind ->
+    (* The kind is written as a name is: in backquotes if the word is a keyword
+       of the text. *)
+    Format.fprintf ppf "@[<h>%tinvalid%t%a@]" Flambda_colours.invalid_keyword
       Flambda_colours.pop
+      (pp_option ~space:Before ident)
+      kind
   | Apply_cont ac ->
     Format.fprintf ppf "@[%tcont%t %a@]" Flambda_colours.expr_keyword
       Flambda_colours.pop apply_cont ac
