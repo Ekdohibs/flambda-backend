@@ -23,13 +23,14 @@
   flambda2_types
   flambda2_rocq_semantics))
 
-;; The generator of types and the differential tests, and the tool that runs
-;; the comparisons of one type on the types that Simplify computes.
+;; The generator of types and the differential tests, of the types and of the
+;; provers, and the tool that runs the comparisons of one type on the types
+;; that Simplify computes.
 
 (executables
- (names types_difftest types_of_compilations)
+ (names types_difftest provers_difftest types_of_compilations)
  (modes native)
- (modules type_comparisons type_generator types_difftest
+ (modules type_comparisons type_generator types_difftest provers_difftest
    types_of_compilations)
  (libraries
   ocamlfrontend
@@ -62,6 +63,16 @@
  (alias runtest)
  (action
   (diff types_difftest.expected types_difftest.output)))
+
+(rule
+ (with-stdout-to
+  provers_difftest.output
+  (run ./provers_difftest.exe)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff provers_difftest.expected provers_difftest.output)))
 
 ;; The types of the units of the semantics tests. The units are those that
 ;; types_of_compilations.units lists, and not all those that are there, so

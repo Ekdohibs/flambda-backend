@@ -1,0 +1,807 @@
+The provers of the compiler against the Rocq model.
+Stack allocation: enabled.
+Kind checks: off, but in the run that says so.
+Provers compared: 61, and reification.
+
+A type of kind value, most of the time, in an environment (20000 cases, seeds 100000 to 119999)
+  13 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  19987 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 19987 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 19987 agree
+  prove_equals_to_simple_of_kind: 19987 agree
+  prove_equals_tagged_immediates: 19987 agree
+  meet_equals_tagged_immediates: 19987 agree
+  meet_naked_immediates: 19987 agree
+  meet_equals_single_tagged_immediate: 19987 agree
+  meet_naked_float32s: 19987 agree
+  meet_naked_floats: 19987 agree
+  meet_naked_int8s: 19987 agree
+  meet_naked_int16s: 19987 agree
+  meet_naked_int32s: 19987 agree
+  meet_naked_int64s: 19987 agree
+  meet_naked_nativeints: 19987 agree
+  meet_naked_vec128s: 19987 agree
+  meet_naked_vec256s: 19987 agree
+  meet_naked_vec512s: 19987 agree
+  meet_naked_masks: 19987 agree
+  meet_variant_like: 19987 agree
+  prove_variant_like: 19987 agree
+  prove_is_a_boxed_or_tagged_number: 19987 agree
+  prove_nothing: 19987 agree
+  prove_is_a_tagged_immediate: 19987 agree
+  prove_is_a_boxed_float32: 19987 agree
+  prove_is_a_boxed_float: 19987 agree
+  prove_is_a_boxed_int32: 19987 agree
+  prove_is_a_boxed_int64: 19987 agree
+  prove_is_a_boxed_nativeint: 19987 agree
+  prove_is_a_boxed_vec128: 19987 agree
+  prove_is_a_boxed_vec256: 19987 agree
+  prove_is_a_boxed_vec512: 19987 agree
+  prove_is_a_boxed_mask: 19987 agree
+  prove_is_or_is_not_a_boxed_float: 19987 agree
+  prove_unique_tag_and_size: 19987 agree
+  prove_is_int: 19987 agree
+  prove_is_not_a_pointer: 19987 agree
+  meet_is_int_variant_only: 19987 agree
+  prove_get_tag: 19987 agree
+  meet_is_null: 19987 agree
+  prove_unique_fully_constructed_immutable_heap_block: 19987 agree
+  meet_single_closures_entry: 19987 agree
+  prove_single_closures_entry: 19987 agree
+  meet_code_ids: 19987 agree
+  prove_code_ids: 19987 agree
+  meet_strings: 19987 agree
+  prove_strings: 19987 agree
+  prove_tagging_of_simple: 19987 agree
+  meet_tagging_of_simple: 19987 agree
+  meet_boxed_float32_containing_simple: 19987 agree
+  meet_boxed_float_containing_simple: 19987 agree
+  meet_boxed_int32_containing_simple: 19987 agree
+  meet_boxed_int64_containing_simple: 19987 agree
+  meet_boxed_nativeint_containing_simple: 19987 agree
+  meet_boxed_vec128_containing_simple: 19987 agree
+  meet_boxed_vec256_containing_simple: 19987 agree
+  meet_boxed_vec512_containing_simple: 19987 agree
+  meet_boxed_mask_containing_simple: 19987 agree
+  meet_block_field_simple: 19987 agree
+  meet_project_value_slot_simple: 19987 agree
+  meet_project_function_slot_simple: 19987 agree
+  prove_alloc_mode_of_boxed_number: 19987 agree
+  never_holds_locally_allocated_values: 19987 agree
+  The answers of the compiler in the environment made with the n-way meet (19987 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_equals_to_simple_of_kind: 6917, 13070, 0, 0
+    prove_equals_tagged_immediates: 1744, 18243, 0, 0
+    meet_equals_tagged_immediates: 1935, 6774, 11278, 0
+    meet_naked_immediates: 137, 88, 19762, 0
+    meet_equals_single_tagged_immediate: 1243, 7466, 11278, 0
+    meet_naked_float32s: 11, 11, 19965, 0
+    meet_naked_floats: 15, 9, 19963, 0
+    meet_naked_int8s: 17, 15, 19955, 0
+    meet_naked_int16s: 17, 10, 19960, 0
+    meet_naked_int32s: 9, 8, 19970, 0
+    meet_naked_int64s: 19, 15, 19953, 0
+    meet_naked_nativeints: 11, 12, 19964, 0
+    meet_naked_vec128s: 21, 10, 19956, 0
+    meet_naked_vec256s: 20, 8, 19959, 0
+    meet_naked_vec512s: 16, 12, 19959, 0
+    meet_naked_masks: 23, 11, 19953, 0
+    meet_variant_like: 3384, 7842, 8761, 0
+    prove_variant_like: 3186, 16801, 0, 0
+    prove_is_a_boxed_or_tagged_number: 3927, 16060, 0, 0
+    prove_nothing: 0, 19987, 0, 0
+    prove_is_a_tagged_immediate: 2234, 17753, 0, 0
+    prove_is_a_boxed_float32: 189, 19798, 0, 0
+    prove_is_a_boxed_float: 184, 19803, 0, 0
+    prove_is_a_boxed_int32: 185, 19802, 0, 0
+    prove_is_a_boxed_int64: 185, 19802, 0, 0
+    prove_is_a_boxed_nativeint: 184, 19803, 0, 0
+    prove_is_a_boxed_vec128: 197, 19790, 0, 0
+    prove_is_a_boxed_vec256: 185, 19802, 0, 0
+    prove_is_a_boxed_vec512: 171, 19816, 0, 0
+    prove_is_a_boxed_mask: 213, 19774, 0, 0
+    prove_is_or_is_not_a_boxed_float: 8801, 11186, 0, 0
+    prove_unique_tag_and_size: 979, 19008, 0, 0
+    prove_is_int: 8088, 11899, 0, 0
+    prove_is_not_a_pointer: 8675, 11312, 0, 0
+    meet_is_int_variant_only: 4331, 6739, 8917, 0
+    prove_get_tag: 1318, 18669, 0, 0
+    meet_is_null: 11862, 4580, 3545, 0
+    prove_unique_fully_constructed_immutable_heap_block: 478, 19509, 0, 0
+    meet_single_closures_entry: 627, 6783, 12422, 155
+      80 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      75 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_single_closures_entry: 593, 19273, 0, 121
+      67 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      54 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_code_ids: 699, 6671, 12617, 0
+    prove_code_ids: 630, 19357, 0, 0
+    meet_strings: 879, 5612, 13496, 0
+    prove_strings: 720, 19267, 0, 0
+    prove_tagging_of_simple: 1357, 18630, 0, 0
+    meet_tagging_of_simple: 1666, 12337, 5984, 0
+    meet_boxed_float32_containing_simple: 152, 5668, 14167, 0
+    meet_boxed_float_containing_simple: 144, 5676, 14167, 0
+    meet_boxed_int32_containing_simple: 142, 5672, 14173, 0
+    meet_boxed_int64_containing_simple: 146, 5668, 14173, 0
+    meet_boxed_nativeint_containing_simple: 141, 5669, 14177, 0
+    meet_boxed_vec128_containing_simple: 154, 5671, 14162, 0
+    meet_boxed_vec256_containing_simple: 139, 5683, 14165, 0
+    meet_boxed_vec512_containing_simple: 132, 5666, 14189, 0
+    meet_boxed_mask_containing_simple: 157, 5681, 14149, 0
+    meet_block_field_simple: 253, 7850, 11884, 0
+    meet_project_value_slot_simple: 208, 7222, 12402, 155
+      80 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      75 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_project_function_slot_simple: 336, 7118, 12378, 155
+      80 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      75 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_alloc_mode_of_boxed_number: 1693, 18294, 0, 0
+    never_holds_locally_allocated_values: 12545, 7442, 0, 0
+  Controls, on the 19987 cases of the table above:
+    prove_is_int of the compiler against prove_is_not_a_pointer of the model: the answers differ on 587
+    prove_is_a_boxed_float of the compiler against prove_is_a_boxed_int64 of the model: the answers differ on 369
+    meet_boxed_float_containing_simple of the compiler against meet_boxed_mask_containing_simple of the model: the answers differ on 434
+    meet_single_closures_entry of the compiler against meet_single_closures_entry of the model: the answers differ on 0
+    19965 have an equation whose type is not unknown; the environment of the compiler without the equations is seen differently from the model's with them on 19964
+    in 4023 the type asked is an alias of a name that has such an equation
+
+A type of naked numbers, most of the time, in an environment (6000 cases, seeds 200000 to 205999)
+  1 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  5999 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 5999 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 5999 agree
+  meet_naked_immediates: 5999 agree
+  meet_naked_float32s: 5999 agree
+  meet_naked_floats: 5999 agree
+  meet_naked_int8s: 5999 agree
+  meet_naked_int16s: 5999 agree
+  meet_naked_int32s: 5999 agree
+  meet_naked_int64s: 5999 agree
+  meet_naked_nativeints: 5999 agree
+  meet_naked_vec128s: 5999 agree
+  meet_naked_vec256s: 5999 agree
+  meet_naked_vec512s: 5999 agree
+  meet_naked_masks: 5999 agree
+  prove_equals_to_simple_of_kind: 5999 agree
+  prove_nothing: 5999 agree
+  never_holds_locally_allocated_values: 5999 agree
+  The answers of the compiler in the environment made with the n-way meet (5999 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    meet_naked_immediates: 237, 189, 5573, 0
+    meet_naked_float32s: 282, 218, 5499, 0
+    meet_naked_floats: 279, 115, 5605, 0
+    meet_naked_int8s: 251, 210, 5538, 0
+    meet_naked_int16s: 248, 205, 5546, 0
+    meet_naked_int32s: 257, 214, 5528, 0
+    meet_naked_int64s: 243, 191, 5565, 0
+    meet_naked_nativeints: 245, 184, 5570, 0
+    meet_naked_vec128s: 250, 186, 5563, 0
+    meet_naked_vec256s: 274, 223, 5502, 0
+    meet_naked_vec512s: 230, 194, 5575, 0
+    meet_naked_masks: 265, 218, 5516, 0
+    prove_equals_to_simple_of_kind: 1153, 4846, 0, 0
+    prove_nothing: 0, 5999, 0, 0
+    never_holds_locally_allocated_values: 3756, 2243, 0, 0
+
+A type of naked immediates with relations to names, or the tagging of one, in an environment (6000 cases, seeds 250000 to 255999)
+  6000 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 6000 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 6000 agree
+  prove_equals_to_simple_of_kind: 6000 agree
+  prove_equals_tagged_immediates: 6000 agree
+  meet_equals_tagged_immediates: 6000 agree
+  meet_naked_immediates: 6000 agree
+  meet_equals_single_tagged_immediate: 6000 agree
+  meet_naked_float32s: 6000 agree
+  meet_naked_floats: 6000 agree
+  meet_naked_int8s: 6000 agree
+  meet_naked_int16s: 6000 agree
+  meet_naked_int32s: 6000 agree
+  meet_naked_int64s: 6000 agree
+  meet_naked_nativeints: 6000 agree
+  meet_naked_vec128s: 6000 agree
+  meet_naked_vec256s: 6000 agree
+  meet_naked_vec512s: 6000 agree
+  meet_naked_masks: 6000 agree
+  meet_variant_like: 6000 agree
+  prove_variant_like: 6000 agree
+  prove_is_a_boxed_or_tagged_number: 6000 agree
+  prove_nothing: 6000 agree
+  prove_is_a_tagged_immediate: 6000 agree
+  prove_is_a_boxed_float32: 6000 agree
+  prove_is_a_boxed_float: 6000 agree
+  prove_is_a_boxed_int32: 6000 agree
+  prove_is_a_boxed_int64: 6000 agree
+  prove_is_a_boxed_nativeint: 6000 agree
+  prove_is_a_boxed_vec128: 6000 agree
+  prove_is_a_boxed_vec256: 6000 agree
+  prove_is_a_boxed_vec512: 6000 agree
+  prove_is_a_boxed_mask: 6000 agree
+  prove_is_or_is_not_a_boxed_float: 6000 agree
+  prove_unique_tag_and_size: 6000 agree
+  prove_is_int: 6000 agree
+  prove_is_not_a_pointer: 6000 agree
+  meet_is_int_variant_only: 6000 agree
+  prove_get_tag: 6000 agree
+  meet_is_null: 6000 agree
+  prove_unique_fully_constructed_immutable_heap_block: 6000 agree
+  meet_single_closures_entry: 6000 agree
+  prove_single_closures_entry: 6000 agree
+  meet_code_ids: 6000 agree
+  prove_code_ids: 6000 agree
+  meet_strings: 6000 agree
+  prove_strings: 6000 agree
+  prove_tagging_of_simple: 6000 agree
+  meet_tagging_of_simple: 6000 agree
+  meet_boxed_float32_containing_simple: 6000 agree
+  meet_boxed_float_containing_simple: 6000 agree
+  meet_boxed_int32_containing_simple: 6000 agree
+  meet_boxed_int64_containing_simple: 6000 agree
+  meet_boxed_nativeint_containing_simple: 6000 agree
+  meet_boxed_vec128_containing_simple: 6000 agree
+  meet_boxed_vec256_containing_simple: 6000 agree
+  meet_boxed_vec512_containing_simple: 6000 agree
+  meet_boxed_mask_containing_simple: 6000 agree
+  meet_block_field_simple: 6000 agree
+  meet_project_value_slot_simple: 6000 agree
+  meet_project_function_slot_simple: 6000 agree
+  prove_alloc_mode_of_boxed_number: 6000 agree
+  never_holds_locally_allocated_values: 6000 agree
+  The answers of the compiler in the environment made with the n-way meet (6000 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_equals_to_simple_of_kind: 0, 6000, 0, 0
+    prove_equals_tagged_immediates: 2507, 3493, 0, 0
+    meet_equals_tagged_immediates: 1015, 487, 4498, 0
+    meet_naked_immediates: 1053, 503, 4444, 0
+    meet_equals_single_tagged_immediate: 641, 861, 4498, 0
+    meet_naked_float32s: 0, 0, 6000, 0
+    meet_naked_floats: 0, 0, 6000, 0
+    meet_naked_int8s: 0, 0, 6000, 0
+    meet_naked_int16s: 0, 0, 6000, 0
+    meet_naked_int32s: 0, 0, 6000, 0
+    meet_naked_int64s: 0, 0, 6000, 0
+    meet_naked_nativeints: 0, 0, 6000, 0
+    meet_naked_vec128s: 0, 0, 6000, 0
+    meet_naked_vec256s: 0, 0, 6000, 0
+    meet_naked_vec512s: 0, 0, 6000, 0
+    meet_naked_masks: 0, 0, 6000, 0
+    meet_variant_like: 2994, 0, 3006, 0
+    prove_variant_like: 2994, 3006, 0, 0
+    prove_is_a_boxed_or_tagged_number: 2994, 3006, 0, 0
+    prove_nothing: 0, 6000, 0, 0
+    prove_is_a_tagged_immediate: 2994, 3006, 0, 0
+    prove_is_a_boxed_float32: 0, 6000, 0, 0
+    prove_is_a_boxed_float: 0, 6000, 0, 0
+    prove_is_a_boxed_int32: 0, 6000, 0, 0
+    prove_is_a_boxed_int64: 0, 6000, 0, 0
+    prove_is_a_boxed_nativeint: 0, 6000, 0, 0
+    prove_is_a_boxed_vec128: 0, 6000, 0, 0
+    prove_is_a_boxed_vec256: 0, 6000, 0, 0
+    prove_is_a_boxed_vec512: 0, 6000, 0, 0
+    prove_is_a_boxed_mask: 0, 6000, 0, 0
+    prove_is_or_is_not_a_boxed_float: 2994, 3006, 0, 0
+    prove_unique_tag_and_size: 0, 6000, 0, 0
+    prove_is_int: 2994, 3006, 0, 0
+    prove_is_not_a_pointer: 2994, 3006, 0, 0
+    meet_is_int_variant_only: 2994, 0, 3006, 0
+    prove_get_tag: 0, 6000, 0, 0
+    meet_is_null: 2994, 0, 3006, 0
+    prove_unique_fully_constructed_immutable_heap_block: 0, 6000, 0, 0
+    meet_single_closures_entry: 0, 0, 6000, 0
+    prove_single_closures_entry: 0, 6000, 0, 0
+    meet_code_ids: 0, 0, 6000, 0
+    prove_code_ids: 0, 6000, 0, 0
+    meet_strings: 0, 0, 6000, 0
+    prove_strings: 0, 6000, 0, 0
+    prove_tagging_of_simple: 641, 5359, 0, 0
+    meet_tagging_of_simple: 641, 861, 4498, 0
+    meet_boxed_float32_containing_simple: 0, 0, 6000, 0
+    meet_boxed_float_containing_simple: 0, 0, 6000, 0
+    meet_boxed_int32_containing_simple: 0, 0, 6000, 0
+    meet_boxed_int64_containing_simple: 0, 0, 6000, 0
+    meet_boxed_nativeint_containing_simple: 0, 0, 6000, 0
+    meet_boxed_vec128_containing_simple: 0, 0, 6000, 0
+    meet_boxed_vec256_containing_simple: 0, 0, 6000, 0
+    meet_boxed_vec512_containing_simple: 0, 0, 6000, 0
+    meet_boxed_mask_containing_simple: 0, 0, 6000, 0
+    meet_block_field_simple: 0, 0, 6000, 0
+    meet_project_value_slot_simple: 0, 0, 6000, 0
+    meet_project_function_slot_simple: 0, 0, 6000, 0
+    prove_alloc_mode_of_boxed_number: 0, 6000, 0, 0
+    never_holds_locally_allocated_values: 3790, 2210, 0, 0
+
+Two types, in an environment (20000 cases, seeds 300000 to 319999)
+  14 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  19986 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 19986 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 19986 agree
+  prove_physical_equality: 19986 agree
+  The answers of the compiler in the environment made with the n-way meet (19986 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_physical_equality: 5145, 14841, 0, 0
+
+A raw type, and one more, in an environment (20000 cases, seeds 400000 to 419999)
+  334 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  42 not converted: not in the compiler: a closure type that is not of kind value, in a closures entry
+  13 not converted: not in the compiler: a head with no number (a nativeint)
+  31 not converted: not in the compiler: a head with no number (an intN)
+  8 not converted: not in the compiler: a head with no number (the bits of a float)
+  13 not converted: not in the compiler: a head with no number (the bits of a floatN)
+  8 not converted: not in the compiler: a head with no number (the bits of a mask)
+  23 not converted: not in the compiler: a head with no number (the bits of a vecN)
+  226 not converted: not in the compiler: a type of naked numbers of kind naked immediate (the type of naked immediates is another constructor)
+  11 not converted: not in the compiler: no code id is numbered 
+  104 not converted: not in the compiler: no function slot is numbered 
+  65 not converted: not in the compiler: no symbol is numbered 
+  60 not converted: not in the compiler: no value slot is numbered 
+  310 not converted: not in the compiler: no variable is numbered 
+  217 not converted: not in the compiler: the allocation mode Local, which no function of the compiler makes
+  52 not converted: not in the compiler: the number N is not a byte
+  156 not converted: not in the compiler: the number N is not a tag
+  18 not converted: not in the compiler: the number NbN is not a nativeint
+  15 not converted: not in the compiler: the number NbN is not an immediate
+  100 not converted: not in the compiler: the number NbN is not an int
+  50 not converted: not in the compiler: the number NbN is not the bits of a float
+  32 not converted: not in the compiler: the number NbN is not the bits of a mask
+  56 not converted: not in the compiler: the number NbN is not the bits of a vec
+  18056 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 18056 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 18056 agree
+  prove_equals_to_simple_of_kind: 18056 agree
+  prove_equals_tagged_immediates: 18056 agree
+  meet_equals_tagged_immediates: 18056 agree
+  meet_naked_immediates: 18056 agree
+  meet_equals_single_tagged_immediate: 18056 agree
+  meet_naked_float32s: 18056 agree
+  meet_naked_floats: 18056 agree
+  meet_naked_int8s: 18056 agree
+  meet_naked_int16s: 18056 agree
+  meet_naked_int32s: 18056 agree
+  meet_naked_int64s: 18056 agree
+  meet_naked_nativeints: 18056 agree
+  meet_naked_vec128s: 18056 agree
+  meet_naked_vec256s: 18056 agree
+  meet_naked_vec512s: 18056 agree
+  meet_naked_masks: 18056 agree
+  meet_variant_like: 18056 agree
+  prove_variant_like: 18056 agree
+  prove_is_a_boxed_or_tagged_number: 18056 agree
+  prove_nothing: 18056 agree
+  prove_is_a_tagged_immediate: 18056 agree
+  prove_is_a_boxed_float32: 18056 agree
+  prove_is_a_boxed_float: 18056 agree
+  prove_is_a_boxed_int32: 18056 agree
+  prove_is_a_boxed_int64: 18056 agree
+  prove_is_a_boxed_nativeint: 18056 agree
+  prove_is_a_boxed_vec128: 18056 agree
+  prove_is_a_boxed_vec256: 18056 agree
+  prove_is_a_boxed_vec512: 18056 agree
+  prove_is_a_boxed_mask: 18056 agree
+  prove_is_or_is_not_a_boxed_float: 18056 agree
+  prove_unique_tag_and_size: 18056 agree
+  prove_is_int: 18056 agree
+  prove_is_not_a_pointer: 18056 agree
+  meet_is_int_variant_only: 18056 agree
+  prove_get_tag: 18056 agree
+  meet_is_null: 18056 agree
+  prove_unique_fully_constructed_immutable_heap_block: 18056 agree
+  meet_single_closures_entry: 18056 agree
+  prove_single_closures_entry: 18056 agree
+  meet_code_ids: 18056 agree
+  prove_code_ids: 18056 agree
+  meet_strings: 18056 agree
+  prove_strings: 18056 agree
+  prove_tagging_of_simple: 18056 agree
+  meet_tagging_of_simple: 18056 agree
+  meet_boxed_float32_containing_simple: 18056 agree
+  meet_boxed_float_containing_simple: 18056 agree
+  meet_boxed_int32_containing_simple: 18056 agree
+  meet_boxed_int64_containing_simple: 18056 agree
+  meet_boxed_nativeint_containing_simple: 18056 agree
+  meet_boxed_vec128_containing_simple: 18056 agree
+  meet_boxed_vec256_containing_simple: 18056 agree
+  meet_boxed_vec512_containing_simple: 18056 agree
+  meet_boxed_mask_containing_simple: 18056 agree
+  meet_block_field_simple: 18056 agree
+  meet_project_value_slot_simple: 18056 agree
+  meet_project_function_slot_simple: 18056 agree
+  prove_alloc_mode_of_boxed_number: 18056 agree
+  never_holds_locally_allocated_values: 18056 agree
+  prove_physical_equality: 18056 agree
+  The answers of the compiler in the environment made with the n-way meet (18056 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_equals_to_simple_of_kind: 2809, 15247, 0, 0
+    prove_equals_tagged_immediates: 725, 17331, 0, 0
+    meet_equals_tagged_immediates: 1207, 4042, 12807, 0
+    meet_naked_immediates: 1523, 958, 15575, 0
+    meet_equals_single_tagged_immediate: 957, 4292, 12807, 0
+    meet_naked_float32s: 273, 34, 17749, 0
+    meet_naked_floats: 232, 53, 17771, 0
+    meet_naked_int8s: 255, 38, 17763, 0
+    meet_naked_int16s: 265, 36, 17755, 0
+    meet_naked_int32s: 247, 32, 17777, 0
+    meet_naked_int64s: 255, 43, 17758, 0
+    meet_naked_nativeints: 257, 36, 17763, 0
+    meet_naked_vec128s: 270, 35, 17751, 0
+    meet_naked_vec256s: 247, 38, 17771, 0
+    meet_naked_vec512s: 290, 26, 17740, 0
+    meet_naked_masks: 250, 40, 17766, 0
+    meet_variant_like: 1272, 5067, 11717, 0
+    prove_variant_like: 964, 17092, 0, 0
+    prove_is_a_boxed_or_tagged_number: 1129, 16927, 0, 0
+    prove_nothing: 0, 18056, 0, 0
+    prove_is_a_tagged_immediate: 820, 17236, 0, 0
+    prove_is_a_boxed_float32: 41, 18015, 0, 0
+    prove_is_a_boxed_float: 35, 18021, 0, 0
+    prove_is_a_boxed_int32: 40, 18016, 0, 0
+    prove_is_a_boxed_int64: 34, 18022, 0, 0
+    prove_is_a_boxed_nativeint: 34, 18022, 0, 0
+    prove_is_a_boxed_vec128: 31, 18025, 0, 0
+    prove_is_a_boxed_vec256: 30, 18026, 0, 0
+    prove_is_a_boxed_vec512: 27, 18029, 0, 0
+    prove_is_a_boxed_mask: 37, 18019, 0, 0
+    prove_is_or_is_not_a_boxed_float: 2989, 15067, 0, 0
+    prove_unique_tag_and_size: 37, 18019, 0, 0
+    prove_is_int: 2122, 15934, 0, 0
+    prove_is_not_a_pointer: 2789, 15267, 0, 0
+    meet_is_int_variant_only: 1741, 4559, 11756, 0
+    prove_get_tag: 69, 17987, 0, 0
+    meet_is_null: 4571, 4062, 9423, 0
+    prove_unique_fully_constructed_immutable_heap_block: 20, 18036, 0, 0
+    meet_single_closures_entry: 65, 3499, 14393, 99
+      55 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      44 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_single_closures_entry: 43, 17965, 0, 48
+      28 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      20 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_code_ids: 151, 3249, 14656, 0
+    prove_code_ids: 86, 17970, 0, 0
+    meet_strings: 488, 2923, 14645, 0
+    prove_strings: 246, 17810, 0, 0
+    prove_tagging_of_simple: 670, 17386, 0, 0
+    meet_tagging_of_simple: 1097, 6537, 10422, 0
+    meet_boxed_float32_containing_simple: 18, 2970, 15068, 0
+    meet_boxed_float_containing_simple: 16, 2968, 15072, 0
+    meet_boxed_int32_containing_simple: 14, 2968, 15074, 0
+    meet_boxed_int64_containing_simple: 13, 2963, 15080, 0
+    meet_boxed_nativeint_containing_simple: 19, 2962, 15075, 0
+    meet_boxed_vec128_containing_simple: 20, 2961, 15075, 0
+    meet_boxed_vec256_containing_simple: 17, 2960, 15079, 0
+    meet_boxed_vec512_containing_simple: 14, 2966, 15076, 0
+    meet_boxed_mask_containing_simple: 18, 2971, 15067, 0
+    meet_block_field_simple: 9, 5159, 12888, 0
+    meet_project_value_slot_simple: 8, 3587, 14362, 99
+      55 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      44 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_project_function_slot_simple: 30, 3579, 14348, 99
+      55 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      44 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_alloc_mode_of_boxed_number: 309, 17747, 0, 0
+    never_holds_locally_allocated_values: 11326, 6730, 0, 0
+    prove_physical_equality: 2581, 15475, 0, 0
+
+A type of kind value, most of the time, in an environment where a name may have two equations (10000 cases, seeds 500000 to 509999)
+  5 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  9995 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 9991 agree
+    4 not run: neither makes the environment: the model has no answer where an equation is added
+  the environment made with the binary meet, seen the same in the model and in the compiler: 9989 agree
+    4 not run: neither makes the environment: the model has no answer where an equation is added
+    2 not run: the two environments are not seen the same: the canonical element of a name
+  prove_equals_to_simple_of_kind: 9991 agree
+  prove_equals_tagged_immediates: 9991 agree
+  meet_equals_tagged_immediates: 9991 agree
+  meet_naked_immediates: 9991 agree
+  meet_equals_single_tagged_immediate: 9991 agree
+  meet_naked_float32s: 9991 agree
+  meet_naked_floats: 9991 agree
+  meet_naked_int8s: 9991 agree
+  meet_naked_int16s: 9991 agree
+  meet_naked_int32s: 9991 agree
+  meet_naked_int64s: 9991 agree
+  meet_naked_nativeints: 9991 agree
+  meet_naked_vec128s: 9991 agree
+  meet_naked_vec256s: 9991 agree
+  meet_naked_vec512s: 9991 agree
+  meet_naked_masks: 9991 agree
+  meet_variant_like: 9991 agree
+  prove_variant_like: 9991 agree
+  prove_is_a_boxed_or_tagged_number: 9991 agree
+  prove_nothing: 9991 agree
+  prove_is_a_tagged_immediate: 9991 agree
+  prove_is_a_boxed_float32: 9991 agree
+  prove_is_a_boxed_float: 9991 agree
+  prove_is_a_boxed_int32: 9991 agree
+  prove_is_a_boxed_int64: 9991 agree
+  prove_is_a_boxed_nativeint: 9991 agree
+  prove_is_a_boxed_vec128: 9991 agree
+  prove_is_a_boxed_vec256: 9991 agree
+  prove_is_a_boxed_vec512: 9991 agree
+  prove_is_a_boxed_mask: 9991 agree
+  prove_is_or_is_not_a_boxed_float: 9991 agree
+  prove_unique_tag_and_size: 9991 agree
+  prove_is_int: 9991 agree
+  prove_is_not_a_pointer: 9991 agree
+  meet_is_int_variant_only: 9991 agree
+  prove_get_tag: 9991 agree
+  meet_is_null: 9991 agree
+  prove_unique_fully_constructed_immutable_heap_block: 9991 agree
+  meet_single_closures_entry: 9991 agree
+  prove_single_closures_entry: 9991 agree
+  meet_code_ids: 9991 agree
+  prove_code_ids: 9991 agree
+  meet_strings: 9991 agree
+  prove_strings: 9991 agree
+  prove_tagging_of_simple: 9991 agree
+  meet_tagging_of_simple: 9991 agree
+  meet_boxed_float32_containing_simple: 9991 agree
+  meet_boxed_float_containing_simple: 9991 agree
+  meet_boxed_int32_containing_simple: 9991 agree
+  meet_boxed_int64_containing_simple: 9991 agree
+  meet_boxed_nativeint_containing_simple: 9991 agree
+  meet_boxed_vec128_containing_simple: 9991 agree
+  meet_boxed_vec256_containing_simple: 9991 agree
+  meet_boxed_vec512_containing_simple: 9991 agree
+  meet_boxed_mask_containing_simple: 9991 agree
+  meet_block_field_simple: 9991 agree
+  meet_project_value_slot_simple: 9991 agree
+  meet_project_function_slot_simple: 9991 agree
+  prove_alloc_mode_of_boxed_number: 9991 agree
+  never_holds_locally_allocated_values: 9991 agree
+  The answers of the compiler in the environment made with the n-way meet (9991 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_equals_to_simple_of_kind: 3553, 6438, 0, 0
+    prove_equals_tagged_immediates: 1005, 8986, 0, 0
+    meet_equals_tagged_immediates: 847, 2066, 7078, 0
+    meet_naked_immediates: 47, 10, 9934, 0
+    meet_equals_single_tagged_immediate: 623, 2290, 7078, 0
+    meet_naked_float32s: 6, 10, 9975, 0
+    meet_naked_floats: 11, 1, 9979, 0
+    meet_naked_int8s: 10, 3, 9978, 0
+    meet_naked_int16s: 8, 9, 9974, 0
+    meet_naked_int32s: 10, 10, 9971, 0
+    meet_naked_int64s: 10, 7, 9974, 0
+    meet_naked_nativeints: 5, 5, 9981, 0
+    meet_naked_vec128s: 6, 3, 9982, 0
+    meet_naked_vec256s: 9, 7, 9975, 0
+    meet_naked_vec512s: 4, 9, 9978, 0
+    meet_naked_masks: 10, 6, 9975, 0
+    meet_variant_like: 1600, 2708, 5683, 0
+    prove_variant_like: 1505, 8486, 0, 0
+    prove_is_a_boxed_or_tagged_number: 1794, 8197, 0, 0
+    prove_nothing: 0, 9991, 0, 0
+    prove_is_a_tagged_immediate: 1109, 8882, 0, 0
+    prove_is_a_boxed_float32: 80, 9911, 0, 0
+    prove_is_a_boxed_float: 71, 9920, 0, 0
+    prove_is_a_boxed_int32: 78, 9913, 0, 0
+    prove_is_a_boxed_int64: 93, 9898, 0, 0
+    prove_is_a_boxed_nativeint: 69, 9922, 0, 0
+    prove_is_a_boxed_vec128: 61, 9930, 0, 0
+    prove_is_a_boxed_vec256: 77, 9914, 0, 0
+    prove_is_a_boxed_vec512: 92, 9899, 0, 0
+    prove_is_a_boxed_mask: 64, 9927, 0, 0
+    prove_is_or_is_not_a_boxed_float: 3857, 6134, 0, 0
+    prove_unique_tag_and_size: 409, 9582, 0, 0
+    prove_is_int: 3424, 6567, 0, 0
+    prove_is_not_a_pointer: 3694, 6297, 0, 0
+    meet_is_int_variant_only: 1895, 2201, 5895, 0
+    prove_get_tag: 565, 9426, 0, 0
+    meet_is_null: 5262, 1233, 3496, 0
+    prove_unique_fully_constructed_immutable_heap_block: 206, 9785, 0, 0
+    meet_single_closures_entry: 236, 2243, 7436, 76
+      42 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      34 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_single_closures_entry: 224, 9707, 0, 60
+      31 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      29 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_code_ids: 258, 2217, 7516, 0
+    prove_code_ids: 234, 9757, 0, 0
+    meet_strings: 333, 1704, 7954, 0
+    prove_strings: 263, 9728, 0, 0
+    prove_tagging_of_simple: 708, 9283, 0, 0
+    meet_tagging_of_simple: 827, 4411, 4753, 0
+    meet_boxed_float32_containing_simple: 68, 1726, 8197, 0
+    meet_boxed_float_containing_simple: 53, 1725, 8213, 0
+    meet_boxed_int32_containing_simple: 61, 1734, 8196, 0
+    meet_boxed_int64_containing_simple: 73, 1731, 8187, 0
+    meet_boxed_nativeint_containing_simple: 53, 1728, 8210, 0
+    meet_boxed_vec128_containing_simple: 49, 1725, 8217, 0
+    meet_boxed_vec256_containing_simple: 56, 1734, 8201, 0
+    meet_boxed_vec512_containing_simple: 68, 1731, 8192, 0
+    meet_boxed_mask_containing_simple: 53, 1722, 8216, 0
+    meet_block_field_simple: 116, 2717, 7158, 0
+    meet_project_value_slot_simple: 86, 2400, 7429, 76
+      42 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      34 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    meet_project_function_slot_simple: 142, 2354, 7419, 76
+      42 with no answer: a fatal error: Function slot (g/N [size N]) not bound in Known closure type with contents
+      34 with no answer: a fatal error: Function slot (h/N [size N]) not bound in Known closure type with contents
+    prove_alloc_mode_of_boxed_number: 685, 9306, 0, 0
+    never_holds_locally_allocated_values: 5708, 4283, 0, 0
+
+Reification of a type of kind value, most of the time, in an environment (20000 cases, seeds 600000 to 619999)
+  8 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  19992 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 19992 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 19992 agree
+  reify: 19992 agree
+  The answers of the compiler in the environment made with the n-way meet (19992 cases):
+  Lift, then Simple, Cannot_reify, Invalid, no answer
+    reify: 1858, then 6138, 9269, 2725, 2
+      2 with no answer: an exception: File "middle_end/flambdaN/types/reify.ml", line N, characters N-N: Assertion failed
+
+Reification of a type of naked numbers, in an environment (4000 cases, seeds 700000 to 703999)
+  1 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  3999 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 3999 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 3999 agree
+  reify: 3999 agree
+  The answers of the compiler in the environment made with the n-way meet (3999 cases):
+  Lift, then Simple, Cannot_reify, Invalid, no answer
+    reify: 18, then 1447, 2240, 294, 0
+
+Reification of a raw type, in an environment (10000 cases, seeds 800000 to 809999)
+  179 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  28 not converted: not in the compiler: a closure type that is not of kind value, in a closures entry
+  6 not converted: not in the compiler: a head with no number (a nativeint)
+  14 not converted: not in the compiler: a head with no number (an intN)
+  4 not converted: not in the compiler: a head with no number (the bits of a float)
+  1 not converted: not in the compiler: a head with no number (the bits of a floatN)
+  5 not converted: not in the compiler: a head with no number (the bits of a mask)
+  9 not converted: not in the compiler: a head with no number (the bits of a vecN)
+  143 not converted: not in the compiler: a type of naked numbers of kind naked immediate (the type of naked immediates is another constructor)
+  4 not converted: not in the compiler: no code id is numbered 
+  55 not converted: not in the compiler: no function slot is numbered 
+  29 not converted: not in the compiler: no symbol is numbered 
+  28 not converted: not in the compiler: no value slot is numbered 
+  164 not converted: not in the compiler: no variable is numbered 
+  108 not converted: not in the compiler: the allocation mode Local, which no function of the compiler makes
+  22 not converted: not in the compiler: the number N is not a byte
+  66 not converted: not in the compiler: the number N is not a tag
+  12 not converted: not in the compiler: the number NbN is not a nativeint
+  9 not converted: not in the compiler: the number NbN is not an immediate
+  51 not converted: not in the compiler: the number NbN is not an int
+  27 not converted: not in the compiler: the number NbN is not the bits of a float
+  13 not converted: not in the compiler: the number NbN is not the bits of a mask
+  31 not converted: not in the compiler: the number NbN is not the bits of a vec
+  8992 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 8992 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 8992 agree
+  reify: 8992 agree
+  The answers of the compiler in the environment made with the n-way meet (8992 cases):
+  Lift, then Simple, Cannot_reify, Invalid, no answer
+    reify: 84, then 2351, 5006, 1548, 3
+      3 with no answer: an exception: File "middle_end/flambdaN/types/reify.ml", line N, characters N-N: Assertion failed
+
+Reification of a type of kind value, most of the time, in an environment where a name may have two equations (6000 cases, seeds 900000 to 905999)
+  3 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  5997 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 5995 agree
+    1 not run: neither makes the environment: the model has no answer where an equation is added
+    1 not run: the two environments are not seen the same: the type of a name
+  the environment made with the binary meet, seen the same in the model and in the compiler: 5993 agree
+    1 not run: neither makes the environment: the model has no answer where an equation is added
+    1 not run: the two environments are not seen the same: the canonical element of a name
+    2 not run: the two environments are not seen the same: the type of a name
+  reify: 5995 agree
+  The answers of the compiler in the environment made with the n-way meet (5995 cases):
+  Lift, then Simple, Cannot_reify, Invalid, no answer
+    reify: 454, then 1309, 2382, 1849, 1
+      1 with no answer: an exception: File "middle_end/flambdaN/types/reify.ml", line N, characters N-N: Assertion failed
+
+With the kind checks of the compiler on: a type of any kind, and one more, in an environment (3000 cases, seeds 1000000 to 1002999)
+  30 not converted: not in the compiler: a Rec_info type given by its head: the model has not got the expression
+  2970 converted
+  the environment made with the n-way meet, seen the same in the model and in the compiler: 2970 agree
+  the environment made with the binary meet, seen the same in the model and in the compiler: 2970 agree
+  prove_equals_to_simple_of_kind: 2348 agree, 622 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [ℕ𝟙𝟞]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  meet_naked_immediates: 599 agree, 2371 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000000): the model answers Invalid,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Naked_immediate]:)
+    on the shrunk input:
+    (Value Unknown)
+    and
+    (Value Unknown)
+    with the arguments: min_name_mode normal, kind value, field 1,
+      function slot 2, value slot 1, variable v1
+  meet_naked_floats: 60 agree, 2910 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000000): the model answers Invalid,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Naked_float]:)
+    on the shrunk input:
+    (Value Unknown)
+    and
+    (Value Unknown)
+    with the arguments: min_name_mode normal, kind value, field 1,
+      function slot 2, value slot 1, variable v1
+  prove_is_int: 1686 agree, 1284 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  prove_is_not_a_pointer: 1686 agree, 1284 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  meet_is_null: 1686 agree, 1284 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Invalid,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  meet_boxed_float_containing_simple: 1686 agree, 1284 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Invalid,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  never_holds_locally_allocated_values: 2970 agree
+  prove_physical_equality: 1664 agree, 1306 disagree as recorded
+    recorded as C2-2, with the kind checks on: the compiler stops on a type of another kind than the prover is for, and the model answers the default of the compiler without them (seed 1000002): the model answers Unknown,
+the compiler, in the environment made with the n-way meet, no answer (a fatal error: Kind error: expected [Value]:)
+    on the shrunk input:
+    (Naked_number naked_int64 Unknown)
+    and
+    (Naked_number naked_int64 Unknown)
+    with the arguments: min_name_mode in types, kind naked_int16, field 2,
+      function slot 1, value slot 2, variable v8
+  The answers of the compiler in the environment made with the n-way meet (2970 cases):
+  a proof or a known result, Unknown or Need_meet, Invalid, no answer
+    prove_equals_to_simple_of_kind: 891, 1457, 0, 622
+      7 with no answer: a fatal error: Kind error: expected [ℕmask]:
+      6 with no answer: a fatal error: Kind error: expected [ℕℕ]:
+      17 with no answer: a fatal error: Kind error: expected [ℕ𝕍N]:
+      7 with no answer: a fatal error: Kind error: expected [ℕ𝕗N]:
+      8 with no answer: a fatal error: Kind error: expected [ℕ𝕗]:
+      59 with no answer: a fatal error: Kind error: expected [ℕ𝕚]:
+      8 with no answer: a fatal error: Kind error: expected [ℕ𝟙𝟞]:
+      3 with no answer: a fatal error: Kind error: expected [ℕ𝟛𝟚]:
+      6 with no answer: a fatal error: Kind error: expected [ℕ𝟞𝟜]:
+      6 with no answer: a fatal error: Kind error: expected [ℕ𝟠]:
+      4 with no answer: a fatal error: Kind error: expected [ℝ]:
+      5 with no answer: a fatal error: Kind error: expected [ℝ𝕘]:
+      486 with no answer: a fatal error: Kind error: expected [𝕍]:
+    meet_naked_immediates: 263, 186, 150, 2371
+      2371 with no answer: a fatal error: Kind error: expected [Naked_immediate]:
+    meet_naked_floats: 33, 10, 17, 2910
+      2910 with no answer: a fatal error: Kind error: expected [Naked_float]:
+    prove_is_int: 709, 977, 0, 1284
+      1284 with no answer: a fatal error: Kind error: expected [Value]:
+    prove_is_not_a_pointer: 769, 917, 0, 1284
+      1284 with no answer: a fatal error: Kind error: expected [Value]:
+    meet_is_null: 1049, 402, 235, 1284
+      1284 with no answer: a fatal error: Kind error: expected [Value]:
+    meet_boxed_float_containing_simple: 10, 472, 1204, 1284
+      1284 with no answer: a fatal error: Kind error: expected [Value]:
+    never_holds_locally_allocated_values: 1879, 1091, 0, 0
+    prove_physical_equality: 916, 748, 0, 1306
+      1306 with no answer: a fatal error: Kind error: expected [Value]:
+
+prove_physical_equality of the aliases of two poison constants of kind value, which no type of the model gives
+  of one name: the model answers (Proved true), the compiler (Proved true)
+  of two names: the model answers (Proved true), the compiler (Proved false) (as recorded: P1-1)
+
+No disagreement.
