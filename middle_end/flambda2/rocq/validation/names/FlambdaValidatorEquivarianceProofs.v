@@ -3290,6 +3290,9 @@ Definition rename_arm_forwards (r : renaming) (F : arm_forwards)
    hand: the tactic does not come to the end of the second. *)
 Section Forward_to_arms.
 
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
+
 #[local] Instance arm_kinds_in_scope_renaming : Renaming_of kinds_in_scope :=
   rename_kinds_in_scope.
 #[local] Instance arm_forwards_renaming : Renaming_of arm_forwards :=
@@ -3423,6 +3426,9 @@ Qed.
 (* The law of a binding, where the pass begins with those kinds and
    nothing else, is given to the tactic. *)
 Section Forward_to_arms_in_code.
+
+(* One pass over the goal for the laws of the database: enough here. *)
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite forward_to_arms_in_binding_equivariant : equivariance.
 #[local] Arguments forward_to_arms_in_binding : simpl never.
