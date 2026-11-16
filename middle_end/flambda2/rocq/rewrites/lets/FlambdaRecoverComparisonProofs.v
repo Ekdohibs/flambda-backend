@@ -44,7 +44,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalProofs
   FlambdaApplyProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaCseSpec
-  FlambdaCseProofs FlambdaRecoverComparisonSpec.
+  FlambdaCseProofs FlambdaRecoverComparisonSpec FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -703,142 +703,68 @@ Qed.
 (* The pass commutes with renaming                                          *)
 (* ======================================================================== *)
 
-(* An entry of what is known, and a comparison, renamed. *)
-Definition rename_entry (r : renaming)
-    (entry : variable * (prim * list simple))
-    : variable * (prim * list simple) :=
-  (rename_variable r (fst entry),
-   (fst (snd entry), map (rename_simple r) (snd (snd entry)))).
+(* The two laws are proved from the definitions ([equivariance], of
+   FlambdaEquivarianceTactic.v): the tactic states and proves, as it
+   goes, the laws of the functions that the pass is made of.
 
-Definition rename_comparison (r : renaming) (held : comparison)
-    : comparison :=
-  (fst held, map (rename_simple r) (snd held)).
+   Three things are given to it. An instance says that
+   [rename_computed] renames the type [computed]. [first_known] takes
+   a function, and is not one of the functions of lists that the tactic
+   goes under: its two lemmas (under [map]; of two functions that agree
+   on the entries up to what is done to their answers) and the rule
+   that uses them are what the tactic needs to go under it, as for
+   [first_answer] in FlambdaUnaliasParamsNamesProofs.v. And
+   [comparison_held] is kept from computation: under [first_known] it
+   is at a renamed entry, and its law, which the tactic derives,
+   applies only where the function stands as it is written. *)
 
-Lemma first_known_renamed {A : Type} (r : renaming)
-    (f f' : variable * (prim * list simple) -> option A) (g : A -> A)
+#[local] Instance computed_renaming : Renaming_of computed := rename_computed.
+
+Lemma first_known_of_map {A : Type}
+    (f : variable * (prim * list simple) -> option A)
+    (g : variable * (prim * list simple) -> variable * (prim * list simple))
+    (known : computed) :
+  first_known f (map g known) = first_known (fun entry => f (g entry)) known.
+Proof.
+  induction known as [ | entry known IH]; [ reflexivity | ]. cbn.
+  rewrite IH. reflexivity.
+Qed.
+#[local] Hint Rewrite @first_known_of_map : equivariance.
+
+Lemma first_known_ext_among {A A' : Type}
+    (f' : variable * (prim * list simple) -> option A')
+    (f : variable * (prim * list simple) -> option A) (h : A -> A')
     (known : computed) :
   (∀ entry : variable * (prim * list simple),
-     f' (rename_entry r entry) = option_map g (f entry)) ->
-  first_known f' (rename_computed r known)
-  = option_map g (first_known f known).
+     In entry known -> f' entry = option_map h (f entry)) ->
+  first_known f' known = option_map h (first_known f known).
 Proof.
-  intros Hf. induction known as [ | entry known IH]; [ reflexivity | ].
-  cbn [rename_computed map first_known].
-  change
-    (rename_variable r (fst entry),
-     (fst (snd entry), map (rename_simple r) (snd (snd entry))))
-    with (rename_entry r entry).
-  rewrite Hf. destruct (f entry); [ reflexivity | exact IH ].
+  induction known as [ | entry known IH]; intros Hf; [ reflexivity | ]. cbn.
+  rewrite (Hf entry (or_introl eq_refl)).
+  destruct (f entry); [ reflexivity | ]. cbn. apply IH.
+  intros entry' Hin. apply Hf. right. exact Hin.
 Qed.
 
-Lemma comparison_held_renamed (r : renaming) (u : variable)
-    (entry : variable * (prim * list simple)) :
-  comparison_held (rename_variable r u) (rename_entry r entry)
-  = option_map (rename_comparison r) (comparison_held u entry).
-Proof.
-  destruct entry as [y [p args]].
-  destruct p as [ p | [ | | | | | kind [c | s]] | p | p | rp ];
-    try reflexivity.
-  cbn [rename_entry fst snd comparison_held].
-  rewrite rename_variable_eqb. destruct (Pos.eqb u y); reflexivity.
-Qed.
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- context [first_known ?f' ?l] =>
+    match goal with
+    | |- context [first_known ?f l] =>
+      tryif constr_eq f f' then fail
+      else (eqv_no_renaming f;
+            erewrite (first_known_ext_among f' f _ l);
+            [ | eqv_enter l; solve [ eqv_core ] ])
+    end
+  end.
 
-Lemma tagged_comparison_held_renamed (r : renaming) (known : computed)
-    (t : variable) (entry : variable * (prim * list simple)) :
-  tagged_comparison_held (rename_computed r known) (rename_variable r t)
-    (rename_entry r entry)
-  = option_map (rename_comparison r) (tagged_comparison_held known t entry).
-Proof.
-  destruct entry as [y [p args]].
-  destruct p as [ [ ] | p | p | p | rp ]; try reflexivity.
-  destruct args as [ | [u | sym | c] [ | arg args]]; try reflexivity.
-  cbn [rename_entry fst snd map rename_simple tagged_comparison_held].
-  rewrite rename_variable_eqb. destruct (Pos.eqb t y); [ | reflexivity ].
-  apply first_known_renamed. intros entry.
-  apply comparison_held_renamed.
-Qed.
-
-Lemma compared_renamed (r : renaming) (known : computed) (tagged : simple) :
-  compared (rename_computed r known) (rename_simple r tagged)
-  = option_map (rename_comparison r) (compared known tagged).
-Proof.
-  destruct tagged as [t | sym | c]; try reflexivity.
-  cbn [rename_simple compared]. apply first_known_renamed. intros entry.
-  apply tagged_comparison_held_renamed.
-Qed.
-
-Lemma is_tagged_zero_renamed (r : renaming) (s : simple) :
-  is_tagged_zero (rename_simple r s) = is_tagged_zero s.
-Proof. destruct s; reflexivity. Qed.
-
-Lemma recover_one_way_renamed (r : renaming) (known : computed)
-    (tagged zero : simple) (c : int_comparison) :
-  recover_one_way (rename_computed r known) (rename_simple r tagged)
-    (rename_simple r zero) c
-  = option_map (rename_named r) (recover_one_way known tagged zero c).
-Proof.
-  unfold recover_one_way.
-  rewrite is_tagged_zero_renamed, compared_renamed.
-  destruct (is_tagged_zero zero); [ | reflexivity ].
-  destruct (compared known tagged) as [[[kind s] operands] | ];
-    [ | reflexivity ].
-  cbn [option_map rename_comparison fst snd].
-  destruct (against_zero s c); reflexivity.
-Qed.
-
-Lemma recover_comparison_renamed (r : renaming) (known : computed)
-    (d : named) :
-  recover_comparison (rename_computed r known) (rename_named r d)
-  = rename_named r (recover_comparison known d).
-Proof.
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  destruct args as [ | arg1 [ | arg2 [ | arg3 args]]]; try reflexivity.
-  cbn [rename_named map recover_comparison].
-  destruct (tested p) as [c | ]; [ | reflexivity ].
-  rewrite !recover_one_way_renamed.
-  destruct (recover_one_way known arg1 arg2 c); [ reflexivity | ].
-  destruct (recover_one_way known arg2 arg1 (swap_comparison c));
-    reflexivity.
-Qed.
-
-Fixpoint recover_comparisons_knowing_equivariant_aux (r : renaming)
-    (e : expr) :
-  ∀ known : computed,
-    recover_comparisons_knowing (rename_computed r known) (rename_expr r e)
-    = rename_expr r (recover_comparisons_knowing known e)
-with recover_comparisons_in_handler_equivariant (r : renaming)
-    (h : continuation_handler) :
-  ∀ known : computed,
-    recover_comparisons_in_handler (rename_computed r known)
-      (rename_handler r h)
-    = rename_handler r (recover_comparisons_in_handler known h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
-         | scrutinee arms | ];
-      intros known; simpl; try reflexivity.
-    + rewrite recover_comparison_renamed, computed_under_let_renamed,
-        recover_comparisons_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite recover_comparisons_knowing_equivariant_aux. reflexivity.
-    + rewrite recover_comparisons_in_handler_equivariant,
-        recover_comparisons_knowing_equivariant_aux.
-      reflexivity.
-    + rewrite recover_comparisons_knowing_equivariant_aux. reflexivity.
-  - destruct h as [params metadata handler]. intros known. simpl.
-    rewrite forget_computed_vars_renamed,
-      recover_comparisons_knowing_equivariant_aux.
-    reflexivity.
-Qed.
+#[local] Arguments comparison_held : simpl never.
 
 Theorem recover_comparisons_knowing_equivariant :
   recover_comparisons_knowing_equivariant_statement.
-Proof.
-  intros r known e. apply recover_comparisons_knowing_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
 Theorem recover_known_comparisons_equivariant :
   recover_known_comparisons_equivariant_statement.
 Proof.
-  intros r e. exact (recover_comparisons_knowing_equivariant_aux r e []).
+  intros r e. exact (recover_comparisons_knowing_equivariant r [] e).
 Qed.
