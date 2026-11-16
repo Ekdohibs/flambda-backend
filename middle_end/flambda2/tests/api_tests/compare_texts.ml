@@ -63,7 +63,18 @@
 
    alloc_stack: the code of the second may allocate on the stack.
    invariant_count: the recursive continuation of the second has one invariant
-   parameter more. They are different; the comparison does not stop on them. *)
+   parameter more. They are different; the comparison does not stop on them.
+
+   result_arity: the two differ in the kind of the result of code.
+   four_arguments_operator: the primitive of four arguments is for another kind
+   of field. They are different.
+
+   value_slots_consistent, function_slots_consistent: the two project the same
+   slots of a closure three times, the first and the third time the same one;
+   the slots have other names in the second. They are the same.
+   value_slots_collision, function_slots_collision: the second projects one slot
+   where the first projects two. They are different: two slots of the first are
+   not one slot of the second. *)
 
 module P = Flambda2_parser
 

@@ -12,3 +12,9 @@ code_variant: different; the unit given is printed
 four_arguments_other: different; the unit given is printed
 alloc_stack: different; the unit given is printed
 invariant_count: different; the unit given is printed
+result_arity: different; the unit given is printed
+four_arguments_operator: different; the unit given is printed
+value_slots_consistent: the same
+value_slots_collision: different; the unit given is printed
+function_slots_consistent: the same
+function_slots_collision: different; the unit given is printed

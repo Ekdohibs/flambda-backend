@@ -1,0 +1,16 @@
+let code size(1) p (z) my_closure &my_region my_depth -> k * e =
+  cont k (z)
+and code size(1) q (z) my_closure &my_region my_depth -> k * e =
+  cont k (z)
+and code size(1) r (z) my_closure &my_region my_depth -> k * e =
+  cont k (z)
+in
+let cf = closure p @p &toplevel
+and cg = closure q @q &toplevel
+and ch = closure r @r &toplevel
+in
+let first = %project_function_slot.[p].[q] (cf) in
+let second = %project_function_slot.[p].[r] (cf) in
+let third = %project_function_slot.[p].[q] (cf) in
+let $B = Block 0 (first, second, third) in
+cont done ($B)

@@ -1297,7 +1297,17 @@ let switch_exprs env switch1 switch2 : Expr.t Comparison.t =
 
 (* The functions that open two binders together stop with a fatal error if the
    two do not bind their names alike. The comparison asks first, so that it says
-   of two such terms that they are different. *)
+   of two such terms that they are different.
+
+   What is compared of two binders, here and in the functions below: of two
+   lets, that they bind as many variables; of two continuations, the number and
+   the kinds of their parameters; of two groups of recursive continuations,
+   their number and the number and the kinds of the invariant parameters; of two
+   functions, the number of their parameters and whether they may allocate on
+   the stack. What is not compared: the kind that a variable bound by a let
+   carries and its name mode; the kinds that the parameters of a function carry
+   (the arity of its code is compared, in [codes]); the debugging identifiers of
+   variables and parameters. *)
 
 (* For [Function_params_and_body.pattern_match_pair]: the same number of
    parameters, and both or neither may allocate on the stack. *)

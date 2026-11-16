@@ -34,7 +34,7 @@
    added in two orders. The comparison of units must call two such kinds the
    same, and must still tell apart two kinds that hold different things.
 
-   Each pair of kinds below is put in eight places of a term where the
+   Each pair of kinds below is put in eight selected places of a term where the
    comparison reads a kind with its subkind, and the answer is printed. The
    places that are not here are the arities of the parameters and of the result
    of code, which are compared by the function that compares the arities of a
@@ -42,10 +42,13 @@
    units of the two orders), and the kinds of the invariant parameters of
    recursive continuations (compare_texts).
 
-   Then things that a text cannot write: that a call is a probe, a call that
-   performs an effect, the shape of a static block, the debugging information of
-   its fields (which is not compared, as no other debugging information is), and
-   a group of two recursive continuations. *)
+   Then pairs that differ in what stands beside a kind (the grouping of an
+   arity; the tag, the mutability and the allocation mode of a block that is
+   made; the mutability of a read and the kind of a write at an offset), and
+   things that a text cannot write: that a call is a probe, a call that performs
+   an effect, the shape of a static block, the debugging information of its
+   fields (which is not compared, as no other debugging information is), and a
+   group of two recursive continuations. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -343,6 +346,73 @@ let recursive_group n =
            (List.map (fun continuation -> continuation, handler) continuations))
         ~invariant_params:Bound_parameters.empty
         ~body:(jump (List.hd continuations) []))
+
+(* The other fields of the primitives whose kinds are compared here. *)
+let block ?(tag = Tag.Scannable.zero) ?(mutability = Mutability.Immutable)
+    ?(local = false) () =
+  let_prim (fun ~toplevel_my_alloc_region ->
+      Variadic
+        ( Make_block
+            ( Values (tag, [reference]),
+              mutability,
+              if local
+              then
+                Alloc_mode.For_allocations.local
+                  ~alloc_region:toplevel_my_alloc_region
+                  ~region:toplevel_my_alloc_region
+              else
+                Alloc_mode.For_allocations.heap
+                  ~alloc_region:toplevel_my_alloc_region ),
+          [argument] ))
+
+let read flag =
+  let_prim (fun ~toplevel_my_alloc_region:_ ->
+      Binary (Read_offset (reference, flag), argument, argument))
+
+let write write_kind =
+  let_prim (fun ~toplevel_my_alloc_region:_ ->
+      Ternary
+        ( Write_offset (write_kind, reference, Alloc_mode.For_assignments.heap),
+          argument,
+          argument,
+          argument ))
+
+let call_with_arguments args_arity =
+  call ~args_arity ~return_arity:any ~extra_args:[] ()
+
+let () =
+  let float = Flambda_arity.Component_for_creation.Singleton KS.naked_float in
+  let value = Flambda_arity.Component_for_creation.Singleton KS.any_value in
+  let arity = Flambda_arity.create in
+  Printf.printf "two arities that group the same kinds in the same way: %s\n"
+    (answer
+       (call_with_arguments (arity [Unboxed_product [float; value]; value]))
+       (call_with_arguments (arity [Unboxed_product [float; value]; value])));
+  Printf.printf "a product of two kinds and the two kinds: %s\n"
+    (answer
+       (call_with_arguments (arity [Unboxed_product [float; value]]))
+       (call_with_arguments (arity [float; value])));
+  Printf.printf "a product of three kinds, nested in two ways: %s\n"
+    (answer
+       (call_with_arguments
+          (arity [Unboxed_product [Unboxed_product [float; value]; value]]))
+       (call_with_arguments
+          (arity [Unboxed_product [float; Unboxed_product [value; value]]])));
+  Printf.printf "an arity with the product of nothing and one without: %s\n"
+    (answer
+       (call_with_arguments (arity [value; Unboxed_product []]))
+       (call_with_arguments (arity [value])));
+  Printf.printf "two blocks made alike: %s\n" (answer (block ()) (block ()));
+  Printf.printf "two blocks made with two tags: %s\n"
+    (answer (block ()) (block ~tag:(tag 1) ()));
+  Printf.printf "a block made immutable and one made mutable: %s\n"
+    (answer (block ()) (block ~mutability:Mutable ()));
+  Printf.printf "a block made on the heap and one made on the stack: %s\n"
+    (answer (block ()) (block ~local:true ()));
+  Printf.printf "two reads at an offset, of an immutable and of a mutable: %s\n"
+    (answer (read Immutable) (read Mutable));
+  Printf.printf "two writes at an offset, of two kinds of write: %s\n"
+    (answer (write Into_block) (write Into_block_or_off_heap))
 
 let () =
   Printf.printf "a call that is a probe and a plain call: %s\n"

@@ -106,6 +106,16 @@ not a variant (the kinds, by Flambda_kind.With_subkind.equal: not equal)
   the kind of a read at an offset: different
   the kind of a write at an offset: different
   the kind of a parameter of a continuation: different
+two arities that group the same kinds in the same way: the same
+a product of two kinds and the two kinds: different
+a product of three kinds, nested in two ways: different
+an arity with the product of nothing and one without: different
+two blocks made alike: the same
+two blocks made with two tags: different
+a block made immutable and one made mutable: different
+a block made on the heap and one made on the stack: different
+two reads at an offset, of an immutable and of a mutable: different
+two writes at an offset, of two kinds of write: different
 a call that is a probe and a plain call: different
 two calls that are probes of one name: the same
 two calls that are probes of two names: different

@@ -1,0 +1,12 @@
+let x = %opaque (2) in
+let y = %opaque (3) in
+let code size(4) g (z : imm tagged) my_closure &my_region my_depth -> k * e
+      : imm tagged =
+  let v = %project_value_slot.[g].[c] (my_closure) in
+  let w = %project_value_slot.[g].[d] (my_closure) in
+  let u = %project_value_slot.[g].[c] (my_closure) in
+  cont k (u)
+in
+let c = closure g @g &toplevel with { c = x; d = y } in
+let $B = Block 0 (c) in
+cont done ($B)
