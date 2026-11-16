@@ -671,11 +671,13 @@ says so. Only the labels that this tree cites are listed.
 - **C1-9.** Simplify folds an arithmetic shift right by 63 of a negative
   naked immediate to 0, and of a tagged immediate to -1.
 - **C1-10.** fexpr reads `%is_int` as the variant-only `Is_int`, and
-  prints the other one the same way.
+  prints the other one the same way. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C1-11.** The reader of the text of terms fails on an integer constant
   beyond 63 bits where it stands in an expression, though the printer
   writes it, and wraps an out-of-range `int8` or `int16` literal without
-  a word.
+  a word. Mended in part on this branch, for a constant beyond 63 bits:
+  see `rocq/HACKING.md`, the changes to the compiler.
 - **C1-12.** A constant of the model holds any integer; the compiler's
   constants are in the range of their kind by construction.
 - **C1-13.** The kinds of the fields of a `Make_block` come from the
@@ -693,7 +695,8 @@ says so. Only the labels that this tree cites are listed.
   whatever the flags, while others of the same sort become `Invalid`.
 - **C2-5.** The fexpr parser gives a direct call, and an indirect call
   with no annotation, the arity in which every argument and result is a
-  `Value`; the printer leaves the arity of such calls out.
+  `Value`; the printer leaves the arity of such calls out. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-6.** Nothing checks that the arities in a code's metadata are the
   kinds of its parameters.
 - **C2-7.** A call with fewer or more arguments than the code has
@@ -716,13 +719,20 @@ says so. Only the labels that this tree cites are listed.
   toplevel" goes by that name.
 - **C2-14.** The printer of fexpr writes the name of a poison constant
   without quotes and the parser reads a string there, so the compiler's
-  own fexpr text of a term with poison is not read back.
+  own fexpr text of a term with poison is not read back. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
+- **C2-15.** `-drawfexpr-to` on a unit that performs an effect stops the
+  compiler with a fatal error: the syntax of fexpr has no call kind for
+  an effect. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
 - **C2-17.** The handler of a probe is called only while the probe is
   enabled, which a mark on the call says and the text of a term does
-  not; the model has no probe.
+  not; the model has no probe. On this branch the text of a term says
+  it: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-18.** The kind that `Make_block` gives each field is read by
   Simplify and by nothing after it, and the text of a term does not
-  write it.
+  write it. On this branch the text of a term writes it for a block of
+  values: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-19.** Simplify, with `-g` and phantom lets on, keeps a `Let` whose
   variable is unused as a phantom binding where it would delete it;
   `to_cmm` runs nothing for such a `Let`, and the text of a term does
@@ -747,21 +757,27 @@ says so. Only the labels that this tree cites are listed.
   of occurrences, whether code uses its closure, whether a value slot
   is always an immediate); the conversion reads none of it.
 - **C2-26.** The text of a term writes both forms of `Is_int` as
-  `%is_int`, and its reader gives the form for variants.
+  `%is_int`, and its reader gives the form for variants. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-27.** The text of a term does not write the kind of
-  `Opaque_identity`, and its reader gives the kind of values.
+  `Opaque_identity`, and its reader gives the kind of values. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-28.** The reader of the text of a term reads the kind `int32` of
   `%invalid` and of `%optimised_out` as naked int8, and `int64` as naked
   int16; the printer has no word for naked int32 and int64 there and
-  stops.
+  stops. Mended on this branch: see `rocq/HACKING.md`, the changes to
+  the compiler.
 - **C2-29.** The text of a term does not write the shape of a static
   block, and its reader gives the shape of values only; Simplify stops
   with a fatal error on a constant record with an unboxed field that is
-  read back.
+  read back. On this branch the text of a term writes the kinds of the
+  fields of such a block, and its reader makes the shape from them: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C2-30.** The text of a term writes nothing for an argument or a
   parameter of no kind (the unboxed product of nothing); read back, a
   partial application or an over-application can be a full application,
-  and a full application a partial one.
+  and a full application a partial one. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C3-1.** Simplify answers a projection that names the wrong function
   slot on one of its two paths and makes it `Invalid` on the other; the
   slot named is not checked where the term is built.
@@ -839,7 +855,8 @@ says so. Only the labels that this tree cites are listed.
   Simplify was not run on it. Since decision D60 a well-formed unit
   of the model may have such a binding.
 - **N1-1.** `Compare` writes the reverse maps of function slots and
-  value slots into the forward maps.
+  value slots into the forward maps. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **N1-2.** `pattern_match_pair` on code and on recursive handlers stops
   the compiler where the lists of bound names differ in length.
 - **N1-3.** That the names of a binder are distinct is checked for
@@ -857,7 +874,8 @@ says so. Only the labels that this tree cites are listed.
   renamings do not compose in general.
 - **N1-9.** The comparison of terms of the compiler (`Compare`) has no
   case for a primitive of four arguments, so it judges a term that has
-  one different from itself.
+  one different from itself. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **P1-1.** Simplify folds `Phys_equal` of a poison against another
   constant to 0, and the backend makes a poison of kind `Value` a tagged
   immediate.
@@ -869,7 +887,8 @@ says so. Only the labels that this tree cites are listed.
   modulo 64.
 - **P1-4.** The fexpr parser reads `%bytes_length` as `String_length
   String`, and the printer writes `String_length Bytes` as
-  `%bytes_length`.
+  `%bytes_length`. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **P1-5.** An unsafe load of several bytes at the end of a string reads
   the byte after the last, which is 0 on the machine and which the model
   has not got; the model is stricter.
@@ -881,11 +900,15 @@ says so. Only the labels that this tree cites are listed.
   reproduced on x86-64 for x86-64; open for cross compilation.
 - **P1-9.** The fexpr printer writes `Array_load` and `Array_set` with
   their array kind only, so a load kind or a set kind that differs from
-  it is lost.
+  it is lost. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
 - **P1-10.** Simplify stops with a fatal error on two array primitives
   that the terms let anyone build.
 - **P1-11.** Simplify looks at the array kind of a load and of a store
   and not at that of `Array_length`, whose compiled code depends on it.
+- **P1-12.** The printer of fexpr writes a float `compare` as
+  `%float_comp.lt`, and the parser reads it back as `<`. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **R1-1.** Unboxing records `Get_tag` on the paths where the value is
   an immediate, and supplies a dummy tag of zero.
 - **R1-2.** The types library evaluates `Is_null` of poison as false.
@@ -933,7 +956,8 @@ says so. Only the labels that this tree cites are listed.
 - **R2-11.** Simplify removes a dead use of a continuation at the wrong
   kind before checking it.
 - **R2-12.** Printing a term as fexpr and parsing it back loses the
-  arities of calls.
+  arities of calls. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **R2-15.** Sharing code between static sets succeeds in separate
   groups but fails within one group.
 - **R2-16.** The checks for duplicate parameters compare the whole
@@ -957,10 +981,13 @@ says so. Only the labels that this tree cites are listed.
 - **R5-3.** `Static_const.compare` has no case for two immutable float
   blocks: a float block does not compare equal to itself, and a float
   block and a float array of the same numbers compare equal in one order
-  and not in the other.
+  and not in the other. Not mended in `Static_const.compare`: on this
+  branch the comparison of units does not ask it of two float blocks
+  (see `rocq/HACKING.md`, the changes to the compiler).
 - **R6-1.** The printer of fexpr writes the naked kinds `int8`, `int16`
   and `mask`, and the parser has no rule for them, so a poison constant
-  of one of those kinds that is printed is not read back.
+  of one of those kinds that is printed is not read back. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **T1-1.** After unboxing, the compiler's own types say that the
   arguments passed for a constant constructor are impossible (the
   `Get_tag` reduction of meet).
@@ -1063,6 +1090,16 @@ says so. Only the labels that this tree cites are listed.
   closure symbols are defined first, the others in order, each after its
   own constant). Run from fexprs at default flags. The model is wider
   than what the compiler accepts; no bug of the compiler is claimed.
+- **T3-22.** The text of a term omits or changes more, and is read back
+  with no complaint or is not read at all: the unboxed fields of a block
+  in an access and in a kind, the marks of a C call, an inlining
+  attribute that is not used and the mark of an inlined body under
+  `-Oclassic`, and the kind of a boxed vector. Mended on this branch,
+  but for what the stack of debugging information of the mark of an
+  inlined body holds: the text keeps the inlining attribute of the mark
+  and whether its stack is empty, and not what the stack holds, the
+  assumptions of zero allocation that the backend's checker reads
+  included (see `rocq/HACKING.md`, the changes to the compiler).
 - **T4-1.** After the n-way join, the meet defines a second time the
   variables that the join imported from a branch.
 - **T4-2.** A meet that reads the type of a name holding poison can
@@ -1093,11 +1130,21 @@ says so. Only the labels that this tree cites are listed.
   every kind of values that is written as never null, and Simplify, run
   on the term read back, can remove a test of null that the compiler
   keeps. The pair validated is then not the pair that the compiler
-  made; the compiler's own code is right.
+  made; the compiler's own code is right. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
+- **T4-14.** The parser of fexpr raises an exception on the load of an
+  unboxed field of a mixed block, as the printer of fexpr writes it.
+  Mended on this branch: see `rocq/HACKING.md`, the changes to the
+  compiler.
 - **T4-15.** The text of a closure that holds a variable of an unboxed
   kind is not read back: the projection, which comes first in the text,
   makes the value slot at the kind of values, and the definition of the
-  closure then stops the parser with a fatal error.
+  closure then stops the parser with a fatal error. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
+- **T4-16.** A load from an array of unboxed products is read back from
+  fexpr as a load from an array of the kind loaded, with "Unexpected
+  parameter" on the standard error and no failure. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **T4-21.** The model's meet can add equations on the same names again
   in opposite orders: where one environment is joined, the join adds
   the equations that the level has for variables of the target in the
@@ -1148,6 +1195,14 @@ says so. Only the labels that this tree cites are listed.
   the model's reading of Simplify's rule too
   (`FlambdaWellFormedSpec.continuations_used`), and a well-formed
   unit is not asked that rule.
+- **T5b-17.** The test tool does not refuse the stores of
+  tail-modulo-cons, which its comment says it refuses: read from the
+  text of a term they are assignments, the conversion takes them, and
+  the run of a unit with a function marked `[@tail_mod_cons]` is
+  undefined at the store. Mended on this branch: the text of a term says
+  that such a store is the first write of the field, and the test tool,
+  which then sees one, says that the model has not got it (see
+  `rocq/HACKING.md`, the changes to the compiler).
 - **T6-1.** A prover answers what the environment says of a name, which
   is not true of a name that holds poison (one case reaches a number
   that is not poison).
@@ -1160,11 +1215,22 @@ says so. Only the labels that this tree cites are listed.
 - **T6-7.** Unboxing a continuation parameter adds, at a use, a load
   that names the tag and the size, justified only by the subkind of a
   binder.
+- **T6-9.** The reader of fexpr reads an array kind that is an unboxed
+  product wrongly: a read or a write becomes one of another array, with
+  "Unexpected parameter" on the standard error, and a product inside a
+  product changes place, with no message. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **T6-11.** `Flambda_kind.With_subkind.equal` compares the constructors
   of a variant kind as the balanced trees that hold them: two kinds that
   are the same variant can compare unequal when their constructors were
   added in different orders, as the front end and the reader of texts
-  add them.
+  add them. Not mended in `Flambda_kind`: on this branch the comparison
+  of units compares two kinds by what they hold (see `rocq/HACKING.md`,
+  the changes to the compiler).
+- **T6-12.** The printer of fexpr writes the inlining attribute
+  `inlined(forward)` of a call, and the grammar of the reader has no
+  rule for it. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
 - **T7-1.** No function of the compiler makes the allocation mode
   `Local` of a type; the converter of types refuses it.
 - **T7-2.** `Equal_types_for_debug.equal_type` overflows the stack on a
@@ -1264,9 +1330,12 @@ says so. Only the labels that this tree cites are listed.
   tree; which fold over names decides was not traced.
 - **V2-1.** The fexpr printer prints a call of a C function, and a
   method call, without its allocation mode, in a form that the fexpr
-  parser refuses.
+  parser refuses. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **V2-2.** The fexpr printer drops the kinds of the fields of a
-  `Make_block`, and the parser reads back `any_value` for each.
+  `Make_block`, and the parser reads back `any_value` for each. Mended
+  on this branch for a block of values: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **V2-3.** The conversion gives a meaning to a local allocation read
   after its region has ended.
 - **V2-4.** A handler that catches an exception by name is undefined in
@@ -1282,7 +1351,9 @@ says so. Only the labels that this tree cites are listed.
   functors, and a functor no larger than `small_functor_size` is to be
   inlined; the tool's Simplify, to which the functor is a function,
   compares it with the thresholds for functions and may leave the call.
-  The pair validated is then not the pair that the compiler made.
+  The pair validated is then not the pair that the compiler made. Mended
+  in part on this branch: the text of a term says that code is the code
+  of a functor (see `rocq/HACKING.md`, the changes to the compiler).
 - **V2-7.** A fault of a tool of the tests, not of the compiler. The
   driver of the compiler's own run
   (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) made
@@ -1311,12 +1382,14 @@ says so. Only the labels that this tree cites are listed.
 - **X2-8.** The reader of the text of terms stops with a fatal error on
   a variable whose name has a `/` in it: an operator with a `/` in its
   name, an anonymous function when the path of the source has a
-  directory, or a variable that the reaper names from others.
+  directory, or a variable that the reaper names from others. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **X2-9.** The text of a term names code of another unit like code of
   its own; the reader stops on a closure over it and reads a direct
   call of it as a call of code that does not exist.
 - **X2-10.** The kinds of unboxed 8-bit and 16-bit integers are printed
-  in the text of a term and are not in the grammar of the reader.
+  in the text of a term and are not in the grammar of the reader. Mended
+  on this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **X2-18.** A fault of a tool of the tests, not of the compiler. The
   driver of the compiler's own run
   (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) did
@@ -1334,6 +1407,13 @@ says so. Only the labels that this tree cites are listed.
   print the same under all 24 names.
 - **X3-5.** The n-way join of two variants that carry only a relation
   answers unknown and drops the relation it has just joined.
+- **X3-8.** `Coercion.change_depth` gives the identity for a change of
+  depth between two equal depths only if the two are the same value in
+  memory; otherwise it gives a coercion that is not the identity, and
+  terms that Simplify returns have such coercions. Not mended in
+  `Coercion`: on this branch the reader of the text of a term reads such
+  a change, which the text writes, as a change of depth and not as the
+  identity (see `rocq/HACKING.md`, the changes to the compiler).
 - **X4-1.** The output of Simplify binds the same variable in two
   places: the names stored in a term are not unique.
 - **X4-3.** Where every set of closures in what a check converted (the
@@ -1354,6 +1434,10 @@ says so. Only the labels that this tree cites are listed.
 - **X5-3.** A load from a string has no coeffect,
   `Bytes.unsafe_to_string` is erased, and `to_cmm` moves the load after
   a write to the bytes.
+- **X5-8.** The lexer of fexpr reads a string that ends with a backslash
+  past its closing quote, and raises an exception that nothing catches.
+  Mended on this branch: see `rocq/HACKING.md`, the changes to the
+  compiler.
 - **X5-9.** Simplify leaves the module block bound in a handler that
   its own rule does not hold to be at toplevel, where a cold handler
   stays out of line. Since decision D60 a well-formed unit of the
@@ -1368,9 +1452,15 @@ says so. Only the labels that this tree cites are listed.
 - **X5-12.** The text of a term gives no arity for a call of unknown
   arity, and the reader gives its result one value; where the result
   is an unboxed pair or an unboxed number, Simplify stops with a fatal
-  error on the term read.
+  error on the term read. Mended on this branch: see `rocq/HACKING.md`,
+  the changes to the compiler.
 - **X5-13.** Simplify turns a switch whose arms are all one action into
   that action only when the arms have the same debugging information.
+- **X5-32.** The text of a term loses the load kind and the set kind of
+  a vector access to an array of integers (P1-9, from plain source), and
+  the test tool validates a unit whose run in the model is not the
+  program's. On this branch the text of a term writes the two kinds: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **X5-34.** In classic mode, where Simplify is not run, closure
   conversion can bind at the head of the unit a block all of whose
   fields are symbols before it binds one of those symbols, a block
