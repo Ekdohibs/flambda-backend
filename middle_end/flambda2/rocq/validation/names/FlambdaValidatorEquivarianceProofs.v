@@ -245,10 +245,14 @@ Proof. exact var_free_b_equivariant_aux. Qed.
    is given the laws of the free names of
    FlambdaValidatorEquivarianceBaseProofs.v, which are proved by hand
    there: the tactic derives them where they are not given, and is
-   slower. *)
+   slower. In this section the tactic rewrites with its database in
+   one pass over the goal, which is quicker and is enough for every
+   proof here. *)
 From OxCamlFlambda2 Require Import FlambdaEquivarianceTactic.
 
 Section Unused_lets.
+
+#[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 #[local] Hint Rewrite var_in_simple_equivariant var_in_named_equivariant
   var_free_b_equivariant_aux cont_free_b_equivariant_aux : equivariance.
@@ -267,16 +271,15 @@ Proof. equivariance. Qed.
 
 (* The variables in scope with their kinds are a list of pairs, whose
    type does not say how it is renamed: the action is
-   [rename_kinds_in_scope]. The laws of the tests and of
+   [rename_kinds_in_scope]. The laws of [named_defined] and of
    [params_in_scope] are given to the tactic once proved; other parts
-   of this file use them by name.
+   of this file use the three laws by name.
 
-   Two of them are proved by hand. The tactic proves that of
-   [named_defined] in more than half a second, which this file is not
-   given. That of [params_in_scope], which adds the parameters of a
-   handler one by one, it does not prove: the hypothesis of its
-   induction is of the variables in scope renamed, and the variables
-   in scope of the next step are a renamed pair put before them. *)
+   The law of [params_in_scope], which adds the parameters of a
+   handler one by one, is proved by hand. The tactic does not prove
+   it: the hypothesis of its induction is of the variables in scope
+   renamed, and the variables in scope of the next step are a renamed
+   pair put before them. *)
 #[local] Instance kinds_in_scope_renaming : Renaming_of kinds_in_scope :=
   rename_kinds_in_scope.
 
@@ -286,27 +289,11 @@ Lemma kind_of_simple_in_scope_equivariant (r : renaming)
   = kind_of_simple_in_scope kinds s.
 Proof. equivariance. Qed.
 
-Lemma map_fst_rename_kinds_in_scope (r : renaming) (kinds : kinds_in_scope) :
-  map fst (rename_kinds_in_scope r kinds)
-  = map (rename_variable r) (map fst kinds).
-Proof.
-  unfold rename_kinds_in_scope. rewrite !map_map. reflexivity.
-Qed.
-
 Lemma named_defined_equivariant (r : renaming) (kinds : kinds_in_scope)
     (kind : flambda_kind) (d : named) :
   named_defined (rename_kinds_in_scope r kinds) kind (rename_named r d)
   = named_defined kinds kind d.
-Proof.
-  destruct d; simpl; try reflexivity;
-    [ rewrite kind_of_simple_in_scope_equivariant; reflexivity
-    | rewrite map_fst_rename_kinds_in_scope,
-        value_slots_in_scope_equivariant;
-      reflexivity
-    | rewrite map_fst_rename_kinds_in_scope,
-        value_slots_in_scope_equivariant;
-      reflexivity ].
-Qed.
+Proof. equivariance. Qed.
 
 Lemma params_in_scope_equivariant (r : renaming) (params : list variable) :
   ∀ (params_kinds : list flambda_kind) (kinds : kinds_in_scope),
@@ -358,21 +345,16 @@ Qed.
    of [sets_under_let] and of [projection_defined] are stated so that
    the rewrite does not derive them at each [Let].
 
-   Two laws are proved by hand. The tactic proves that of [forget_set]
-   in a third of a second, which this file is not given. That of
-   [forget_sets], which forgets the variables of a list one by one, it
-   does not prove, for the reason given of [params_in_scope]. *)
+   The law of [forget_sets], which forgets the variables of a list one
+   by one, is proved by hand, for the reason given of
+   [params_in_scope]. *)
 #[local] Instance known_sets_renaming : Renaming_of known_sets :=
   rename_known_sets.
 
 Lemma forget_set_renamed (r : renaming) (x : variable) (known : known_sets) :
   forget_set (rename_variable r x) (rename_known_sets r known)
   = rename_known_sets r (forget_set x known).
-Proof.
-  induction known as [ | [y entry] known IH]; simpl; [ reflexivity | ].
-  rewrite rename_variable_eqb. destruct (Pos.eqb x y); simpl; rewrite IH;
-    reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
 Lemma forget_sets_renamed (r : renaming) (xs : list variable) :
   ∀ known : known_sets,
