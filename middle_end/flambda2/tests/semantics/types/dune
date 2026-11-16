@@ -24,14 +24,16 @@
   flambda2_rocq_semantics))
 
 ;; The generator of types and the differential tests, of the types and of the
-;; provers (with the table of the provers, prover_table.ml), and the tool that
-;; runs the comparisons of one type on the types that Simplify computes.
+;; provers (with the table of the provers, prover_table.ml), the tool that runs
+;; the comparisons of one type on the types that Simplify computes, and the
+;; tool that replays the environments of Simplify into the model.
 
 (executables
- (names types_difftest provers_difftest types_of_compilations)
+ (names types_difftest provers_difftest types_of_compilations
+   provers_of_compilations)
  (modes native)
  (modules type_comparisons type_generator prover_table types_difftest
-   provers_difftest types_of_compilations)
+   provers_difftest types_of_compilations provers_of_compilations)
  (libraries
   ocamlfrontend
   ocamloptcomp
@@ -94,6 +96,30 @@
  (alias runtest)
  (action
   (diff types_of_compilations.expected types_of_compilations.output)))
+
+;; The environments that Simplify computes for the units of the semantics
+;; tests, replayed into the model, at the default flags and at -O3
+;; (provers_of_compilations.README.md). The units are those of a list of its
+;; own, for the reason given above.
+
+(rule
+ (deps
+  provers_of_compilations.exe
+  provers_of_compilations.units
+  (glob_files ../*.fl)
+  (glob_files ../ocaml/*.fl))
+ (action
+  (with-stdout-to
+   provers_of_compilations.output
+   (progn
+    (system "u=provers_of_compilations.units; ./${u%.units}.exe $(cat $u)")
+    (system
+     "u=provers_of_compilations.units; ./${u%.units}.exe -O3 $(cat $u)")))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff provers_of_compilations.expected provers_of_compilations.output)))
 
 ;; The types that the compiler kept of the units of the standard library in
 ;; their .cmx files. The files are those that the compiler of this context

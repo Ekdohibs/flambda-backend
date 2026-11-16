@@ -1,0 +1,220 @@
+The environments that Simplify computes for the units of the semantics tests, replayed into the Rocq model.
+
+apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+indirect_higher_order.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay
+match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay
+mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+tail_loop.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_duplicate_slot.fl: not simplified: an assertion of simplify_set_of_closures.ml fails
+set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_mutual_recursion.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+set_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_shared_code__f_N_code
+set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_static_group_one_function.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_one_function__f_N_code
+set_static_group_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_shared_code__f_N_code
+set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+static_in_loop.fl: not simplified: a fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
+string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay
+try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+
+In all:
+  95 units simplified
+  275 environments
+  275 admitted: the model's replay is seen as Simplify's environment
+  5629 names in the environments admitted
+  275 admitted, and the compiler's replay is seen as Simplify's environment too
+  5 units not simplified
+The environments that Simplify computes for the units of the semantics tests, at -O3, replayed into the Rocq model.
+
+apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+indirect_higher_order.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay
+match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay
+mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
+record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+tail_loop.fl: 8 environments, 8 admitted, 8 of them with the compiler's replay
+tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
+raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_duplicate_slot.fl: not simplified: an assertion of simplify_set_of_closures.ml fails
+set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_mutual_recursion.fl: 11 environments, 11 admitted, 11 of them with the compiler's replay
+set_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_shared_code__f_N_code
+set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_static_group_one_function.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_one_function__f_N_code
+set_static_group_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_shared_code__f_N_code
+set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+static_in_loop.fl: not simplified: a fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
+string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay
+try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
+uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
+undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+
+In all:
+  95 units simplified
+  285 environments
+  285 admitted: the model's replay is seen as Simplify's environment
+  5864 names in the environments admitted
+  285 admitted, and the compiler's replay is seen as Simplify's environment too
+  5 units not simplified
