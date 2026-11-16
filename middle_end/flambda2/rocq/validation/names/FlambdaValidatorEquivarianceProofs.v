@@ -2383,6 +2383,26 @@ Proof. equivariance. Qed.
 Lemma share_handlers_equivariant : rewrite_equivariant share_handlers.
 Proof. exact share_handlers_equivariant_aux. Qed.
 
+(* A pass that carries a state down the term and adds to it: in the
+   renamed term the state is then a list made of renamed parts, and the
+   tactic does not use the hypothesis of the induction there. This
+   rule, for the function [f] of the pass and the renaming [rn] of its
+   state, takes the state from the other side of the equation and
+   shows that the list is that state renamed. *)
+#[local] Ltac eqv_state_back f rn :=
+  match goal with
+  | r : renaming,
+    H : context [f _ (rename_expr _ ?e) = rename_expr _ (f _ ?e)]
+    |- context [f ?m' (rename_expr ?r ?e)] =>
+    match goal with
+    | |- context [f ?m e] =>
+      eqv_no_renaming m;
+      let m'' := eval cbv beta in (rn r m) in
+      tryif constr_eq m' m'' then fail
+      else (replace m' with m''; [ rewrite H | solve [ eqv_core ] ])
+    end
+  end.
+
 (* Removing the parameters of a continuation that its handler does not
    use. The masks are keyed by continuations, which are renamed. *)
 Lemma keep_map {A B : Type} (g : A -> B) (mask : list bool) :
@@ -2472,28 +2492,10 @@ Proof.
 Qed.
 #[local] Hint Rewrite mask_of_renamed drop_args_renamed : equivariance.
 
-(* The hypothesis of the induction is about renamed masks. Under a
-   continuation, and in a loop, the masks are a list made of renamed
-   parts, and the tactic does not use the hypothesis from right to left
-   there. The rule takes the masks from the other side of the equation
-   and shows that the list is those masks renamed. *)
+(* The masks are added to under a continuation and in a loop: the rule
+   above. *)
 #[local] Ltac eqv_extra ::=
-  match goal with
-  | r : renaming,
-    H : context [drop_params _ (rename_expr _ ?e)
-                 = rename_expr _ (drop_params _ ?e)]
-    |- context [drop_params ?m' (rename_expr ?r ?e)] =>
-    lazymatch m' with
-    | map _ _ => fail
-    | _ => idtac
-    end;
-    match goal with
-    | |- context [drop_params ?m e] =>
-      eqv_no_renaming m;
-      replace m' with (rename_masks r m);
-      [ rewrite H | solve [ eqv_core ] ]
-    end
-  end.
+  eqv_state_back drop_params (fun r : renaming => rename_masks r).
 
 Lemma drop_params_renamed : equivariance_of drop_params.
 Proof. equivariance. Qed.
@@ -2547,10 +2549,8 @@ Qed.
    database does not see where the handlers are renamed under a
    binder, so that the two searches have the same fuel. Then: [settle]
    at a function and at first masks that mention the renaming, where
-   the other side has it at ones that do not. Last: [drop_dead] at
-   masks that are not written as a renamed list, of a term that the
-   induction has a hypothesis for, where the other side has it at
-   masks that do not mention the renaming. *)
+   the other side has it at ones that do not. Last, the rule above for
+   the masks that the pass adds to. *)
 #[local] Ltac eqv_extra ::=
   first
     [ rewrite count_params_renamed
@@ -2563,22 +2563,7 @@ Qed.
           rewrite (settle_renamed r fuel next next' first first')
         end
       end
-    | match goal with
-      | r : renaming,
-        H : context [drop_dead _ (rename_expr _ ?e)
-                     = rename_expr _ (drop_dead _ ?e)]
-        |- context [drop_dead ?m' (rename_expr ?r ?e)] =>
-        lazymatch m' with
-        | map _ _ => fail
-        | _ => idtac
-        end;
-        match goal with
-        | |- context [drop_dead ?m e] =>
-          eqv_no_renaming m;
-          replace m' with (rename_masks r m);
-          [ rewrite H | solve [ eqv_core ] ]
-        end
-      end ].
+    | eqv_state_back drop_dead (fun r : renaming => rename_masks r) ].
 
 Lemma drop_dead_params_equivariant : rewrite_equivariant drop_dead_params.
 Proof. equivariance. Qed.
@@ -2598,22 +2583,7 @@ Section Loop_lets.
   : equivariance.
 
 #[local] Ltac eqv_extra ::=
-  match goal with
-  | r : renaming,
-    H : context [remove_unused_defined_lets_in_loops _ (rename_expr _ ?e)
-                 = rename_expr _ (remove_unused_defined_lets_in_loops _ ?e)]
-    |- context [remove_unused_defined_lets_in_loops ?m' (rename_expr ?r ?e)] =>
-    lazymatch m' with
-    | rename_kinds_in_scope _ _ => fail
-    | _ => idtac
-    end;
-    match goal with
-    | |- context [remove_unused_defined_lets_in_loops ?m e] =>
-      eqv_no_renaming m;
-      change m' with (rename_kinds_in_scope r m);
-      rewrite H
-    end
-  end.
+  eqv_state_back remove_unused_defined_lets_in_loops rename_kinds_in_scope.
 
 Lemma remove_unused_defined_lets_in_loops_equivariant_aux (r : renaming)
     (e : expr) :
@@ -3111,22 +3081,7 @@ Section Forward_jumps.
   : equivariance.
 
 #[local] Ltac eqv_extra ::=
-  match goal with
-  | r : renaming,
-    H : context [forward_jumps_under _ (rename_expr _ ?e)
-                 = rename_expr _ (forward_jumps_under _ ?e)]
-    |- context [forward_jumps_under ?m' (rename_expr ?r ?e)] =>
-    lazymatch m' with
-    | rename_forwards _ _ => fail
-    | _ => idtac
-    end;
-    match goal with
-    | |- context [forward_jumps_under ?m e] =>
-      eqv_no_renaming m;
-      replace m' with (rename_forwards r m);
-      [ rewrite H | solve [ eqv_core ] ]
-    end
-  end.
+  eqv_state_back forward_jumps_under rename_forwards.
 
 Lemma forward_jumps_under_equivariant (r : renaming) (e : expr) :
   ∀ F : forwards,
