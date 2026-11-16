@@ -1,0 +1,92 @@
+;; Controls of the driver that checks that the text of a term, read back, is
+;; the term (../../tools/textisterm/fltextisterm.ml). The driver is built in
+;; the main context only, so the rules are for that context.
+;;
+;; variant_two_orders, ../ocaml/variant_two_blocks: units whose term has the
+;; kind of a variant built with its constructors in another order than the
+;; reader of texts builds it. The text is the term.
+;;
+;; c_call: the text is not read back.
+;;
+;; interface_only, type_error: the compiler does not reach the middle end.
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   variant_two_orders.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:variant_two_orders.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff variant_two_orders.expected variant_two_orders.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps ../ocaml/variant_two_blocks.mli)
+ (action
+  (with-stdout-to
+   variant_two_blocks.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:../ocaml/variant_two_blocks.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff variant_two_blocks.expected variant_two_blocks.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   c_call.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:c_call.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff c_call.expected c_call.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   interface_only.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:interface_only.mli}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff interface_only.expected interface_only.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   type_error.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:type_error.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff type_error.expected type_error.output)))

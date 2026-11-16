@@ -1,0 +1,22 @@
+;; The driver that checks that the text of a term, read back, is the term
+;; (fltextisterm.ml).
+;;
+;; It is the compiler, so it is linked with the library unix, as
+;; oxcaml_main_native is. The system compiler cannot build that library
+;; (the comment on boot_ocamlopt in the dune file at the root), so the
+;; program is built in the main context only, as ../ownrun/ is.
+
+(executable
+ (name fltextisterm)
+ (enabled_if
+  (= %{context_name} "main"))
+ (modes native)
+ (libraries
+  ocamlfrontend
+  ocamloptcomp
+  flambda2
+  flambda2_compare
+  flambda2_parser
+  flambda2_terms
+  flambda2_ui
+  unix))
