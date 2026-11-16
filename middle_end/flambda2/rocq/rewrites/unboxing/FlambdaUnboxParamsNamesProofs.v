@@ -255,112 +255,74 @@ Lemma is_bound_renamed_handlers (r : renaming) (k : continuation)
   = is_bound k handlers.
 Proof. equivariance. Qed.
 
-Fixpoint extend_applications_equivariant_aux (r : renaming) (e : expr) :
-  ∀ (known : facts) (k : continuation) (i : nat) (p : unary_primitive),
-    extend_applications (rename_facts r known) (rename_continuation r k) i p
-      (rename_expr r e)
-    = option_map (rename_expr r) (extend_applications known k i p e)
-with extend_in_handler_equivariant (r : renaming) (h : continuation_handler) :
-  ∀ (known : facts) (k : continuation) (i : nat) (p : unary_primitive),
-    extend_in_handler (rename_facts r known) (rename_continuation r k) i p
-      (rename_handler r h)
-    = option_map (rename_handler r) (extend_in_handler known k i p h).
+#[local] Hint Rewrite is_bound_renamed_handlers : equivariance.
+
+(* The handlers of a recursive continuation, each given to a function
+   that may fail: the law, where the function commutes with the
+   renaming on the handlers of the list. It is given to the tactic by
+   a rule, at the two functions that extend the applications in a
+   handler; the tactic shows the premise by its induction. *)
+Lemma all_some_handlers_renamed (r : renaming)
+    (f f' : continuation_handler -> option continuation_handler)
+    (handlers : list (continuation * continuation_handler)) :
+  (∀ x, In x handlers ->
+     f' (rename_handler r (snd x))
+     = option_map (rename_handler r) (f (snd x))) ->
+  all_some
+    (map
+       (fun x =>
+          let '(k', h) :=
+            let '(k, h) := x in (rename_continuation r k, rename_handler r h)
+          in
+          let* h0 := f' h in Some (k', h0))
+       handlers)
+  = option_map
+      (map (fun '(k, h) => (rename_continuation r k, rename_handler r h)))
+      (all_some
+         (map (fun '(k', h) => let* h0 := f h in Some (k', h0)) handlers)).
 Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k0 h body | handlers body | ap
-         | ac | scrutinee arms | ];
-      intros known k i p; cbn [rename_expr extend_applications].
-    + rewrite facts_under_let_equivariant,
-        extend_applications_equivariant_aux.
-      destruct (extend_applications (facts_under_let known x d) k i p body);
-        reflexivity.
-    + rewrite facts_under_statics_equivariant,
-        extend_applications_equivariant_aux.
-      destruct
-        (extend_applications (facts_under_statics known bindings) k i p body);
-        reflexivity.
-    + rewrite extend_in_handler_equivariant.
-      destruct (extend_in_handler known k i p h) as [h' | ]; simpl;
-        [ | reflexivity ].
-      rewrite rename_continuation_eqb.
-      destruct (Pos.eqb k0 k); [ reflexivity | ].
-      rewrite extend_applications_equivariant_aux.
-      destruct (extend_applications known k i p body); reflexivity.
-    + rewrite is_bound_renamed_handlers.
-      destruct (is_bound k handlers); [ reflexivity | ].
-      assert (Hhandlers :
-        all_some
-          (map
-             (fun '(k', h) =>
-                let* h :=
-                  extend_in_handler (rename_facts r known)
-                    (rename_continuation r k) i p h
-                in
-                Some (k', h))
-             (map
-                (fun '(k', h) => (rename_continuation r k', rename_handler r h))
-                handlers))
-        = option_map
-            (map
-               (fun '(k', h) =>
-                  (rename_continuation r k', rename_handler r h)))
-            (all_some
-               (map
-                  (fun '(k', h) =>
-                     let* h := extend_in_handler known k i p h in
-                     Some (k', h))
-                  handlers))).
-      { induction handlers as [ | [k1 h1] handlers IH]; simpl;
-          [ reflexivity | ].
-        rewrite (extend_in_handler_equivariant r h1 known k i p).
-        destruct (extend_in_handler known k i p h1); simpl; [ | reflexivity ].
-        rewrite IH.
-        destruct
-          (all_some
-             (map
-                (fun '(k', h) =>
-                   let* h := extend_in_handler known k i p h in
-                   Some (k', h))
-                handlers));
-          reflexivity. }
-      rewrite Hhandlers.
-      destruct
-        (all_some
-           (map
-              (fun '(k', h) =>
-                 let* h := extend_in_handler known k i p h in
-                 Some (k', h))
-              handlers));
-        simpl; [ | reflexivity ].
-      rewrite extend_applications_equivariant_aux.
-      destruct (extend_applications known k i p body); reflexivity.
-    + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !rename_continuation_eqb.
-      destruct
-        (Pos.eqb (ap_continuation ap) k || Pos.eqb (ap_exn_continuation ap) k);
-        reflexivity.
-    + rewrite extend_apply_cont_equivariant.
-      destruct (extend_apply_cont known k i p ac); reflexivity.
-    + rewrite extend_arms_equivariant.
-      destruct (extend_arms known k i p arms); reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. intros known k i p.
-    cbn [rename_handler extend_in_handler].
-    rewrite facts_under_params_equivariant,
-      extend_applications_equivariant_aux.
-    destruct
-      (extend_applications (facts_under_params known params) k i p handler);
-      reflexivity.
+  intros Hf.
+  induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
+  pose proof (Hf (k, h) (or_introl eq_refl)) as Hh. simpl in Hh. rewrite Hh.
+  destruct (f h) as [h' | ]; simpl; [ | reflexivity ].
+  rewrite IH by (intros x Hx; apply Hf; right; exact Hx).
+  destruct
+    (all_some
+       (map (fun '(k', h) => let* h0 := f h in Some (k', h0)) handlers));
+    reflexivity.
 Qed.
+
+#[local] Ltac eqv_extra ::=
+  match goal with
+  | |- context [all_some (map _ ?handlers)] =>
+    match goal with
+    | |- context [extend_in_handler (rename_facts ?r ?known)
+                    (rename_continuation ?r ?k) ?i ?p] =>
+      rewrite
+        (all_some_handlers_renamed r (extend_in_handler known k i p)
+           (extend_in_handler (rename_facts r known)
+              (rename_continuation r k) i p)
+           handlers);
+      [ | eqv_premise ]
+    | |- context [extend_in_handler_by ?extend' (rename_facts ?r ?known)
+                    (rename_continuation ?r ?k)] =>
+      match goal with
+      | |- context [extend_in_handler_by ?extend known k] =>
+        rewrite
+          (all_some_handlers_renamed r (extend_in_handler_by extend known k)
+             (extend_in_handler_by extend' (rename_facts r known)
+                (rename_continuation r k))
+             handlers);
+        [ | eqv_premise ]
+      end
+    end
+  end.
 
 Theorem extend_applications_equivariant :
   extend_applications_equivariant_statement.
-Proof.
-  intros r known k i p e. apply extend_applications_equivariant_aux.
-Qed.
+Proof. equivariance. Qed.
 
-#[local] Hint Rewrite is_bound_renamed_handlers
-  extend_applications_equivariant : equivariance.
+#[local] Hint Rewrite extend_applications_equivariant : equivariance.
 
 (* ======================================================================== *)
 (* The pass                                                                 *)
@@ -424,107 +386,14 @@ Lemma extend_arms_by_equivariant (known : facts) (k : continuation)
       (extend_arms_by extend known k arms).
 Proof. equivariance. Qed.
 
-Fixpoint extend_applications_by_equivariant_aux (e : expr) :
+#[local] Hint Rewrite extend_arms_by_equivariant : equivariance.
+
+Lemma extend_applications_by_equivariant_aux (e : expr) :
   ∀ (known : facts) (k : continuation),
     extend_applications_by extend' (rename_facts r known)
       (rename_continuation r k) (rename_expr r e)
-    = option_map (rename_expr r) (extend_applications_by extend known k e)
-with extend_in_handler_by_equivariant (h : continuation_handler) :
-  ∀ (known : facts) (k : continuation),
-    extend_in_handler_by extend' (rename_facts r known)
-      (rename_continuation r k) (rename_handler r h)
-    = option_map (rename_handler r) (extend_in_handler_by extend known k h).
-Proof.
-  - destruct e
-      as [ x kind d body | bindings body | k0 h body | handlers body | ap
-         | ac | scrutinee arms | ];
-      intros known k; cbn [rename_expr extend_applications_by].
-    + rewrite facts_under_let_equivariant,
-        extend_applications_by_equivariant_aux.
-      destruct
-        (extend_applications_by extend (facts_under_let known x d) k body);
-        reflexivity.
-    + rewrite facts_under_statics_equivariant,
-        extend_applications_by_equivariant_aux.
-      destruct
-        (extend_applications_by extend (facts_under_statics known bindings) k
-           body);
-        reflexivity.
-    + rewrite extend_in_handler_by_equivariant.
-      destruct (extend_in_handler_by extend known k h) as [h' | ]; simpl;
-        [ | reflexivity ].
-      rewrite rename_continuation_eqb.
-      destruct (Pos.eqb k0 k); [ reflexivity | ].
-      rewrite extend_applications_by_equivariant_aux.
-      destruct (extend_applications_by extend known k body); reflexivity.
-    + rewrite is_bound_renamed_handlers.
-      destruct (is_bound k handlers); [ reflexivity | ].
-      assert (Hhandlers :
-        all_some
-          (map
-             (fun '(k', h) =>
-                let* h :=
-                  extend_in_handler_by extend' (rename_facts r known)
-                    (rename_continuation r k) h
-                in
-                Some (k', h))
-             (map
-                (fun '(k', h) => (rename_continuation r k', rename_handler r h))
-                handlers))
-        = option_map
-            (map
-               (fun '(k', h) =>
-                  (rename_continuation r k', rename_handler r h)))
-            (all_some
-               (map
-                  (fun '(k', h) =>
-                     let* h := extend_in_handler_by extend known k h in
-                     Some (k', h))
-                  handlers))).
-      { induction handlers as [ | [k1 h1] handlers IH]; simpl;
-          [ reflexivity | ].
-        rewrite (extend_in_handler_by_equivariant h1 known k).
-        destruct (extend_in_handler_by extend known k h1); simpl;
-          [ | reflexivity ].
-        rewrite IH.
-        destruct
-          (all_some
-             (map
-                (fun '(k', h) =>
-                   let* h := extend_in_handler_by extend known k h in
-                   Some (k', h))
-                handlers));
-          reflexivity. }
-      rewrite Hhandlers.
-      destruct
-        (all_some
-           (map
-              (fun '(k', h) =>
-                 let* h := extend_in_handler_by extend known k h in
-                 Some (k', h))
-              handlers));
-        simpl; [ | reflexivity ].
-      rewrite extend_applications_by_equivariant_aux.
-      destruct (extend_applications_by extend known k body); reflexivity.
-    + cbn [rename_apply ap_continuation ap_exn_continuation].
-      rewrite !rename_continuation_eqb.
-      destruct
-        (Pos.eqb (ap_continuation ap) k || Pos.eqb (ap_exn_continuation ap) k);
-        reflexivity.
-    + rewrite extend_apply_cont_by_equivariant.
-      destruct (extend_apply_cont_by extend known k ac); reflexivity.
-    + rewrite extend_arms_by_equivariant.
-      destruct (extend_arms_by extend known k arms); reflexivity.
-    + reflexivity.
-  - destruct h as [params metadata handler]. intros known k.
-    cbn [rename_handler extend_in_handler_by].
-    rewrite facts_under_params_equivariant,
-      extend_applications_by_equivariant_aux.
-    destruct
-      (extend_applications_by extend (facts_under_params known params) k
-         handler);
-      reflexivity.
-Qed.
+    = option_map (rename_expr r) (extend_applications_by extend known k e).
+Proof. equivariance. Qed.
 
 End By_renamed.
 
@@ -642,20 +511,17 @@ Lemma known_immediates_equivariant (r : renaming) (params : list variable) :
     = rename_immediates r (known_immediates params args).
 Proof. equivariance. Qed.
 
+#[local] Hint Rewrite known_immediates_equivariant expr_eqb_under_renaming
+  : equivariance.
+
 Lemma never_reads_renamed (r : renaming) (consts : list (variable * Z))
     (handler without : expr) :
   never_reads (rename_immediates r consts) (rename_expr r handler)
     (rename_expr r without)
   = never_reads consts handler without.
-Proof.
-  unfold never_reads.
-  rewrite !take_arms_equivariant, !remove_unused_conts_equivariant,
-    expr_eqb_under_renaming.
-  reflexivity.
-Qed.
+Proof. equivariance. Qed.
 
-#[local] Hint Rewrite known_immediates_equivariant never_reads_renamed :
-  equivariance.
+#[local] Hint Rewrite never_reads_renamed : equivariance.
 
 Theorem extend_args_certain_equivariant :
   extend_args_certain_equivariant_statement.
