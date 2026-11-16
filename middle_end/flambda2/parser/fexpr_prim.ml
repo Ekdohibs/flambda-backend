@@ -992,30 +992,34 @@ let untag_immediate =
   D.(unary "%untag_imm" ~params:param0 (fun _ () -> P.Untag_immediate))
 
 let project_value_slot =
-  (* CR mshinwell: support non-value kinds in the projection syntax. Note that
-     if the value slot's definition (in a "with" clause, where kinds are
-     supported) has already been parsed, the slot registered under this name
-     will have the correct kind and the kind here is ignored. *)
+  (* The kind of the value slot is written after its name where it is not that
+     of values. It is the kind that the slot is given if the projection is the
+     first place where the text names it. If the slot's definition (in a "with"
+     clause, which has the kind too) has already been parsed, the slot
+     registered under this name has its kind and the kind here is ignored. *)
   (* If a function slot is fresh when defining a primitive, it means it does not
   exist in constructions, but only in projections. As such, it will be deleted
   when computing the slot_offsets. This means we can give it a dummy size. *)
-  let kind = Flambda_kind.value in
   D.(
     unary "%project_value_slot"
       ~params:
-        (param2
-           (maps (positional string)
-              ~from:(fun env pf ->
-                Fexpr_to_flambda_commons.fresh_or_existing_function_slot env pf
-                  ~size:0)
-              ~to_:(fun env pf ->
-                Flambda_to_fexpr_commons.Env.translate_function_slot env pf))
-           (maps (positional string)
-              ~from:(fun env vs ->
-                Fexpr_to_flambda_commons.fresh_or_existing_value_slot env vs
-                  kind)
-              ~to_:(fun env vs ->
-                Flambda_to_fexpr_commons.Env.translate_value_slot env vs)))
+        (maps
+           (param3
+              (maps (positional string)
+                 ~from:(fun env pf ->
+                   Fexpr_to_flambda_commons.fresh_or_existing_function_slot env
+                     pf ~size:0)
+                 ~to_:(fun env pf ->
+                   Flambda_to_fexpr_commons.Env.translate_function_slot env pf))
+              (positional string) kind)
+           ~from:(fun env (project_from, vs, kind) ->
+             ( project_from,
+               Fexpr_to_flambda_commons.fresh_or_existing_value_slot env vs kind
+             ))
+           ~to_:(fun env (project_from, vs) ->
+             ( project_from,
+               Flambda_to_fexpr_commons.Env.translate_value_slot env vs,
+               Value_slot.kind vs )))
       (fun _ (project_from, value_slot) ->
         P.Project_value_slot { project_from; value_slot }))
 

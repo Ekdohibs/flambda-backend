@@ -111,7 +111,9 @@
 ;; another string. The reader takes a backslash with the character after it.
 ;; The text is the term.
 ;;
-;; partial_application_of_unboxed_float: the text is not read back.
+;; partial_application_of_unboxed_float: a closure that keeps an unboxed
+;; float in a value slot. The text writes the kind of the slot where the code
+;; reads it. The text is the term.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
 ;;

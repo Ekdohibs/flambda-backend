@@ -285,7 +285,7 @@ let code inline(never) loopify(never) size(4) newer_version_of(read_13)
         -> k * k1
         : imm tagged =
   let b_into_b_field_unboxed_int64 =
-    %project_value_slot.[read].[unboxed_field_b_field_unboxed_int64]
+    %project_value_slot.[read].[unboxed_field_b_field_unboxed_int64].`int64`
       (my_closure)
   in
   let prim = b_into_b_field_unboxed_int64 in
