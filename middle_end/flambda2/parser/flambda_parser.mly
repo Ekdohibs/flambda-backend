@@ -84,14 +84,15 @@ let make_tag ~loc:_ = function
   | _, Some _ ->
     Misc.fatal_errorf "No modifier allowed for tags"
 
+(* The digits are read as the suffix says: only those of an 8-bit and of a
+   16-bit integer are read as an OCaml integer. *)
 let make_const_int (i, m) : const =
-  let i' = int_of_string i in
   match m with
   | None -> Tagged_immediate i
   | Some 'i' -> Naked_immediate i
   | Some 'n' -> Naked_nativeint (Int64.of_string i)
-  | Some 's' -> Naked_int8 (Numeric_types.Int8.of_int i')
-  | Some 'S' -> Naked_int16 (Numeric_types.Int16.of_int i')
+  | Some 's' -> Naked_int8 (Numeric_types.Int8.of_int (int_of_string i))
+  | Some 'S' -> Naked_int16 (Numeric_types.Int16.of_int (int_of_string i))
   | Some 'l' -> Naked_int32 (Int32.of_string i)
   | Some 'L' -> Naked_int64 (Int64.of_string i)
   | Some c -> Misc.fatal_errorf "Unknown int modifier: %c" c

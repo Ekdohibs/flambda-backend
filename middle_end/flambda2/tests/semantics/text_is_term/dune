@@ -103,6 +103,10 @@
 ;; parameter_that_is_a_boxed_vector: a parameter of the kind of a boxed
 ;; 128-bit vector, which the reader takes. The text is the term.
 ;;
+;; large_unboxed_integer: unboxed 64-bit and native integers of more than 63
+;; bits, whose digits the reader reads as the suffix says. The text is the
+;; term.
+;;
 ;; partial_application_of_unboxed_float: the text is not read back.
 ;;
 ;; interface_only, type_error: the compiler does not reach the middle end.
@@ -186,6 +190,22 @@
   (= %{context_name} "main"))
  (action
   (diff length_of_bytes.expected length_of_bytes.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   large_unboxed_integer.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:large_unboxed_integer.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff large_unboxed_integer.expected large_unboxed_integer.output)))
 
 (rule
  (enabled_if

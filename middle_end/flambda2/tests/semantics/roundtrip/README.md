@@ -41,38 +41,34 @@ in the order of the term.
 ## Answers that are not "round trip the same"
 
 Each has a file here with what the tool prints, and its reason below.
-There are four, of units of `../ocaml/library`.
+There is none now.
 
-The four are `ocaml_library_int64_identities.expected`,
-`ocaml_library_int64_laws_more.expected`,
-`ocaml_library_nativeint_identities.expected` and
-`ocaml_library_nativeint_laws_more.expected`. In each the round trip
-is the same of the unit of the file, and the unit after Simplify is
-"not read back: the parser of fexpr fails", with the exception
+There were four, `int64_identities.fl`, `int64_laws_more.fl`,
+`nativeint_identities.fl` and `nativeint_laws_more.fl` of
+`../ocaml/library` after Simplify, until the parser of fexpr read the
+digits of an integer constant as its suffix says. In each the round
+trip was the same of the unit of the file, and the unit after Simplify
+was "not read back: the parser of fexpr fails", with the exception
 `Failure("int_of_string")`.
 
 The term after Simplify of each has a naked 64-bit or native integer
 at an end of its range as the argument of a continuation
 (`k (-9223372036854775808L)`), where Simplify has removed the box of
 two numbers that meet. The printer of fexpr writes such a number with
-all its digits and its suffix. The parser gives the digits of a
+all its digits and its suffix. The parser gave the digits of a
 constant that stands in an expression to `int_of_string` before it
-looks at the suffix (`middle_end/flambda2/parser/flambda_parser.mly`,
-`make_const_int`), and that fails outside 63 bits (discrepancy
-C1-11). The exception comes out of the parser itself and is no error
+looked at the suffix (`middle_end/flambda2/parser/flambda_parser.mly`,
+`make_const_int`), and that failed outside 63 bits (discrepancy
+C1-11). The exception came out of the parser itself and was no error
 that it reports; `read_back` (`../../tools/flroundtrip.ml`) makes its
-line of it as it does of one. The term before of each of the four has
-the same numbers as static data, which the parser reads another way
-(`make_boxed_const_int`).
+line of such an exception as it does of an error. The term before of
+each of the four has the same numbers as static data, which the parser
+reads another way (`make_boxed_const_int`).
 
-It is a limit of fexpr and not a fault of the conversion or of the
-printer of the model, which writes the number that the term has; the
-compiler's own text of the term after of each of the four stops the
-parser at the same place. The round trip says nothing of the term
-after of those four units. The check of a unit, as the rules of the
-tests run it, reads no text of its term after, so their verdicts are
-not touched. The other sixteen units of that directory are the same
-before and after Simplify.
+It was a limit of fexpr and not a fault of the conversion or of the
+printer of the model, which writes the number that the term has. The
+parser now reads the digits as the suffix says, the unit read back is
+the unit printed, and the four examples have no file here.
 
 Until `read_back` made that line, the tool ended on the exception at
 the term after of those four, with status 2 and no second line, and
