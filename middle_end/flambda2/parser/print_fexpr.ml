@@ -693,13 +693,21 @@ let inline_attribute_opt ~space ppf i =
   pp_option ~space (inline_attribute ~space:Neither) ppf i
 
 let inlined_attribute ~space ppf (i : Fexpr.inlined_attribute) =
+  let use_info (u : Inlined_attribute.Use_info.t) =
+    match u with
+    | Expected_to_be_used -> ""
+    | Unused_because_of_call_site_decision ->
+      ", unused_because_of_call_site_decision"
+    | Unused_because_function_unknown -> ", unused_because_function_unknown"
+    | Jsir_inlining_disabled -> ", jsir_inlining_disabled"
+  in
   let str =
     match i with
-    | Always_inlined -> Some "inlined(always)"
+    | Always_inlined u -> Some (Format.sprintf "inlined(always%s)" (use_info u))
     | Hint_inlined -> Some "inlined(hint)"
     | Forward_inlined -> Some "inlined(forward)"
     | Never_inlined -> Some "inlined(never)"
-    | Unroll i -> Some (Format.sprintf "unroll(%d)" i)
+    | Unroll (i, u) -> Some (Format.sprintf "unroll(%d%s)" i (use_info u))
     | Default_inlined -> None
   in
   pp_option ~space Format.pp_print_string ppf str

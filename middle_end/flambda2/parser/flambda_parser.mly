@@ -757,11 +757,25 @@ inline:
   | KWD_INLINE LPAREN KWD_DEFAULT RPAREN { Default_inline }
 
 inlined:
-  | KWD_INLINED LPAREN KWD_ALWAYS RPAREN { Always_inlined }
+  | KWD_INLINED LPAREN KWD_ALWAYS; u = use_info; RPAREN { Always_inlined u }
   | KWD_INLINED LPAREN KWD_HINT RPAREN { Hint_inlined }
   | KWD_INLINED LPAREN KWD_NEVER RPAREN { Never_inlined }
-  | KWD_UNROLL LPAREN; i = plain_int; RPAREN { Unroll i }
+  | KWD_UNROLL LPAREN; i = plain_int; u = use_info; RPAREN { Unroll (i, u) }
   | KWD_INLINED LPAREN KWD_DEFAULT RPAREN { Default_inlined }
+
+(* Whether an attribute that asks for inlining is expected to be used, which it
+   is where nothing is written, and why not if it is not. *)
+use_info:
+  | { Inlined_attribute.Use_info.Expected_to_be_used }
+  | COMMA; u = IDENT
+    { match u with
+      | "unused_because_of_call_site_decision" ->
+        Inlined_attribute.Use_info.Unused_because_of_call_site_decision
+      | "unused_because_function_unknown" ->
+        Inlined_attribute.Use_info.Unused_because_function_unknown
+      | "jsir_inlining_disabled" ->
+        Inlined_attribute.Use_info.Jsir_inlining_disabled
+      | _ -> Misc.fatal_errorf "Unknown use of an inlining attribute '%s'" u }
 
 inlining_state:
   | KWD_INLINING_STATE LPAREN; depth = inlining_state_depth; RPAREN

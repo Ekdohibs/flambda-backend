@@ -92,7 +92,8 @@ and code rec loopify(never) size(75) newer_version_of(map_foo_4)
                  in
                  cont k2 (`fn[tests12.ml:25,2--70]`))
               where k2 (g : val) =
-                (apply unknown_arity &my_alloc_region inlined(always)
+                (apply unknown_arity &my_alloc_region
+                        inlined(always, unused_because_function_unknown)
                    (g : imm tagged -> [ 0 | 0 of val * val ]) (0) -> k2 * k1
                    where k2 (g_result : [ 0 | 0 of val * val ]) =
                      let Popaque = %opaque (g_result) in

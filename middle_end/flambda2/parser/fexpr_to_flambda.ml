@@ -965,8 +965,8 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
       | None | Some Default_inlined -> Default_inlined
       | Some Hint_inlined -> Hint_inlined
       | Some Forward_inlined -> Forward_inlined
-      | Some Always_inlined -> Always_inlined Expected_to_be_used
-      | Some (Unroll n) -> Unroll (n, Expected_to_be_used)
+      | Some (Always_inlined use_info) -> Always_inlined use_info
+      | Some (Unroll (n, use_info)) -> Unroll (n, use_info)
       | Some Never_inlined -> Never_inlined
     in
     let inlining_state =

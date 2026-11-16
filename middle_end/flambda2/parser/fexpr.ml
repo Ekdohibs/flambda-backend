@@ -296,11 +296,11 @@ type inline_attribute = Inline_attribute.t =
   | Default_inline
 
 type inlined_attribute =
-  | Always_inlined
+  | Always_inlined of Inlined_attribute.Use_info.t
   | Hint_inlined
   | Forward_inlined
   | Never_inlined
-  | Unroll of int
+  | Unroll of int * Inlined_attribute.Use_info.t
   | Default_inlined
 
 type inlining_state = { depth : int (* CR lmaurer: Add inlining arguments *) }

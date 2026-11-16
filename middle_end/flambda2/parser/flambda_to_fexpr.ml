@@ -765,8 +765,8 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       | Default_inlined -> Some Default_inlined
       | Hint_inlined -> Some Hint_inlined
       | Forward_inlined -> Some Forward_inlined
-      | Always_inlined _ -> Some Always_inlined
-      | Unroll (n, _) -> Some (Unroll n)
+      | Always_inlined use_info -> Some (Always_inlined use_info)
+      | Unroll (n, use_info) -> Some (Unroll (n, use_info))
       | Never_inlined -> Some Never_inlined
   in
   let inlining_state = inlining_state (Apply_expr.inlining_state app) in
