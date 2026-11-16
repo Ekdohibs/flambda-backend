@@ -39,7 +39,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaNominalSpec FlambdaNominalProofs FlambdaNormaliseSpec
   FlambdaNormaliseProofs FlambdaValidatorEquivarianceBaseProofs
-  FlambdaBlockLoadSpec FlambdaBlockLoadProofs FlambdaReadsAfterSpec.
+  FlambdaBlockLoadSpec FlambdaBlockLoadProofs FlambdaReadsAfterSpec
+  FlambdaEquivarianceTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -439,55 +440,18 @@ Proof. exact remove_constant_allocations_equivalent_aux. Qed.
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
+(* The laws are proved by the tactic of FlambdaEquivarianceTactic.v from
+   the definitions; it states and proves by itself the laws of
+   [surely_immediate] and of [allocation_of_constants]. The law of
+   [var_free_b] is given to it, which it would otherwise derive again.
+   [surely_value_renamed] is used by name in
+   FlambdaValidatorEquivarianceProofs.v. *)
 Lemma surely_value_renamed (r : renaming) (s : simple) :
   surely_value (rename_simple r s) = surely_value s.
-Proof. destruct s as [x | sym | c]; reflexivity. Qed.
+Proof. equivariance. Qed.
 
-Lemma surely_immediate_renamed (r : renaming) (s : simple) :
-  surely_immediate (rename_simple r s) = surely_immediate s.
-Proof. destruct s as [x | sym | c]; reflexivity. Qed.
-
-Lemma allocation_of_constants_renamed (r : renaming) (d : named) :
-  allocation_of_constants (rename_named r d) = allocation_of_constants d.
-Proof.
-  assert
-    (Hargs :
-      ∀ args : list simple,
-        forallb surely_immediate (map (rename_simple r) args)
-        = forallb surely_immediate args).
-  { induction args as [ | s args IH]; [ reflexivity | ].
-    simpl. rewrite surely_immediate_renamed, IH. reflexivity. }
-  destruct d as [s | p args | | | | | ]; try reflexivity.
-  cbn [rename_named].
-  destruct p; try reflexivity.
-  match goal with
-  | vp : variadic_primitive |- _ =>
-    destruct vp as [[tag] | kind]; cbn [allocation_of_constants];
-      apply Hargs
-  end.
-Qed.
-
-Fixpoint remove_constant_allocations_equivariant_aux (r : renaming)
-    (e : expr) :
-  remove_constant_allocations (rename_expr r e)
-  = rename_expr r (remove_constant_allocations e).
-Proof.
-  destruct e
-    as [ x kind d body | bindings body | k [params metadata handler] body
-       | handlers body | ap | ac | scrutinee arms | ];
-    simpl; try reflexivity.
-  - rewrite remove_constant_allocations_equivariant_aux,
-      allocation_of_constants_renamed, var_free_b_equivariant_aux.
-    destruct
-      (kind_eqb kind Value
-       && allocation_of_constants d
-       && negb (var_free_b x (remove_constant_allocations body)));
-      reflexivity.
-  - rewrite remove_constant_allocations_equivariant_aux. reflexivity.
-  - rewrite !remove_constant_allocations_equivariant_aux. reflexivity.
-  - rewrite remove_constant_allocations_equivariant_aux. reflexivity.
-Qed.
+#[local] Hint Rewrite var_free_b_equivariant_aux : equivariance.
 
 Theorem remove_constant_allocations_equivariant :
   remove_constant_allocations_equivariant_statement.
-Proof. exact remove_constant_allocations_equivariant_aux. Qed.
+Proof. equivariance. Qed.
