@@ -36,8 +36,9 @@
      about alpha-equivalence were written, and in which the three
      statements about a binding that is not used,
      FlambdaApplySpec.inlinable and many proofs still are;
-   - [free_continuations] of FlambdaWellFormedSpec.v, by which a handler
-     is found to be at toplevel;
+   - [free_continuations] of FlambdaWellFormedSpec.v, with that file's
+     [continuations_used], by which a handler is found to be at
+     toplevel as Simplify has it;
    - [expr_in_scope] of FlambdaNormaliseSpec.v, the check of scope that
      the test of inlining uses.
    None of them looks into code: each treats a binding of code as

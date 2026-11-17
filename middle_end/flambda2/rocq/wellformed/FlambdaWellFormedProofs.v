@@ -177,6 +177,54 @@ Proof.
     rewrite (outside_nowhere names_of handler Hh), (IH Hrest). reflexivity.
 Qed.
 
+(* A continuation that is used is free. *)
+Fixpoint continuations_used_in_free (e : expr) {struct e} :
+  ∀ k : continuation, k ∈ continuations_used e -> k ∈ free_continuations e.
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k0 [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    intros k;
+    cbn [continuations_used handler_continuations_used free_continuations
+         handler_free_continuations].
+  - apply continuations_used_in_free.
+  - apply continuations_used_in_free.
+  - intros H. apply in_app_or in H as [H | H]; apply in_or_app.
+    + left. exact (continuations_used_in_free handler k H).
+    + right. apply among_In. apply among_In in H.
+      rewrite among_without in H |- *.
+      apply andb_true_iff in H as [H Hnot].
+      apply andb_true_iff. split; [ | exact Hnot ].
+      apply among_In, continuations_used_in_free, among_In, H.
+  - intros H. apply among_In. apply among_In in H.
+    rewrite among_without in H |- *.
+    apply andb_true_iff in H as [H Hnot].
+    apply andb_true_iff. split; [ | exact Hnot ].
+    apply among_In. apply among_In in H.
+    apply in_app_or in H as [H | H]; apply in_or_app.
+    + left. clear Hnot.
+      induction handlers as [ | [k1 [params metadata handler]] handlers IH];
+        [ destruct H | ].
+      cbn [flat_map handler_continuations_used handler_free_continuations]
+        in H |- *.
+      apply in_app_or in H as [H | H]; apply in_or_app.
+      * left. exact (continuations_used_in_free handler k H).
+      * right. exact (IH H).
+    + right. exact (continuations_used_in_free body k H).
+  - intros H. exact H.
+  - intros [<- | []]. unfold apply_cont_continuations. left. reflexivity.
+  - intros H. apply in_map_iff in H as (arm & <- & Hin).
+    apply in_flat_map. exists arm. split; [ exact Hin | ].
+    unfold apply_cont_continuations. left. reflexivity.
+  - intros [].
+Qed.
+
+Theorem continuations_used_free : continuations_used_free_statement.
+Proof. exact continuations_used_in_free. Qed.
+
+Theorem try_body_at_unit_toplevel : try_body_at_unit_toplevel_statement.
+Proof. repeat split; vm_compute; reflexivity. Qed.
+
 Fixpoint at_unit_toplevel_outside (unit_exn : continuation) (e : expr)
     {struct e} :
   ∀ toplevel : bool,

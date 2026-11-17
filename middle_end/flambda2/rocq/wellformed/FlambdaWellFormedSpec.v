@@ -62,16 +62,21 @@
    - the body of a [Let], of a [Let_static] or of a [Let_cont] that is at
      toplevel;
    - the handler of a non-recursive continuation bound at toplevel, which
-     is not an exception handler, when all its body can do is to apply
-     that continuation or raise to the exception continuation of the
-     unit: the handler then postdominates its body.
+     is not an exception handler, when the only continuations that its
+     body uses are that continuation and the exception continuation of
+     the unit. A use is an application of the continuation, an arm of a
+     test that goes to it, or a call that returns or raises to it; a
+     trap action that names a handler is not a use of the handler
+     ([continuations_used]).
    Nothing else is: not the handler of a recursive continuation, which may
    run many times, and never the body of code, which runs once for each
    call.
 
    [statics_at_unit_toplevel] is the model's reading of this, as a check
    of the text: it carries down the term
-   whether it is at toplevel, as Simplify does.
+   whether it is at toplevel, as Simplify does. It reads the uses off
+   the term; Simplify counts those that it met in its own run, and the
+   CR at [continuations_used] says where the two differ.
 
    The term that Simplify returns need not keep that rule: it can have
    static bindings in handlers that are not at toplevel. The rule that
@@ -247,6 +252,62 @@ with handler_free_continuations (h : continuation_handler)
   | Handler _ _ handler => free_continuations handler
   end.
 
+(* The continuations that an expression uses and does not bind itself,
+   as Simplify counts a use where it decides whether a handler is at
+   toplevel: the continuation that an [Apply_cont] applies
+   (simplify/simplify_apply_cont_expr.ml, [record_continuation_use]),
+   the one that an arm of a [Switch] goes to
+   (simplify/simplify_switch_expr.ml), and the two continuations of a
+   call (simplify/simplify_apply_expr.ml). The handler that a trap
+   action names is not one: pushing or popping a handler does not go
+   to it. So this is [free_continuations] without those handlers. *)
+Fixpoint continuations_used (e : expr) : list continuation :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => continuations_used body
+  | Let_cont_non_recursive k h body =>
+    handler_continuations_used h ++ without [k] (continuations_used body)
+  | Let_cont_recursive handlers body =>
+    without (map fst handlers)
+      (flat_map (fun '(_, h) => handler_continuations_used h) handlers
+       ++ continuations_used body)
+  | Apply ap => [ap_continuation ap; ap_exn_continuation ap]
+  | Apply_cont ac => [ac_continuation ac]
+  | Switch _ arms => map (fun arm => ac_continuation (snd arm)) arms
+  | Invalid => []
+  end
+with handler_continuations_used (h : continuation_handler)
+    : list continuation :=
+  match h with
+  | Handler _ _ handler => continuations_used handler
+  end.
+
+(* CR mshinwell: [continuations_used] reads the term as it is written.
+   Simplify counts the uses that it recorded in its own run on the way
+   down (simplify/simplify_let_cont_expr.ml, where it asks whether the
+   uses of the body are of the continuation alone). It does not go into
+   a handler that nothing it met applies, nor into what follows a point
+   that it found invalid, nor into the arms of a [Switch] that it has
+   decided; it goes into the code that it inlines in the place of a
+   call; and a call whose result it knows to be bottom records no use
+   of the return continuation (simplify/simplify_apply_expr.ml). So
+   Simplify can take a term that [statics_at_unit_toplevel] refuses.
+   No term is known that the definition takes and on which Simplify
+   stops for the place of a static binding; that is not proved.
+   [statics_at_unit_toplevel] is not a condition of a well-formed unit,
+   and the test tool does not use it as an admission check of the term
+   that it gives Simplify. It is what two statements about a term that
+   passes it are stated with
+   ([at_unit_toplevel_outside_loops_and_code_statement], and
+   FlambdaStaticsInScopeSpec.whole_bodies_in_scope_statement), and the
+   tool's guess of the liftings reads its test of a handler. Is this
+   reading of the text enough for the model, or should the definition
+   follow Simplify's run more closely? Decision D60. *)
+
+(* A continuation that is used is free. *)
+Definition continuations_used_free_statement : Prop :=
+  ∀ (e : expr) (k : continuation),
+    k ∈ continuations_used e -> k ∈ free_continuations e.
+
 (* Whether the expression uses [k] as an exception handler: some call
    has it as its exception continuation, or some trap action names it. *)
 Definition traps (k : continuation) (ac : apply_cont) : bool :=
@@ -279,14 +340,16 @@ with handler_raises_to (k : continuation) (h : continuation_handler) : bool :=
 
 (* Whether the handler [h] of the non-recursive continuation [k], bound
    at toplevel around [body], is at toplevel too: it is not an exception
-   handler, and all [body] can do is to apply [k] or raise to the
-   exception continuation of the unit. In a well-formed unit a handler
-   that is not an exception handler is not used as one
+   handler, and the only continuations that [body] uses are [k] and the
+   exception continuation of the unit ([continuations_used]). So the
+   body of a [try], whose handler is pushed by a trap action where the
+   body is entered, is at toplevel where the [try] is. In a well-formed
+   unit a handler that is not an exception handler is not used as one
    ([exn_handlers_well_formed]). *)
 Definition handler_at_unit_toplevel (unit_exn k : continuation)
     (h : continuation_handler) (body : expr) : bool :=
   negb (handler_is_exn_handler h)
-  && all_among (free_continuations body) [k; unit_exn].
+  && all_among (continuations_used body) [k; unit_exn].
 
 (* CR mshinwell: this refuses a [Let_static] that is not at toplevel even
    when it binds only code. The compiler stops on one that binds a symbol
@@ -333,6 +396,46 @@ with code_statics_at_unit_toplevel (unit_exn : continuation) (c : code)
   | Code _ _ _ _ _ body => statics_at_unit_toplevel unit_exn false body
   end.
 
+(* The body of a [try] as the front end makes it. The return
+   continuation of the unit is [1] and its exception continuation [2];
+   [3] is the continuation after the [try], [4] its handler and [5] its
+   body, which is entered with the handler pushed, binds a symbol, and
+   leaves with the handler popped:
+
+     let_cont k3 (p) = return p in
+     let_cont k4 exn (e) = apply k3 (0) in
+     let_cont k5 = (let_static s = a block; apply k3 (s), popping k4) in
+     apply k5, pushing k4 *)
+Definition try_body_example_entry : expr :=
+  Apply_cont (Apply_cont_expr 5%positive [] (Some (Push 4%positive))).
+
+Definition try_body_example : expr :=
+  Let_cont_non_recursive 3%positive
+    (Handler [1%positive] (make_handler_metadata [Value])
+       (Apply_cont (Apply_cont_expr 1%positive [Var 1%positive] None)))
+    (Let_cont_non_recursive 4%positive
+       (Handler [2%positive] (make_exn_handler_metadata [Value])
+          (Apply_cont
+             (Apply_cont_expr 3%positive [Const (Tagged_immediate 0)] None)))
+       (Let_cont_non_recursive 5%positive
+          (Handler [] (make_handler_metadata [])
+             (Let_static
+                [Bind_symbol 1%positive
+                   (Static_const_block 0 [Const (Tagged_immediate 7)])]
+                (Apply_cont
+                   (Apply_cont_expr 3%positive [Symbol 1%positive]
+                      (Some (Pop 4%positive None))))))
+          try_body_example_entry)).
+
+(* The symbol is bound at toplevel by the model's reading of Simplify's
+   rule: the entry of the
+   [try] uses the continuation of the body alone. The handler that its
+   trap action names is free in it and is not used. *)
+Definition try_body_at_unit_toplevel_statement : Prop :=
+  statics_at_unit_toplevel 2%positive true try_body_example = true
+  ∧ continuations_used try_body_example_entry = [5%positive]
+  ∧ free_continuations try_body_example_entry = [5%positive; 4%positive].
+
 (* ======================================================================== *)
 (* Static bindings are outside loops and code                               *)
 (* ======================================================================== *)
@@ -343,11 +446,12 @@ with code_statics_at_unit_toplevel (unit_exn : continuation) (c : code)
    and is not there (simplify/simplify_named.ml, the case
    [Static_consts]; a group that binds only code passes).
    [statics_at_unit_toplevel] is the model's reading of that rule and
-   is not the same test: the CR at its definition has one way in which
-   the two differ. Simplify's own output does not keep its rule: a
-   handler that has one inlinable use, which is an [Apply_cont] without
-   a trap action, can be put in the place of the use with the static
-   bindings at its head, and nothing asks where it lands
+   is not the same test: the CR at its definition and the one at
+   [continuations_used] say where the two are known to differ.
+   Simplify's own output does not keep its rule: a handler that has one
+   inlinable use, which is an [Apply_cont] without a trap action, can
+   be put in the place of the use with the static bindings at its
+   head, and nothing asks where it lands
    (simplify/simplify_let_cont_expr.ml, [is_single_inlinable_use];
    simplify/simplify_apply_cont_expr.ml). The uses that are left when
    the handler of a recursive continuation has been simplified, which

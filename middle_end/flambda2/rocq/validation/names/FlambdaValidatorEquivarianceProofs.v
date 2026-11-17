@@ -1286,6 +1286,52 @@ Proof. exact well_formed_free_continuations_renamed. Qed.
 #[local] Hint Rewrite well_formed_free_continuations_renamed
   handler_free_continuations_renamed : equivariance.
 
+Fixpoint continuations_used_renamed (r : renaming) (e : expr) :
+  continuations_used (rename_expr r e)
+  = map (rename_continuation r) (continuations_used e)
+with handler_continuations_used_renamed (r : renaming)
+    (h : continuation_handler) :
+  handler_continuations_used (rename_handler r h)
+  = map (rename_continuation r) (handler_continuations_used h).
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      cbn [rename_expr continuations_used].
+    + apply continuations_used_renamed.
+    + apply continuations_used_renamed.
+    + rewrite map_app, handler_continuations_used_renamed,
+        continuations_used_renamed.
+      rewrite <- (without_map_injective (rename_continuation r)
+                    (rename_continuation_eqb r) [k]).
+      reflexivity.
+    + fold (rename_handlers r handlers).
+      rewrite map_fst_rename_handlers.
+      rewrite <- (without_map_injective (rename_continuation r)
+                    (rename_continuation_eqb r)).
+      rewrite map_app, continuations_used_renamed.
+      do 2 f_equal. unfold rename_handlers.
+      induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
+      cbn [map flat_map].
+      rewrite map_app, (handler_continuations_used_renamed r h), IH.
+      reflexivity.
+    + reflexivity.
+    + destruct ac. reflexivity.
+    + induction arms as [ | [i ac] arms IH]; [ reflexivity | ].
+      cbn [map fst snd]. rewrite IH. destruct ac. reflexivity.
+    + reflexivity.
+  - destruct h as [params metadata handler].
+    cbn [rename_handler handler_continuations_used].
+    apply continuations_used_renamed.
+Qed.
+
+Theorem continuations_used_equivariant :
+  continuations_used_equivariant_statement.
+Proof. exact continuations_used_renamed. Qed.
+
+#[local] Hint Rewrite continuations_used_renamed
+  handler_continuations_used_renamed : equivariance.
+
 Theorem handler_at_unit_toplevel_equivariant :
   handler_at_unit_toplevel_equivariant_statement.
 Proof. equivariance. Qed.

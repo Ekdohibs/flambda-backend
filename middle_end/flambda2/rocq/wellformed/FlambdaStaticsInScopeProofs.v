@@ -3030,28 +3030,28 @@ Proof.
         intros a Ha. apply Hrest_all. right. exact Ha.
 Qed.
 
-(* A continuation that an expression has a way to is free in it. *)
-Fixpoint exits_keys_free (names_of : static_binding -> list positive)
+(* A continuation that an expression has a way to is one that it uses. *)
+Fixpoint exits_keys_used (names_of : static_binding -> list positive)
     (e : expr) {struct e} :
   ∀ (k : continuation) (names : list positive),
-    (k, names) ∈ exits names_of e -> k ∈ free_continuations e.
+    (k, names) ∈ exits names_of e -> k ∈ continuations_used e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k0 [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
     intros k names;
-    cbn [exits handler_exits free_continuations handler_free_continuations].
-  - apply exits_keys_free.
+    cbn [exits handler_exits continuations_used handler_continuations_used].
+  - apply exits_keys_used.
   - intros H. apply in_with_bound in H as (a & Ha & _).
-    exact (exits_keys_free names_of body k a Ha).
+    exact (exits_keys_used names_of body k a Ha).
   - assert (Hbody :
       ∀ a : list positive,
         (k, a) ∈ exits names_of body -> k <> k0 ->
-        k ∈ free_continuations handler
-            ++ without [k0] (free_continuations body)).
+        k ∈ continuations_used handler
+            ++ without [k0] (continuations_used body)).
     { intros a Ha Hne. apply in_or_app. right. apply among_In.
       rewrite FlambdaMapProofs.among_without. apply andb_true_iff.
-      split; [ apply among_In, (exits_keys_free names_of body k a Ha) | ].
+      split; [ apply among_In, (exits_keys_used names_of body k a Ha) | ].
       unfold among. cbn [existsb].
       rewrite (proj2 (Pos.eqb_neq k k0) Hne). reflexivity. }
     destruct (lookup k0 (exits names_of body)) as [entry | ] eqn:Hentry.
@@ -3062,7 +3062,7 @@ Proof.
         rewrite Pos.eqb_refl in Hnot. discriminate Hnot.
       * apply in_with_bound in Ha as (a' & Ha' & _).
         apply in_or_app. left.
-        exact (exits_keys_free names_of handler k a' Ha').
+        exact (exits_keys_used names_of handler k a' Ha').
     + intros H. apply (Hbody names H). intros ->.
       exact (in_lookup_some _ _ _ H Hentry).
   - assert (Hbody :
@@ -3070,13 +3070,13 @@ Proof.
         (k, a) ∈ exits names_of body ->
         among k (map fst handlers) = false ->
         k ∈ without (map fst handlers)
-              (flat_map (fun '(_, h) => handler_free_continuations h)
+              (flat_map (fun '(_, h) => handler_continuations_used h)
                  handlers
-               ++ free_continuations body)).
+               ++ continuations_used body)).
     { intros a Ha Hnot. apply among_In.
       rewrite FlambdaMapProofs.among_without, Hnot, andb_true_r.
       apply among_In, in_or_app. right.
-      exact (exits_keys_free names_of body k a Ha). }
+      exact (exits_keys_used names_of body k a Ha). }
     destruct (group_entry (map fst handlers) (exits names_of body))
       as [entry | ] eqn:Hentry.
     + intros H. apply in_meet_exits in H as (a & [Ha | Ha] & _).
@@ -3093,10 +3093,10 @@ Proof.
           as [ | [k1 [params metadata handler]] handlers IH];
           intros a' Ha'; [ destruct Ha' | ].
         cbn [fold_right flat_map handler_exits
-             handler_free_continuations] in Ha' |- *.
+             handler_continuations_used] in Ha' |- *.
         apply in_meet_exits in Ha' as (a'' & [Ha'' | Ha''] & _).
         -- apply in_or_app. left.
-           exact (exits_keys_free names_of handler k a'' Ha'').
+           exact (exits_keys_used names_of handler k a'' Ha'').
         -- apply in_or_app. right. exact (IH a'' Ha'').
     + intros H. apply (Hbody names H).
       destruct (among k (map fst handlers)) eqn:Hamong; [ | reflexivity ].
@@ -3106,19 +3106,27 @@ Proof.
   - intros H.
     apply in_add_exit in H as [[-> _] | (a & [[= -> _] | []] & _)];
       [ left; reflexivity | right; left; reflexivity ].
-  - intros [[= <- _] | []]. unfold apply_cont_continuations. left.
-    reflexivity.
+  - intros [[= <- _] | []]. left. reflexivity.
   - intros H. change (fold_right
         (fun arm l => add_exit (ac_continuation (snd arm)) [] l) [] arms)
       with (arms_exits arms) in H.
     revert names H.
     induction arms as [ | arm arms IH]; intros names H; [ destruct H | ].
     cbn [arms_exits fold_right] in H. fold (arms_exits arms) in H.
-    cbn [flat_map]. apply in_or_app.
+    cbn [map].
     apply in_add_exit in H as [[-> _] | (a & Ha & _)].
-    + left. unfold apply_cont_continuations. left. reflexivity.
+    + left. reflexivity.
     + right. exact (IH a Ha).
   - intros [].
+Qed.
+
+(* So it is free in it. *)
+Lemma exits_keys_free (names_of : static_binding -> list positive)
+    (e : expr) (k : continuation) (names : list positive) :
+  (k, names) ∈ exits names_of e -> k ∈ free_continuations e.
+Proof.
+  intros H.
+  exact (continuations_used_in_free e k (exits_keys_used names_of e k names H)).
 Qed.
 
 Section Whole_bodies.
@@ -3172,7 +3180,7 @@ Proof.
         apply andb_true_iff in Hat as [_ Hat].
         pose proof
           (proj1 (all_among_spec _ _) Hat k'
-             (proj2 (among_In _ _) (exits_keys_free names_of body k' a Ha)))
+             (proj2 (among_In _ _) (exits_keys_used names_of body k' a Ha)))
           as Hk2.
         unfold among in Hk2. cbn [existsb] in Hk2.
         rewrite (proj2 (Pos.eqb_neq k' unit_exn) Hk'), !orb_false_r in Hk2.

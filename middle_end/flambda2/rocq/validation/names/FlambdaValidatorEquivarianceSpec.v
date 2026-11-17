@@ -143,7 +143,8 @@
    unit is: where static bindings may be
    ([statics_outside_loops_and_code]; and Simplify's rule for its
    input, [statics_at_unit_toplevel], with [raises_to],
-   [handler_at_unit_toplevel] and that file's [free_continuations]),
+   [handler_at_unit_toplevel] and that file's [free_continuations] and
+   [continuations_used]),
    the static names bound ([static_names]), the
    sets of closures ([sets_well_formed]), the numbers
    ([numbers_in_range]), the exception handlers
@@ -684,6 +685,12 @@ Definition well_formed_free_continuations_equivariant_statement : Prop :=
   ∀ (r : renaming) (e : expr),
     free_continuations (rename_expr r e)
     = map (rename_continuation r) (free_continuations e).
+
+(* The continuations that a term uses: the same, renamed. *)
+Definition continuations_used_equivariant_statement : Prop :=
+  ∀ (r : renaming) (e : expr),
+    continuations_used (rename_expr r e)
+    = map (rename_continuation r) (continuations_used e).
 
 Definition raises_to_equivariant_statement : Prop :=
   ∀ (r : renaming) (k : continuation) (e : expr),
