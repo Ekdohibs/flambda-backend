@@ -3161,13 +3161,13 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    guesses are made).
 
    In a handler that is not at toplevel
-   (FlambdaWellFormedSpec.handler_at_toplevel: the arm of a test, say) and in
-   the handler of a recursive continuation, where no static binding may stand, a
-   symbol goes to the first [Let] that makes just what the symbol is bound to
-   and mentions no variable: FlambdaLiftFromArmsSpec.lift_to_head binds it at
-   the head of the unit. That puts the unit under a group of static bindings,
-   and the validation makes it first, so the paths of the other [Let]s outside
-   code are then given as they are under that group.
+   (FlambdaWellFormedSpec.handler_at_unit_toplevel: the arm of a test, say) and
+   in the handler of a recursive continuation, where no static binding may
+   stand, a symbol goes to the first [Let] that makes just what the symbol is
+   bound to and mentions no variable: FlambdaLiftFromArmsSpec.lift_to_head binds
+   it at the head of the unit. That puts the unit under a group of static
+   bindings, and the validation makes it first, so the paths of the other [Let]s
+   outside code are then given as they are under that group.
 
    A symbol that no [Let] outside code takes goes to the first [Let] in the body
    of code that makes just what the symbol is bound to and mentions no variable,
@@ -3913,7 +3913,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     | Let_static (_, body) -> in_expr (Numbers.Coq_xO path) body
     | Let_cont_non_recursive (k, (Handler (_, _, handler) as h), body) ->
       in_expr (Numbers.Coq_xO path) body;
-      if Well_formed.handler_at_toplevel unit.Well_formed.unit_exn k h body
+      if Well_formed.handler_at_unit_toplevel unit.Well_formed.unit_exn k h body
       then in_expr (Numbers.Coq_xI path) handler
       else in_code (to_head, to_head_given) (Numbers.Coq_xI path) handler
     | Let_cont_recursive (handlers, body) ->
@@ -4141,7 +4141,9 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
         match arm with
         | Some (arm_path, bound) -> Some (arm_path, params @ bound)
         | None ->
-          if Well_formed.handler_at_toplevel unit.Well_formed.unit_exn k h body
+          if
+            Well_formed.handler_at_unit_toplevel unit.Well_formed.unit_exn k h
+              body
           then None
           else Some (path, params)
       in
