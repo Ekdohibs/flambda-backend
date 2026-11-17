@@ -8,6 +8,7 @@ open FlambdaNormaliseSpec
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open List
+open ListDef
 
 (** val shareable : prim -> bool **)
 
@@ -189,7 +190,13 @@ let rec share_primitives_knowing known e =
         share_primitives_in_handler known h,
         share_primitives_knowing known body )
   | Let_cont_recursive (handlers, body) ->
-    Let_cont_recursive (handlers, share_primitives_knowing known body)
+    Let_cont_recursive
+      ( map
+          (fun pat ->
+            let k, h = pat in
+            k, share_primitives_in_handler known h)
+          handlers,
+        share_primitives_knowing known body )
   | _ -> e
 
 (** val share_primitives_in_handler : computed -> continuation_handler ->
