@@ -32,10 +32,13 @@
    This file is to be reviewed: [derivable] against the fields of
    FlambdaReaperGraphSpec.closed, of which it has one constructor each,
    named after the field ([by_alias_input] for [alias_input]);
-   [least_solution]; the two checks of the graph ([only_read_into] and
-   what is made of it); the examples; and the statements. The check and
-   the computation of a least solution are FlambdaReaperLeast.v, which
-   needs no review; the proofs are FlambdaReaperLeastProofs.v.
+   [least_solution]; [derivable_local] against [derivable] and
+   FlambdaReaperLocalFieldsSpec.local_reads_used, and
+   [least_solution_local]; the two checks of the graph
+   ([only_read_into] and what is made of it); the examples; and the
+   statements. The check and the computation of a least solution are
+   FlambdaReaperLeast.v and FlambdaReaperLocalFields.v, which need no
+   review; the proofs are FlambdaReaperLeastProofs.v.
 
    The guards. The rules of points_to_analysis.ml have one kind of
    negation, the guard of [nontop_usages] and [nontop_sources]:
@@ -142,7 +145,44 @@
    a least solution may fail the check, the check of the graph that
    gives it; with [Auto], or for a unit that binds each variable once,
    none ([least_rebuild_cc_auto_refines_observably_statement],
-   [least_rebuild_unbox_bound_once_refines_observably_statement]). *)
+   [least_rebuild_unbox_bound_once_refines_observably_statement]).
+
+   Local fields. The statements of the rebuild ask no local field or no
+   projection, which the rules before the fix of local fields
+   (FlambdaReaperLocalFieldsSpec.v) need. [derivable_local] is
+   [derivable] with the rule of the fix, which concludes [has_usage];
+   tables are a least solution of the rules with the fix
+   ([least_solution_local]) if they pass [check_closed_local] and those
+   rules derive each of their tuples, the guards read off the tables.
+   [compute_least_local] gives one ([compute_least_local_sound_statement]),
+   as on the two units of FlambdaReaperLocalFieldsSpec.v
+   ([least_local_examples_statement]). A least solution of the rules
+   before the fix that passes [check_local_reads_used] is one of the
+   rules with it ([least_local_of_least_statement]), which every least
+   solution does under the old premise. The converse fails: the program
+   with the fix is no more monotone than without, and where the fix
+   gives an allocation any usage, the rules guarded on its absence
+   ([usages_accessor], [usages_alias], [alias_constructor_usage]) stop
+   applying to it, so that its least solution may lose tuples of
+   [usages] that the least solution before the fix has
+   ([local_fix_drops_usages_statement]). So the three lemmas on the
+   checks are proved again of the rules with the fix, not derived
+   ([least_field_used_exact_local_statement],
+   [least_apply_widgets_local_statement],
+   [least_unboxed_reads_local_statement]); they hold as they are, as the
+   rule of the fix concludes only [has_usage] and the proofs invert the
+   derivations of the other relations. The statements of the rebuild
+   for a least solution of the rules with the fix
+   ([least_rebuild_refines_observably_local_statement],
+   [least_rebuild_cc_refines_observably_local_statement],
+   [least_rebuild_unbox_refines_observably_local_statement],
+   [least_rebuild_cc_auto_refines_observably_local_statement],
+   [least_rebuild_unbox_bound_once_observably_local_statement]) drop the
+   premise on local fields and projections; they are the [_local]
+   statements of FlambdaReaperRebuildSpec.v,
+   FlambdaReaperCallingConventionsSpec.v and
+   FlambdaReaperUnboxingRefinesSpec.v, whose checks such a solution
+   passes. The statements before are their corollaries. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -152,7 +192,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperSolutionSpec FlambdaReaperFlowSpec FlambdaReaperRebuild
   FlambdaReaperRebuildSpec FlambdaReaperCallingConventions
   FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxing
-  FlambdaReaperUnboxingRefinesSpec FlambdaReaperLeast.
+  FlambdaReaperUnboxingRefinesSpec FlambdaReaperLeast
+  FlambdaReaperLocalFields.
+From OxCamlFlambda2 Require FlambdaReaperLocalFieldsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -930,6 +972,457 @@ Definition least_rebuild_unbox_bound_once_refines_observably_statement : Prop :=
     exits_one_value u e = true ->
     variables_bound_once e = true ->
     least_solution is_local (traverse_unit flag u e) T ->
+    local_unboxing (traverse_unit flag u e) T (derive_dominated T)
+      (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+         lambda_lifting)
+      e
+    = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T
+         (derive_cannot_change (traverse_unit flag u e) T)
+         (unit_code_deps flag u e) (derive_dominated T)
+         (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+            lambda_lifting)
+         preserve_direct_calls e).
+
+(* ======================================================================== *)
+(* The rules with the fix of local fields                                   *)
+(* ======================================================================== *)
+
+Section DerivationLocal.
+
+Variable is_local : field -> bool.
+Variable G : graph.
+(* The solution that the guards are read off. *)
+Variable S : solution.
+
+(* The tuples that the rules with the fix of local fields derive
+   (FlambdaReaperLocalFieldsSpec.closed_local): those of [derivable],
+   whose constructors are those here with [by_] for [byl_], and the
+   rule of the fix ([local_reads_used]), the last of [local_rules]: a
+   read of a local field off a node with any source gives that node
+   [has_usage]. *)
+Inductive derivable_local : atom -> Prop :=
+  (* alias_rules *)
+  | byl_alias_input : ∀ to_ from,
+      g_alias G to_ from -> derivable_local (Atom_alias to_ from)
+  | byl_alias_propagate : ∀ if_used to_ from,
+      derivable_local (Atom_any_usage if_used) ->
+      g_propagate G if_used to_ from ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_if_any_source : ∀ if_any_source to_ from,
+      derivable_local (Atom_any_source if_any_source) ->
+      g_alias_if_any_source G if_any_source to_ from ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_constructor_usage : ∀ base base_use relation to_ from,
+      g_constructor G base relation from ->
+      derivable_local (Atom_usages base base_use) ->
+      s_any_usage S base = false ->
+      g_accessor G to_ relation base_use ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_local_constructor_usage : ∀ base base_use relation to_ from,
+      is_local relation = true ->
+      g_constructor G base relation from ->
+      derivable_local (Atom_usages base base_use) ->
+      g_accessor G to_ relation base_use ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_parameter_usage : ∀ base base_use relation to_ from,
+      g_parameter G base relation to_ ->
+      derivable_local (Atom_usages base base_use) ->
+      s_any_usage S base = false ->
+      g_argument G from relation base_use ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_accessor_source : ∀ base base_source relation to_ from,
+      g_accessor G to_ relation base ->
+      derivable_local (Atom_sources base base_source) ->
+      s_any_source S base = false ->
+      g_constructor G base_source relation from ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_local_accessor_source : ∀ base base_source relation to_ from,
+      is_local relation = true ->
+      g_accessor G to_ relation base ->
+      derivable_local (Atom_sources base base_source) ->
+      g_constructor G base_source relation from ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_escaping_reading : ∀ relation to_ from,
+      derivable_local (Atom_escaping_field relation from) ->
+      derivable_local (Atom_reading_field relation to_) ->
+      derivable_local (Atom_alias to_ from)
+  | byl_alias_argument_source : ∀ base base_source relation to_ from,
+      g_argument G from relation base ->
+      derivable_local (Atom_sources base base_source) ->
+      s_any_source S base = false ->
+      g_parameter G base_source relation to_ ->
+      derivable_local (Atom_alias to_ from)
+  (* has_usage_rules *)
+  | byl_has_usage_any : ∀ x,
+      derivable_local (Atom_any_usage x) -> derivable_local (Atom_has_usage x)
+  | byl_has_usage_alias : ∀ to_ from,
+      derivable_local (Atom_has_usage to_) ->
+      derivable_local (Atom_alias to_ from) ->
+      derivable_local (Atom_has_usage from)
+  | byl_has_usage_accessor : ∀ to_ relation base,
+      derivable_local (Atom_has_usage to_) -> g_accessor G to_ relation base ->
+      derivable_local (Atom_has_usage base)
+  | byl_has_usage_argument : ∀ from relation base,
+      derivable_local (Atom_has_source from) ->
+      g_argument G from relation base ->
+      derivable_local (Atom_has_usage base)
+  (* has_source_rules *)
+  | byl_has_source_any : ∀ x,
+      derivable_local (Atom_any_source x) -> derivable_local (Atom_has_source x)
+  | byl_has_source_alias : ∀ from to_,
+      derivable_local (Atom_has_source from) ->
+      derivable_local (Atom_alias to_ from) ->
+      derivable_local (Atom_has_source to_)
+  | byl_has_source_constructor : ∀ from relation base,
+      derivable_local (Atom_has_source from) ->
+      g_constructor G base relation from ->
+      derivable_local (Atom_has_source base)
+  | byl_has_source_function_slot : ∀ from relation base,
+      g_constructor G base relation from -> is_function_slot relation = true ->
+      derivable_local (Atom_has_source base)
+  | byl_has_source_parameter : ∀ to_ relation base,
+      derivable_local (Atom_has_usage to_) -> g_parameter G base relation to_ ->
+      derivable_local (Atom_has_source base)
+  (* any_usage_rules *)
+  | byl_any_usage_use : ∀ to_ from,
+      derivable_local (Atom_has_usage to_) -> g_use G to_ from ->
+      derivable_local (Atom_any_usage from)
+  | byl_any_usage_alias : ∀ to_ from,
+      derivable_local (Atom_any_usage to_) ->
+      derivable_local (Atom_alias to_ from) ->
+      derivable_local (Atom_any_usage from)
+  | byl_any_usage_constructor : ∀ base relation from,
+      derivable_local (Atom_any_usage base) ->
+      g_constructor G base relation from ->
+      is_local relation = false -> derivable_local (Atom_any_usage from)
+  | byl_any_usage_argument : ∀ base relation from,
+      derivable_local (Atom_any_source base) ->
+      g_argument G from relation base ->
+      derivable_local (Atom_any_usage from)
+  (* any_source_rules *)
+  | byl_any_source_input : ∀ x,
+      g_any_source G x -> derivable_local (Atom_any_source x)
+  | byl_any_source_zero_alloc : ∀ x,
+      g_zero_alloc_source G x -> derivable_local (Atom_any_source x)
+  | byl_any_source_if_used : ∀ if_used x,
+      derivable_local (Atom_any_usage if_used) ->
+      g_any_source_if_used G if_used x ->
+      derivable_local (Atom_any_source x)
+  | byl_any_source_alias : ∀ from to_,
+      derivable_local (Atom_alias to_ from) ->
+      derivable_local (Atom_any_source from) ->
+      derivable_local (Atom_any_source to_)
+  | byl_any_source_parameter : ∀ base relation to_,
+      derivable_local (Atom_any_usage base) ->
+      g_parameter G base relation to_ ->
+      derivable_local (Atom_any_source to_)
+  | byl_any_source_accessor : ∀ base relation to_,
+      derivable_local (Atom_any_source base) ->
+      g_accessor G to_ relation base ->
+      is_local relation = false -> derivable_local (Atom_any_source to_)
+  | byl_any_source_use : ∀ from to_,
+      derivable_local (Atom_has_source from) -> g_use G to_ from ->
+      derivable_local (Atom_any_source to_)
+  (* The input [any_usage]. *)
+  | byl_any_usage_input : ∀ x,
+      g_any_usage G x -> derivable_local (Atom_any_usage x)
+  (* usages_rules, with the guard of [nontop_usages] *)
+  | byl_usages_accessor : ∀ to_ relation base,
+      g_accessor G to_ relation base -> s_any_usage S base = false ->
+      derivable_local (Atom_usages base base)
+  | byl_usages_argument : ∀ from relation base,
+      g_argument G from relation base -> s_any_usage S base = false ->
+      derivable_local (Atom_usages base base)
+  | byl_usages_alias : ∀ to_ from usage,
+      derivable_local (Atom_usages to_ usage) -> s_any_usage S to_ = false ->
+      derivable_local (Atom_alias to_ from) -> s_any_usage S from = false ->
+      derivable_local (Atom_usages from usage)
+  (* sources_rules, with the guard of [nontop_sources] *)
+  | byl_sources_constructor : ∀ from relation base,
+      g_constructor G base relation from -> s_any_source S base = false ->
+      derivable_local (Atom_sources base base)
+  | byl_sources_parameter : ∀ to_ relation base,
+      g_parameter G base relation to_ -> s_any_source S base = false ->
+      derivable_local (Atom_sources base base)
+  | byl_sources_alias : ∀ from to_ source,
+      derivable_local (Atom_sources from source) ->
+      s_any_source S from = false ->
+      derivable_local (Atom_alias to_ from) -> s_any_source S to_ = false ->
+      derivable_local (Atom_sources to_ source)
+  (* local_rules *)
+  | byl_escaping_field_rule : ∀ base relation from,
+      derivable_local (Atom_any_usage base) ->
+      g_constructor G base relation from ->
+      is_local relation = true ->
+      derivable_local (Atom_escaping_field relation from)
+  | byl_reading_field_rule : ∀ base relation to_,
+      derivable_local (Atom_any_source base) ->
+      g_accessor G to_ relation base ->
+      is_local relation = true ->
+      derivable_local (Atom_reading_field relation to_)
+  (* the rule of the fix, the last of local_rules *)
+  | byl_has_usage_local_reading : ∀ base relation to_,
+      derivable_local (Atom_any_source base) ->
+      g_accessor G to_ relation base -> is_local relation = true ->
+      derivable_local (Atom_has_usage base)
+  (* post_processing_rules: [field_of_constructor_is_used] *)
+  | byl_field_used_any_usage : ∀ base relation from,
+      g_constructor G base relation from ->
+      derivable_local (Atom_any_usage base) -> is_local relation = false ->
+      derivable_local (Atom_field_used base relation)
+  | byl_field_used_usage : ∀ base relation from usage v,
+      g_constructor G base relation from ->
+      derivable_local (Atom_usages base usage) ->
+      g_accessor G v relation usage ->
+      derivable_local (Atom_has_usage v) ->
+      derivable_local (Atom_field_used base relation)
+  | byl_field_used_reading : ∀ base relation from x,
+      g_constructor G base relation from ->
+      derivable_local (Atom_any_usage base) ->
+      derivable_local (Atom_reading_field relation x) ->
+      derivable_local (Atom_has_usage x) ->
+      derivable_local (Atom_field_used base relation)
+  | byl_field_used_local_source : ∀ usage base relation from v,
+      g_constructor G base relation from ->
+      derivable_local (Atom_sources usage base) -> is_local relation = true ->
+      derivable_local (Atom_any_usage base) -> g_accessor G v relation usage ->
+      derivable_local (Atom_has_usage v) ->
+      derivable_local (Atom_field_used base relation).
+
+End DerivationLocal.
+
+(* Tables [T] are a least solution of the rules with the fix: they are
+   closed under them ([check_closed_local]: those of [check_closed] and
+   the rule of the fix), and the rules with the fix derive each of their
+   tuples, the guards read off [T]. *)
+Definition least_solution_local (is_local : field -> bool) (F : facts)
+    (T : tables) : Prop :=
+  check_closed_local is_local F T = true
+  ∧ ∀ a : atom,
+      holds (solution_of_tables T) a = true ->
+      derivable_local is_local (graph_of_facts F) (solution_of_tables T) a.
+
+(* [compute_least_local] (FlambdaReaperLocalFields.v), if it gives
+   tables, gives a least solution of the rules with the fix. *)
+Definition compute_least_local_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (fuel : nat) (T : tables),
+    compute_least_local is_local F fuel = Some T ->
+    least_solution_local is_local F T.
+
+(* The least solutions of the fixed rules of the two units of
+   FlambdaReaperLocalFieldsSpec.v, which the solver finds there, are
+   least solutions of the rules with the fix. *)
+Definition least_local_examples_statement : Prop :=
+  least_solution_local LocalSlotCounterexample.is_local
+    FlambdaReaperLocalFieldsSpec.LocalSlotFixed.facts
+    FlambdaReaperLocalFieldsSpec.LocalSlotFixed.solution
+  ∧ least_solution_local LocalSlotCounterexample.is_local
+      FlambdaReaperLocalFieldsSpec.NestedSlot.facts
+      FlambdaReaperLocalFieldsSpec.NestedSlot.fixed_solution.
+
+(* The rules before the fix are among those with it: a least solution
+   of the rules before the fix that passes the check of the fix is a
+   least solution of the rules with it. With no local field, or no
+   projection, every table passes the check
+   (FlambdaReaperFlowSpec.old_premise_local_reads_used_statement). *)
+Definition least_local_of_least_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables),
+    least_solution is_local F T ->
+    check_local_reads_used is_local F T = true ->
+    least_solution_local is_local F T.
+
+(* The rules with the fix are no more monotone than those before: where
+   the fix gives an allocation any usage, the rules guarded on its
+   absence stop applying to it, and the least solution can lose tuples
+   of [usages]. The unit of [local_slot_counterexample_statement] with a
+   second read of the slot 60, from the closure itself, into the
+   variable that the handler returns:
+
+     ...
+     let x13 = x12.60 in
+     let x15 = x10.60 in
+     let_cont k5 x14 = return x15 in
+     k5 x13
+
+   Before the fix, [x10] has no usage of any kind, and the direct read
+   gives it [usages x10 x10] ([usages_accessor]). With the fix, [x12]
+   has a usage, so [x10] has any usage, and the least solution has no
+   [usages x10 x10]. The slot is used in [x10], and [x15] is an alias of
+   the constants, in both: with the fix by [field_used_local_source]
+   and [alias_local_accessor_source], from [sources x10 x10]. *)
+Module DirectReadExample.
+
+Local Open Scope positive_scope.
+Import LocalSlotCounterexample.
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 20 code20]
+    (Let 10 Value
+       (Closure_of_set 40 [(40, 20)] [(60, Const (Tagged_immediate 5))])
+       (Let 11 Value
+          (Prim (Variadic (Make_immutable_array Array_values)) [Var 10])
+          (Let 12 Value
+             (Prim (Binary (Array_load Array_values Load_values Immutable))
+                [Var 11; Const (Tagged_immediate 0)])
+             (Let 13 Value (Project_value_slot_from 40 60 (Var 12))
+                (Let 15 Value (Project_value_slot_from 40 60 (Var 10))
+                   (Let_cont_non_recursive 5
+                      (Handler [14] (make_handler_metadata [Value])
+                         (return_to 1 [Var 15]))
+                      (return_to 5 [Var 13]))))))).
+
+Definition facts : FlambdaReaperGraphSpec.facts :=
+  traverse_unit Never interface unit_expr.
+
+End DirectReadExample.
+
+Definition local_fix_drops_usages_statement : Prop :=
+  let x10 := Node_variable 10%positive in
+  let x15 := Node_variable 15%positive in
+  let slot := Field_value_slot 60%positive in
+  ∃ T T' : tables,
+    least_solution LocalSlotCounterexample.is_local DirectReadExample.facts
+      T
+    ∧ least_solution_local LocalSlotCounterexample.is_local
+        DirectReadExample.facts T'
+    ∧ mem_node x10 (t_any_usage T) = false
+    ∧ mem_pair x10 x10 (t_usages T) = true
+    ∧ mem_node x10 (t_any_usage T') = true
+    ∧ mem_pair x10 x10 (t_usages T') = false
+    ∧ mem_node_field x10 slot (t_field_used T) = true
+    ∧ mem_node_field x10 slot (t_field_used T') = true
+    ∧ mem_pair x15 Node_all_constants (t_alias T) = true
+    ∧ mem_pair x15 Node_all_constants (t_alias T') = true.
+
+(* What a least solution of the rules with the fix gives of the checks
+   of the statements, as a least solution of the rules before it does:
+   the rule of the fix concludes only [has_usage], so that each tuple of
+   the other relations is derived by the rules that derive it before the
+   fix, from premises derived with the fix. These are not corollaries
+   of the lemmas before the fix ([local_fix_drops_usages_statement]). *)
+Definition least_field_used_exact_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables),
+    least_solution_local is_local F T ->
+    check_field_used_exact is_local F T = true.
+
+Definition least_apply_widgets_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables),
+    is_local_slots_only is_local ->
+    least_solution_local is_local F T ->
+    check_widgets_read_only F = true ->
+    check_apply_widgets F T = true.
+
+Definition least_unboxed_reads_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool),
+    least_solution_local is_local F T ->
+    check_reads_read_only is_local F (derive_dominated T)
+      (derive_to_unbox is_local F T cannot_change max_unbox_size
+         lambda_lifting)
+    = true ->
+    check_unboxed_reads F T (derive_dominated T)
+      (derive_to_unbox is_local F T cannot_change max_unbox_size
+         lambda_lifting)
+    = true.
+
+(* The statements of the rebuild for the least solution, with local
+   fields: those above for a least solution of the rules with the fix,
+   with no premise on the local fields or the projections of the unit.
+   They are the [_local] statements of FlambdaReaperRebuildSpec.v,
+   FlambdaReaperCallingConventionsSpec.v and
+   FlambdaReaperUnboxingRefinesSpec.v, whose checks a least solution of
+   the rules with the fix passes. *)
+Definition least_rebuild_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    program_refines_observably e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+Definition least_rebuild_cc_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    check_widgets_read_only (traverse_unit flag u e) = true ->
+    program_refines_observably e
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T
+         (derive_cannot_change (traverse_unit flag u e) T)
+         (unit_code_deps flag u e) preserve_direct_calls e).
+
+Definition least_rebuild_unbox_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (max_unbox_size : nat)
+    (lambda_lifting preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    local_unboxing (traverse_unit flag u e) T (derive_dominated T)
+      (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+         lambda_lifting)
+      e
+    = true ->
+    check_reads_read_only is_local (traverse_unit flag u e)
+      (derive_dominated T)
+      (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+         lambda_lifting)
+    = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T
+         (derive_cannot_change (traverse_unit flag u e) T)
+         (unit_code_deps flag u e) (derive_dominated T)
+         (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+            lambda_lifting)
+         preserve_direct_calls e).
+
+Definition least_rebuild_cc_auto_refines_observably_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit Auto u e) T ->
+    program_refines_observably e
+      (rebuild_unit_cc_from_tables (traverse_unit Auto u e) T
+         (derive_cannot_change (traverse_unit Auto u e) T)
+         (unit_code_deps Auto u e) preserve_direct_calls e).
+
+Definition least_rebuild_unbox_bound_once_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (max_unbox_size : nat)
+    (lambda_lifting preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    variables_bound_once e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
     local_unboxing (traverse_unit flag u e) T (derive_dominated T)
       (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
          lambda_lifting)

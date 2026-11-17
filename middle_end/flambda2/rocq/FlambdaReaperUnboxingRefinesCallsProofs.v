@@ -73,7 +73,9 @@
    an unboxed name adding nothing to them by [check_unboxed_uses]
    ([add_usages_unboxed]). The second statement composes the first with
    FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably,
-   and the examples are the statements applied. *)
+   in its version with local fields ([_local]), of which the statement
+   with the old premise is a corollary; the examples are the statements
+   applied. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -6458,17 +6460,46 @@ Proof.
            cannot_change dominated to_unbox pdc).
 Qed.
 
+Theorem rebuild_unbox_fixed_refines_observably_local :
+  rebuild_unbox_fixed_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
+    Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hcalls Hcheck.
+  exact (refines_observably_refines _ _ _
+           (FlambdaReaperCallingConventionsProofs
+            .rebuild_cc_refines_observably_local
+              flag is_local u e T cannot_change pdc Hslots Hfrag Hany
+              Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_unbox_fixed_refines_cc flag is_local u e T cannot_change
+              dominated to_unbox pdc Hslots Hfrag Hclosed Hcalls Hcheck)).
+Qed.
+
 Theorem rebuild_unbox_fixed_refines_observably :
   rebuild_unbox_fixed_refines_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
     Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hcalls Hcheck.
+  exact (rebuild_unbox_fixed_refines_observably_local flag is_local u e T
+           cannot_change dominated to_unbox pdc Hslots Hfrag Hany Hrk Hwf
+           Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hcalls Hcheck).
+Qed.
+
+Theorem rebuild_unbox_fixed_tail_refines_observably_local :
+  rebuild_unbox_fixed_tail_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
+    Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hcalls Hcheck.
   exact (refines_observably_refines _ _ _
-           (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-              flag is_local u e T cannot_change pdc Hslots Hproj Hfrag Hany
-              Hrk Hwf Hone Hclosed Hexact Hccc Hwid)
-           (rebuild_unbox_fixed_refines_cc flag is_local u e T cannot_change
-              dominated to_unbox pdc Hslots Hfrag Hclosed Hcalls Hcheck)).
+           (FlambdaReaperCallingConventionsProofs
+            .rebuild_cc_refines_observably_local
+              flag is_local u e T cannot_change pdc Hslots Hfrag Hany
+              Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_unbox_fixed_tail_refines_cc flag is_local u e T
+              cannot_change dominated to_unbox pdc Hslots Hfrag Hclosed Hcalls
+              Hcheck)).
 Qed.
 
 Theorem rebuild_unbox_fixed_tail_refines_observably :
@@ -6476,13 +6507,12 @@ Theorem rebuild_unbox_fixed_tail_refines_observably :
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
     Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hcalls Hcheck.
-  exact (refines_observably_refines _ _ _
-           (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-              flag is_local u e T cannot_change pdc Hslots Hproj Hfrag Hany
-              Hrk Hwf Hone Hclosed Hexact Hccc Hwid)
-           (rebuild_unbox_fixed_tail_refines_cc flag is_local u e T
-              cannot_change dominated to_unbox pdc Hslots Hfrag Hclosed Hcalls
-              Hcheck)).
+  exact (rebuild_unbox_fixed_tail_refines_observably_local flag is_local u e
+           T cannot_change dominated to_unbox pdc Hslots Hfrag Hany Hrk Hwf
+           Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hcalls Hcheck).
 Qed.
 
 Theorem fixed_call_example : fixed_call_example_statement.

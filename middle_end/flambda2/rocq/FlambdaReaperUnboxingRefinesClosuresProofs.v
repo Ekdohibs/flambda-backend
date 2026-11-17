@@ -48,7 +48,9 @@
    ([wrapper_cc_none], [wrapper_u_none]). The second statement composes
    the first with
    FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably,
-   and the examples are the statements applied, or runs. *)
+   in its version with local fields ([_local]), of which the statement
+   with the old premise is a corollary; the examples are the statements
+   applied, or runs. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -2652,17 +2654,46 @@ Proof.
            cannot_change dominated to_unbox tcr pdc).
 Qed.
 
+Theorem rebuild_repr_fixed_refines_observably_local :
+  rebuild_repr_fixed_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
+    Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hrepr Hcheck.
+  exact (refines_observably_refines _ _ _
+           (FlambdaReaperCallingConventionsProofs
+            .rebuild_cc_refines_observably_local
+              flag is_local u e T cannot_change pdc Hslots Hfrag Hany
+              Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_repr_fixed_refines_cc flag is_local u e T cannot_change
+              dominated to_unbox tcr pdc Hslots Hfrag Hclosed Hrepr Hcheck)).
+Qed.
+
 Theorem rebuild_repr_fixed_refines_observably :
   rebuild_repr_fixed_refines_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
     Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hrepr Hcheck.
+  exact (rebuild_repr_fixed_refines_observably_local flag is_local u e T
+           cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hany Hrk Hwf
+           Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hrepr Hcheck).
+Qed.
+
+Theorem rebuild_repr_fixed_tail_refines_observably_local :
+  rebuild_repr_fixed_tail_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
+    Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hrepr Hcheck.
   exact (refines_observably_refines _ _ _
-           (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-              flag is_local u e T cannot_change pdc Hslots Hproj Hfrag Hany
-              Hrk Hwf Hone Hclosed Hexact Hccc Hwid)
-           (rebuild_repr_fixed_refines_cc flag is_local u e T cannot_change
-              dominated to_unbox tcr pdc Hslots Hfrag Hclosed Hrepr Hcheck)).
+           (FlambdaReaperCallingConventionsProofs
+            .rebuild_cc_refines_observably_local
+              flag is_local u e T cannot_change pdc Hslots Hfrag Hany
+              Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_repr_fixed_tail_refines_cc flag is_local u e T
+              cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hclosed
+              Hrepr Hcheck)).
 Qed.
 
 Theorem rebuild_repr_fixed_tail_refines_observably :
@@ -2670,13 +2701,12 @@ Theorem rebuild_repr_fixed_tail_refines_observably :
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
     Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hrepr Hcheck.
-  exact (refines_observably_refines _ _ _
-           (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-              flag is_local u e T cannot_change pdc Hslots Hproj Hfrag Hany
-              Hrk Hwf Hone Hclosed Hexact Hccc Hwid)
-           (rebuild_repr_fixed_tail_refines_cc flag is_local u e T
-              cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hclosed
-              Hrepr Hcheck)).
+  exact (rebuild_repr_fixed_tail_refines_observably_local flag is_local u e
+           T cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hany Hrk
+           Hwf Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hrepr Hcheck).
 Qed.
 
 (* ======================================================================== *)

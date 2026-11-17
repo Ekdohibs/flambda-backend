@@ -36,10 +36,11 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperRebuildSpec FlambdaReaperCallingConventions
   FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesSpec FlambdaReaperLeast
-  FlambdaReaperLeastSpec.
+  FlambdaReaperLeastSpec FlambdaReaperLocalFields
+  FlambdaReaperLocalFieldsSpec.
 From OxCamlFlambda2 Require FlambdaMapProofs FlambdaReaperFlowProofs
   FlambdaReaperRebuildProofs FlambdaReaperCallingConventionsProofs
-  FlambdaReaperUnboxingRefinesProofs.
+  FlambdaReaperUnboxingRefinesProofs FlambdaReaperLocalFieldsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -3672,20 +3673,945 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* The rules with the fix of local fields                                   *)
+(* ======================================================================== *)
+
+(* Each rule of [derivable_local] is a field of [closed] or the rule of
+   the fix, so a solution closed under the rules with the fix has every
+   tuple that they derive with its own guards. *)
+Lemma derivable_local_holds (is_local : field -> bool) (G : graph)
+    (S : solution) (a : atom) :
+  closed_local is_local G S -> derivable_local is_local G S a ->
+  holds S a = true.
+Proof.
+  intros [Hclosed Hlrs] Hd. induction Hd; cbn [holds] in *;
+  [> eapply (alias_input _ _ _ Hclosed)
+  | eapply (alias_propagate _ _ _ Hclosed)
+  | eapply (alias_if_any_source _ _ _ Hclosed)
+  | eapply (alias_constructor_usage _ _ _ Hclosed)
+  | eapply (alias_local_constructor_usage _ _ _ Hclosed)
+  | eapply (alias_parameter_usage _ _ _ Hclosed)
+  | eapply (alias_accessor_source _ _ _ Hclosed)
+  | eapply (alias_local_accessor_source _ _ _ Hclosed)
+  | eapply (alias_escaping_reading _ _ _ Hclosed)
+  | eapply (alias_argument_source _ _ _ Hclosed)
+  | eapply (has_usage_any _ _ _ Hclosed)
+  | eapply (has_usage_alias _ _ _ Hclosed)
+  | eapply (has_usage_accessor _ _ _ Hclosed)
+  | eapply (has_usage_argument _ _ _ Hclosed)
+  | eapply (has_source_any _ _ _ Hclosed)
+  | eapply (has_source_alias _ _ _ Hclosed)
+  | eapply (has_source_constructor _ _ _ Hclosed)
+  | eapply (has_source_function_slot _ _ _ Hclosed)
+  | eapply (has_source_parameter _ _ _ Hclosed)
+  | eapply (any_usage_use _ _ _ Hclosed)
+  | eapply (any_usage_alias _ _ _ Hclosed)
+  | eapply (any_usage_constructor _ _ _ Hclosed)
+  | eapply (any_usage_argument _ _ _ Hclosed)
+  | eapply (any_source_input _ _ _ Hclosed)
+  | eapply (any_source_zero_alloc _ _ _ Hclosed)
+  | eapply (any_source_if_used _ _ _ Hclosed)
+  | eapply (any_source_alias _ _ _ Hclosed)
+  | eapply (any_source_parameter _ _ _ Hclosed)
+  | eapply (any_source_accessor _ _ _ Hclosed)
+  | eapply (any_source_use _ _ _ Hclosed)
+  | eapply (any_usage_input _ _ _ Hclosed)
+  | eapply (usages_accessor _ _ _ Hclosed)
+  | eapply (usages_argument _ _ _ Hclosed)
+  | eapply (usages_alias _ _ _ Hclosed)
+  | eapply (sources_constructor _ _ _ Hclosed)
+  | eapply (sources_parameter _ _ _ Hclosed)
+  | eapply (sources_alias _ _ _ Hclosed)
+  | eapply (escaping_field_rule _ _ _ Hclosed)
+  | eapply (reading_field_rule _ _ _ Hclosed)
+  | eapply Hlrs
+  | eapply (field_used_any_usage _ _ _ Hclosed)
+  | eapply (field_used_usage _ _ _ Hclosed)
+  | eapply (field_used_reading _ _ _ Hclosed)
+  | eapply (field_used_local_source _ _ _ Hclosed) ]; eassumption.
+Qed.
+
+Lemma derivable_local_mono (is_local : field -> bool) (G : graph)
+    (S S' : solution) (a : atom) :
+  (∀ x, s_any_usage S' x = true -> s_any_usage S x = true) ->
+  (∀ x, s_any_source S' x = true -> s_any_source S x = true) ->
+  derivable_local is_local G S a -> derivable_local is_local G S' a.
+Proof.
+  intros Hu Hs Hd.
+  assert (Gu : ∀ x, s_any_usage S x = false -> s_any_usage S' x = false).
+  { intros x Hx. destruct (s_any_usage S' x) eqn:E; [ | reflexivity ].
+    rewrite (Hu x E) in Hx. discriminate. }
+  assert (Gs : ∀ x, s_any_source S x = false -> s_any_source S' x = false).
+  { intros x Hx. destruct (s_any_source S' x) eqn:E; [ | reflexivity ].
+    rewrite (Hs x E) in Hx. discriminate. }
+  induction Hd;
+  [> eapply byl_alias_input
+  | eapply byl_alias_propagate
+  | eapply byl_alias_if_any_source
+  | eapply byl_alias_constructor_usage
+  | eapply byl_alias_local_constructor_usage
+  | eapply byl_alias_parameter_usage
+  | eapply byl_alias_accessor_source
+  | eapply byl_alias_local_accessor_source
+  | eapply byl_alias_escaping_reading
+  | eapply byl_alias_argument_source
+  | eapply byl_has_usage_any
+  | eapply byl_has_usage_alias
+  | eapply byl_has_usage_accessor
+  | eapply byl_has_usage_argument
+  | eapply byl_has_source_any
+  | eapply byl_has_source_alias
+  | eapply byl_has_source_constructor
+  | eapply byl_has_source_function_slot
+  | eapply byl_has_source_parameter
+  | eapply byl_any_usage_use
+  | eapply byl_any_usage_alias
+  | eapply byl_any_usage_constructor
+  | eapply byl_any_usage_argument
+  | eapply byl_any_source_input
+  | eapply byl_any_source_zero_alloc
+  | eapply byl_any_source_if_used
+  | eapply byl_any_source_alias
+  | eapply byl_any_source_parameter
+  | eapply byl_any_source_accessor
+  | eapply byl_any_source_use
+  | eapply byl_any_usage_input
+  | eapply byl_usages_accessor
+  | eapply byl_usages_argument
+  | eapply byl_usages_alias
+  | eapply byl_sources_constructor
+  | eapply byl_sources_parameter
+  | eapply byl_sources_alias
+  | eapply byl_escaping_field_rule
+  | eapply byl_reading_field_rule
+  | eapply byl_has_usage_local_reading
+  | eapply byl_field_used_any_usage
+  | eapply byl_field_used_usage
+  | eapply byl_field_used_reading
+  | eapply byl_field_used_local_source ]; eauto.
+Qed.
+
+Section LeastLocal.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Hypothesis Hleast : least_solution_local is_local F T.
+
+Abbreviation G := (graph_of_facts F).
+Abbreviation S := (solution_of_tables T).
+Abbreviation D := (derivable_local is_local G S).
+
+Lemma least_local_checks :
+  check_closed is_local F T = true
+  ∧ check_local_reads_used is_local F T = true.
+Proof. apply andb_true_iff. exact (proj1 Hleast). Qed.
+
+Lemma least_local_closed_local : closed_local is_local G S.
+Proof.
+  exact (FlambdaReaperLocalFieldsProofs.check_closed_local_sound is_local F
+           T (proj1 Hleast)).
+Qed.
+
+Lemma least_local_closed : closed is_local G S.
+Proof. exact (proj1 least_local_closed_local). Qed.
+
+Lemma least_local_holds (a : atom) : D a -> holds S a = true.
+Proof.
+  exact (derivable_local_holds is_local G S a least_local_closed_local).
+Qed.
+
+Lemma least_local_derivable (a : atom) : holds S a = true -> D a.
+Proof. exact (proj2 Hleast a). Qed.
+
+End LeastLocal.
+
+(* The rule of the fix concludes only [has_usage]: a tuple of
+   [field_of_constructor_is_used] is derived by one of the four rules of
+   the post-processing, as in [least_field_used_exact]. *)
+Theorem least_field_used_exact_local :
+  least_field_used_exact_local_statement.
+Proof.
+  intros is_local F T Hleast.
+  unfold check_field_used_exact. apply forallb_forall.
+  intros [base relation] Hin.
+  pose proof (least_local_derivable is_local F T Hleast
+                (Atom_field_used base relation)) as Hd.
+  unfold_rels. specialize (Hd (proj2 (mem_node_field_In _ _ _) Hin)).
+  inversion Hd; subst; unfold_rels;
+  repeat match goal with
+  | H : derivable_local _ _ _ _ |- _ =>
+      apply (least_local_holds is_local F T Hleast) in H; unfold_rels
+  end;
+  add_memberships; rewrite !orb_true_iff.
+  - left; left; left. unfold derived_by_field_used_any_usage.
+    solve_existsb.
+  - left; left; right. unfold derived_by_field_used_usage.
+    solve_existsb.
+  - left; right. unfold derived_by_field_used_reading. solve_existsb.
+  - right. unfold derived_by_field_used_local_source. solve_existsb.
+Qed.
+
+(* What a node only read into gets of a least solution of the rules with
+   the fix, as in the section [Read_only]: the inversions are of tuples
+   that the rule of the fix does not conclude. *)
+Section Read_only_local.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Hypothesis Hleast : least_solution_local is_local F T.
+Variable x : node.
+Variable f : field.
+Variable base : node.
+Variable if_any_source : bool.
+Hypothesis Hro : read_only F x f base if_any_source.
+Hypothesis Hnot_local : is_local f = false.
+
+Abbreviation G := (graph_of_facts F).
+Abbreviation S := (solution_of_tables T).
+Abbreviation D := (derivable_local is_local G S).
+
+Lemma alias_into_local (from : node) :
+  D (Atom_alias x from) ->
+  (∃ b : node,
+     (b, f, from) ∈ f_constructor F ∧ D (Atom_usages b base)
+     ∧ s_any_usage S b = false)
+  ∨ (∃ bs : node,
+       D (Atom_sources base bs) ∧ s_any_source S base = false
+       ∧ (bs, f, from) ∈ f_constructor F)
+  ∨ (if_any_source = true ∧ D (Atom_any_source base)).
+Proof.
+  intros Hd. inversion Hd; subst; unfold_rels.
+  - exfalso. eapply (ro_alias _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_propagate _ _ _ _ _ Hro). eassumption.
+  - match goal with
+    | H : (_, x, _) ∈ f_alias_if_any_source F |- _ =>
+        destruct (ro_if_any_source _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    right; right. auto.
+  - match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    left. eexists. eauto.
+  - match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    congruence.
+  - exfalso. eapply (ro_parameter_to _ _ _ _ _ Hro). eassumption.
+  - match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    right; left. eexists. eauto.
+  - match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    congruence.
+  - match goal with
+    | H : derivable_local _ _ _ (Atom_reading_field _ _) |- _ =>
+        inversion H; subst; unfold_rels
+    end.
+    match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    congruence.
+  - exfalso. eapply (ro_parameter_to _ _ _ _ _ Hro). eassumption.
+Qed.
+
+Lemma any_source_into_local :
+  D (Atom_any_source x) ->
+  (∃ from : node, D (Atom_alias x from) ∧ D (Atom_any_source from))
+  ∨ D (Atom_any_source base).
+Proof.
+  intros Hd. inversion Hd; subst; unfold_rels.
+  - exfalso. eapply (ro_any_source _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_zero_alloc _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_if_used _ _ _ _ _ Hro). eassumption.
+  - left. eauto.
+  - exfalso. eapply (ro_parameter_to _ _ _ _ _ Hro). eassumption.
+  - match goal with
+    | H : (x, _, _) ∈ f_accessor F |- _ =>
+        destruct (ro_accessor _ _ _ _ _ Hro _ _ H) as [-> ->]
+    end.
+    right. assumption.
+  - exfalso. eapply (ro_use _ _ _ _ _ Hro). eassumption.
+Qed.
+
+Lemma sources_into_local (s : node) :
+  D (Atom_sources x s) ->
+  ∃ from : node,
+    D (Atom_sources from s) ∧ s_any_source S from = false
+    ∧ D (Atom_alias x from) ∧ s_any_source S x = false.
+Proof.
+  intros Hd. inversion Hd; subst; unfold_rels.
+  - exfalso. eapply (ro_constructor _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_parameter_base _ _ _ _ _ Hro). eassumption.
+  - eexists. eauto.
+Qed.
+
+Lemma has_source_into_local :
+  D (Atom_has_source x) ->
+  D (Atom_any_source x)
+  ∨ ∃ from : node, D (Atom_alias x from) ∧ D (Atom_has_source from).
+Proof.
+  intros Hd. inversion Hd; subst; unfold_rels.
+  - left. assumption.
+  - right. eauto.
+  - exfalso. eapply (ro_constructor _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_constructor _ _ _ _ _ Hro). eassumption.
+  - exfalso. eapply (ro_parameter_base _ _ _ _ _ Hro). eassumption.
+Qed.
+
+End Read_only_local.
+
+(* [check_apply_widgets], as [least_apply_widgets]. *)
+Lemma read_of_local (is_local : field -> bool) (F : facts) (T : tables)
+    (a n y from : node) :
+  least_solution_local is_local F T ->
+  is_local (Field_call_witness Known_arity_code_pointer) = false ->
+  read_only F a (Field_call_witness Known_arity_code_pointer) n true ->
+  (y, Field_call_witness Known_arity_code_pointer, n) ∈ f_accessor F ->
+  mem_pair a from (t_alias T) = true ->
+  mem_node n (t_any_source T) = true ∨ mem_pair y from (t_alias T) = true.
+Proof.
+  intros Hleast Hknown Hro Hacc Hal.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  apply (least_local_derivable is_local F T Hleast (Atom_alias a from)) in Hal.
+  destruct (alias_into_local is_local F T a _ n true Hro Hknown from Hal)
+    as [(b & Hb & Hu & Hg) | [(bs & Hs & Hg & Hb) | [_ Has]]].
+  - right. apply (least_local_holds is_local F T Hleast) in Hu. unfold_rels.
+    exact (alias_constructor_usage _ _ _ Hc b n _ y from Hb Hu Hg Hacc).
+  - right. apply (least_local_holds is_local F T Hleast) in Hs. unfold_rels.
+    exact (alias_accessor_source _ _ _ Hc n bs _ y from Hacc Hs Hg Hb).
+  - left. exact (least_local_holds is_local F T Hleast _ Has).
+Qed.
+
+Lemma widget_any_source_local (is_local : field -> bool) (F : facts)
+    (T : tables) (a a' n : node) :
+  least_solution_local is_local F T ->
+  is_local (Field_call_witness Known_arity_code_pointer) = false ->
+  read_only F a (Field_call_witness Known_arity_code_pointer) n true ->
+  (a', Field_call_witness Known_arity_code_pointer, n) ∈ f_accessor F ->
+  mem_node a (t_any_source T) = true -> mem_node a' (t_any_source T) = true.
+Proof.
+  intros Hleast Hknown Hro Hacc' Has.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  apply (least_local_derivable is_local F T Hleast (Atom_any_source a)) in Has.
+  destruct (any_source_into_local is_local F T a _ n true Hro Has)
+    as [(from & Hal & Hfrom) | Hn].
+  - apply (least_local_holds is_local F T Hleast) in Hal, Hfrom.
+    destruct (read_of_local is_local F T a n a' from Hleast Hknown Hro Hacc'
+                Hal)
+      as [Hn | Hal'].
+    + exact (any_source_accessor _ _ _ Hc n _ a' Hn Hacc' Hknown).
+    + exact (any_source_alias _ _ _ Hc from a' Hal' Hfrom).
+  - apply (least_local_holds is_local F T Hleast) in Hn. unfold_rels.
+    exact (any_source_accessor _ _ _ Hc n _ a' Hn Hacc' Hknown).
+Qed.
+
+Lemma widget_sources_local (is_local : field -> bool) (F : facts)
+    (T : tables) (a a' n y : node) :
+  least_solution_local is_local F T ->
+  is_local (Field_call_witness Known_arity_code_pointer) = false ->
+  read_only F a (Field_call_witness Known_arity_code_pointer) n true ->
+  read_only F a' (Field_call_witness Known_arity_code_pointer) n true ->
+  (a, Field_call_witness Known_arity_code_pointer, n) ∈ f_accessor F ->
+  (a', Field_call_witness Known_arity_code_pointer, n) ∈ f_accessor F ->
+  mem_pair a y (t_sources T) = true -> mem_pair a' y (t_sources T) = true.
+Proof.
+  intros Hleast Hknown Hro Hro' Hacc Hacc' Hs.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  apply (least_local_derivable is_local F T Hleast (Atom_sources a y)) in Hs.
+  destruct (sources_into_local is_local F T a _ n true Hro y Hs)
+    as (from & Hfrom & Hgf & Hal & Hga).
+  apply (least_local_holds is_local F T Hleast) in Hfrom, Hal. unfold_rels.
+  destruct (read_of_local is_local F T a n a' from Hleast Hknown Hro Hacc' Hal)
+    as [Hn | Hal'].
+  - pose proof (any_source_accessor _ _ _ Hc n _ a Hn Hacc Hknown).
+    unfold_rels. congruence.
+  - assert (Hga' : mem_node a' (t_any_source T) = false).
+    { destruct (mem_node a' (t_any_source T)) eqn:E; [ | reflexivity ].
+      rewrite (widget_any_source_local is_local F T a' a n Hleast Hknown Hro'
+                 Hacc E) in Hga.
+      discriminate. }
+    exact (sources_alias _ _ _ Hc from a' y Hfrom Hgf Hal' Hga').
+Qed.
+
+Theorem least_apply_widgets_local : least_apply_widgets_local_statement.
+Proof.
+  intros is_local F T Hslots Hleast Hcheck.
+  assert (Hknown :
+            is_local (Field_call_witness Known_arity_code_pointer) = false).
+  { destruct (is_local (Field_call_witness Known_arity_code_pointer))
+      eqn:E; [ | reflexivity ].
+    destruct (Hslots _ E) as [[w Hw] | [fs Hfs]]; discriminate. }
+  unfold check_widgets_read_only in Hcheck.
+  rewrite forallb_forall in Hcheck.
+  unfold check_apply_widgets. apply forallb_forall.
+  intros [[a f] n] Hacc. apply forallb_forall.
+  intros [[a' f'] n'] Hacc'. cbn beta iota.
+  destruct (field_eqb f (Field_call_witness Known_arity_code_pointer)
+            && field_eqb f' f && node_eqb n' n) eqn:E; [ | reflexivity ].
+  apply andb_true_iff in E as [E Hn]. apply andb_true_iff in E as [Hf Hf'].
+  apply field_eqb_eq in Hf, Hf'. apply node_eqb_eq in Hn. subst.
+  pose proof (Hcheck _ Hacc) as Hro. pose proof (Hcheck _ Hacc') as Hro'.
+  cbn beta iota in Hro, Hro'. rewrite field_eqb_refl in Hro, Hro'.
+  cbn in Hro, Hro'.
+  apply only_read_into_read_only in Hro, Hro'.
+  cbn [negb orb]. apply andb_true_iff. split.
+  - apply Bool.eqb_true_iff.
+    destruct (mem_node a (t_any_source T)) eqn:Ea,
+      (mem_node a' (t_any_source T)) eqn:Ea'; try reflexivity.
+    + rewrite (widget_any_source_local is_local F T a a' n Hleast Hknown Hro
+                 Hacc' Ea) in Ea'.
+      discriminate.
+    + rewrite (widget_any_source_local is_local F T a' a n Hleast Hknown Hro'
+                 Hacc Ea') in Ea.
+      discriminate.
+  - apply forallb_forall. intros [x y] Hin. cbn beta iota.
+    destruct (node_eqb x a) eqn:Ex; [ | reflexivity ].
+    apply node_eqb_eq in Ex. subst x. cbn.
+    exact (widget_sources_local is_local F T a a' n y Hleast Hknown Hro Hro'
+             Hacc Hacc' (proj2 (mem_pair_In _ _ _) Hin)).
+Qed.
+
+(* [check_unboxed_reads], as [least_unboxed_reads]: the inductions are
+   on derivations, the rule of the fix a case of no interest. *)
+Section Flow_local.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Hypothesis Hleast : least_solution_local is_local F T.
+
+Abbreviation G := (graph_of_facts F).
+Abbreviation S := (solution_of_tables T).
+Abbreviation D := (derivable_local is_local G S).
+
+Lemma has_source_allocation_local (n : node) :
+  D (Atom_has_source n) ->
+  mem_node n (t_any_source T) = true
+  ∨ ∃ s : node,
+      mem_pair n s (t_sources T) = true ∧ mem_node s (t_has_source T) = true.
+Proof.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  set (P := fun a : atom =>
+         match a with
+         | Atom_has_source n =>
+           mem_node n (t_any_source T) = true
+           ∨ ∃ s : node,
+               mem_pair n s (t_sources T) = true
+               ∧ mem_node s (t_has_source T) = true
+         | _ => True
+         end).
+  intros Hd. change (P (Atom_has_source n)).
+  induction Hd; cbn [P] in *; trivial.
+  - apply (least_local_holds is_local F T Hleast) in Hd. left. exact Hd.
+  - (* along an alias *)
+    apply (least_local_holds is_local F T Hleast) in Hd2. unfold_rels.
+    destruct (mem_node from (t_any_source T)) eqn:Ef.
+    { left. exact (any_source_alias _ _ _ Hc from to_ Hd2 Ef). }
+    destruct (mem_node to_ (t_any_source T)) eqn:Et; [ left; reflexivity | ].
+    destruct IHHd1 as [Hany | (s & Hs & Hhs)]; [ congruence | ].
+    right. exists s. split; [ | exact Hhs ].
+    exact (sources_alias _ _ _ Hc from to_ s Hs Ef Hd2 Et).
+  - (* a constructor: its own source *)
+    destruct (mem_node base (t_any_source T)) eqn:Eb; [ left; reflexivity | ].
+    right. exists base. split.
+    + exact (sources_constructor _ _ _ Hc from relation base H Eb).
+    + apply (least_local_holds is_local F T Hleast) in Hd. unfold_rels.
+      exact (has_source_constructor _ _ _ Hc from relation base Hd H).
+  - destruct (mem_node base (t_any_source T)) eqn:Eb; [ left; reflexivity | ].
+    right. exists base. split.
+    + exact (sources_constructor _ _ _ Hc from relation base H Eb).
+    + exact (has_source_function_slot _ _ _ Hc from relation base H H0).
+  - destruct (mem_node base (t_any_source T)) eqn:Eb; [ left; reflexivity | ].
+    right. exists base. split.
+    + exact (sources_parameter _ _ _ Hc to_ relation base H Eb).
+    + apply (least_local_holds is_local F T Hleast) in Hd. unfold_rels.
+      exact (has_source_parameter _ _ _ Hc to_ relation base Hd H).
+Qed.
+
+Lemma sources_any_usage_local (y s : node) :
+  D (Atom_sources y s) ->
+  mem_node y (t_any_usage T) = true -> mem_node s (t_any_usage T) = true.
+Proof.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  set (P := fun a : atom =>
+         match a with
+         | Atom_sources y s =>
+           mem_node y (t_any_usage T) = true ->
+           mem_node s (t_any_usage T) = true
+         | _ => True
+         end).
+  intros Hd. change (P (Atom_sources y s)).
+  induction Hd; cbn [P] in *; trivial.
+  intros Hto. apply IHHd1.
+  apply (least_local_holds is_local F T Hleast) in Hd2. unfold_rels.
+  exact (any_usage_alias _ _ _ Hc to_ from Hto Hd2).
+Qed.
+
+Lemma usages_flow_local (b u : node) :
+  D (Atom_usages b u) ->
+  (mem_node b (t_any_source T) = true -> mem_node u (t_any_source T) = true)
+  ∧ ∀ s : node,
+      mem_pair b s (t_sources T) = true ->
+      mem_node u (t_any_source T) = true ∨ mem_pair u s (t_sources T) = true.
+Proof.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  set (P := fun a : atom =>
+         match a with
+         | Atom_usages b u =>
+           (mem_node b (t_any_source T) = true ->
+            mem_node u (t_any_source T) = true)
+           ∧ ∀ s : node,
+               mem_pair b s (t_sources T) = true ->
+               mem_node u (t_any_source T) = true
+               ∨ mem_pair u s (t_sources T) = true
+         | _ => True
+         end).
+  intros Hd. change (P (Atom_usages b u)).
+  induction Hd; cbn [P] in *; trivial.
+  - split; [ exact (fun H => H) | intros s Hs; right; exact Hs ].
+  - split; [ exact (fun H => H) | intros s Hs; right; exact Hs ].
+  - destruct IHHd1 as [IHany IHsrc].
+    apply (least_local_holds is_local F T Hleast) in Hd2. unfold_rels.
+    assert (Hany : mem_node from (t_any_source T) = true ->
+                   mem_node usage (t_any_source T) = true).
+    { intros Hf. apply IHany.
+      exact (any_source_alias _ _ _ Hc from to_ Hd2 Hf). }
+    split; [ exact Hany | ].
+    intros s Hs.
+    destruct (mem_node from (t_any_source T)) eqn:Ef;
+      [ left; exact (Hany eq_refl) | ].
+    destruct (mem_node to_ (t_any_source T)) eqn:Et;
+      [ left; exact (IHany eq_refl) | ].
+    apply IHsrc. exact (sources_alias _ _ _ Hc from to_ s Hs Ef Hd2 Et).
+Qed.
+
+End Flow_local.
+
+Theorem least_unboxed_reads_local : least_unboxed_reads_local_statement.
+Proof.
+  intros is_local F T cannot_change max_unbox_size lambda_lifting Hleast
+    Hcheck.
+  pose proof (least_local_closed is_local F T Hleast) as Hc.
+  set (to_unbox := derive_to_unbox is_local F T cannot_change
+                     max_unbox_size lambda_lifting) in *.
+  unfold check_reads_read_only in Hcheck. rewrite forallb_forall in Hcheck.
+  unfold check_unboxed_reads. apply forallb_forall.
+  intros [[x f] y] Hacc. cbn beta iota.
+  destruct (mem_node x (t_has_source T) && mem_node x (t_has_usage T)
+            && negb (has_to_be_unboxed (derive_dominated T) to_unbox x))
+    eqn:Hx; [ | reflexivity ].
+  apply andb_true_iff in Hx as [Hx _]. apply andb_true_iff in Hx as [Hhs _].
+  cbn [negb orb]. apply forallb_forall. intros [a y'] Hd. cbn beta iota.
+  destruct (node_eqb y y' && mem_node a to_unbox) eqn:Ha;
+    [ | reflexivity ].
+  apply andb_true_iff in Ha as [Hy Ha]. apply node_eqb_eq in Hy. subst y'.
+  destruct (dominated_spec T a y Hd) as (Hya & Hha & Hnoany & Huniq).
+  (* The read of [y] is only read into. *)
+  assert (Hunboxed : has_to_be_unboxed (derive_dominated T) to_unbox y
+                     = true).
+  { unfold has_to_be_unboxed. apply existsb_exists. exists (a, y).
+    split; [ exact Hd | ]. cbn beta iota. rewrite node_eqb_refl, Ha.
+    reflexivity. }
+  pose proof (Hcheck _ Hacc) as Hro. cbn beta iota in Hro.
+  rewrite Hunboxed in Hro. cbn [negb orb] in Hro.
+  apply andb_true_iff in Hro as [Hnl Hro]. apply negb_true_iff in Hnl.
+  apply only_read_into_read_only in Hro.
+  apply andb_true_iff. split.
+  - (* [y] has a source [a] that would have [any_usage] *)
+    apply negb_true_iff.
+    destruct (mem_node y (t_any_usage T)) eqn:Hyu; [ | reflexivity ].
+    exfalso.
+    apply (least_local_derivable is_local F T Hleast (Atom_sources y a)) in Hya.
+    pose proof (sources_any_usage_local is_local F T Hleast y a Hya Hyu) as Hau.
+    rewrite (to_unbox_no_any_usage is_local F T cannot_change
+               max_unbox_size lambda_lifting a Ha) in Hau.
+    discriminate.
+  - (* [x] has its source from the field [f] of [a] *)
+    apply (least_local_derivable is_local F T Hleast (Atom_has_source x))
+      in Hhs.
+    assert (Hal : ∃ from : node,
+                    derivable_local is_local (graph_of_facts F)
+                      (solution_of_tables T) (Atom_alias x from)
+                    ∧ mem_node from (t_has_source T) = true).
+    { destruct (has_source_into_local is_local F T x f y false Hro Hhs)
+        as [Hany | (from & Hal & Hfrom)].
+      - destruct (any_source_into_local is_local F T x f y false Hro Hany)
+          as [(from & Hal & Hfrom) | Hyany].
+        + exists from. split; [ exact Hal | ].
+          apply (least_local_holds is_local F T Hleast) in Hfrom. unfold_rels.
+          exact (has_source_any _ _ _ Hc from Hfrom).
+        + apply (least_local_holds is_local F T Hleast) in Hyany. unfold_rels.
+          congruence.
+      - exists from. split; [ exact Hal | ].
+        exact (least_local_holds is_local F T Hleast _ Hfrom). }
+    destruct Hal as (from & Hal & Hfrom).
+    assert (Hcons : (a, f, from) ∈ f_constructor F).
+    { destruct (alias_into_local is_local F T x f y false Hro Hnl from Hal)
+        as [(b & Hb & Hu & Hg) | [(bs & Hs & Hg & Hb) | [Habs _]]];
+        [ | | discriminate ].
+      - (* [b] flows to [y]: a source of [y] with a source *)
+        apply (least_local_holds is_local F T Hleast) in Hu as Hu'.
+        destruct (usages_flow_local is_local F T Hleast b y Hu) as [Hfa Hfs].
+        assert (Hbs : mem_node b (t_any_source T) = false).
+        { destruct (mem_node b (t_any_source T)) eqn:E; [ | reflexivity ].
+          rewrite (Hfa eq_refl) in Hnoany. discriminate. }
+        pose proof (sources_constructor _ _ _ Hc from f b Hb Hbs) as Hbb.
+        unfold_rels.
+        destruct (Hfs b Hbb) as [Hyany | Hyb]; [ congruence | ].
+        rewrite (Huniq b Hyb
+                   (has_source_constructor _ _ _ Hc from f b Hfrom Hb))
+          in Hb.
+        exact Hb.
+      - (* [bs] is a source of [y] with a source *)
+        apply (least_local_holds is_local F T Hleast) in Hs. unfold_rels.
+        rewrite (Huniq bs Hs
+                   (has_source_constructor _ _ _ Hc from f bs Hfrom Hb))
+          in Hb.
+        exact Hb. }
+    apply (single_field_source_found F T a from f Hcons).
+    apply (has_source_allocation_local is_local F T Hleast from).
+    exact (least_local_derivable is_local F T Hleast (Atom_has_source from)
+             Hfrom).
+Qed.
+
+(* A step with the fix adds only what the rules with the fix derive, as
+   [step_derivable]: the rule of the fix is among them. *)
+Ltac derive_local_with Hall :=
+  first
+    [ eapply byl_alias_input; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_propagate; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_if_any_source; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_constructor_usage; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_local_constructor_usage;
+      solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_parameter_usage; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_accessor_source; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_local_accessor_source;
+      solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_escaping_reading; solve [ repeat solve_premise Hall ]
+    | eapply byl_alias_argument_source; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_usage_any; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_usage_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_usage_accessor; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_usage_argument; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_source_any; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_source_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_source_constructor; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_source_function_slot; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_source_parameter; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_usage_use; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_usage_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_usage_constructor; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_usage_argument; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_input; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_zero_alloc; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_if_used; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_parameter; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_accessor; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_source_use; solve [ repeat solve_premise Hall ]
+    | eapply byl_any_usage_input; solve [ repeat solve_premise Hall ]
+    | eapply byl_usages_accessor; solve [ repeat solve_premise Hall ]
+    | eapply byl_usages_argument; solve [ repeat solve_premise Hall ]
+    | eapply byl_usages_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_sources_constructor; solve [ repeat solve_premise Hall ]
+    | eapply byl_sources_parameter; solve [ repeat solve_premise Hall ]
+    | eapply byl_sources_alias; solve [ repeat solve_premise Hall ]
+    | eapply byl_escaping_field_rule; solve [ repeat solve_premise Hall ]
+    | eapply byl_reading_field_rule; solve [ repeat solve_premise Hall ]
+    | eapply byl_has_usage_local_reading; solve [ repeat solve_premise Hall ]
+    | eapply byl_field_used_any_usage; solve [ repeat solve_premise Hall ]
+    | eapply byl_field_used_usage; solve [ repeat solve_premise Hall ]
+    | eapply byl_field_used_reading; solve [ repeat solve_premise Hall ]
+    | eapply byl_field_used_local_source; solve [ repeat solve_premise Hall ] ].
+
+Lemma step_local_derivable (is_local : field -> bool) (F : facts)
+    (Tg T : tables) :
+  (∀ a : atom,
+     holds (solution_of_tables T) a = true ->
+     derivable_local is_local (graph_of_facts F) (solution_of_tables Tg) a) ->
+  ∀ a : atom,
+    holds (solution_of_tables (step_local is_local F Tg T)) a = true ->
+    derivable_local is_local (graph_of_facts F) (solution_of_tables Tg) a.
+Proof.
+  intros Hall a Ha.
+  destruct a; unfold_rels; cbn [step_local step t_alias t_any_usage
+    t_any_source t_has_usage t_has_source t_usages t_sources
+    t_reading_field t_escaping_field t_field_used] in Ha;
+  first
+    [ apply mem_pair_In in Ha | apply mem_node_In in Ha
+    | apply mem_field_node_In in Ha | apply mem_node_field_In in Ha ];
+  repeat (apply add_new_in in Ha; destruct Ha as [Ha | Ha]);
+  try solve [ apply Hall; unfold_rels;
+              first
+                [ apply mem_pair_In; exact Ha | apply mem_node_In; exact Ha
+                | apply mem_field_node_In; exact Ha
+                | apply mem_node_field_In; exact Ha ] ];
+  unfold new_alias, new_any_usage, new_any_source, new_has_usage,
+    new_has_source, new_usages, new_sources, new_reading_field,
+    new_escaping_field, new_field_used, new_has_usage_local in Ha;
+  break_in Ha; clean_tests; derive_local_with Hall.
+Qed.
+
+Lemma saturate_local_derivable (is_local : field -> bool) (F : facts)
+    (Tg : tables) (fuel : nat) (T : tables) :
+  (∀ a : atom,
+     holds (solution_of_tables T) a = true ->
+     derivable_local is_local (graph_of_facts F) (solution_of_tables Tg) a) ->
+  ∀ a : atom,
+    holds (solution_of_tables (saturate_local is_local F Tg fuel T)) a
+    = true ->
+    derivable_local is_local (graph_of_facts F) (solution_of_tables Tg) a.
+Proof.
+  revert T. induction fuel as [ | fuel IH]; intros T Hall;
+    cbn [saturate_local]; [ exact Hall | ].
+  destruct (Nat.eqb _ _); [ exact Hall | ].
+  apply IH. apply step_local_derivable. exact Hall.
+Qed.
+
+Lemma empty_tables_derivable_local (is_local : field -> bool) (G : graph)
+    (S : solution) (a : atom) :
+  holds (solution_of_tables empty_tables) a = true ->
+  derivable_local is_local G S a.
+Proof. destruct a; discriminate. Qed.
+
+Lemma alternate_local_some (is_local : field -> bool) (F : facts)
+    (fuel rounds : nat) (Tg T : tables) :
+  alternate_local is_local F fuel rounds Tg = Some T ->
+  ∃ Tg' : tables,
+    T = saturate_local is_local F Tg' fuel empty_tables
+    ∧ check_closed_local is_local F T = true ∧ tops_within T Tg' = true.
+Proof.
+  revert Tg. induction rounds as [ | rounds IH]; intros Tg Halt;
+    cbn [alternate_local] in Halt;
+    (destruct (check_closed_local is_local F
+                 (saturate_local is_local F Tg fuel empty_tables)
+               && tops_within
+                    (saturate_local is_local F Tg fuel empty_tables) Tg)
+       eqn:E;
+     [ injection Halt as <-; apply andb_true_iff in E as [Hc Ht];
+       exists Tg; auto
+     | ]).
+  - discriminate.
+  - exact (IH _ Halt).
+Qed.
+
+(* As [compute_least_sound]. *)
+Theorem compute_least_local_sound : compute_least_local_sound_statement.
+Proof.
+  intros is_local F fuel T Hcomp. unfold compute_least_local in Hcomp.
+  apply alternate_local_some in Hcomp as (Tg & -> & Hclosed & Htops).
+  split; [ exact Hclosed | ].
+  unfold tops_within in Htops.
+  apply andb_true_iff in Htops as [Htu Hts].
+  rewrite forallb_forall in Htu, Hts.
+  intros a Ha.
+  apply (derivable_local_mono is_local (graph_of_facts F)
+           (solution_of_tables Tg)).
+  - intros x Hx. unfold_rels. apply Htu. apply mem_node_In. exact Hx.
+  - intros x Hx. unfold_rels. apply Hts. apply mem_node_In. exact Hx.
+  - apply (saturate_local_derivable is_local F Tg fuel empty_tables);
+      [ intros a' Ha'; exact (empty_tables_derivable_local _ _ _ _ Ha') | ].
+    exact Ha.
+Qed.
+
+Theorem least_local_examples : least_local_examples_statement.
+Proof.
+  split; apply (compute_least_local_sound _ _ 50).
+  - exact (proj1 (proj2 FlambdaReaperLocalFieldsProofs.local_slot_fixed)).
+  - exact (proj1 (proj2 (proj2 (proj2 (proj2
+             FlambdaReaperLocalFieldsProofs.nested_slot))))).
+Qed.
+
+(* The statements of the rebuild for a least solution of the rules with
+   the fix: the [_local] statements, whose checks it passes. *)
+Theorem least_rebuild_refines_observably_local :
+  least_rebuild_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls Hslots Hfrag Hstatic
+    Hkinded Hwf Hexits Hleast.
+  destruct (least_local_checks is_local _ T Hleast) as [Hclosed Hlrs].
+  exact (FlambdaReaperRebuildProofs.rebuild_refines_observably_local flag
+           is_local u e T preserve_direct_calls Hslots Hfrag Hstatic Hkinded
+           Hwf Hexits Hclosed Hlrs
+           (least_field_used_exact_local _ _ _ Hleast)).
+Qed.
+
+Theorem least_rebuild_cc_refines_observably_local :
+  least_rebuild_cc_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls Hslots Hfrag Hstatic
+    Hkinded Hwf Hexits Hleast Hwidgets.
+  destruct (least_local_checks is_local _ T Hleast) as [Hclosed Hlrs].
+  exact (FlambdaReaperCallingConventionsProofs
+         .rebuild_cc_refines_observably_local flag is_local u e T
+           (derive_cannot_change (traverse_unit flag u e) T)
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           Hclosed Hlrs (least_field_used_exact_local _ _ _ Hleast)
+           (proj1
+              (FlambdaReaperCallingConventionsProofs.derive_cannot_change_least
+                 _ _))
+           (least_apply_widgets_local _ _ _ Hslots Hleast Hwidgets)).
+Qed.
+
+Theorem least_rebuild_unbox_refines_observably_local :
+  least_rebuild_unbox_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T max_unbox_size lambda_lifting
+    preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits Hleast
+    Hunboxing Hreads.
+  destruct (least_local_checks is_local _ T Hleast) as [Hclosed Hlrs].
+  exact (FlambdaReaperUnboxingRefinesProofs
+         .rebuild_unbox_refines_observably_local flag is_local u e T
+           (derive_cannot_change (traverse_unit flag u e) T)
+           (derive_dominated T)
+           (least_to_unbox is_local (traverse_unit flag u e) T max_unbox_size
+              lambda_lifting)
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           Hclosed Hlrs (least_field_used_exact_local _ _ _ Hleast) Hunboxing
+           (least_unboxed_reads_local _ _ _ _ _ _ Hleast Hreads)).
+Qed.
+
+Theorem least_rebuild_cc_auto_refines_observably_local :
+  least_rebuild_cc_auto_refines_observably_local_statement.
+Proof.
+  intros is_local u e T preserve_direct_calls Hslots Hfrag Hstatic Hkinded
+    Hwf Hexits Hleast.
+  exact (least_rebuild_cc_refines_observably_local Auto is_local u e T
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           Hleast (traverse_widgets_read_only u e)).
+Qed.
+
+Theorem least_rebuild_unbox_bound_once_observably_local :
+  least_rebuild_unbox_bound_once_observably_local_statement.
+Proof.
+  intros flag is_local u e T max_unbox_size lambda_lifting
+    preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits Hbound
+    Hleast Hunboxing.
+  apply (least_rebuild_unbox_refines_observably_local flag is_local); auto.
+  exact (bound_once_reads_read_only flag is_local u e T _ Hslots Hbound
+           (proj1 (least_local_checks is_local _ T Hleast)) Hunboxing).
+Qed.
+
+(* The rules before the fix are among those with it. *)
+Lemma derivable_derivable_local (is_local : field -> bool) (G : graph)
+    (S : solution) (a : atom) :
+  derivable is_local G S a -> derivable_local is_local G S a.
+Proof.
+  intros Hd. induction Hd;
+  [> eapply byl_alias_input
+  | eapply byl_alias_propagate
+  | eapply byl_alias_if_any_source
+  | eapply byl_alias_constructor_usage
+  | eapply byl_alias_local_constructor_usage
+  | eapply byl_alias_parameter_usage
+  | eapply byl_alias_accessor_source
+  | eapply byl_alias_local_accessor_source
+  | eapply byl_alias_escaping_reading
+  | eapply byl_alias_argument_source
+  | eapply byl_has_usage_any
+  | eapply byl_has_usage_alias
+  | eapply byl_has_usage_accessor
+  | eapply byl_has_usage_argument
+  | eapply byl_has_source_any
+  | eapply byl_has_source_alias
+  | eapply byl_has_source_constructor
+  | eapply byl_has_source_function_slot
+  | eapply byl_has_source_parameter
+  | eapply byl_any_usage_use
+  | eapply byl_any_usage_alias
+  | eapply byl_any_usage_constructor
+  | eapply byl_any_usage_argument
+  | eapply byl_any_source_input
+  | eapply byl_any_source_zero_alloc
+  | eapply byl_any_source_if_used
+  | eapply byl_any_source_alias
+  | eapply byl_any_source_parameter
+  | eapply byl_any_source_accessor
+  | eapply byl_any_source_use
+  | eapply byl_any_usage_input
+  | eapply byl_usages_accessor
+  | eapply byl_usages_argument
+  | eapply byl_usages_alias
+  | eapply byl_sources_constructor
+  | eapply byl_sources_parameter
+  | eapply byl_sources_alias
+  | eapply byl_escaping_field_rule
+  | eapply byl_reading_field_rule
+  | eapply byl_field_used_any_usage
+  | eapply byl_field_used_usage
+  | eapply byl_field_used_reading
+  | eapply byl_field_used_local_source ]; eauto.
+Qed.
+
+Theorem least_local_of_least : least_local_of_least_statement.
+Proof.
+  intros is_local F T [Hclosed Hder] Hlrs. split.
+  - unfold check_closed_local. rewrite Hclosed, Hlrs. reflexivity.
+  - intros a Ha. exact (derivable_derivable_local _ _ _ _ (Hder a Ha)).
+Qed.
+
+(* With the premise of the statements before the fix, a least solution
+   of the rules before the fix is one of the rules with it. *)
+Lemma least_local_old_premise (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr)
+    (T : tables) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false)
+  ∨ FlambdaReaperFlowSpec.projection_free e = true ->
+  least_solution is_local (traverse_unit flag u e) T ->
+  least_solution_local is_local (traverse_unit flag u e) T.
+Proof.
+  intros Hslots Hold Hleast.
+  exact (least_local_of_least _ _ _ Hleast
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hold)).
+Qed.
+
+Theorem local_fix_drops_usages : local_fix_drops_usages_statement.
+Proof.
+  cbv zeta.
+  destruct (compute_least
+              FlambdaReaperFlowSpec.LocalSlotCounterexample.is_local
+              DirectReadExample.facts 50)
+    as [T | ] eqn:E; [ | vm_compute in E; discriminate ].
+  destruct (compute_least_local
+              FlambdaReaperFlowSpec.LocalSlotCounterexample.is_local
+              DirectReadExample.facts 50)
+    as [T' | ] eqn:E'; [ | vm_compute in E'; discriminate ].
+  exists T, T'.
+  split; [ exact (compute_least_sound _ _ _ _ E) | ].
+  split; [ exact (compute_least_local_sound _ _ _ _ E') | ].
+  vm_compute in E, E'. injection E as <-. injection E' as <-.
+  repeat split.
+Qed.
+
+(* ======================================================================== *)
 (* The statements of the rebuild for the least solution                     *)
 (* ======================================================================== *)
 
-(* The statements of the rebuild, whose checks of the solution a least
-   solution passes. *)
+(* The statements of the rebuild for a least solution of the rules
+   before the fix: corollaries of the [_local] ones, as such a solution
+   is one of the rules with the fix under the old premise
+   ([least_local_old_premise]). *)
 Theorem least_rebuild_refines_observably :
   least_rebuild_refines_observably_statement.
 Proof.
   intros flag is_local u e T preserve_direct_calls Hslots Hlocal Hfrag
     Hstatic Hkinded Hwf Hexits Hleast.
-  apply (FlambdaReaperRebuildProofs.rebuild_refines_observably flag
-           is_local); auto.
-  - exact (proj1 Hleast).
-  - exact (least_field_used_exact _ _ _ Hleast).
+  exact (least_rebuild_refines_observably_local flag is_local u e T
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           (least_local_old_premise flag is_local u e T Hslots Hlocal
+              Hleast)).
 Qed.
 
 Theorem least_rebuild_cc_refines_observably :
@@ -3693,14 +4619,11 @@ Theorem least_rebuild_cc_refines_observably :
 Proof.
   intros flag is_local u e T preserve_direct_calls Hslots Hlocal Hfrag
     Hstatic Hkinded Hwf Hexits Hleast Hwidgets.
-  apply (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-           flag is_local); auto.
-  - exact (proj1 Hleast).
-  - exact (least_field_used_exact _ _ _ Hleast).
-  - exact (proj1
-             (FlambdaReaperCallingConventionsProofs.derive_cannot_change_least
-                _ _)).
-  - exact (least_apply_widgets _ _ _ Hslots Hleast Hwidgets).
+  exact (least_rebuild_cc_refines_observably_local flag is_local u e T
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           (least_local_old_premise flag is_local u e T Hslots Hlocal
+              Hleast)
+           Hwidgets).
 Qed.
 
 Theorem least_rebuild_unbox_refines_observably :
@@ -3709,11 +4632,12 @@ Proof.
   intros flag is_local u e T max_unbox_size lambda_lifting
     preserve_direct_calls Hslots Hlocal Hfrag Hstatic Hkinded Hwf Hexits
     Hleast Hunboxing Hreads.
-  apply (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_refines_observably
-           flag is_local); auto.
-  - exact (proj1 Hleast).
-  - exact (least_field_used_exact _ _ _ Hleast).
-  - exact (least_unboxed_reads _ _ _ _ _ _ Hleast Hreads).
+  exact (least_rebuild_unbox_refines_observably_local flag is_local u e T
+           max_unbox_size lambda_lifting preserve_direct_calls Hslots Hfrag
+           Hstatic Hkinded Hwf Hexits
+           (least_local_old_premise flag is_local u e T Hslots Hlocal
+              Hleast)
+           Hunboxing Hreads).
 Qed.
 
 (* With [Auto], the traversal passes the check of the graph. *)
@@ -3722,9 +4646,10 @@ Theorem least_rebuild_cc_auto_refines_observably :
 Proof.
   intros is_local u e T preserve_direct_calls Hslots Hlocal Hfrag Hstatic
     Hkinded Hwf Hexits Hleast.
-  exact (least_rebuild_cc_refines_observably Auto is_local u e T
-           preserve_direct_calls Hslots Hlocal Hfrag Hstatic Hkinded Hwf
-           Hexits Hleast (traverse_widgets_read_only u e)).
+  exact (least_rebuild_cc_auto_refines_observably_local is_local u e T
+           preserve_direct_calls Hslots Hfrag Hstatic Hkinded Hwf Hexits
+           (least_local_old_premise Auto is_local u e T Hslots Hlocal
+              Hleast)).
 Qed.
 
 (* ======================================================================== *)
@@ -3813,8 +4738,11 @@ Proof.
   intros flag is_local u e T max_unbox_size lambda_lifting
     preserve_direct_calls Hslots Hlocal Hfrag Hstatic Hkinded Hwf Hexits
     Hbound Hleast Hunboxing.
-  apply (least_rebuild_unbox_refines_observably flag is_local); auto.
-  exact (bound_once_reads_read_only flag is_local u e T _ Hslots Hbound
-           (proj1 Hleast) Hunboxing).
+  exact (least_rebuild_unbox_bound_once_observably_local flag is_local u e
+           T max_unbox_size lambda_lifting preserve_direct_calls Hslots Hfrag
+           Hstatic Hkinded Hwf Hexits Hbound
+           (least_local_old_premise flag is_local u e T Hslots Hlocal
+              Hleast)
+           Hunboxing).
 Qed.
 
