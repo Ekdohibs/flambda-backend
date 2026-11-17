@@ -248,7 +248,19 @@
    keeps of every state it reaches ([state_exact], [run_exact]: no
    expression is run that is not of the unit), and which
    FlambdaReaperClosuresExactProofs.v proves of a unit that binds each
-   variable once. *)
+   variable once.
+
+   Local fields. The invariant of the flow is that of
+   FlambdaReaperFlowProofs.WithLocal, for a premise [slots_read] of the
+   facts of a projection that gives the rule of the fix
+   ([Hslots_read]): [True] and the check of the fix for the statements
+   with local fields ([rebuild_refines_checked_local]), that no field is
+   local before the fix ([rebuild_exit_statics]). A projection of a
+   local field is related through the alias that the fix gives
+   ([rel_read_slot]); the field that a kept projection reads is used,
+   and what it holds has a use, without the fix
+   ([FlambdaReaperFlowProofs.field_used_read_slot],
+   [field_used_hu_slot]). *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -262,9 +274,13 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaNameAbstractionSpec FlambdaNameAbstractionProofs
   FlambdaFreshQuantifierSpec FlambdaRenameApartSpec
   FlambdaReaperRebuild FlambdaReaperRebuildSpec
-  FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec.
-From OxCamlFlambda2 Require FlambdaHeapFreeSpec FlambdaHeapFreeProofs.
+  FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec
+  FlambdaReaperLocalFields FlambdaReaperLocalFieldsSpec.
+From OxCamlFlambda2 Require FlambdaHeapFreeSpec FlambdaHeapFreeProofs
+  FlambdaReaperLocalFieldsProofs.
 Import ListNotations.
+(* The run of the flow for any premise of the facts of a projection. *)
+Import FlambdaReaperFlowProofs.WithLocal.
 
 (* ======================================================================== *)
 (* Simulations in which a step may be answered by none                      *)
@@ -1141,6 +1157,22 @@ Proof.
     exact (alias_accessor_source _ _ _ Hc _ _ _ _ _ Hacc Hsrc Eb Hcons).
 Qed.
 
+(* The same of any field, with the rule of the fix if it is local
+   (FlambdaReaperFlowProofs.flows_read_slot). *)
+Lemma rel_read_slot (a base to_ from : node) (f : field) (v v' : value) :
+  local_reads_used is_local G sol ->
+  g_constructor G a f from ->
+  g_accessor G to_ f base ->
+  may_come_from sol a base ->
+  rel v from v' -> rel v to_ v'.
+Proof.
+  intros Hlrs Hcons Hacc Hmay Hv. destruct (is_local f) eqn:Hl.
+  - apply (rel_alias v to_ from v'); [ | exact Hv ].
+    exact (FlambdaReaperLocalFieldsProofs.local_read_alias is_local G sol a
+             base to_ from f (conj Hc Hlrs) Hl Hcons Hacc Hmay).
+  - exact (rel_read a base to_ from f v v' Hl Hcons Hacc Hmay Hv).
+Qed.
+
 (* At a node with any usage, what the second run has is [sim]. *)
 Lemma rel_au_sim : ∀ (v : value) (n : node) (v' : value),
   au n -> rel v n v' -> sim v v'.
@@ -1209,6 +1241,29 @@ Proof.
       [ congruence | | congruence | congruence ].
     apply (has_usage_alias _ _ _ Hc v from Hhu).
     exact (alias_constructor_usage _ _ _ Hc _ _ _ _ _ Hcons Hus Ea Hacc).
+Qed.
+
+(* The same of a local field. *)
+Lemma field_used_hu_slot (a from : node) (f : field) :
+  s_field_used sol a f = true -> g_constructor G a f from -> hu from.
+Proof.
+  intros Hused Hcons. destruct (is_local f) eqn:Hl;
+    [ | exact (field_used_hu a from f Hl Hused Hcons) ].
+  destruct (Hexact a f Hused)
+    as (from0 & _ & [[_ Hl'] | [(usage & v & Hus & Hacc & Hhu)
+                              | [(x & Hau & Hrf & Hhu)
+                                | (usage & v & Hsrc & _ & _ & Hacc
+                                   & Hhu)]]]).
+  - congruence.
+  - apply (has_usage_alias _ _ _ Hc v from Hhu).
+    exact (alias_local_constructor_usage _ _ _ Hc _ _ _ _ _ Hl Hcons Hus
+             Hacc).
+  - apply (has_usage_alias _ _ _ Hc x from Hhu).
+    exact (alias_escaping_reading _ _ _ Hc f x from
+             (escaping_field_rule _ _ _ Hc a f from Hau Hcons Hl) Hrf).
+  - apply (has_usage_alias _ _ _ Hc v from Hhu).
+    exact (alias_local_accessor_source _ _ _ Hc usage a f v from Hl Hacc
+             Hsrc Hcons).
 Qed.
 
 End Rel.
@@ -3472,6 +3527,10 @@ Variable symbols : list symbol.
 Variable u : unit_interface.
 (* Whether the primitives of the heap are in the term. *)
 Variable heap_prims : Prop.
+(* What the facts of a projection carry
+   (FlambdaReaperFlowProofs.WithLocal), which gives the rule of the fix
+   ([Hslots_read]). *)
+Variable slots_read : Prop.
 Variable F : facts.
 Variable preserve_direct_calls : bool.
 Variable unit_code_ids : list code_id.
@@ -3569,8 +3628,9 @@ Hypothesis Hcode_id_of_witness :
     g_constructor G w Field_code_id_of_call_witness (Node_code_id id) ->
     g_constructor G w Field_code_id_of_call_witness (Node_code_id id') ->
     id' = id.
+Hypothesis Hslots_read : slots_read -> local_reads_used is_local G sol.
 
-Abbreviation slots := (∀ f : field, is_local f = false).
+Abbreviation slots := slots_read.
 Abbreviation called := (called_by G cds).
 Abbreviation edges :=
   (expr_edges G noted deps cds keep codes symbols slots heap_prims).
@@ -3616,6 +3676,9 @@ Abbreviation slot_rel :=
   (slot_rel G sol keep called (exact = true) True located beta sets_exact).
 Abbreviation rel_read_ :=
   (rel_read G sol keep called (exact = true) True located beta
+     sets_exact).
+Abbreviation rel_read_slot_ :=
+  (rel_read_slot G sol keep called (exact = true) True located beta
      sets_exact).
 Abbreviation rel_alias_ :=
   (rel_alias G sol keep called (exact = true) True located beta
@@ -5029,7 +5092,7 @@ Qed.
 Lemma rel_project_function_slot (slot o : function_slot)
     (decls : list (function_slot * code_id))
     (vs vs' : list (value_slot * value)) (base y : node) (id0 id1 : code_id) :
-  is_local (Field_function_slot o) = false ->
+  local_reads_used is_local G sol ->
   lookup slot decls = Some id0 -> lookup o decls = Some id1 ->
   g_accessor G y (Field_function_slot o) base ->
   rel (Value_closure_of_set slot decls vs) base
@@ -5040,7 +5103,7 @@ Proof.
   destruct Hrel as (sites & vs'' & Hmay & Heq & Hex & Hse & Hall).
   injection Heq as <-.
   destruct (Hall slot id0 Hl0) as (_ & _ & Hfs & _).
-  apply (rel_read_ is_local Hc
+  apply (rel_read_slot_ is_local Hc
       _ _ _ _ _
       _ _ Hl
            (Hfs o id1 Hl1) Hacc Hmay).
@@ -5077,7 +5140,7 @@ Proof.
     { simpl in Hnc. destruct (kind_of_value v); try discriminate Hnc;
         exact Hused. }
     simpl in Hedges. destruct Hedges as ((Hacc & Hnoted) & Hk & Hslots).
-    pose proof (Hslots (Field_value_slot w)) as Hl.
+    pose proof (Hslots_read Hslots) as Hl.
     cbn [eval_named rebuild_named] in Hev |- *.
     destruct (eval_simple vars c) as [vc | ] eqn:Hvc; [ | discriminate Hev ].
     pose proof (has_usage_accessor _ _ _ Hc _ _ _ Hx Hacc) as Hc_hu.
@@ -5097,15 +5160,15 @@ Proof.
       destruct (Hall pf id0 Hl0) as (_ & _ & _ & Hsr).
       destruct (proj1 (slots_related_iff _ _) Hsr w v Hw Hk)
         as (from & Hcons & _ & _ & Hfu).
-      pose proof (field_used_read is_local G sol Hc _ _ _ _ _ Hl Hcons Hacc
+      pose proof (field_used_read_slot is_local G sol Hc _ _ _ _ _ Hcons Hacc
                     Hmay Hx) as Hused_w.
       destruct (Hfu Hused_w) as (x' & Hx' & Hrelx).
-      pose proof (field_used_hu G sol is_local Hc Hexact _ _ _ Hl Hused_w Hcons)
-        as Hhu_from.
+      pose proof (field_used_hu_slot G sol is_local Hc Hexact _ _ _ Hused_w
+                    Hcons) as Hhu_from.
       exists x'. split.
       * unfold project_value_slot. simpl. rewrite Hl0. simpl.
         rewrite Pos.eqb_refl. exact Hx'.
-      * exact (rel_read_
+      * exact (rel_read_slot_
           is_local Hc _ _
           _ _ _
         _ _ Hl
@@ -5127,15 +5190,15 @@ Proof.
           [ destruct (Hbound (Hhu_s Hc_hu) Hnone) | ].
         destruct (proj1 (slots_related_iff _ _) Hsr w v Hw Hk)
           as (from & Hcons & _ & _ & Hfu).
-        pose proof (field_used_read is_local G sol Hc _ _ _ _ _ Hl Hcons Hacc
+        pose proof (field_used_read_slot is_local G sol Hc _ _ _ _ _ Hcons Hacc
                       Hmay Hx) as Hused_w.
         destruct (Hfu Hused_w) as (x' & Hx' & Hrelx).
-        pose proof (field_used_hu G sol is_local Hc Hexact _ _ _ Hl Hused_w
+        pose proof (field_used_hu_slot G sol is_local Hc Hexact _ _ _ Hused_w
                       Hcons) as Hhu_from.
         exists x'. split.
         -- unfold project_value_slot. simpl. rewrite Hls'. simpl.
            rewrite Hl0. simpl. rewrite Pos.eqb_refl. exact Hx'.
-        -- exact (rel_read_
+        -- exact (rel_read_slot_
             is_local Hc _
             _ _
           _ _ _ _
@@ -5168,7 +5231,7 @@ Proof.
       * unfold project_function_slot. simpl.
         rewrite Pos.eqb_refl, Hl0, Hl1. reflexivity.
       * exact (rel_project_function_slot mf mt decls0 slots0 vs' _ _ id0 id1
-                 (Hslots _) Hl0 Hl1 Hacc Hrel).
+                 (Hslots_read Hslots) Hl0 Hl1 Hacc Hrel).
     + destruct (lookup s (static_values statics))
         as [[ | slot0 syms0 decls0 slots0 | | | | | ] | ] eqn:Hls;
         try discriminate Hev.
@@ -5198,11 +5261,11 @@ Proof.
         rewrite Hs'. eexists. split.
         -- unfold project_function_slot. simpl. rewrite Hls'. simpl.
            rewrite Pos.eqb_refl, Hl0, Hl1, Hs'0. reflexivity.
-        -- apply (rel_read_
+        -- apply (rel_read_slot_
             is_local Hc _
             _ _
           _ _ _ _
-                    (Hslots _) Hcons Hacc Hmay).
+                    (Hslots_read Hslots) Hcons Hacc Hmay).
            cbn [rel]. split; [ reflexivity | split; [ exact Hself | ] ].
            exact (fun h => h).
 Qed.
@@ -7069,8 +7132,8 @@ Definition pending_ok (en : rebuild_env) (vars vars' : env) (e : expr)
 
 (* The invariant of the flow on the first run, and that of its heap. *)
 Definition flow_ok (s : state) : Prop :=
-  flow_invariant is_local G sol noted deps cds keep codes symbols u heap_prims
-    located s
+  flow_invariant G sol noted deps cds keep codes symbols u heap_prims located
+    slots_read s
   ∧ heap_ok G sol cds keep located s.
 
 (* The two runs: the first has the invariant of the flow, and the facts
@@ -7394,8 +7457,9 @@ Ltac related_intro :=
       by first [ assumption | intros ? ? ? ? ? Hx; discriminate Hx ]
   end;
   pose proof (step_flow_invariant_heap is_local G sol noted deps cds keep
-                codes symbols u heap_prims located Hc Hlocal Hconsts Hsyms
-                Hunit_syms Hdeps Hnd Hcds _ Hflow Hhok Halloc) as Hflow';
+                codes symbols u heap_prims located slots_read Hc Hlocal
+                Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds Hslots_read _ Hflow
+                Hhok Halloc) as Hflow';
   pose proof (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hflow)
     as (Hvars & _ & Hsflow);
   simpl_state; simpl in He.
@@ -7489,8 +7553,8 @@ Proof.
   destruct (Hothers o (or_introl eq_refl)) as (id1 & Hl1).
   assert (Hfy : flows_ (Value_closure_of_set o decls vs) (Node_variable y)).
   { destruct (Hall slot id0 Hslot) as (_ & _ & Hfs & _).
-    apply (flows_read is_local G sol keep called located Hc _ _ _ _ _ _ (Hslots
-        _)
+    apply (flows_read_slot is_local G sol keep called located Hc _ _ _ _ _ _
+      (Hslots_read Hslots)
              (Hfs o id1 Hl1) Hacc Hn).
     simpl. exists sites.
     split; [ exact (proj1 (Hall o id1 Hl1)) | exact Hall ]. }
@@ -9151,7 +9215,7 @@ Proof.
     destruct Hrel1 as (sites & vs' & _ & -> & _).
     destruct Hd as ((Hacc & _) & Hslots).
     pose proof (rel_project_function_slot slot o decls0 vs0 vs' _ _ id0 id1
-                  (Hslots _) Hl0 Hl1 Hacc Hrel0) as Hrel_x.
+                  (Hslots_read Hslots) Hl0 Hl1 Hacc Hrel0) as Hrel_x.
     assert (Hev' : eval_named statics' vars'
                      (Project_function_slot slot o (Var x0))
                    = Some (Value_closure_of_set o decls0 vs')).
@@ -12184,7 +12248,7 @@ Lemma indirect_call_step (ap : apply_expr) (vars : env) (K : cont_env)
      (id, c) ∈ codes ->
      code_is_tupled c = false
      ∧ length (code_params_arity c) = length (ap_args_arity ap)) ->
-  codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+  codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   (∀ callee : value,
      eval_simple vars (ap_callee ap) = Some callee ->
      partial_application_of callee = None) ->
@@ -13849,9 +13913,8 @@ Proof.
   destruct Hcall as (witness & apply_node & called_node & Hargs & Hretacc
                      & Hexnacc & Hcalled & Hused & Hcond & Happly).
   pose proof Hflow as (ctx0 & ce0 & _ & _ & _ & _ & _ & _ & Hcodes & _).
-  pose proof (call_step is_local G noted deps cds keep codes symbols heap_prims
-      ap
-      vars
+  pose proof (call_step G noted deps cds keep codes symbols heap_prims
+                slots_read ap vars
                 conts statics hp rcd id Hkind Hfrag_ap Hcodes) as Hcs.
   unfold answered_h. revert Hflow' Hcs.
   destruct (step (State (Apply ap) vars conts statics hp rcd))
@@ -13892,9 +13955,8 @@ Proof.
   destruct (rel_closure_of statics statics' callee callee' _ id slots Hst
               Hrel_c Hhu_callee Hclosure)
     as (slots' & Hclosure').
-  destruct (code_facts is_local G noted deps cds keep codes symbols heap_prims
-      Hnd
-              statics id c Hcodes Hcode)
+  destruct (code_facts G noted deps cds keep codes symbols heap_prims
+              slots_read Hnd statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & _ & _ & Lp & Lr).
   destruct (Hcds id cd Hcd) as (Hpar & Hretc & Hexnc & Hcodeid & Hasid).
   pose proof (called_alloc is_local G sol cds Hc Hcds b id Hcalled_b) as Hbb.
@@ -14385,7 +14447,8 @@ Definition returned_ok (c : cont_value) : Prop :=
     (statics statics' : static_env) (hp hp' : heap) (rcd rcd' : read_record),
     way_out cont_rel over_rel ns c c' -> at_nodes ns vs vs' ->
     statics_rel statics statics' -> heaps_rel hp hp' ->
-    codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+    codes_ok G noted deps cds keep codes symbols heap_prims slots_read
+      statics ->
     statics_flow_ statics ->
     every (pa_ok statics) vs -> cont_pa_ok statics c ->
     result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -14409,7 +14472,8 @@ Definition called_ok (rt : cont_value) : Prop :=
     ret_ok cont_rel over_rel returns ret rt rt' -> cont_pa_ok statics rt ->
     way_out cont_rel over_rel [exn] et et' ->
     statics_rel statics statics' -> heaps_rel hp hp' ->
-    codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+    codes_ok G noted deps cds keep codes symbols heap_prims slots_read
+      statics ->
     statics_flow_ statics ->
     result_flow (call_function callee Indirect vs a ret rt et statics hp rcd) ->
     result_rel (call_function callee Indirect vs a ret rt et statics hp rcd)
@@ -14444,7 +14508,8 @@ Lemma returned_cases (c : cont_value) :
      over_rel n0 c c' -> rel v n0 v' -> pa_ok statics v ->
      cont_pa_ok statics c ->
      statics_rel statics statics' -> heaps_rel hp hp' ->
-     codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+     codes_ok G noted deps cds keep codes symbols heap_prims slots_read
+       statics ->
      statics_flow_ statics ->
      result_flow (apply_cont_value c [v] statics hp rcd) ->
      result_rel (apply_cont_value c [v] statics hp rcd)
@@ -14760,7 +14825,7 @@ Lemma ret_answered (m : list bool) (K : list flambda_kind) (ns : list node)
   map kind_of_value vs = K ->
   at_nodes ns vs vs' ->
   statics_rel statics statics' -> heaps_rel hp hp' ->
-  codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+  codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   statics_flow_ statics ->
   every (pa_ok statics) vs -> cont_pa_ok statics c ->
   result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -15081,7 +15146,8 @@ Lemma returned_either (c : cont_value) :
         (map kind_of_value vs) ns c c' ->
     at_nodes ns vs vs' ->
     statics_rel statics statics' -> heaps_rel hp hp' ->
-    codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+    codes_ok G noted deps cds keep codes symbols heap_prims slots_read
+      statics ->
     statics_flow_ statics ->
     every (pa_ok statics) vs -> cont_pa_ok statics c ->
     result_flow (apply_cont_value c vs statics hp rcd) ->
@@ -15214,8 +15280,8 @@ Proof.
 Qed.
 
 Lemma result_flow_of_ok (r : step_result) :
-  result_heap_ok is_local G sol noted deps cds keep codes symbols u heap_prims
-    located r ->
+  result_heap_ok G sol noted deps cds keep codes symbols u heap_prims located
+    slots_read r ->
   result_flow r.
 Proof.
   destruct r as [s' | | ]; [ exact (fun H => H) | intros _; exact I
@@ -15250,7 +15316,7 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
   way_out cont_rel over_rel [exn] et et' ->
   every (pa_ok statics) (applied ++ vs) ->
   statics_rel statics statics' -> heaps_rel hp hp' ->
-  codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+  codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   statics_flow_ statics ->
   shape_of_closure_call statics closure Indirect (applied ++ vs) (aa ++ a) ret
   = Some shape ->
@@ -15274,9 +15340,8 @@ Proof.
     by (apply (not_local is_local Hlocal); intros; discriminate).
   destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape)
     as (id & slots & c & all0 & A0 & Hclosure & Hcode & _ & Hafc & Hcall).
-  destruct (code_facts is_local G noted deps cds keep codes symbols heap_prims
-      Hnd
-              statics id c Hcodes Hcode)
+  destruct (code_facts G noted deps cds keep codes symbols heap_prims
+              slots_read Hnd statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & Hunk & _ & Lp & Lr).
   destruct (Hjk id slots c Hclosure Hcode) as [Hlt_aa Htupled].
   assert (Hne_c : code_params_arity c <> [])
@@ -15868,7 +15933,7 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
   ret_ok cont_rel over_rel returns ret rt rt' ->
   way_out cont_rel over_rel [exn] et et' ->
   statics_rel statics statics' -> heaps_rel hp hp' ->
-  codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+  codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   statics_flow_ statics ->
   shape_of_closure_call statics callee Indirect vs a ret = Some shape ->
   result_flow
@@ -15892,9 +15957,8 @@ Proof.
         & Hcall).
   rewrite Hclosure in Hclosure0. injection Hclosure0 as <- <-.
   rewrite Hcode in Hcode0. injection Hcode0 as <-.
-  destruct (code_facts is_local G noted deps cds keep codes symbols heap_prims
-      Hnd
-              statics id c Hcodes Hcode)
+  destruct (code_facts G noted deps cds keep codes symbols heap_prims
+              slots_read Hnd statics id c Hcodes Hcode)
     as (Hin_codes & cd & Hcd & _ & Htw & Lp & Lr).
   pose proof (Hunt id c Hin_codes) as Hsingle. rewrite Htupled in Hsingle.
   pose proof (singleton_params_length _ Hsingle) as Hsize.
@@ -16584,7 +16648,7 @@ Lemma call_function_kinds (callee : value) (vs : list value) (a ret : arity)
     (rt et : cont_value) (statics : static_env) (hp : heap)
     (rcd : read_record) :
   indirect_codes ->
-  codes_ok is_local G noted deps cds keep codes symbols heap_prims statics ->
+  codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   map kind_of_value vs <> unarize a ->
   call_function callee Indirect vs a ret rt et statics hp rcd = Undefined.
 Proof.
@@ -17378,8 +17442,9 @@ Lemma initial_related (e : expr) :
        empty_heap no_reads).
 Proof.
   intros He Hfree Hok.
-  split; [ split; [ exact (initial_flow_invariant is_local G sol noted deps
-                             cds keep codes symbols u heap_prims located e He)
+  split; [ split; [ exact (initial_flow_invariant G sol noted deps cds keep
+                             codes symbols u heap_prims located slots_read e
+                             He)
                   | exact (initial_heap_ok G sol cds keep located e) ] | ].
   exists None, FlambdaReaperRebuild.empty_env, (unit_conts u), [].
   simpl_state.
@@ -19281,18 +19346,19 @@ Proof.
   - cbn [lookup]. rewrite Pos.eqb_refl. reflexivity.
 Qed.
 
-Lemma rebuild_refines_checked (hb ex : bool)
+(* With local fields, the tables passing the check of the fix. *)
+Lemma rebuild_refines_checked_local (hb ex : bool)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) :
   is_local_slots_only is_local ->
-  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
   in_fragment hb e = true ->
   checked ex (unit_codes e) e = true ->
   calls_kinded [] e = true ->
   well_formed_unit u e = true ->
   exits_one_value u e = true ->
   check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   (ex = false -> results_kinded [] [] e = true) ->
   refines_heap_with (exits_rel (if hb then True else False) ex)
@@ -19301,14 +19367,13 @@ Lemma rebuild_refines_checked (hb ex : bool)
               preserve_direct_calls e) [] [] empty_static_env empty_heap
        no_reads).
 Proof.
-  intros Hlocal Hslots Hfrag Hcf Hkinded Hwf Hexits Hcheck Hcheck_exact
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
     Hrk_ex.
   rename preserve_direct_calls into b.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
     as Hexact.
-  destruct (traverse_unit_keeps flag u e (∀ f : field, is_local f = false) hb
-              Hfrag Hslots)
+  destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & _).
   pose proof (traverse_unit_scrutinees ex (unit_codes e) flag u e Hcf)
@@ -19355,8 +19420,7 @@ Proof.
     as Hcode_checks.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
-                (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)
+                (static_names symbols_of_binding e) True
                 (if hb then True else False)) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
@@ -19436,9 +19500,13 @@ Proof.
   rewrite <- (rebuild_expr_cc_unchanged F sol (fun _ => true) [] b
                 (static_names code_ids_bound e) (bound_code_metadata e)
                 (fresh_name (names_of e)) (fun _ _ => eq_refl)).
+  assert (Hslots_read : True -> local_reads_used is_local G sol)
+    by (intros _;
+        exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+                 is_local _ _ Hlrs)).
   eapply (unit_refines is_local G sol noted deps cds (unit_kept e)
             (unit_codes e) (static_names symbols_of_binding e) u
-            (if hb then True else False) F b);
+            (if hb then True else False) True F b);
     eassumption || reflexivity || (intros; reflexivity)
     || (intros; discriminate)
     || (intros ? ? ? ? ? ? ? ? ? _ Hch;
@@ -19453,12 +19521,9 @@ Proof.
                                (fun r K H => rets_nil_any _ r K H)))))).
 Qed.
 
-(* The same for the rebuild with changes of calling convention, given
-   what the checks of the table say of it. *)
-Lemma rebuild_cc_refines_checked (hb ex : bool)
+Lemma rebuild_refines_checked (hb ex : bool)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
-    (cannot_change cannot_change_witness : node -> bool)
     (preserve_direct_calls : bool) :
   is_local_slots_only is_local ->
   (∀ f : field, is_local f = false) ∨ projection_free e = true ->
@@ -19468,6 +19533,37 @@ Lemma rebuild_cc_refines_checked (hb ex : bool)
   well_formed_unit u e = true ->
   exits_one_value u e = true ->
   check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  (ex = false -> results_kinded [] [] e = true) ->
+  refines_heap_with (exits_rel (if hb then True else False) ex)
+    (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e) [] [] empty_static_env empty_heap
+       no_reads).
+Proof.
+  intros Hlocal Hslots Hfrag Hcf Hkinded Hwf Hexits Hcheck Hcheck_exact Hrk_ex.
+  exact (rebuild_refines_checked_local hb ex flag is_local u e T
+           preserve_direct_calls Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact Hrk_ex).
+Qed.
+
+(* The same for the rebuild with changes of calling convention, given
+   what the checks of the table say of it. *)
+(* With local fields, the tables passing the check of the fix. *)
+Lemma rebuild_cc_refines_checked_local (hb ex : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change cannot_change_witness : node -> bool)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  in_fragment hb e = true ->
+  checked ex (unit_codes e) e = true ->
+  calls_kinded [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   results_kinded [] [] e = true ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
@@ -19493,14 +19589,13 @@ Lemma rebuild_cc_refines_checked (hb ex : bool)
               cannot_change (unit_code_deps flag u e) preserve_direct_calls e)
        [] [] empty_static_env empty_heap no_reads).
 Proof.
-  intros Hlocal Hslots Hfrag Hcf Hkinded Hwf Hexits Hcheck Hcheck_exact
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
     Hrk Hccc Hwid Hcid.
   rename preserve_direct_calls into b.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
     as Hexact.
-  destruct (traverse_unit_keeps flag u e (∀ f : field, is_local f = false) hb
-              Hfrag Hslots)
+  destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & Hcds_eq).
   pose proof (traverse_unit_scrutinees ex (unit_codes e) flag u e Hcf)
@@ -19547,8 +19642,7 @@ Proof.
     as Hcode_checks.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
-                (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)
+                (static_names symbols_of_binding e) True
                 (if hb then True else False)) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
@@ -19649,9 +19743,13 @@ Proof.
       id' = id)
     by (intros id id' w _; apply Hcid).
   unfold rebuild_unit_cc.
+  assert (Hslots_read : True -> local_reads_used is_local G sol)
+    by (intros _;
+        exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+                 is_local _ _ Hlrs)).
   eapply (unit_refines is_local G sol noted deps cds (unit_kept e)
             (unit_codes e) (static_names symbols_of_binding e) u
-            (if hb then True else False) F b);
+            (if hb then True else False) True F b);
     eassumption || reflexivity || (intros; reflexivity)
     || exact (fun Hf : False => False_ind _ Hf)
     || exact (conj I (conj (ex_intro _ []
@@ -19661,6 +19759,53 @@ Proof.
                                (conj (ex_intro _ [] (conj Hkinded Hagree0))
                                   (ex_intro _ [] (conj Hraises Hxagree0))))
                                (fun r K H => rets_nil_any _ r K H)))))).
+Qed.
+
+Lemma rebuild_cc_refines_checked (hb ex : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change cannot_change_witness : node -> bool)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_fragment hb e = true ->
+  checked ex (unit_codes e) e = true ->
+  calls_kinded [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  results_kinded [] [] e = true ->
+  cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+    cannot_change_witness cannot_change ->
+  (∀ a a' n y : node,
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a
+       (Field_call_witness Known_arity_code_pointer) n ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a'
+       (Field_call_witness Known_arity_code_pointer) n ->
+     (s_any_source (solution_of_tables T) a' = true ->
+      s_any_source (solution_of_tables T) a = true)
+     ∧ (s_sources (solution_of_tables T) a' y = true ->
+        s_sources (solution_of_tables T) a y = true)) ->
+  (∀ (w : node) (id id' : code_id),
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id) ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id') ->
+     id' = id) ->
+  refines_heap_with (exits_rel (if hb then True else False) ex)
+    (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_unit_cc (traverse_unit flag u e) (solution_of_tables T)
+              cannot_change (unit_code_deps flag u e) preserve_direct_calls e)
+       [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hlocal Hslots Hfrag Hcf Hkinded Hwf Hexits Hcheck Hcheck_exact Hrk
+    Hccc Hwid Hcid.
+  exact (rebuild_cc_refines_checked_local hb ex flag is_local u e T
+           cannot_change cannot_change_witness preserve_direct_calls Hlocal
+           Hfrag Hcf Hkinded Hwf Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact Hrk Hccc Hwid Hcid).
 Qed.
 
 Lemma refines_heap_with_mono
@@ -20117,18 +20262,29 @@ Proof.
   - intros params metadata handler IH H. exact (IH H).
 Qed.
 
-Theorem rebuild_refines : rebuild_refines_statement.
+Theorem rebuild_refines_local : rebuild_refines_local_statement.
 Proof.
-  intros flag is_local u e T b Hlocal Hslots Hfrag Hcf Hwf Hexits Hcheck
-    Hcheck_exact.
+  intros flag is_local u e T b Hlocal Hfrag Hcf Hwf Hexits Hcheck
+    Hlrs Hcheck_exact.
   pose proof (closure_free_no_code_no_slots e Hcf) as Hns.
   refine (proj2 (exits_rel_flow true _ _
-                   (rebuild_refines_checked false true flag is_local u e T b
-                      Hlocal Hslots Hfrag _ _ Hwf Hexits Hcheck Hcheck_exact
+                   (rebuild_refines_checked_local false true flag is_local u
+                      e T b Hlocal Hfrag _ _ Hwf Hexits Hcheck Hlrs
+                      Hcheck_exact
                       (fun E => match E with end))) eq_refl).
   - rewrite (proj1 (checked_modes (unit_codes e)) e). exact Hns.
   - apply (proj1 (calls_kinded_of_exact (unit_codes e))).
     rewrite (proj1 (checked_modes (unit_codes e)) e). exact Hns.
+Qed.
+
+Theorem rebuild_refines : rebuild_refines_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hslots Hfrag Hcf Hwf Hexits Hcheck
+    Hcheck_exact.
+  exact (rebuild_refines_local flag is_local u e T b Hlocal Hfrag Hcf Hwf
+           Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact).
 Qed.
 
 Theorem example : example_statement.
@@ -20269,32 +20425,55 @@ Proof.
       assumption.
 Qed.
 
-Theorem rebuild_refines_observably : rebuild_refines_observably_statement.
+Theorem rebuild_refines_observably_local :
+  rebuild_refines_observably_local_statement.
 Proof.
-  intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
-    Hcheck_exact.
+  intros flag is_local u e T b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+    Hlrs Hcheck_exact.
   assert (Hkinded : calls_kinded [] e = true).
   { apply (proj1 calls_kinded_of_results e [] [] [] Hrk).
     intros k l Hl. discriminate Hl. }
   exact (proj1 (exits_rel_flow false _ _
-                  (rebuild_refines_checked false false flag is_local u e T b
-                     Hlocal Hslots Hfrag
+                  (rebuild_refines_checked_local false false flag is_local u
+                     e T b Hlocal Hfrag
                      (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
-                     Hkinded Hwf Hexits Hcheck Hcheck_exact (fun _ => Hrk)))).
+                     Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+                     (fun _ => Hrk)))).
+Qed.
+
+Theorem rebuild_refines_observably : rebuild_refines_observably_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
+    Hcheck_exact.
+  exact (rebuild_refines_observably_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact).
+Qed.
+
+Theorem rebuild_refines_up_to_heap_local :
+  rebuild_refines_up_to_heap_local_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+    Hlrs Hcheck_exact.
+  assert (Hkinded : calls_kinded [] e = true).
+  { apply (proj1 calls_kinded_of_results e [] [] [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  exact (exits_rel_heap _ false _ _
+           (rebuild_refines_checked_local true false flag is_local u e T b
+              Hlocal Hfrag
+              (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
+              Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact (fun _ => Hrk))).
 Qed.
 
 Theorem rebuild_refines_up_to_heap : rebuild_refines_up_to_heap_statement.
 Proof.
   intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
     Hcheck_exact.
-  assert (Hkinded : calls_kinded [] e = true).
-  { apply (proj1 calls_kinded_of_results e [] [] [] Hrk).
-    intros k l Hl. discriminate Hl. }
-  exact (exits_rel_heap _ false _ _
-           (rebuild_refines_checked true false flag is_local u e T b Hlocal
-              Hslots Hfrag
-              (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
-              Hkinded Hwf Hexits Hcheck Hcheck_exact (fun _ => Hrk))).
+  exact (rebuild_refines_up_to_heap_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact).
 Qed.
 
 (* ======================================================================== *)
@@ -21520,8 +21699,14 @@ Proof.
                  (static_names code_ids_bound e) (fresh_name (names_of e))
                  false True (fun _ => true) [] (bound_code_metadata e) L
                  (state_statics s) (state_statics t)).
-  { eapply (unit_exit_statics is_local G sol noted deps cds (unit_kept e)
-              (unit_codes e) (static_names symbols_of_binding e) u False F b);
+  { assert (Hslots_read :
+              (∀ f : field, is_local f = false) ->
+              local_reads_used is_local G sol)
+      by exact (FlambdaReaperLocalFieldsProofs.local_reads_used_no_local
+                 is_local G sol).
+    eapply (unit_exit_statics is_local G sol noted deps cds (unit_kept e)
+              (unit_codes e) (static_names symbols_of_binding e) u False
+              (∀ f : field, is_local f = false) F b);
       eassumption || reflexivity || (intros; reflexivity)
       || (intros; discriminate)
       || (intros ? ? ? ? ? ? ? ? ? _ Hch;

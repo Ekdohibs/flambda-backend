@@ -130,17 +130,16 @@
    rebuild goes wrong; that of the fixed rules passes and the rebuild
    exits as the unit does ([nested_slot_statement]).
 
-   What the statements of the flow and of the rebuild will need. They
-   ask, for now, that no field be local or that the unit have no
-   projection. With the fix they can ask [local_reads_used] instead:
-   the step of a projection needs that what the allocation holds in the
-   field is where the read puts it, which [local_read_alias_statement]
-   gives for a local field, from [may_come_from] and the rules with the
-   fix, as FlambdaReaperFlowProofs.read_transfer does for a field that
-   is not local; the rules before the fix do not give it
-   ([local_read_alias_needs_fix_statement], on the counterexample). A
-   read that the rebuild keeps has a usage, and finds its field used in
-   every allocation that it may come from without the fix
+   The statements of the flow and of the rebuild with local fields
+   (the [_local] statements of FlambdaReaperFlowSpec.v and after) ask
+   [check_local_reads_used] in place of no local field or no
+   projection, which gives it
+   (FlambdaReaperFlowSpec.old_premise_local_reads_used_statement). The
+   step of a projection of a local field uses
+   [local_read_alias_statement]; the rules before the fix do not give
+   it ([local_read_alias_needs_fix_statement], on the counterexample).
+   A read that the rebuild keeps finds its field used in every
+   allocation that it may come from without the fix
    ([local_read_field_used_statement]). *)
 
 From Stdlib Require Import ZArith List Bool.

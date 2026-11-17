@@ -32,8 +32,10 @@
      ([flows_alias]), at a node with any source whose usage implies that
      the first has any usage ([flows_escape]), at the node a field of it
      is read into ([flows_read], and [read_transfer] for any property of
-     nodes kept by aliases and escapes), and at the parameter of the
-     witness of the code it is given to as an argument
+     nodes kept by aliases and escapes; for a local field, with the rule
+     of the fix, [flows_read_slot], through
+     FlambdaReaperLocalFieldsSpec.local_read_alias_statement), and at the
+     parameter of the witness of the code it is given to as an argument
      ([argument_transfer]).
    - What the traversal makes: the facts of a term of the fragment, under
      the nodes of the parameters of the continuations in scope and in
@@ -87,12 +89,20 @@
      tuple read into the parameters of the code ([tupled_call_ok]).
      [called_by] gives the closures a call witness, which is what the
      statement says ([flows_weaken]).
+     The invariant is that of module [WithLocal], for any premise
+     [slots_read] of the facts of a projection that gives the rule of
+     the fix; the names of the run outside it are those before the fix,
+     with [slots_read] that no field is local.
    The facts of a term that the proof reads ([expr_edges]) are in every
    graph that has those of the traversal but uses by other nodes than
    variables and symbols and reads of [Is_int] into other nodes than
    variables ([graph_sub], [expr_edges_mono]); so the statement holds of
-   any such graph and a solution closed for it ([flow_sound_gen]), the
-   graph without the two facts that keep a tuple alive among them. *)
+   any such graph and a solution closed for it, with the rule of the fix
+   ([flow_sound_gen_local]), the graph without the two facts that keep a
+   tuple alive among them. The traversal of a unit without projection
+   reads no value or function slot ([traverse_unit_reads_no_slot]), so
+   the premise of the statements before the fix gives the check of the
+   fix ([old_premise_local_reads_used]). *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia Permutation.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -100,9 +110,11 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperTraversal
   FlambdaReaperSolution FlambdaReaperSolutionSpec
-  FlambdaReaperSolutionProofs FlambdaReaperFlowSpec.
+  FlambdaReaperSolutionProofs FlambdaReaperFlowSpec FlambdaReaperLocalFields
+  FlambdaReaperLocalFieldsSpec.
 From OxCamlFlambda2 Require FlambdaHeapProofs FlambdaPrimitiveProofs
-  FlambdaTupledProofs FlambdaReaperTupledProofs.
+  FlambdaTupledProofs FlambdaReaperTupledProofs
+  FlambdaReaperLocalFieldsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -381,6 +393,38 @@ Proof.
     pose proof (usages_accessor _ _ _ Hc _ _ _ Hacc Eau) as Hbb.
     destruct (Hus Hhub base Hbb) as [Hab | Hab]; [ | congruence ].
     exact (field_used_usage _ _ _ Hc _ _ _ _ _ Hcons Hab Hacc Hhu).
+Qed.
+
+(* The same of a read of any field, with the rule of the fix
+   ([local_reads_used]) if the field is local
+   (FlambdaReaperLocalFieldsSpec.local_read_alias_statement). *)
+Lemma flows_read_slot (a base to_ from : node) (f : field) (v : value) :
+  local_reads_used is_local G sol ->
+  g_constructor G a f from ->
+  g_accessor G to_ f base ->
+  may_come_from sol a base ->
+  flows_ v from -> flows_ v to_.
+Proof.
+  intros Hlrs Hcons Hacc Hmay Hv. destruct (is_local f) eqn:Hl.
+  - apply (flows_alias v to_ from); [ | exact Hv ].
+    exact (FlambdaReaperLocalFieldsProofs.local_read_alias is_local G sol a
+             base to_ from f (conj Hc Hlrs) Hl Hcons Hacc Hmay).
+  - exact (flows_read a base to_ from f v Hl Hcons Hacc Hmay Hv).
+Qed.
+
+(* A read into a node that has a usage uses the field, local or not; this
+   needs no fix
+   (FlambdaReaperLocalFieldsSpec.local_read_field_used_statement). *)
+Lemma field_used_read_slot (a base to_ from : node) (f : field) :
+  g_constructor G a f from ->
+  g_accessor G to_ f base ->
+  may_come_from sol a base ->
+  hu to_ -> s_field_used sol a f = true.
+Proof.
+  intros Hcons Hacc Hmay Hhu. destruct (is_local f) eqn:Hl.
+  - exact (FlambdaReaperLocalFieldsProofs.local_read_field_used is_local G
+             sol a base to_ from f Hc Hl Hcons Hacc Hmay Hhu).
+  - exact (field_used_read a base to_ from f Hl Hcons Hacc Hmay Hhu).
 Qed.
 
 End Carry.
@@ -4156,6 +4200,11 @@ Proof.
   apply IH; [ | exact Hfs ]. intros i f Hin. exact (H i f (or_intror Hin)).
 Qed.
 
+(* The run, for any premise [slots_read] of the facts of a projection
+   that gives the rule of the fix: that no field is local, before the
+   fix, or anything if the solution has the rule. *)
+Module WithLocal.
+
 Section Run.
 
 Variable is_local : field -> bool.
@@ -4172,6 +4221,8 @@ Variable u : unit_interface.
 Variable heap_prims : Prop.
 (* The allocation of each location of the run. *)
 Variable located : location -> option node.
+(* What the facts of a projection carry ([named_edges]). *)
+Variable slots_read : Prop.
 Hypothesis Hc : closed is_local G sol.
 Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hconsts : g_any_source G Node_all_constants.
@@ -4185,8 +4236,9 @@ Hypothesis Hnd : NoDup (map fst cds).
 Hypothesis Hcds :
   ∀ (id : code_id) (cd : code_dep),
     lookup id cds = Some cd -> known_witness_edges G id cd.
+Hypothesis Hslots_read : slots_read -> local_reads_used is_local G sol.
 
-Abbreviation slots := (∀ f : field, is_local f = false).
+Abbreviation slots := slots_read.
 Abbreviation called := (called_by G cds).
 Abbreviation flows_ := (flows G sol keep called located).
 Abbreviation env_flows_ := (env_flows G sol keep called located).
@@ -4688,8 +4740,8 @@ Proof.
       destruct (Hall from id0 Hl0) as (_ & _ & _ & Hvs).
       destruct (proj1 (for_all_bindings_lookup _ _ _) Hvs w v Hw Hk)
         as (from' & Hcons & Hfrom).
-      exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hn
-               Hfrom).
+      exact (flows_read_slot _ _ _ _ _ _ Hc _ _ _ _ _ v (Hslots_read Hslots)
+               Hcons Hacc Hn Hfrom).
     + destruct (lookup s (static_values statics))
         as [[ | slot0 syms0 decls0 slots0 | | | | | ] | ] eqn:Hls;
         try discriminate Hcis.
@@ -4700,8 +4752,8 @@ Proof.
         destruct (Hst s _ Hls) as (_ & _ & _ & Hvs).
         destruct (proj1 (for_all_bindings_lookup _ _ _) Hvs w v Hw Hk)
           as (from' & Hcons & Hfrom).
-        exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ v (Hslots _) Hcons Hacc Hfc
-                 Hfrom).
+        exact (flows_read_slot _ _ _ _ _ _ Hc _ _ _ _ _ v
+                 (Hslots_read Hslots) Hcons Hacc Hfc Hfrom).
   - (* [Project_function_slot] *)
     destruct Hedges as ((Hacc & Hnoted) & Hslots).
     destruct (eval_simple vars closure) as [vc | ] eqn:Hvc;
@@ -4720,9 +4772,8 @@ Proof.
       injection Hev as <-.
       destruct Hfc as (sites & Hn & Hall).
       destruct (Hall move_from id0 Hl0) as (_ & _ & Hfs & _).
-      apply (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ _ (Hslots _) (Hfs move_to id1
-        Hl1)
-               Hacc Hn).
+      apply (flows_read_slot _ _ _ _ _ _ Hc _ _ _ _ _ _ (Hslots_read Hslots)
+               (Hfs move_to id1 Hl1) Hacc Hn).
       simpl. exists sites.
       split; [ exact (proj1 (Hall move_to id1 Hl1)) | exact Hall ].
     + destruct (lookup s (static_values statics))
@@ -4739,8 +4790,8 @@ Proof.
         injection Hev as <-.
         destruct (Hst s _ Hls) as (_ & _ & Hfs & _).
         destruct (Hfs move_to s' Hs') as [Hcons Hself].
-        exact (flows_read _ _ _ _ _ _ Hc _ _ _ _ _ (Value_symbol s') (Hslots _)
-                 Hcons Hacc Hfc Hself).
+        exact (flows_read_slot _ _ _ _ _ _ Hc _ _ _ _ _ (Value_symbol s')
+                 (Hslots_read Hslots) Hcons Hacc Hfc Hself).
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -8221,6 +8272,264 @@ Qed.
 
 End Run.
 
+End WithLocal.
+
+(* The names of the run as before the fix: the same where the facts of a
+   projection do not matter, and else where they carry that no field is
+   local. *)
+Abbreviation alias_consts_any_source := WithLocal.alias_consts_any_source.
+Abbreviation alloc_ok := WithLocal.alloc_ok.
+Abbreviation alloc_self := WithLocal.alloc_self.
+Abbreviation any_source_self := WithLocal.any_source_self.
+Abbreviation apply_cont_args_flow := WithLocal.apply_cont_args_flow.
+Abbreviation apply_cont_fits := WithLocal.apply_cont_fits.
+Abbreviation apply_cont_value_statics := WithLocal.apply_cont_value_statics.
+Abbreviation args_at := WithLocal.args_at.
+Abbreviation args_at_app := WithLocal.args_at_app.
+Abbreviation args_at_skipn := WithLocal.args_at_skipn.
+Abbreviation bind_params_length := WithLocal.bind_params_length.
+Abbreviation block_fields_pa_ok := WithLocal.block_fields_pa_ok.
+Abbreviation block_of_flows := WithLocal.block_of_flows.
+Abbreviation block_structure := WithLocal.block_structure.
+Abbreviation block_structure_made := WithLocal.block_structure_made.
+Abbreviation boxed_flows := WithLocal.boxed_flows.
+Abbreviation boxed_number_of_cases := WithLocal.boxed_number_of_cases.
+Abbreviation boxed_self := WithLocal.boxed_self.
+Abbreviation call_chain_app := WithLocal.call_chain_app.
+Abbreviation call_chain_mono := WithLocal.call_chain_mono.
+Abbreviation call_code_not_exit := WithLocal.call_code_not_exit.
+Abbreviation call_code_statics := WithLocal.call_code_statics.
+Abbreviation call_function_statics := WithLocal.call_function_statics.
+Abbreviation called_alloc := WithLocal.called_alloc.
+Abbreviation caller_call_chain := WithLocal.caller_call_chain.
+Abbreviation caller_chain_nth := WithLocal.caller_chain_nth.
+Abbreviation chain_cover := WithLocal.chain_cover.
+Abbreviation chain_end_last := WithLocal.chain_end_last.
+Abbreviation closure_alloc := WithLocal.closure_alloc.
+Abbreviation code_chain_nth := WithLocal.code_chain_nth.
+Abbreviation cond_alias_alias := WithLocal.cond_alias_alias.
+Abbreviation cond_use_live := WithLocal.cond_use_live.
+Abbreviation consts_any_source := WithLocal.consts_any_source.
+Abbreviation cont_pa_closure_inv := WithLocal.cont_pa_closure_inv.
+Abbreviation cont_pa_extra_inv := WithLocal.cont_pa_extra_inv.
+Abbreviation cont_pa_over_inv := WithLocal.cont_pa_over_inv.
+Abbreviation count_ok_lookup := WithLocal.count_ok_lookup.
+Abbreviation counted := WithLocal.counted.
+Abbreviation counts := WithLocal.counts.
+Abbreviation counts_rec := WithLocal.counts_rec.
+Abbreviation default_flows := WithLocal.default_flows.
+Abbreviation env_flows_no_location := WithLocal.env_flows_no_location.
+Abbreviation escapes_flows := WithLocal.escapes_flows.
+Abbreviation every_app_intro := WithLocal.every_app_intro.
+Abbreviation every_firstn := WithLocal.every_firstn.
+Abbreviation every_skipn := WithLocal.every_skipn.
+Abbreviation exec_prim_cases := WithLocal.exec_prim_cases.
+Abbreviation fields_from_replace := WithLocal.fields_from_replace.
+Abbreviation find_arm_compact := WithLocal.find_arm_compact.
+Abbreviation firstn_length_app := WithLocal.firstn_length_app.
+Abbreviation fits := WithLocal.fits.
+Abbreviation flows_block := WithLocal.flows_block.
+Abbreviation flows_location := WithLocal.flows_location.
+Abbreviation handler_counted := WithLocal.handler_counted.
+Abbreviation hd_error_combine := WithLocal.hd_error_combine.
+Abbreviation heap_allocates := WithLocal.heap_allocates.
+Abbreviation heap_ok := WithLocal.heap_ok.
+Abbreviation heap_pa_ok := WithLocal.heap_pa_ok.
+Abbreviation heap_pa_ok_le := WithLocal.heap_pa_ok_le.
+Abbreviation indirect_ok := WithLocal.indirect_ok.
+Abbreviation indirect_pending := WithLocal.indirect_pending.
+Abbreviation initial_heap_ok := WithLocal.initial_heap_ok.
+Abbreviation is_tagged_immediate_const := WithLocal.is_tagged_immediate_const.
+Abbreviation length_unarize_app := WithLocal.length_unarize_app.
+Abbreviation live := WithLocal.live.
+Abbreviation load_field_nth := WithLocal.load_field_nth.
+Abbreviation location_simple := WithLocal.location_simple.
+Abbreviation lookup_counts := WithLocal.lookup_counts.
+Abbreviation lookup_nodup_in := WithLocal.lookup_nodup_in.
+Abbreviation may_come_from_any := WithLocal.may_come_from_any.
+Abbreviation named_edges_no_heap := WithLocal.named_edges_no_heap.
+Abbreviation named_edges_not_heap := WithLocal.named_edges_not_heap.
+Abbreviation not_local := WithLocal.not_local.
+Abbreviation nth_error_combine_eq := WithLocal.nth_error_combine_eq.
+Abbreviation nth_error_combine_inv := WithLocal.nth_error_combine_inv.
+Abbreviation nth_error_skipn_last := WithLocal.nth_error_skipn_last.
+Abbreviation pending := WithLocal.pending.
+Abbreviation prim_exec_pa_ok := WithLocal.prim_exec_pa_ok.
+Abbreviation read_const := WithLocal.read_const.
+Abbreviation read_location := WithLocal.read_location.
+Abbreviation run_call_statics := WithLocal.run_call_statics.
+Abbreviation simple_escapes := WithLocal.simple_escapes.
+Abbreviation simple_flows := WithLocal.simple_flows.
+Abbreviation simple_used := WithLocal.simple_used.
+Abbreviation singleton_params_length := WithLocal.singleton_params_length.
+Abbreviation skipn_length_app := WithLocal.skipn_length_app.
+Abbreviation state_pa_ok := WithLocal.state_pa_ok.
+Abbreviation statics_le_refl := WithLocal.statics_le_refl.
+Abbreviation step_statics_le := WithLocal.step_statics_le.
+Abbreviation store_field_replace := WithLocal.store_field_replace.
+Abbreviation target_length := WithLocal.target_length.
+Abbreviation transfers := WithLocal.transfers.
+Abbreviation transfers_compose := WithLocal.transfers_compose.
+Abbreviation tuple_fields_block := WithLocal.tuple_fields_block.
+Abbreviation Conts_top := WithLocal.Conts_top.
+Abbreviation Conts_code := WithLocal.Conts_code.
+Abbreviation Conts_cons := WithLocal.Conts_cons.
+Abbreviation Outer_ok := WithLocal.Outer_ok.
+Abbreviation Closure_ok := WithLocal.Closure_ok.
+Abbreviation Extra_ok := WithLocal.Extra_ok.
+Abbreviation Over_ok := WithLocal.Over_ok.
+
+Section Run.
+
+Variable is_local : field -> bool.
+Variable G : graph.
+Variable sol : solution.
+Variable noted : symbol -> Prop.
+Variable deps : closure_dep -> Prop.
+Variable cds : finite_map code_dep.
+Variable keep : value_slot -> bool.
+Variable codes : list (code_id * code).
+Variable symbols : list symbol.
+Variable u : unit_interface.
+Variable heap_prims : Prop.
+Variable located : location -> option node.
+Hypothesis Hc : closed is_local G sol.
+Hypothesis Hlocal : is_local_slots_only is_local.
+Hypothesis Hconsts : g_any_source G Node_all_constants.
+Hypothesis Hsyms :
+  ∀ s : symbol, noted s -> may_come_from sol (Node_symbol s) (Node_symbol s).
+Hypothesis Hunit_syms :
+  ∀ s : symbol,
+    among s symbols = true -> may_come_from sol (Node_symbol s) (Node_symbol s).
+Hypothesis Hdeps : ∀ d : closure_dep, deps d -> closure_dep_facts G cds d.
+Hypothesis Hnd : NoDup (map fst cds).
+Hypothesis Hcds :
+  ∀ (id : code_id) (cd : code_dep),
+    lookup id cds = Some cd -> known_witness_edges G id cd.
+
+Abbreviation slots := (∀ f : field, is_local f = false).
+Abbreviation no_local_reads :=
+  (FlambdaReaperLocalFieldsProofs.local_reads_used_no_local is_local G sol).
+
+Definition apply_conts :=
+  @WithLocal.apply_conts is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hconsts Hsyms.
+Definition apply_ok :=
+  @WithLocal.apply_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hlocal Hnd Hcds.
+Definition call_ok :=
+  @WithLocal.call_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hlocal Hnd Hcds.
+Definition call_step :=
+  @WithLocal.call_step G noted deps cds keep codes symbols heap_prims slots.
+Definition closure_call_ok :=
+  @WithLocal.closure_call_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hnd Hcds.
+Definition code_facts :=
+  @WithLocal.code_facts G noted deps cds keep codes symbols heap_prims slots
+    Hnd.
+Definition codes_ok :=
+  @WithLocal.codes_ok G noted deps cds keep codes symbols heap_prims slots.
+Definition cont_ok :=
+  @WithLocal.cont_ok G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition cont_ok_closure_inv :=
+  @WithLocal.cont_ok_closure_inv G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition cont_ok_compose :=
+  @WithLocal.cont_ok_compose G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition cont_ok_compose_gen :=
+  @WithLocal.cont_ok_compose_gen G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition cont_ok_extra_inv :=
+  @WithLocal.cont_ok_extra_inv G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition cont_ok_outer_inv :=
+  @WithLocal.cont_ok_outer_inv G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition cont_ok_over_inv :=
+  @WithLocal.cont_ok_over_inv G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition conts_ok :=
+  @WithLocal.conts_ok G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition conts_ok_flows :=
+  @WithLocal.conts_ok_flows G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition conts_ok_lookup :=
+  @WithLocal.conts_ok_lookup G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition conts_ok_none :=
+  @WithLocal.conts_ok_none G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition conts_ok_rec :=
+  @WithLocal.conts_ok_rec G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition direct_call_ok :=
+  @WithLocal.direct_call_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hlocal Hconsts Hsyms Hnd Hcds.
+Definition enter_code_ok :=
+  @WithLocal.enter_code_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hnd.
+Definition flow_invariant :=
+  @WithLocal.flow_invariant G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition flow_invariant_flows :=
+  @WithLocal.flow_invariant_flows G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition initial_flow_invariant :=
+  @WithLocal.initial_flow_invariant G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition let_flow_invariant :=
+  @WithLocal.let_flow_invariant is_local G sol noted deps cds keep codes
+    symbols u heap_prims located slots Hc Hlocal Hconsts Hsyms Hdeps Hcds
+    no_local_reads.
+Definition named_flows :=
+  @WithLocal.named_flows is_local G sol noted deps cds keep heap_prims located
+    slots Hc Hlocal Hconsts Hsyms Hdeps Hcds no_local_reads.
+Definition no_arg_call :=
+  @WithLocal.no_arg_call G noted deps cds keep codes symbols heap_prims slots.
+Definition prim_exec_flows :=
+  @WithLocal.prim_exec_flows is_local G sol noted deps cds keep heap_prims
+    located slots Hc Hlocal Hconsts Hsyms Hdeps Hcds no_local_reads.
+Definition resolve_ok :=
+  @WithLocal.resolve_ok G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition result_heap_ok :=
+  @WithLocal.result_heap_ok G sol noted deps cds keep codes symbols u
+    heap_prims located slots.
+Definition result_ok :=
+  @WithLocal.result_ok G sol noted deps cds keep codes symbols u heap_prims
+    located slots.
+Definition run_flow_invariant :=
+  @WithLocal.run_flow_invariant is_local G sol noted deps cds keep codes
+    symbols u heap_prims located slots Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+    Hnd Hcds no_local_reads.
+Definition statics_bindings :=
+  @WithLocal.statics_bindings is_local G sol noted deps cds keep codes symbols
+    heap_prims located slots Hc Hconsts Hsyms Hunit_syms Hdeps Hcds.
+Definition statics_bindings_pa :=
+  @WithLocal.statics_bindings_pa G noted deps cds keep codes symbols heap_prims
+    slots.
+Definition step_flow_invariant :=
+  @WithLocal.step_flow_invariant is_local G sol noted deps cds keep codes
+    symbols u heap_prims located slots Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+    Hnd Hcds no_local_reads.
+Definition step_flow_invariant_core :=
+  @WithLocal.step_flow_invariant_core is_local G sol noted deps cds keep codes
+    symbols u heap_prims located slots Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+    Hnd Hcds no_local_reads.
+Definition step_flow_invariant_heap :=
+  @WithLocal.step_flow_invariant_heap is_local G sol noted deps cds keep codes
+    symbols u heap_prims located slots Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+    Hnd Hcds no_local_reads.
+Definition tupled_call_ok :=
+  @WithLocal.tupled_call_ok is_local G sol noted deps cds keep codes symbols u
+    heap_prims located slots Hc Hlocal Hnd Hcds.
+
+End Run.
+
 (* ======================================================================== *)
 (* What the closures are said to have                                       *)
 (* ======================================================================== *)
@@ -8869,14 +9178,554 @@ Proof.
       * rewrite run_succ, E in Hrun. discriminate Hrun.
 Qed.
 
-Lemma flow_sound_gen (flag : reaper_preserve_direct_calls)
+(* ======================================================================== *)
+(* The reads of a unit without projection                                   *)
+(* ======================================================================== *)
+
+(* A fact that reads no value or function slot. *)
+Definition reads_no_slot (fct : fact) : bool :=
+  match fct with
+  | Fact_accessor _ (Field_value_slot _) _
+  | Fact_accessor _ (Field_function_slot _) _ => false
+  | _ => true
+  end.
+
+Section NoSlotReads.
+
+Abbreviation nsr l := (forallb reads_no_slot l = true).
+Abbreviation nsa a := (nsr (acc_facts a)).
+
+Lemma nsr_app (l l' : list fact) : nsr l -> nsr l' -> nsr (l ++ l').
+Proof. intros H H'. rewrite forallb_app, H, H'. reflexivity. Qed.
+
+Lemma nsr_map {A : Type} (g : A -> fact) (l : list A) :
+  (∀ x : A, reads_no_slot (g x) = true) -> nsr (map g l).
+Proof.
+  intros H. induction l as [ | x l IH]; [ reflexivity | ].
+  simpl. rewrite H. exact IH.
+Qed.
+
+Lemma nsa_add_facts (l : list fact) (a : acc) :
+  nsr l -> nsa a -> nsa (add_facts l a).
+Proof. intros Hl Ha. exact (nsr_app _ _ Hl Ha). Qed.
+
+Lemma note_simple_facts_eq (s : simple) (a : acc) :
+  acc_facts (note_simple s a) = acc_facts a.
+Proof. destruct s; reflexivity. Qed.
+
+Lemma note_simples_facts_eq (l : list simple) :
+  ∀ a : acc, acc_facts (note_simples l a) = acc_facts a.
+Proof.
+  unfold note_simples. induction l as [ | s l IH]; intros a;
+    [ reflexivity | ].
+  simpl. rewrite IH. apply note_simple_facts_eq.
+Qed.
+
+Lemma fresh_list_facts_eq (n : nat) :
+  ∀ a : acc, acc_facts (snd (fresh_list n a)) = acc_facts a.
+Proof.
+  induction n as [ | n IH]; intros a; [ reflexivity | ].
+  cbn [fresh_list]. destruct (fresh a) as [x a1] eqn:Ef.
+  specialize (IH a1). destruct (fresh_list n a1) as [xs a2].
+  cbn [snd] in IH |- *. rewrite IH.
+  unfold fresh in Ef. injection Ef as _ <-. reflexivity.
+Qed.
+
+Ltac nsr_tac :=
+  repeat first
+    [ reflexivity
+    | apply nsr_app
+    | apply nsr_map; intros [? ?]; reflexivity
+    | apply nsr_map; intros ?; reflexivity ].
+
+Lemma nsa_cond_any_usage (env : traverse_env) (s : simple) (a : acc) :
+  nsa a -> nsa (cond_any_usage env s a).
+Proof.
+  intros Ha. unfold cond_any_usage.
+  destruct (env_current_code_id env); apply nsa_add_facts;
+    try reflexivity; rewrite note_simple_facts_eq; exact Ha.
+Qed.
+
+Lemma nsa_cond_alias (env : traverse_env) (from to_ : node) (a : acc) :
+  nsa a -> nsa (cond_alias env from to_ a).
+Proof.
+  intros Ha. unfold cond_alias.
+  destruct (env_current_code_id env); apply nsa_add_facts;
+    first [ reflexivity | exact Ha ].
+Qed.
+
+Lemma nsa_find_cont (env : traverse_env) (k : continuation) (n : nat)
+    (a : acc) :
+  nsa a -> nsa (snd (find_cont env k n a)).
+Proof.
+  intros Ha. unfold find_cont.
+  destruct (lookup k (FlambdaReaperTraversal.env_conts env)); [ exact Ha | ].
+  pose proof (fresh_list_facts_eq n a) as Hf.
+  destruct (fresh_list n a) as [params a']. cbn [snd] in Hf |- *.
+  apply nsa_add_facts; [ nsr_tac | rewrite Hf; exact Ha ].
+Qed.
+
+Lemma nsa_block_deps (base : node) (fields : list simple) (a : acc) :
+  nsa a -> nsa (block_deps base fields a).
+Proof.
+  intros Ha. unfold block_deps. apply nsa_add_facts; [ nsr_tac | ].
+  rewrite note_simples_facts_eq. exact Ha.
+Qed.
+
+Lemma nsa_traverse_prim (env : traverse_env) (x : variable) (p : prim)
+    (args : list simple) (a : acc) :
+  nsa a -> nsa (traverse_prim env x p args a).
+Proof.
+  intros Ha. unfold traverse_prim.
+  assert (Hacc : ∀ f s a,
+            reads_no_slot (Fact_accessor (Node_variable x) f
+                             (node_of_simple s)) = true ->
+            nsa a ->
+            nsa (add_fact (Fact_accessor (Node_variable x) f
+                             (node_of_simple s)) (note_simple s a))).
+  { intros f s a0 Hf Ha0. apply nsa_add_facts.
+    - exact (andb_true_intro (conj Hf eq_refl)).
+    - rewrite note_simple_facts_eq. exact Ha0. }
+  assert (Hdefault :
+    nsa (add_facts
+           (Fact_any_source (Node_variable x)
+            :: map (fun from => Fact_use (Node_variable x) from)
+                 (free_names_of_simples args))
+           (if prim_has_arbitrary_effects p
+            then cond_any_usage env (Var x) a else a))).
+  { apply nsa_add_facts; [ nsr_tac | ].
+    destruct (prim_has_arbitrary_effects p);
+      [ apply nsa_cond_any_usage, Ha | exact Ha ]. }
+  cbv zeta.
+  destruct p as [p | p | p | p | p]; [ | exact Hdefault | | | ].
+  - destruct p; destruct args as [ | s [ | s' args]]; try exact Hdefault;
+      try destruct mut; try destruct variant_only; cbv beta iota;
+      first
+        [ exact Hdefault
+        | apply Hacc; [ reflexivity | exact Ha ]
+        | apply nsa_add_facts; [ reflexivity | ];
+          first
+            [ apply Hacc; [ reflexivity | exact Ha ]
+            | rewrite note_simple_facts_eq; exact Ha ] ].
+  - destruct p; [ apply nsa_block_deps, Ha | exact Hdefault ].
+  - destruct p; try exact Hdefault. apply nsa_block_deps, Ha.
+  - destruct p; try exact Hdefault. destruct args; exact Ha.
+Qed.
+
+Lemma nsa_record_set_of_closures_deps (env : traverse_env)
+    (closures : list (node * option code_id))
+    (function_slots : list (function_slot * node))
+    (value_slots : list (value_slot * simple)) (a : acc) :
+  nsa a ->
+  nsa (record_set_of_closures_deps env closures function_slots value_slots
+         a).
+Proof.
+  unfold record_set_of_closures_deps. revert a.
+  induction closures as [ | [base code] closures IH]; intros a Ha;
+    [ exact Ha | ].
+  cbn [fold_left]. apply IH. apply nsa_add_facts; [ nsr_tac | ].
+  rewrite note_simples_facts_eq. destruct code; exact Ha.
+Qed.
+
+Lemma closures_of_set_facts (x : variable) (slot : function_slot)
+    (others : list (function_slot * variable))
+    (function_decls : list (function_slot * code_id)) :
+  ∀ a : acc,
+    acc_facts (snd (closures_of_set x slot others function_decls a))
+    = acc_facts a.
+Proof.
+  induction function_decls as [ | [f id] decls IH]; intros a;
+    [ reflexivity | ].
+  cbn [closures_of_set].
+  destruct (if Pos.eqb f slot then (Node_variable x, a)
+            else match lookup f others with
+                 | Some y => (Node_variable y, a)
+                 | None => fresh a
+                 end) as [name a1] eqn:Hn.
+  specialize (IH a1).
+  destruct (closures_of_set x slot others decls a1) as [rest a2].
+  cbn [snd] in IH |- *. rewrite IH.
+  destruct (Pos.eqb f slot); [ injection Hn as _ <-; reflexivity | ].
+  destruct (lookup f others); [ injection Hn as _ <-; reflexivity | ].
+  unfold fresh in Hn. injection Hn as _ <-. reflexivity.
+Qed.
+
+Lemma nsa_traverse_closure_of_set (env : traverse_env) (x : variable)
+    (slot : function_slot) (function_decls : list (function_slot * code_id))
+    (value_slots : list (value_slot * simple)) (a : acc) :
+  nsa a -> nsa (traverse_closure_of_set env x slot function_decls value_slots
+                  a).
+Proof.
+  intros Ha. unfold traverse_closure_of_set.
+  destruct (among slot _); [ | exact Ha ].
+  pose proof (closures_of_set_facts x slot (set_closures_of env x)
+                (compact function_decls) a) as Hf.
+  destruct (closures_of_set _ _ _ _ a) as [closures a1].
+  cbn [snd] in Hf. apply nsa_record_set_of_closures_deps.
+  rewrite Hf. exact Ha.
+Qed.
+
+Lemma nsa_traverse_named (env : traverse_env) (x : variable) (d : named)
+    (a : acc) :
+  named_projection_free d = true ->
+  nsa a -> nsa (traverse_named env x d a).
+Proof.
+  intros Hd Ha. destruct d; try discriminate Hd; cbn [traverse_named].
+  - apply nsa_add_facts; [ reflexivity | ].
+    rewrite note_simple_facts_eq. exact Ha.
+  - apply nsa_traverse_prim, Ha.
+  - apply nsa_record_set_of_closures_deps, Ha.
+  - apply nsa_traverse_closure_of_set, Ha.
+Qed.
+
+Lemma nsa_traverse_static_binding (env : traverse_env)
+    (binding : static_binding) (a : acc) :
+  nsa a -> nsa (traverse_static_binding env binding a).
+Proof.
+  intros Ha. destruct binding as [ | | s const]; try exact Ha.
+  destruct const as [ | | | contents | | elements ];
+    cbn [traverse_static_binding].
+  - apply nsa_record_set_of_closures_deps, Ha.
+  - apply nsa_record_set_of_closures_deps, Ha.
+  - apply nsa_block_deps, Ha.
+  - apply nsa_add_facts; [ | exact Ha ].
+    unfold boxed_number_facts.
+    destruct (boxed_number_kind contents); [ reflexivity | ].
+    destruct contents; reflexivity.
+  - apply nsa_add_facts; [ reflexivity | exact Ha ].
+  - destruct elements; [ apply nsa_add_facts; [ reflexivity | exact Ha ] | ].
+    apply nsa_block_deps, Ha.
+Qed.
+
+Lemma nsa_unknown_arity_witness_deps (id : code_id) (returns : list node)
+    (exn : node) :
+  ∀ (pws : list (list node * node)) (a : acc),
+    nsa a -> nsa (unknown_arity_witness_deps id returns exn pws a).
+Proof.
+  induction pws as [ | [first witness] rest IH]; intros a Ha;
+    [ exact Ha | ].
+  cbn [unknown_arity_witness_deps].
+  assert (Ha1 : nsa (add_facts
+                       (map (fun '(i, p) => Fact_parameter witness i p)
+                          (indexed first)
+                        ++ [Fact_constructor witness
+                              Field_code_id_of_call_witness
+                              (Node_code_id id)]) a))
+    by (apply nsa_add_facts; [ nsr_tac | exact Ha ]).
+  destruct rest as [ | [first' next] rest'].
+  - apply nsa_add_facts; [ nsr_tac | exact Ha1 ].
+  - destruct (fresh _) as [v a2] eqn:Hf. apply IH.
+    apply nsa_add_facts; [ reflexivity | ].
+    unfold fresh in Hf. injection Hf as _ <-. exact Ha1.
+Qed.
+
+Lemma nsa_prepare_code (id : code_id) (c : code) (a : acc) :
+  nsa a -> nsa (prepare_code id c a).
+Proof.
+  intros Ha. unfold prepare_code.
+  pose proof (fresh_list_facts_eq (length (code_result_kinds c)) a) as H1.
+  destruct (fresh_list _ a) as [returns a1]. cbn [snd] in H1.
+  destruct (fresh a1) as [exn a2] eqn:H2.
+  destruct (fresh a2) as [my_closure a3] eqn:H3.
+  pose proof (fresh_list_facts_eq (length (code_params_kinds c)) a3) as H4.
+  destruct (fresh_list _ a3) as [params a4]. cbn [snd] in H4.
+  unfold fresh in H2, H3. injection H2 as _ <-. injection H3 as _ <-.
+  cbn [acc_facts] in H4.
+  assert (Ha4 : nsa a4) by (rewrite H4, H1; exact Ha).
+  unfold create_known_arity_call_witness.
+  destruct (fresh a4) as [known a5] eqn:H5.
+  unfold fresh in H5. injection H5 as _ <-.
+  set (a6 := add_facts _ _).
+  assert (Ha6 : nsa a6) by (apply nsa_add_facts; [ nsr_tac | exact Ha4 ]).
+  clearbody a6.
+  assert (Hu : nsa (snd (create_unknown_arity_call_witnesses id
+                           (code_is_tupled c) (code_params_arity c) params
+                           returns exn a6))).
+  { unfold create_unknown_arity_call_witnesses.
+    destruct (code_is_tupled c).
+    - unfold create_unknown_arity_tupled_call_witnesses.
+      destruct (fresh a6) as [w b1] eqn:E1.
+      destruct (fresh b1) as [ut b2] eqn:E2.
+      destruct (fresh b2) as [ka b3] eqn:E3.
+      unfold fresh in E1, E2, E3.
+      injection E1 as _ <-. injection E2 as _ <-. injection E3 as _ <-.
+      apply nsa_add_facts; [ nsr_tac | exact Ha6 ].
+    - unfold create_unknown_arity_non_tupled_call_witnesses.
+      pose proof (fresh_list_facts_eq
+                    (length (at_least_one_group
+                               (group_by_parameter (code_params_arity c)
+                                  params))) a6) as Hf.
+      destruct (fresh_list _ a6) as [ws b1]. cbn [snd] in Hf |- *.
+      apply nsa_unknown_arity_witness_deps. rewrite Hf. exact Ha6. }
+  destruct (create_unknown_arity_call_witnesses _ _ _ _ _ _ a6)
+    as [unknown a7].
+  cbn [snd] in Hu.
+  unfold add_code_dep. cbn [acc_facts].
+  apply nsa_add_facts; [ reflexivity | exact Hu ].
+Qed.
+
+Lemma nsa_prepare_binding (binding : static_binding) (a : acc) :
+  nsa a -> nsa (prepare_binding binding a).
+Proof.
+  intros Ha. destruct binding; cbn [prepare_binding];
+    [ apply nsa_prepare_code, Ha | exact Ha | exact Ha ].
+Qed.
+
+Lemma nsa_make_known (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  nsa a -> nsa (snd (make_known_arity_apply_widget env ap returns exn a)).
+Proof.
+  intros Ha. unfold make_known_arity_apply_widget.
+  destruct (fresh a) as [w a1] eqn:E1.
+  destruct (fresh a1) as [called a2] eqn:E2.
+  destruct (fresh a2) as [apply_node a3] eqn:E3.
+  unfold fresh in E1, E2, E3.
+  injection E1 as _ <-. injection E2 as _ <-. injection E3 as _ <-.
+  cbn [snd]. apply nsa_cond_alias. apply nsa_add_facts; [ nsr_tac | ].
+  rewrite note_simples_facts_eq. exact Ha.
+Qed.
+
+Lemma nsa_unknown_arity_apply_deps (returns : list node) (exn called : node) :
+  ∀ (aws : list (list simple * node)) (a : acc),
+    nsa a -> nsa (unknown_arity_apply_deps returns exn called aws a).
+Proof.
+  induction aws as [ | [first witness] rest IH]; intros a Ha;
+    [ exact Ha | ].
+  cbn [unknown_arity_apply_deps].
+  assert (Ha1 : nsa (add_facts
+                       (map (fun '(i, s) =>
+                               Fact_argument (node_of_simple s) i witness)
+                          (indexed first)
+                        ++ [Fact_accessor exn (Field_return_of_call Exn)
+                              witness;
+                            Fact_accessor called
+                              Field_code_id_of_call_witness witness]) a))
+    by (apply nsa_add_facts; [ nsr_tac | exact Ha ]).
+  destruct rest as [ | [first' next] rest'].
+  - apply nsa_add_facts; [ nsr_tac | exact Ha1 ].
+  - destruct (fresh _) as [v a2] eqn:Hf. apply IH.
+    apply nsa_add_facts; [ reflexivity | ].
+    unfold fresh in Hf. injection Hf as _ <-. exact Ha1.
+Qed.
+
+Lemma nsa_make_unknown (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  nsa a -> nsa (snd (make_unknown_arity_apply_widget env ap returns exn a)).
+Proof.
+  intros Ha. unfold make_unknown_arity_apply_widget.
+  destruct (fresh a) as [called a1] eqn:E1.
+  unfold fresh in E1. injection E1 as _ <-.
+  set (groups := at_least_one_group _).
+  set (a2 := add_fact _ _).
+  assert (Ha2 : nsa a2) by (apply nsa_add_facts; [ reflexivity | exact Ha ]).
+  clearbody a2.
+  pose proof (fresh_list_facts_eq (length groups) a2) as Hf.
+  destruct (fresh_list _ a2) as [ws a3]. cbn [snd] in Hf.
+  assert (Ha4 : nsa (unknown_arity_apply_deps returns exn called
+                       (combine groups ws) (note_simples (ap_args ap) a3))).
+  { apply nsa_unknown_arity_apply_deps.
+    rewrite note_simples_facts_eq, Hf. exact Ha2. }
+  destruct (fresh (unknown_arity_apply_deps _ _ _ _ _)) as [an a5] eqn:E5.
+  unfold fresh in E5. injection E5 as _ <-.
+  destruct ws as [ | first ws']; cbn [snd];
+    [ exact Ha4 | apply nsa_cond_alias, Ha4 ].
+Qed.
+
+Lemma nsa_add_apply (env : traverse_env) (id : code_id)
+    (callee call_widget : node) (b : bool) (a : acc) :
+  nsa a -> nsa (add_apply env id callee call_widget b a).
+Proof.
+  intros Ha. unfold add_apply. destruct b; [ | exact Ha ].
+  destruct (fresh a) as [c a1] eqn:E1.
+  destruct (fresh a1) as [w a2] eqn:E2.
+  unfold fresh in E1, E2. injection E1 as _ <-. injection E2 as _ <-.
+  apply nsa_add_facts; [ reflexivity | exact Ha ].
+Qed.
+
+Lemma nsa_traverse_apply (env : traverse_env) (ap : apply_expr) (a : acc) :
+  nsa a -> nsa (traverse_apply env ap a).
+Proof.
+  intros Ha. unfold traverse_apply.
+  pose proof (nsa_find_cont env (ap_continuation ap)
+                (length (unarize (ap_return_arity ap))) a Ha) as H1.
+  destruct (find_cont _ _ _ a) as [return_args a1]. cbn [snd] in H1.
+  pose proof (nsa_find_cont env (ap_exn_continuation ap)
+                (S (length (ap_exn_extra_args ap))) a1 H1) as H2.
+  destruct (find_cont _ _ _ a1) as [exn_params a2]. cbn [snd] in H2.
+  assert (H3 : ∀ exn_arg a3,
+             nsa a3 -> nsa (traverse_call_kind env ap exn_arg return_args a3)).
+  { intros exn_arg a3 Ha3. unfold traverse_call_kind.
+    destruct (ap_call_kind ap) as [id | ].
+    - pose proof (nsa_make_known env ap return_args exn_arg
+                    (note_simple (ap_callee ap) a3)) as Hk.
+      rewrite note_simple_facts_eq in Hk. specialize (Hk Ha3).
+      destruct (make_known_arity_apply_widget _ _ _ _ _) as [cw a4].
+      cbn [snd] in Hk.
+      assert (Ha5 : nsa (add_fact (Fact_accessor cw
+                                     (Field_call_witness
+                                        Known_arity_code_pointer)
+                                     (node_of_simple (ap_callee ap))) a4))
+        by (apply nsa_add_facts; [ reflexivity | exact Hk ]).
+      destruct (env_should_preserve_direct_calls env);
+        try (apply nsa_add_apply, Ha5).
+      destruct (negb _); [ apply nsa_add_apply, Ha5 | exact Ha5 ].
+    - pose proof (nsa_make_unknown env ap return_args exn_arg
+                    (note_simple (ap_callee ap) a3)) as Hk.
+      rewrite note_simple_facts_eq in Hk. specialize (Hk Ha3).
+      destruct (make_unknown_arity_apply_widget _ _ _ _ _) as [cw a4].
+      cbn [snd] in Hk.
+      apply nsa_add_facts; [ reflexivity | exact Hk ]. }
+  destruct exn_params as [ | p extra].
+  - destruct (fresh a2) as [e a3] eqn:E. unfold fresh in E.
+    injection E as _ <-. apply H3. exact H2.
+  - apply H3. apply nsa_add_facts; [ nsr_tac | ].
+    rewrite note_simples_facts_eq. exact H2.
+Qed.
+
+Lemma nsa_apply_cont_deps (env : traverse_env) (ac : apply_cont) (a : acc) :
+  nsa a -> nsa (apply_cont_deps env ac a).
+Proof.
+  intros Ha. unfold apply_cont_deps.
+  pose proof (nsa_find_cont env (ac_continuation ac) (length (ac_args ac)) a
+                Ha) as Hf.
+  destruct (find_cont _ _ _ a) as [params a']. cbn [snd] in Hf.
+  apply nsa_add_facts; [ nsr_tac | ].
+  rewrite note_simples_facts_eq. exact Hf.
+Qed.
+
+Lemma nsa_traverse_switch (env : traverse_env) (scrutinee : simple)
+    (arms : list (Z * apply_cont)) (a : acc) :
+  nsa a -> nsa (traverse_switch env scrutinee arms a).
+Proof.
+  intros Ha. unfold traverse_switch.
+  pose proof (nsa_cond_any_usage env scrutinee a Ha) as H.
+  revert H. generalize (cond_any_usage env scrutinee a).
+  induction (Keyed.compact Z.eqb arms) as [ | [d ac] l IH]; intros a' Ha';
+    [ exact Ha' | ].
+  simpl. apply IH. apply nsa_apply_cont_deps, Ha'.
+Qed.
+
+Lemma nsa_exn_handler_deps (env : traverse_env) (h : continuation_handler)
+    (a : acc) :
+  nsa a -> nsa (exn_handler_deps env h a).
+Proof.
+  intros Ha. unfold exn_handler_deps.
+  destruct h as [[ | p params] metadata handler]; [ exact Ha | ].
+  destruct (hm_is_exn_handler metadata); [ | exact Ha ].
+  apply nsa_cond_any_usage, nsa_add_facts; [ reflexivity | exact Ha ].
+Qed.
+
+Lemma nsa_fold {B : Type} (step : acc -> B -> acc) (l : list B) :
+  (∀ (b : B) (a : acc), b ∈ l -> nsa a -> nsa (step a b)) ->
+  ∀ a : acc, nsa a -> nsa (List.fold_left step l a).
+Proof.
+  induction l as [ | b l IH]; intros Hstep a Ha; [ exact Ha | ].
+  simpl. apply IH; [ intros b' a' Hb; apply Hstep; right; exact Hb | ].
+  apply Hstep; [ left; reflexivity | exact Ha ].
+Qed.
+
+(* The traversal of a unit without projection reads no slot. *)
+Lemma nsa_traverse :
+  (∀ e : expr, projection_free e = true ->
+     ∀ (env : traverse_env) (a : acc), nsa a -> nsa (traverse env e a))
+  ∧ (∀ h : continuation_handler, handler_projection_free h = true ->
+       ∀ (env : traverse_env) (a : acc), nsa a ->
+         nsa (traverse_handler env h a)).
+Proof.
+  apply expr_handler_ind.
+  - intros x kind d body IH Hpf env a Ha. simpl in Hpf.
+    apply andb_true_iff in Hpf as [Hd Hbody]. cbn [traverse].
+    apply (IH Hbody). apply nsa_traverse_named; [ exact Hd | exact Ha ].
+  - intros bindings body IHc IH Hpf env a Ha. simpl in Hpf.
+    apply andb_true_iff in Hpf as [Hbs Hbody]. cbn [traverse]. cbv zeta.
+    apply (IH Hbody). rewrite forallb_forall in Hbs.
+    apply nsa_fold; [ | apply nsa_fold; [ | apply nsa_fold ] ].
+    + intros [id c | id | s const] a' Hin Ha'; cbn [traverse_binding];
+        try exact Ha'.
+      destruct c as [params mc ret exn md cbody]. cbn [traverse_code].
+      destruct (lookup id (acc_code_deps a')) as [cd | ]; [ | exact Ha' ].
+      pose proof (Hbs _ Hin) as Hc. cbn in Hc.
+      apply (IHc id (Code params mc ret exn md cbody) Hin Hc).
+      apply nsa_add_facts; [ nsr_tac | exact Ha' ].
+    + intros b a' _ Ha'. apply nsa_traverse_static_binding, Ha'.
+    + intros b a' _ Ha'. apply nsa_prepare_binding, Ha'.
+    + exact Ha.
+  - intros k h body IHh IH Hpf env a Ha. simpl in Hpf.
+    apply andb_true_iff in Hpf as [Hh Hbody]. cbn [traverse].
+    apply (IH Hbody). apply nsa_exn_handler_deps. exact (IHh Hh env a Ha).
+  - intros handlers body IHh IH Hpf env a Ha. simpl in Hpf.
+    apply andb_true_iff in Hpf as [Hhs Hbody]. cbn [traverse].
+    apply (IH Hbody). rewrite forallb_forall in Hhs.
+    apply nsa_fold; [ | exact Ha ].
+    intros [k h] a' Hin Ha'. exact (IHh k h Hin (Hhs _ Hin) _ a' Ha').
+  - intros ap _ env a Ha. apply nsa_traverse_apply, Ha.
+  - intros ac _ env a Ha. apply nsa_apply_cont_deps, Ha.
+  - intros scrutinee arms _ env a Ha. apply nsa_traverse_switch, Ha.
+  - intros _ env a Ha. exact Ha.
+  - intros params metadata handler IH Hpf env a Ha. exact (IH Hpf env a Ha).
+Qed.
+
+Lemma nsa_add_closure_dep (cds : finite_map code_dep) (d : closure_dep)
+    (a : acc) :
+  nsa a -> nsa (add_closure_dep cds d a).
+Proof.
+  intros Ha. unfold add_closure_dep.
+  destruct (lookup _ cds) as [cd | ].
+  - apply nsa_add_facts; [ | exact Ha ].
+    destruct (cd_unknown_arity_call_witnesses cd); reflexivity.
+  - destruct (fresh a) as [w a1] eqn:E. unfold fresh in E.
+    injection E as _ <-. apply nsa_add_facts; [ reflexivity | exact Ha ].
+Qed.
+
+Lemma nsa_resolve_delayed_deps (symbols : list symbol) (a : acc) :
+  nsa a -> nsa (resolve_delayed_deps symbols a).
+Proof.
+  intros Ha. unfold resolve_delayed_deps.
+  apply nsa_add_facts; [ nsr_tac | ].
+  apply nsa_fold; [ intros d a' _; apply nsa_add_closure_dep | ].
+  apply nsa_add_facts; [ | exact Ha ].
+  induction (acc_apply_deps a) as [ | d l IH]; [ reflexivity | ].
+  cbn [flat_map]. apply nsr_app; [ | exact IH ].
+  unfold apply_dep_facts.
+  destruct (lookup _ _); [ unfold alias_for_caller | ];
+    destruct (ad_function_containing_apply_expr d); reflexivity.
+Qed.
+
+(* The facts of a unit without projection read no slot. *)
+Lemma traverse_unit_reads_no_slot (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) :
+  projection_free e = true ->
+  ∀ (to_ : node) (f : field) (base : node),
+    (to_, f, base) ∈ f_accessor (traverse_unit flag u e) ->
+    (∀ w : value_slot, f <> Field_value_slot w)
+    ∧ (∀ fs : function_slot, f <> Field_function_slot fs).
+Proof.
+  intros Hpf to_ f base Hin.
+  assert (Hall : nsa (resolve_delayed_deps (static_names symbols_of_binding e)
+                        (add_fact (Fact_any_usage (Node_made 1))
+                           (traverse (initial_env flag u e) e
+                              initial_acc)))).
+  { apply nsa_resolve_delayed_deps, nsa_add_facts; [ reflexivity | ].
+    apply (proj1 nsa_traverse e Hpf). reflexivity. }
+  rewrite traverse_unit_eq in Hin.
+  cbn [facts_of_list f_accessor] in Hin.
+  apply in_flat_map in Hin as (fct & Hfct & Hin).
+  destruct fct; cbn in Hin; try contradiction.
+  destruct Hin as [[= <- <- <-] | []].
+  rewrite forallb_forall in Hall. specialize (Hall _ Hfct).
+  split; intros ? ->; discriminate Hall.
+Qed.
+
+End NoSlotReads.
+
+Lemma flow_sound_gen_local (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (n : nat) (G : graph) :
   graph_sub (graph_of_facts (traverse_unit flag u e)) G ->
   is_local_slots_only is_local ->
-  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
   in_heap_fragment e = true ->
   closed is_local G (solution_of_tables T) ->
+  local_reads_used is_local G (solution_of_tables T) ->
   ∃ located : location -> option node,
     match run n (State e [] [] empty_static_env empty_heap no_reads) with
     | Step s =>
@@ -8890,20 +9739,19 @@ Lemma flow_sound_gen (flag : reaper_preserve_direct_calls)
     | Undefined => True
     end.
 Proof.
-  intros Hsub Hlocal Hslots Hfrag Hc.
-  destruct (traverse_unit_facts_heap flag u e
-              (∀ f : field, is_local f = false) Hfrag Hslots)
+  intros Hsub Hlocal Hfrag Hc Hlrs.
+  destruct (traverse_unit_facts_heap flag u e True Hfrag (or_introl I))
     as (noted & deps & cds & He0 & Hconsts0 & Himported & _ & Hdeps0 & Hnd
         & Hkeys).
   set (G0 := graph_of_facts (traverse_unit flag u e)) in *.
   set (sol := solution_of_tables T) in *.
   pose proof (static_names_edges G0 noted deps cds (unit_kept e)
                 (unit_codes e) (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false) True) as [Hnames _].
+                True True) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He0) as [Hsym_names Hcode_names].
   pose proof (proj1 (expr_edges_mono G0 G Hsub noted deps cds (unit_kept e)
                        (unit_codes e) (static_names symbols_of_binding e)
-                       (∀ f : field, is_local f = false) True)
+                       True True)
                 e None (unit_conts u) He0) as He.
   pose proof (sub_any_source G0 G Hsub _ Hconsts0) as Hconsts.
   assert (Hdeps : ∀ d : closure_dep, deps d -> closure_dep_facts G cds d).
@@ -8962,19 +9810,20 @@ Proof.
                                 no_reads))
     as (located & Hloc).
   exists located.
-  pose proof (run_flow_invariant is_local G sol noted deps cds (unit_kept e)
-                (unit_codes e) (static_names symbols_of_binding e) u True
-                located Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds n _
-                Hloc
-                (initial_flow_invariant is_local G sol noted deps cds
+  pose proof (WithLocal.run_flow_invariant is_local G sol noted deps cds
+                (unit_kept e) (unit_codes e) (static_names symbols_of_binding e)
+                u True located True Hc Hlocal Hconsts Hsyms Hunit_syms Hdeps
+                Hnd Hcds (fun _ => Hlrs) n _ Hloc
+                (WithLocal.initial_flow_invariant G sol noted deps cds
                    (unit_kept e) (unit_codes e)
-                   (static_names symbols_of_binding e) u True located e He)
+                   (static_names symbols_of_binding e) u True located True e
+                   He)
                 ltac:(apply initial_heap_ok))
     as Hrun.
   destruct (run n (State e [] [] empty_static_env empty_heap no_reads))
     as [s | k vs hp rd | ].
   - destruct Hrun as [Hinv [Hheap _]].
-    destruct (flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hinv)
+    destruct (WithLocal.flow_invariant_flows _ _ _ _ _ _ _ _ _ _ _ _ _ Hinv)
       as (Hvars & Hconts & Hst).
     apply (state_flows_weaken _ _ _ (called_by G cds));
       [ apply called_witness | ].
@@ -8987,19 +9836,70 @@ Proof.
   - exact I.
 Qed.
 
+Theorem flow_sound_local : flow_sound_local_statement.
+Proof.
+  intros flag is_local u e T n Hlocal Hfrag Hcheck Hlrs.
+  exact (flow_sound_gen_local flag is_local u e T n _ (graph_sub_refl _)
+           Hlocal Hfrag (check_closed_sound is_local _ _ Hcheck)
+           (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+              is_local _ _ Hlrs)).
+Qed.
+
+Theorem flow_sound_without_keep_alive_local :
+  flow_sound_without_keep_alive_local_statement.
+Proof.
+  intros flag is_local u e T n Hlocal Hfrag Hcheck Hlrs.
+  exact (flow_sound_gen_local flag is_local u e T n _
+           (without_keep_alive_sub _) Hlocal Hfrag
+           (check_closed_sound is_local _ _ Hcheck)
+           (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+              is_local _ _ Hlrs)).
+Qed.
+
+Theorem old_premise_local_reads_used :
+  old_premise_local_reads_used_statement.
+Proof.
+  intros flag is_local u e T Hlocal Hslots.
+  unfold check_local_reads_used. apply forallb_forall.
+  intros [[to_ f] base] Hin.
+  destruct (is_local f) eqn:Hl;
+    [ | rewrite andb_false_r; reflexivity ].
+  exfalso. destruct Hslots as [Hno | Hpf];
+    [ rewrite Hno in Hl; discriminate Hl | ].
+  destruct (traverse_unit_reads_no_slot flag u e Hpf to_ f base Hin)
+    as [Hw Hfs].
+  destruct (Hlocal f Hl) as [(w & ->) | (fs & ->)];
+    [ exact (Hw w eq_refl) | exact (Hfs fs eq_refl) ].
+Qed.
+
+(* The graph without the two facts of tupled code has fewer reads. *)
+Lemma check_local_reads_used_without_keep_alive (is_local : field -> bool)
+    (F : facts) (T : tables) :
+  check_local_reads_used is_local F T = true ->
+  check_local_reads_used is_local
+    (FlambdaReaperTupledSpec.without_keep_alive F) T
+  = true.
+Proof.
+  unfold check_local_reads_used. rewrite !forallb_forall.
+  intros H x Hx. apply filter_In in Hx as [Hx _]. exact (H x Hx).
+Qed.
+
 Theorem flow_sound : flow_sound_statement.
 Proof.
   intros flag is_local u e T n Hlocal Hslots Hfrag Hcheck.
-  exact (flow_sound_gen flag is_local u e T n _ (graph_sub_refl _) Hlocal
-           Hslots Hfrag (check_closed_sound is_local _ _ Hcheck)).
+  exact (flow_sound_local flag is_local u e T n Hlocal Hfrag Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)).
 Qed.
 
 Theorem flow_sound_without_keep_alive :
   flow_sound_without_keep_alive_statement.
 Proof.
   intros flag is_local u e T n Hlocal Hslots Hfrag Hcheck.
-  exact (flow_sound_gen flag is_local u e T n _ (without_keep_alive_sub _)
-           Hlocal Hslots Hfrag (check_closed_sound is_local _ _ Hcheck)).
+  exact (flow_sound_without_keep_alive_local flag is_local u e T n Hlocal
+           Hfrag Hcheck
+           (check_local_reads_used_without_keep_alive is_local _ T
+              (old_premise_local_reads_used flag is_local u e T Hlocal
+                 Hslots))).
 Qed.
 
 Theorem unit_cont_nodes_used : unit_cont_nodes_used_statement.

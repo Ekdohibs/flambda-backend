@@ -5416,23 +5416,37 @@ Proof.
       exact (Hwrong Hm).
 Qed.
 
+Theorem rebuild_unbox_refines_observably_local :
+  rebuild_unbox_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox
+    preserve_direct_calls Hlocal_slots Hfragment Hstatic Hkinded
+    Hwell_formed Hone Hclosed Hlrs Hexact Hlocal Hcheck.
+  apply (refines_observably_refines _
+           (State (rebuild_unit_from_tables (traverse_unit flag u e) T
+                     preserve_direct_calls e)
+              [] [] empty_static_env empty_heap no_reads)).
+  - exact (rebuild_refines_observably_local flag is_local u e T
+             preserve_direct_calls Hlocal_slots Hfragment
+             (static_constants_any_kind_arguments _ e Hstatic)
+             Hkinded Hwell_formed Hone Hclosed Hlrs Hexact).
+  - exact (rebuild_unbox_refines_rebuild flag is_local u e T cannot_change
+             (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls
+             Hlocal_slots Hfragment Hclosed Hlocal Hcheck).
+Qed.
+
 Theorem rebuild_unbox_refines_observably :
   rebuild_unbox_refines_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox
     preserve_direct_calls Hlocal_slots Hprojections Hfragment Hstatic Hkinded
     Hwell_formed Hone Hclosed Hexact Hlocal Hcheck.
-  apply (refines_observably_refines _
-           (State (rebuild_unit_from_tables (traverse_unit flag u e) T
-                     preserve_direct_calls e)
-              [] [] empty_static_env empty_heap no_reads)).
-  - exact (rebuild_refines_observably flag is_local u e T
-             preserve_direct_calls Hlocal_slots Hprojections Hfragment
-             (static_constants_any_kind_arguments _ e Hstatic)
-             Hkinded Hwell_formed Hone Hclosed Hexact).
-  - exact (rebuild_unbox_refines_rebuild flag is_local u e T cannot_change
-             (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls
-             Hlocal_slots Hfragment Hclosed Hlocal Hcheck).
+  exact (rebuild_unbox_refines_observably_local flag is_local u e T
+           cannot_change dominated to_unbox preserve_direct_calls Hlocal_slots
+           Hfragment Hstatic Hkinded Hwell_formed Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal_slots Hprojections)
+           Hexact Hlocal Hcheck).
 Qed.
 
 Theorem local_example : local_example_statement.
@@ -6935,19 +6949,34 @@ Proof.
   apply WithoutUnboxing.rebuild_unbox_without_unboxing.
 Qed.
 
+Theorem rebuild_unbox_without_unboxing_observably_local :
+  rebuild_unbox_without_unboxing_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox
+    preserve_direct_calls Hlocal Hfrag Hstatic Hkinded Hwf Hone Hclosed Hlrs
+    Hexact Hcc_closed Hwidgets Hnil Hm.
+  rewrite (rebuild_unbox_without_unboxing (traverse_unit flag u e) T
+             cannot_change (unit_code_deps flag u e) dominated to_unbox
+             preserve_direct_calls e Hnil Hm).
+  exact
+    (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably_local
+       flag is_local u e T cannot_change preserve_direct_calls Hlocal Hfrag
+       (static_constants_any_kind_arguments _ e Hstatic) Hkinded Hwf Hone
+       Hclosed Hlrs Hexact Hcc_closed Hwidgets).
+Qed.
+
 Theorem rebuild_unbox_without_unboxing_observably :
   rebuild_unbox_without_unboxing_observably_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox
     preserve_direct_calls Hlocal Hproj Hfrag Hstatic Hkinded Hwf Hone
     Hclosed Hexact Hcc_closed Hwidgets Hnil Hm.
-  rewrite (rebuild_unbox_without_unboxing (traverse_unit flag u e) T
-             cannot_change (unit_code_deps flag u e) dominated to_unbox
-             preserve_direct_calls e Hnil Hm).
-  exact (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably
-           flag is_local u e T cannot_change preserve_direct_calls Hlocal
-           Hproj Hfrag (static_constants_any_kind_arguments _ e Hstatic)
-           Hkinded Hwf Hone Hclosed Hexact Hcc_closed Hwidgets).
+  exact (rebuild_unbox_without_unboxing_observably_local flag is_local u e T
+           cannot_change dominated to_unbox preserve_direct_calls Hlocal Hfrag
+           Hstatic Hkinded Hwf Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hproj)
+           Hexact Hcc_closed Hwidgets Hnil Hm).
 Qed.
 
 Theorem without_unboxing_examples : without_unboxing_examples_statement.

@@ -1113,11 +1113,11 @@ Proof.
   exact (traverse_unit_witness_code_ids _ _ _ _ _ _ Hin Hin').
 Qed.
 
-Theorem rebuild_cc_refines_observably :
-  rebuild_cc_refines_observably_statement.
+Theorem rebuild_cc_refines_observably_local :
+  rebuild_cc_refines_observably_local_statement.
 Proof.
-  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk
-    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid.
+  intros flag is_local u e T cannot_change b Hlocal Hfrag Hdc Hrk
+    Hwf Hexits Hcheck Hlrs Hcheck_exact Hccc Hwid.
   pose proof (traverse_witness_code_ids flag u e) as Hcid.
   assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
   { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
@@ -1125,23 +1125,34 @@ Proof.
     intros k l Hl. discriminate Hl. }
   destruct (check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
   exact (proj1 (FlambdaReaperRebuildProofs.exits_rel_flow false _ _
-                  (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked false
-                     false flag is_local u e T
-                     (fun n => mem_node n cannot_change) ccw b Hlocal Hslots
-                     Hfrag
+                  (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked_local
+                     false false flag is_local u e T
+                     (fun n => mem_node n cannot_change) ccw b Hlocal Hfrag
                      (proj1
                         (FlambdaReaperRebuildProofs.any_kind_arguments_checked
                            (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
-                     Hkinded Hwf Hexits Hcheck Hcheck_exact Hrk Hcl
+                     Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact Hrk Hcl
                      (check_apply_widgets_sound _ _ Hwid)
                      (check_witness_code_ids_sound _ Hcid)))).
 Qed.
 
-Theorem rebuild_cc_refines_up_to_heap :
-  rebuild_cc_refines_up_to_heap_statement.
+Theorem rebuild_cc_refines_observably :
+  rebuild_cc_refines_observably_statement.
 Proof.
-  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk
-    Hwf Hexits Hcheck Hcheck_exact Hccc Hwid.
+  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk Hwf
+    Hexits Hcheck Hcheck_exact Hccc Hwid.
+  exact (rebuild_cc_refines_observably_local flag is_local u e T cannot_change
+           b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact Hccc Hwid).
+Qed.
+
+Theorem rebuild_cc_refines_up_to_heap_local :
+  rebuild_cc_refines_up_to_heap_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change b Hlocal Hfrag Hdc Hrk
+    Hwf Hexits Hcheck Hlrs Hcheck_exact Hccc Hwid.
   pose proof (traverse_witness_code_ids flag u e) as Hcid.
   assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
   { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
@@ -1149,15 +1160,27 @@ Proof.
     intros k l Hl. discriminate Hl. }
   destruct (check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
   exact (FlambdaReaperRebuildProofs.exits_rel_heap _ false _ _
-           (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked true false
-              flag is_local u e T (fun n => mem_node n cannot_change) ccw b
-              Hlocal Hslots Hfrag
+           (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked_local true
+              false flag is_local u e T (fun n => mem_node n cannot_change) ccw b
+              Hlocal Hfrag
               (proj1
                  (FlambdaReaperRebuildProofs.any_kind_arguments_checked
                     (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
-              Hkinded Hwf Hexits Hcheck Hcheck_exact Hrk Hcl
+              Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact Hrk Hcl
               (check_apply_widgets_sound _ _ Hwid)
               (check_witness_code_ids_sound _ Hcid))).
+Qed.
+
+Theorem rebuild_cc_refines_up_to_heap :
+  rebuild_cc_refines_up_to_heap_statement.
+Proof.
+  intros flag is_local u e T cannot_change b Hlocal Hslots Hfrag Hdc Hrk Hwf
+    Hexits Hcheck Hcheck_exact Hccc Hwid.
+  exact (rebuild_cc_refines_up_to_heap_local flag is_local u e T cannot_change
+           b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact Hccc Hwid).
 Qed.
 
 Theorem rebuild_cc_refines_up_to_heap_flow :

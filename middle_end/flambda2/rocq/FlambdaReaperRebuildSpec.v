@@ -62,7 +62,13 @@
      value slots and projections the rebuild goes wrong
      (FlambdaReaperFlowSpec.local_slot_counterexample_statement). A
      unit of the fragment here has no projection and meets it; it is
-     stated for the fragment to grow.
+     stated for the fragment to grow. The statements whose names end
+     in [_local] ask instead that the tables pass the check of the
+     fix of local fields too ([check_local_reads_used], on the graph
+     of [check_closed]; FlambdaReaperLocalFieldsSpec.v), which the
+     premise gives whatever the tables
+     (FlambdaReaperFlowSpec.old_premise_local_reads_used_statement):
+     with it, a unit may project local slots.
    - [in_flow_fragment]: the fragment in which FlambdaReaperFlowSpec.v
      said what a solution means, before it said it of the heap
      ([in_heap_fragment], which is wider). It leaves out the primitives
@@ -376,7 +382,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaPrimitiveModel FlambdaMapSpec FlambdaSemanticsSpec
   FlambdaUnusedStaticsSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionSpec
-  FlambdaReaperFlowSpec FlambdaReaperRebuild.
+  FlambdaReaperFlowSpec FlambdaReaperRebuild FlambdaReaperLocalFields.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1045,6 +1051,25 @@ Definition rebuild_refines_statement : Prop :=
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    program_refines e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* The same with local fields: the tables pass the check of the fix
+   too, which the premise of the statement before gives
+   (FlambdaReaperFlowSpec.old_premise_local_reads_used_statement). *)
+Definition rebuild_refines_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    closure_free e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     program_refines e
       (rebuild_unit_from_tables (traverse_unit flag u e) T
@@ -1865,6 +1890,25 @@ Definition rebuild_refines_observably_statement : Prop :=
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e).
 
+(* The same with local fields, the tables passing the check of the
+   fix. *)
+Definition rebuild_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    program_refines_observably e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
 (* ======================================================================== *)
 (* The statement with the heap                                              *)
 (* ======================================================================== *)
@@ -1888,6 +1932,25 @@ Definition rebuild_refines_up_to_heap_statement : Prop :=
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    program_refines_up_to_heap e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* The same with local fields, the tables passing the check of the
+   fix. *)
+Definition rebuild_refines_up_to_heap_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     program_refines_up_to_heap e
       (rebuild_unit_from_tables (traverse_unit flag u e) T

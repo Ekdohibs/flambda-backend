@@ -230,15 +230,24 @@
    says nothing, and the conditions that the proof needs are those of
    the fragment.
 
-   Local fields. The statement asks that no field is local, unless the
-   unit has no projection ([projection_free]). With local value slots it
-   does not hold, and the reaper is unsound: a closure stored in an
-   immutable array and loaded back has any source at its new node and
-   no alias to its allocation, so the read of a local value slot of it
-   gives what is read no source when nothing uses it, and the rebuild
-   replaces by [Invalid] an [Apply_cont] that passes it on
+   Local fields. With local fields the statement asks the tables to pass
+   the check of the fix as well, on the same graph
+   ([check_local_reads_used]; FlambdaReaperLocalFieldsSpec.v: a read of
+   a local field from a node with any source is a usage of that node),
+   which a read of a local field needs: what an allocation that the
+   value read may come from holds in the field is then where the read
+   puts it ([flow_sound_local_statement]). Without the fix it does not
+   hold, and the reaper is unsound: a closure stored in an immutable
+   array and loaded back has any source at its new node and no alias to
+   its allocation, so the read of a local value slot of it gives what is
+   read no source when nothing uses it, and the rebuild replaces by
+   [Invalid] an [Apply_cont] that passes it on
    ([local_slot_counterexample_statement]: the least solution passes
    the check, the unit exits, and the rebuilt unit goes wrong).
+   [flow_sound_statement] asks instead of the check that no field be
+   local, or that the unit have no projection ([projection_free]);
+   either gives the check whatever the tables
+   ([old_premise_local_reads_used_statement]).
 
    The statement holds of more than nothing: a unit with a static
    block, a block made, two loads and a continuation
@@ -292,7 +301,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionSpec
-  FlambdaReaperRebuild.
+  FlambdaReaperRebuild FlambdaReaperLocalFields.
 From OxCamlFlambda2 Require FlambdaReaperTupledSpec.
 Import ListNotations.
 
@@ -917,6 +926,68 @@ Definition flow_sound_without_keep_alive_statement : Prop :=
       | Undefined => True
       end.
 
+(* The statements with local fields: the tables pass the check of the
+   fix of local fields too, on the same graph. *)
+Definition flow_sound_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (n : nat),
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    let G := graph_of_facts (traverse_unit flag u e) in
+    ∃ located : location -> option node,
+      match run n (State e [] [] empty_static_env empty_heap no_reads) with
+      | Step s =>
+        state_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located s
+      | Exit k vs hp _ =>
+        exit_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located u k vs
+        ∧ heap_flows G (solution_of_tables T) (unit_kept e)
+            (has_call_witness G) located hp
+      | Undefined => True
+      end.
+
+Definition flow_sound_without_keep_alive_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (n : nat),
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    check_closed is_local
+      (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e)) T
+    = true ->
+    check_local_reads_used is_local
+      (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e)) T
+    = true ->
+    let G :=
+      graph_of_facts
+        (FlambdaReaperTupledSpec.without_keep_alive (traverse_unit flag u e))
+    in
+    ∃ located : location -> option node,
+      match run n (State e [] [] empty_static_env empty_heap no_reads) with
+      | Step s =>
+        state_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located s
+      | Exit k vs hp _ =>
+        exit_flows G (solution_of_tables T) (unit_kept e)
+          (has_call_witness G) located u k vs
+        ∧ heap_flows G (solution_of_tables T) (unit_kept e)
+            (has_call_witness G) located hp
+      | Undefined => True
+      end.
+
+(* The premise of the statements before the fix gives the check of the
+   fix, whatever the tables: without local fields the rule says nothing,
+   and the traversal of a unit without projection reads no value or
+   function slot, the only fields that may be local. *)
+Definition old_premise_local_reads_used_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true.
+
 (* The wider check holds of every unit of the narrower: the old premise
    of the statements implies the new. *)
 Definition in_flow_fragment_in_heap_fragment_statement : Prop :=
@@ -1408,7 +1479,10 @@ Definition solution : tables :=
 End LocalSlotCounterexample.
 
 (* The unit is of the fragment, its slot 60 is local, its least solution
-   passes the check, the unit exits, and the rebuilt unit goes wrong. *)
+   passes the check, the unit exits, and the rebuilt unit goes wrong. The
+   least solution of the rules with the fix passes the check of the fix,
+   and the unit rebuilt with it exits
+   (FlambdaReaperLocalFieldsSpec.local_slot_fixed_statement). *)
 Definition local_slot_counterexample_statement : Prop :=
   is_local_slots_only LocalSlotCounterexample.is_local
   ∧ in_heap_fragment LocalSlotCounterexample.unit_expr = true

@@ -166,7 +166,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperGraphSpec FlambdaReaperTraversal FlambdaReaperSolution
   FlambdaReaperFlowSpec FlambdaReaperRebuild FlambdaReaperRebuildSpec
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
-  FlambdaUnusedStaticsSpec.
+  FlambdaUnusedStaticsSpec FlambdaReaperLocalFields.
 From OxCamlFlambda2 Require FlambdaReaperTupledSpec
   FlambdaReaperCallingConventionsSpec FlambdaReaperUnboxingSpec
   FlambdaReaperSolutionSpec.
@@ -508,6 +508,28 @@ Definition rebuild_unbox_refines_observably_statement : Prop :=
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+(* The same with local fields: the tables pass the check of the fix
+   too (FlambdaReaperLocalFieldsSpec.v). *)
+Definition rebuild_unbox_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
     check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
@@ -2181,6 +2203,35 @@ Definition rebuild_unbox_without_unboxing_observably_statement : Prop :=
     well_formed_unit u e = true ->
     exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    fst (unit_unboxed_fields (traverse_unit flag u e) T dominated to_unbox e)
+    = [] ->
+    arities_match (call_results (traverse_unit flag u e) T e)
+      (unit_code_deps flag u e) [] e
+    = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+(* The same with local fields, the tables passing the check of the
+   fix. *)
+Definition rebuild_unbox_without_unboxing_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    static_constants (unit_codes e) e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
     FlambdaReaperCallingConventionsSpec.check_apply_widgets
