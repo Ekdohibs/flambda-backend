@@ -50,6 +50,10 @@
 ;; write of the field and not an assignment, which the text writes
 ;; "%array_set.values.value.init". The text is the term.
 ;;
+;; write_into_a_local_array: a write into an array of values that is an
+;; assignment marked local, as the array may be on the stack, which the text
+;; writes "%array_set.values.value.lassign". The text is the term.
+;;
 ;; vector_read_of_an_array_of_integers: a read of an array of immediates that
 ;; gives a 128-bit vector, which the text writes "%array_load.`imm`.`vec128`".
 ;; The text is the term.
@@ -604,6 +608,22 @@
   (= %{context_name} "main"))
  (action
   (diff first_write_of_a_cell.expected first_write_of_a_cell.output)))
+
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   write_into_a_local_array.output
+   (run sh %{dep:run.sh} %{dep:../../tools/textisterm/fltextisterm.exe}
+     %{dep:write_into_a_local_array.ml}))))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff write_into_a_local_array.expected write_into_a_local_array.output)))
 
 (rule
  (enabled_if
