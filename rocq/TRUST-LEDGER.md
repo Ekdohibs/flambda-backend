@@ -458,12 +458,17 @@ it gave back.
   the compiler's driver with two hooks registered
   (`driver/compiler_hooks.mli`), and gives the two terms of the
   compiler's own run, as they are in memory, to the check of the
-  tool (`Flsemantics.check`). No unit of the examples has an
-  expected file of what it prints, so no rule of the tree runs it
-  for that; the controls of
-  `middle_end/flambda2/tests/semantics/own_run/` run it: one gives
-  it a second unit in a process, and seven compare the files that
-  it writes of a unit with those that the compiler writes. A verdict that
+  tool (`Flsemantics.check`). The rules of
+  `middle_end/flambda2/tests/semantics/ocaml/` run it on each unit of
+  that directory in the context main. Its output is compared with
+  `X.expected`, the expectation also used for the text-based run, with
+  the documented textual normalization for units listed in
+  `own_run_numbers.txt`; an `X.own_expected`, when present, is used
+  instead. The controls of
+  `middle_end/flambda2/tests/semantics/own_run/` run it besides: one
+  gives it a second unit in a process, and seven compare the files
+  that it writes of a unit with those that the compiler writes. A
+  verdict that
   it prints does not rest on the entry above: there is no text, no
   reader and no second run of Simplify. In its place it rests on
   the two hooks: that `Raw_flambda2` is given the term that the

@@ -42,6 +42,12 @@ status 0 of a unit, and the status 1, and no other, of a unit that
 way. The list names a unit only with the reason for which the tool
 fails on it.
 
+In the context main the rules also compile each `X.ml` with the driver
+of the compiler's own run, and compare what that prints with
+`X.expected` too, or with `X.own_expected` for a unit that has that
+file ("The compiler's own run", at the end of this file, has the rule
+and its two exceptions).
+
 - `-drawfexpr` prints the unit after the conversion from Lambda (closure
   conversion) and before Simplify. The tool runs Simplify itself, with
   the default flags, on what the parser reads back.
@@ -196,6 +202,10 @@ unit made from OCaml.
   `-drawfexpr` and the fexpr parser: what is validated is the term the
   parser reads back, which is the term the compiler simplifies only as
   far as printing and parsing lose nothing.
+  The rules of this directory check each unit in a second way too, in
+  which the same check is given the two terms of the compiler's own
+  run, and what it prints is compared with `X.expected`, with two
+  exceptions ("The compiler's own run", "The rule").
   What the theorem observes at the exit is the continuation, its
   arguments, here the symbol of the unit, and the heap, which has
   the cells that the run has made; the contents of the module block
@@ -3233,84 +3243,37 @@ directory sets the variable; one of `../regions/` does.
   form of the term: a unit that gives the continuation its own
   symbol through a variable, or from a call, fails it. No unit of
   this directory fails it.
-- That distance has been measured for the units of this directory
-  (by X5, with the tool and the 259 units as they are at ba85db2822;
-  nothing in the tree makes the measure). The check of the tool was
-  given the two terms of the compiler's own run as they are in its
-  memory: the term given to Simplify and the term that the compiler's
-  Simplify returned, taken through the two hooks of
-  `driver/compiler_hooks.mli` (`Raw_flambda2`, `Flambda2`), with no
-  text written or read and no second run of Simplify. The conversion was
-  the tool's of that commit with one change: the kinds of the fields of
-  a `Make_block` were dropped, as the text then dropped them. (The tool
-  of that commit took only fields of any value, in
-  `convert_variadic_primitive` of
-  `middle_end/flambda2/tests/tools/flsemantics.ml`; of the terms in
-  memory it refused 58 of the 259 units, for a subkind in 51 and for a
-  field that is only never null in 7; 57 of the 58 were converted with
-  the change.) What follows is what the check answered with that changed
-  conversion, which was in no tree. It is no proof that dropping those
-  kinds is faithful: Simplify takes an argument that is a variable to be
-  of the subkind of its field, and makes the primitive `Invalid` where
-  it cannot be. What the tool of this tree checks of the kind of a field
-  is said above, with the kinds of the fields of a `Make_block`; it is
-  provisional (decision D25, which is open), and the figures below have
-  not been taken again with it. At the default flags, of the 259 units:
-  - 252 were converted in both ways, and for each of them the tool
-    printed of the compiler's pair the lines that it printed of its own:
-    the verdict, the comparison that succeeded, the steps of the two
-    runs, the check of kinds. 242 were validated, 8 were not, 2 were
-    undefined before Simplify.
-  - 5 were refused by the conversion in both ways.
-  - 2 were validated of the tool's pair, and of the compiler's pair the
-    term after Simplify was not well-formed: `div_unknown.ml` and
-    `string_get16_checked.ml`. The compiler's Simplify keeps the
-    handler of the raise, which the front end marks `[cold]`, as a
-    handler of its own (`add_non_inlinable_continuation` in
-    `middle_end/flambda2/simplify/env/upwards_env.ml` keeps the
-    handler of a cold continuation unknown to its uses). The binding
-    of the module block is then in a handler whose body can leave
-    through another continuation, which
-    `FlambdaWellFormedSpec.statics_at_unit_toplevel` refuses, and
-    which Simplify refuses too when it is given its own output
-    (discrepancy X5-9, a second shape of C5-11); `well_formed_unit`
-    asked that rule then. The tool's Simplify, to which the handler was
-    not cold while the text had not the mark, put the raise in the arm
-    of the `Switch`, and the tool validated that term. The text has the
-    mark now (above), and `well_formed_unit` asks another rule, which
-    takes a static binding under such a handler (decision D60). Of each
-    of the two, and of `string_get_twice.ml`, the tool of this tree
-    validates its own pair with its imports, at the default flags and
-    with `-O3`; and the program of "The compiler's own run", built from
-    this tree and run by hand at the default flags, prints of the
-    compiler's pair of each of the three what the tool prints of its
-    own, byte for byte. That is said of what each printed; the two
-    terms after have not been compared.
-
-  With `-O3`: 228 validated, 22 not, 2 undefined before, the same 5
-  and the same 2, and again the same lines for all 252.
-
-  The two terms after Simplify, as `-dfexpr-to` writes them, compared
-  as texts up to names, are the same for 253 of the 259 units (252
-  with `-O3`). The others are the two above and units in which only a
-  kind that is written differs (`call_result_tested.ml`,
-  `partial_exported.ml`, `tupled_recursive.ml`,
-  `tupled_unknown_pair.ml`; with `-O3`,
-  `exported_funs_in_arms_used.ml` and `returned_closure_of_pair.ml`
-  in place of the first).
-
-  For the 13 units of T4-13 that the directory had then, with both
-  sets of flags, the two terms
-  after Simplify as printed are the same up to names, and with the
-  changed conversion the check prints the same lines of the
-  compiler's pair as of the tool's. The comparison of the terms is
-  of texts: it does not compare the kinds and the marks that the
-  text does not write. Nothing is claimed of dropping the kinds of
-  fields. In that measure the 13 remained counted apart. They are no
-  longer counted apart in this directory, since the text marks a kind
-  that may be null and the reader takes the mark ("What the verdicts
-  mean"). The figures above remain those of the older measure. The
-  fourteenth unit of T4-13 is not among the 259.
+- That distance is looked at for every unit of this directory by a
+  rule. The check of the tool is given the two terms of the compiler's
+  own run as they are in its memory: the term given to Simplify and the
+  term that the compiler's Simplify returned, taken through the two
+  hooks of `driver/compiler_hooks.mli` (`Raw_flambda2`, `Flambda2`),
+  with no text written or read and no second run of Simplify. What it
+  prints of the unit must be what the tool prints of the text. There
+  are two exceptions: one unit whose two lines are compared up to the
+  numbers of its variables, and a unit that is given an expected file
+  of its own for this way, of which the rule then shows no agreement
+  of the two ways ("The compiler's own run", below, which says what
+  the rule compares and what it does not cover).
+  Three units show what the mark `[cold]` of a handler does there:
+  `div_unknown.ml`, `string_get16_checked.ml` and
+  `string_get_twice.ml`. The compiler's Simplify keeps the handler of
+  the raise, which the front end marks `[cold]`, as a handler of its
+  own (`add_non_inlinable_continuation` in
+  `middle_end/flambda2/simplify/env/upwards_env.ml` keeps the handler
+  of a cold continuation unknown to its uses). The binding of the
+  module block is then in a handler whose body can leave through
+  another continuation, which
+  `FlambdaWellFormedSpec.statics_at_unit_toplevel` refuses, and which
+  Simplify refuses too when it is given its own output (discrepancy
+  X5-9, a second shape of C5-11). `well_formed_unit` asked that rule
+  until decision D60, and both ways then said that the term after of
+  each of the three was not well-formed. It asks another rule now,
+  which takes a static binding under such a handler, and both ways
+  validate each of the three with its imports. The text has the mark,
+  and the printed terms after of the two ways agree up to names in the
+  measure of "The compiler's own run", below; what is not printed was
+  not compared.
 
 What no example here validates, because the model has not got it:
 arithmetic on floats, calls of C functions (polymorphic comparison among
@@ -3330,8 +3293,10 @@ change.)
 ## The compiler's own run
 
 `../../tools/ownrun/flsemantics_ownrun.ml` is a second way to check a
-unit, beside the first and not in its place: every count in this file,
-but those of this section, is of the first.
+unit, beside the first and not in its place. Every count in this file
+is of the first way. The rules of this directory ask the second way of
+each unit of this directory too, and ask that it print what the first
+prints, with the two exceptions that "The rule", below, gives.
 
     sh own_run.sh <flsemantics_ownrun.exe> X.ml
 
@@ -3497,60 +3462,178 @@ translation to Cmm, the back end and the link are not looked at. Of a
 unit on which the compiler does not run Simplify (`-Oclassic`, or an
 attribute of the unit) the program says "not checked".
 
-What it finds of the 347 units of this directory at 87cdbf3e01. It
-was measured with the program of this section on the tree at that
-commit, at the default flags; no `X.own_expected` is in the tree, so
-no rule of the tree makes the measure again. The program was then as
-it was before it was mended (above): what follows is of compilations
-in which the names that Simplify made had later numbers than in the
-compiler's, and it has not been measured again with the program as
-it is. The units of `pairs/` are not run: `own_run.sh` does not give
-the program the `.cmx` file of a first unit.
+### The rule
 
-- Of the 325 units that the first way validated at that commit (283, the
-  14 counted apart for T4-13 and 28 with their imports, by the tables
-  that this file had there), this one validated 241 and said "not
-  checked" of 78, for one clause of the conversion. Of a `Make_block`
-  the tool of that commit took only fields of any value (in
-  `convert_variadic_primitive` of `../../tools/flsemantics.ml`, the test
-  that the kind of each field is `Flambda_kind.With_subkind.any_value`),
-  and the term in memory has the kinds of the fields, which the text
-  then had not. With that clause changed to ask only that each field is
-  a value, a change that was in no tree and of which nothing is proved,
-  it validated 319 of the 325, and no unit that the first way did not.
-  What the tool of this tree checks of the kind of a field is said under
-  "What a validation does not say", with the kinds of the fields of a
-  `Make_block`: it is provisional (decision D25, which is open), and
-  this measure has not been made again with it.
-  `empty_array_phys_equal.ml`, whose run is undefined in the model in
-  both ways, was not among the 325, and printed in this way what it
-  printed in the first.
-- The 6 others have the handler of a failed check (of a divisor, of an
-  index), which the front end marks `[cold]`; the text did not carry the
-  mark then. The compiler's Simplify keeps a cold handler as a handler
-  of its own; the tool's, to which it was not cold, put the raise in the
-  arm of the `Switch`. Of `div_unknown.ml`, `string_get16_checked.ml`
-  and `string_get_twice.ml` the compiler's term after then bound the
-  module block in a handler whose body can leave through another
-  continuation, and was not well-formed by the rule that the model
-  asked then (discrepancy X5-9, above): the program exited 1, as the
-  tool does of such a term. Of `string_get_in_branch.ml`,
-  `string_get_two_indices.ml` and `string_length_after_join.ml` the
-  two runs agreed, and the validator of that commit did not accept the
-  pair in which the handler is kept: "not validated". The text carries
-  the mark now, and the model asks another rule of the place of a
-  static binding (decision D60). In the first way, at the default
-  flags, the tool of this tree validates each of the six with its
-  imports. Of these six alone this way was run again, by hand, with
-  the program as it is now, built from this tree, at the default
-  flags: of each it prints what the first way prints, byte for byte.
-  Nothing is said here of whether the two ways have the same term
-  after of any of the six.
+In the context main, where the program is built, the rules of this
+directory run `own_run.sh` on each unit of this directory, and compare
+what the program prints of the unit in one of three ways.
 
-A unit that has `X.own_expected` beside it is checked in this way by
-the rules of this directory, which compare what the program prints
-with that file; a unit that has none is checked in the first way
-only.
+The ordinary way is that of every unit that the two others do not
+name: at this commit, of every unit but `float_add.ml`. `own_same.sh`
+compares what the program prints with `X.expected`, the file that what
+the tool prints of the text is compared with, and the two must be the
+same bytes: the same verdict, the same line of the comparison that
+succeeded, the same steps and results of the two runs, the same lines
+of the other checks. The row of such a unit in the tables under "The
+examples" is then, at the default flags, a row of the pair that the
+compiler made as well as of the pair that the tool makes from the
+text. It is the same check, given another pair: what a verdict rests
+on, and what it does not say, are as said above for either way. A
+unit that `tool_fails.txt` names is compared in this way too: the rule
+takes the status 1 of the program, and no other, of such a unit, as
+the rule of the tool does. No unit is named there at this commit.
+
+The two other ways:
+
+- `float_add.ml`, which `own_run_numbers.txt` names. Both ways say "not
+  checked" of it, in a line that shows the primitive that the model has
+  not got with its two arguments, which are variables. A variable is
+  printed as its name, a slash, the number that the process gave it,
+  and `UV` if it is user-visible or `N` if it is not. The tool and the
+  program print the two variables with the same name and with other
+  numbers, the tool with `UV` and the program with `N`: the numbers
+  are each process's, and the text does not say which variables are
+  user-visible, so the reader makes all of them so (`fresh_var` in
+  `middle_end/flambda2/parser/fexpr_to_flambda_commons.ml`). Of a unit
+  that the list names, `own_same.sh` asks that each of the two files be
+  one line of the form `X.fl: not checked: the model has not got
+  primitive (...)`, with no byte after the newline of that line, no
+  null byte and no `/#`. In each line, a word between a space or a
+  parenthesis and a space or a parenthesis that is a name (letters,
+  digits, underscores and quotes, of which the first is a letter or an
+  underscore), a slash, digits, and `UV` or `N` has `/#` put in the
+  place of its slash, its digits and those letters. Nothing else of a
+  line is changed, and the two lines must then be the same bytes. That
+  is a substitution in the text of the line and no parser: the script
+  takes such a word for a variable with its number, and does not know
+  that it is one. In what the two ways print of `float_add.ml` the
+  words of that form are the two variables. The script fails if the two
+  files are the same bytes before the substitution, so that the list
+  names only units that need it. This was chosen over a second expected
+  file for the unit: that file would have the numbers that the program
+  gives, which change with anything that makes the compiler make one
+  name more or one fewer before those two. Of this unit the rule shows
+  that the two ways print the same line up to that substitution, and
+  no more.
+- A unit that has `X.own_expected` is compared with that file, by
+  dune's `diff`, in the place of `X.expected`. No unit has one. It is
+  for a unit of which the two ways are known not to print the same,
+  which this file would then name, with the reason. Such a file is an
+  expectation of its own. Of a unit that has one the rule shows that
+  the program prints what that file has, and nothing of an agreement
+  of the two ways: the row of the unit in the tables is then of the
+  first way only.
+
+Where the two files still differ after the comparison that is the
+unit's (byte for byte, or, for a unit of `own_run_numbers.txt`, after
+the substitution above), `own_same.sh` prints the lines that differ. It
+also fails, and says why, for a unit of `own_run_numbers.txt` whose two
+files are the same bytes as they are (the name is then to be taken out
+of the list), or are not each the one line described above. A program
+that exits with a status that the rule does not take fails the rule
+that runs it, and nothing is compared.
+
+What a failure means, and what `dune promote` does, is not the same
+in the three ways. In the ordinary way: if the rule that compares what
+the tool prints with `X.expected` fails for the unit too, by the same
+lines, the two ways agree with each other and differ from
+`X.expected`: that change is to be looked at before it is promoted;
+`dune promote` then takes what the tool prints, and this rule passes
+again. If the two ways no longer print the same, the terms, the
+conversion, the options and the load path of the two compilations
+(`OCAMLPARAM` among them) and what each program prints are to be looked
+at, and the difference reported. By itself it does not show that the
+two terms differ: the line of `float_add.ml` differs by how names are
+printed. "What a validation does not say" has the losses of the text
+that are known. `dune promote` offers nothing for a comparison that
+`own_same.sh` makes. Of a unit of `own_run_numbers.txt`, to promote
+what the tool prints is not enough where the two files are then the
+same bytes: the rule fails until the name is taken out of the list. Of
+a unit that has `X.own_expected` the comparison is dune's, and
+`dune promote` offers what the program prints for that file: to take
+it is to say what the program prints now, and says nothing of the
+first way.
+
+### What was measured besides
+
+Outside the tree, of the 554 units that this directory has at
+69ac334cba, with the compiler built at 7d82a601ae (no file of the
+compiler differs at those two commits) and with a tool and a program
+that were linked before 69ac334cba was cut: from their sources at
+7d82a601ae, of which no commit up to 69ac334cba changes any but the
+extracted files, and from the extracted files that `make -C rocq all`
+had then made of the definition that 155d15c93a brings. Those
+extracted files are byte for byte the ones that `make -C rocq all`
+makes at 155d15c93a and that the tree has at 69ac334cba; the two
+programs were not linked again there. No rule makes these measures
+again.
+
+- With `-O3` given to the tool on the text and to the program, the two
+  print the same bytes of 553 of the 554 units, and of `float_add.ml`
+  the same line but for the numbers and the marks of its two variables.
+  With `-O3` the compiler prints, of each of the 554 units, the text of
+  the term given to Simplify that it prints without it.
+- The two terms after Simplify, each written as a text (`-dfexpr-to`
+  given to the tool and to the program) and compared as the tokens of
+  the syntax: the same up to a one-to-one renaming of variables,
+  continuations, code identifiers, symbols and slots, for each of the
+  554 units, at the default flags and with `-O3`. That comparison is of
+  texts: it does not see what the text does not write.
+- What `-drawflambda -dflambda` print in the program and in the
+  compiler, of each of the 554 units, at the default flags and with
+  `-O3`: the term given to Simplify is the same bytes, and so is the
+  term that Simplify returns. (In the program as it was before it was
+  mended the second had other numbers in its names.)
+
+### What the rule does not cover
+
+- Units that are not in this directory. The rule is of the units that
+  are here, and says nothing of any other. On a list of 2,689 units
+  that the testers keep outside the tree, T3 set what the program says
+  of each unit beside what the tool says of its text, with the tool
+  built at 22698f64d1, the program built at 3d5db97911 and a compiler
+  that has the files of the one above. That count is T3's: it is no
+  measure of the rules of this directory, nothing in the tree makes
+  it, and it is the count made with that tool and that program, not
+  a count made with the tool and the program of this tree, which are
+  of after decision D60. The lines of the two
+  verdicts differ of 47 units at the default flags and of 46 with
+  `-O3`, and none of those units has the name of a unit of this
+  directory. A line that differs is not always another verdict: of 10
+  and 6 of those units both ways say that the term before is undefined
+  in the model, and the two lines differ in what they say besides. By
+  cause, at the default flags and with `-O3`:
+  - Of 19 and 18, the tool's Simplify does not make the term that the
+    compiler's makes. In 18 and 16 a block is built again from the
+    fields of an immutable block: the compiler's Simplify puts that
+    block in its place, and the tool's, to which the text gives no
+    modes of parameters, does not (discrepancy X5-11). Of 4 and 4 of
+    those the term before is undefined in both ways, and the two
+    differ in whether the two terms were then found the same. In 1 and
+    2 the tool's Simplify shares equal constants that the compiler's
+    does not (discrepancy X5-10).
+  - Of 12 and 12, the reader does not read the text that the printer
+    wrote, and the tool has no verdict (discrepancy T4-15 for 9 of
+    them at each setting).
+  - Of 16 and 16, the unit uses another unit. In that measure the tool
+    was given no directory in which to look for a `.cmx` file, where
+    the program reads those that the compilation reads; given the
+    same files, the tool has the program's verdict of each.
+- `pairs/`. The second unit of a pair needs the `.cmx` file of the
+  first. `own_run.sh` compiles one unit in a directory that has nothing
+  else, and the program checks one unit in a process; the rules of
+  `pairs/` give the tool the directory of the first unit with `-I`,
+  where the program would look on the compiler's load path. No rule
+  runs the program on a pair, and the pairs were not in the measure
+  reported here.
+- `library/`. Its units are compiled with the standard library, and
+  `own_run.sh` gives `-nostdlib`. The program would have the library on
+  the compiler's load path, where the tool is given no directory. No
+  rule runs the program on these units, and they were not in the
+  measure reported here.
+- `census/`. Its units are generated and counted by a script, in the
+  first way; nothing there is run by the tests.
+- Flags other than the default ones.
 
 The program checks one unit in a process, as the tool does. Given a
 second, it says of it "not checked: a second unit in one process",

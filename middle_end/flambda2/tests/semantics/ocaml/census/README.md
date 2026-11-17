@@ -216,11 +216,15 @@ nothing is believed of its guesses, and a better one needs no
 proof.
 
 Three of the 7 were validated already where the check was given the
-pair that the compiler itself makes, converted with the change that
-the measure makes to the conversion (`functions`, seed 6; `known`,
-seeds 37 and 46; measured by X5 with the tool as it is at
-ba85db2822, see `../README.md`, "What a validation does not say",
-for the change and what it does not show). The tool's Simplify,
+pair used in X5's measure of the compiler's own run at ba85db2822
+(`functions`, seed 6; `known`, seeds 37 and 46): the two terms that
+the program of that measure took through the compiler's hooks. Nothing
+is said here of whether the compilation in which that pair was taken
+was the compiler's own. That was measured with the tool as it is at
+ba85db2822 and one change to its conversion that was in no tree: the
+kinds of the fields of a `Make_block` at the block kind `Values` were
+dropped, as the text then dropped them, which is no proof that
+dropping them is faithful. The tool's Simplify,
 which reads the term from a text that has no debugging information,
 shares the block that it lifts with an equal constant that the unit
 binds already, where the compiler's Simplify makes a second symbol
