@@ -19,17 +19,17 @@ val raises_to : continuation -> expr -> bool
 
 val handler_raises_to : continuation -> continuation_handler -> bool
 
-val handler_at_toplevel :
+val handler_at_unit_toplevel :
   continuation -> continuation -> continuation_handler -> expr -> bool
 
-val statics_at_toplevel : continuation -> bool -> expr -> bool
+val statics_at_unit_toplevel : continuation -> bool -> expr -> bool
 
-val handler_statics_at_toplevel :
+val handler_statics_at_unit_toplevel :
   continuation -> bool -> continuation_handler -> bool
 
-val binding_statics_at_toplevel : continuation -> static_binding -> bool
+val binding_statics_at_unit_toplevel : continuation -> static_binding -> bool
 
-val code_statics_at_toplevel : continuation -> code -> bool
+val code_statics_at_unit_toplevel : continuation -> code -> bool
 
 val code_ids_of_binding : static_binding -> code_id list
 

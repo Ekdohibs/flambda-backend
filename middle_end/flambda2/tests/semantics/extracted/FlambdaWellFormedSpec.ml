@@ -69,50 +69,52 @@ let rec raises_to k = function
 and handler_raises_to k = function
   | Handler (_, _, handler) -> raises_to k handler
 
-(** val handler_at_toplevel : continuation -> continuation ->
+(** val handler_at_unit_toplevel : continuation -> continuation ->
     continuation_handler -> expr -> bool **)
 
-let handler_at_toplevel unit_exn0 k h body =
+let handler_at_unit_toplevel unit_exn0 k h body =
   negb (handler_is_exn_handler h)
   && all_among (free_continuations body) [k; unit_exn0]
 
-(** val statics_at_toplevel : continuation -> bool -> expr -> bool **)
+(** val statics_at_unit_toplevel : continuation -> bool -> expr -> bool **)
 
-let rec statics_at_toplevel unit_exn0 toplevel = function
-  | Let (_, _, _, body) -> statics_at_toplevel unit_exn0 toplevel body
+let rec statics_at_unit_toplevel unit_exn0 toplevel = function
+  | Let (_, _, _, body) -> statics_at_unit_toplevel unit_exn0 toplevel body
   | Let_static (bindings, body) ->
-    (toplevel && forallb (binding_statics_at_toplevel unit_exn0) bindings)
-    && statics_at_toplevel unit_exn0 toplevel body
+    (toplevel && forallb (binding_statics_at_unit_toplevel unit_exn0) bindings)
+    && statics_at_unit_toplevel unit_exn0 toplevel body
   | Let_cont_non_recursive (k, h, body) ->
-    handler_statics_at_toplevel unit_exn0
-      (toplevel && handler_at_toplevel unit_exn0 k h body)
+    handler_statics_at_unit_toplevel unit_exn0
+      (toplevel && handler_at_unit_toplevel unit_exn0 k h body)
       h
-    && statics_at_toplevel unit_exn0 toplevel body
+    && statics_at_unit_toplevel unit_exn0 toplevel body
   | Let_cont_recursive (handlers, body) ->
     forallb
       (fun pat ->
         let _, h = pat in
-        handler_statics_at_toplevel unit_exn0 false h)
+        handler_statics_at_unit_toplevel unit_exn0 false h)
       handlers
-    && statics_at_toplevel unit_exn0 toplevel body
+    && statics_at_unit_toplevel unit_exn0 toplevel body
   | _ -> true
 
-(** val handler_statics_at_toplevel : continuation -> bool ->
+(** val handler_statics_at_unit_toplevel : continuation -> bool ->
     continuation_handler -> bool **)
 
-and handler_statics_at_toplevel unit_exn0 toplevel = function
-  | Handler (_, _, handler) -> statics_at_toplevel unit_exn0 toplevel handler
+and handler_statics_at_unit_toplevel unit_exn0 toplevel = function
+  | Handler (_, _, handler) ->
+    statics_at_unit_toplevel unit_exn0 toplevel handler
 
-(** val binding_statics_at_toplevel : continuation -> static_binding -> bool **)
+(** val binding_statics_at_unit_toplevel : continuation -> static_binding ->
+    bool **)
 
-and binding_statics_at_toplevel unit_exn0 = function
-  | Bind_code (_, c) -> code_statics_at_toplevel unit_exn0 c
+and binding_statics_at_unit_toplevel unit_exn0 = function
+  | Bind_code (_, c) -> code_statics_at_unit_toplevel unit_exn0 c
   | _ -> true
 
-(** val code_statics_at_toplevel : continuation -> code -> bool **)
+(** val code_statics_at_unit_toplevel : continuation -> code -> bool **)
 
-and code_statics_at_toplevel unit_exn0 = function
-  | Code (_, _, _, _, _, body) -> statics_at_toplevel unit_exn0 false body
+and code_statics_at_unit_toplevel unit_exn0 = function
+  | Code (_, _, _, _, _, body) -> statics_at_unit_toplevel unit_exn0 false body
 
 (** val code_ids_of_binding : static_binding -> code_id list **)
 
@@ -720,7 +722,7 @@ type unit_interface =
 (** val well_formed_unit : unit_interface -> expr -> bool **)
 
 let well_formed_unit u e =
-  ((((((((statics_at_toplevel u.unit_exn true e
+  ((((((((statics_at_unit_toplevel u.unit_exn true e
          && distinct (static_names code_ids_of_binding e))
         && distinct (static_names symbols_of_binding e))
        && names_in_scope u.unit_return u.unit_exn e)
