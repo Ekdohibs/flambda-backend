@@ -13,6 +13,10 @@ val free_continuations : expr -> continuation list
 
 val handler_free_continuations : continuation_handler -> continuation list
 
+val continuations_used : expr -> continuation list
+
+val handler_continuations_used : continuation_handler -> continuation list
+
 val traps : continuation -> apply_cont -> bool
 
 val raises_to : continuation -> expr -> bool

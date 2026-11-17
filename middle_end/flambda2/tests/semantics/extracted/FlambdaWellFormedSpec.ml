@@ -38,6 +38,34 @@ let rec free_continuations = function
 and handler_free_continuations = function
   | Handler (_, _, handler) -> free_continuations handler
 
+(** val continuations_used : expr -> continuation list **)
+
+let rec continuations_used = function
+  | Let (_, _, _, body) -> continuations_used body
+  | Let_static (_, body) -> continuations_used body
+  | Let_cont_non_recursive (k, h, body) ->
+    app
+      (handler_continuations_used h)
+      (without (k :: []) (continuations_used body))
+  | Let_cont_recursive (handlers, body) ->
+    without (map fst handlers)
+      (app
+         (flat_map
+            (fun pat ->
+              let _, h = pat in
+              handler_continuations_used h)
+            handlers)
+         (continuations_used body))
+  | Apply ap -> [ap.ap_continuation; ap.ap_exn_continuation]
+  | Apply_cont ac -> ac.ac_continuation :: []
+  | Switch (_, arms) -> map (fun arm -> (snd arm).ac_continuation) arms
+  | Invalid -> []
+
+(** val handler_continuations_used : continuation_handler -> continuation list **)
+
+and handler_continuations_used = function
+  | Handler (_, _, handler) -> continuations_used handler
+
 (** val traps : continuation -> apply_cont -> bool **)
 
 let traps k ac =
@@ -74,7 +102,7 @@ and handler_raises_to k = function
 
 let handler_at_unit_toplevel unit_exn0 k h body =
   negb (handler_is_exn_handler h)
-  && all_among (free_continuations body) [k; unit_exn0]
+  && all_among (continuations_used body) [k; unit_exn0]
 
 (** val statics_outside_loops_and_code : bool -> expr -> bool **)
 
