@@ -11,106 +11,106 @@ A control: an environment made by hand, with variables of the three name modes, 
 
 The environments that Simplify computes for the units of the semantics tests, replayed into the Rocq model.
 
-apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-indirect_higher_order.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay
-match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay
-mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-tail_loop.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
-phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 39 questions
+arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 33 questions
+block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 24 questions
+block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 57 questions
+const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 15 questions
+exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 81 questions
+get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 18 questions
+indirect_higher_order.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 45 questions
+inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 45 questions
+inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 42 questions
+inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 69 questions
+int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 18 questions
+int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 39 questions
+int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 1785 questions
+int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 1785 questions
+int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 27 questions
+int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 6 questions
+int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 774 questions
+int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 759 questions
+int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 948 questions
+int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 12 questions
+kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 9 questions
+kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 33 questions
+kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 165 questions
+kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 60 questions
+kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 21 questions
+kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 27 questions
+kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 51 questions
+kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 108 questions
+num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 795 questions
+num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 33 questions
+num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 255 questions
+num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 633 questions
+num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 42 questions
+closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 486 questions
+constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 378 questions
+exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 108 questions
+exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 72 questions
+exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 182 questions
+factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 159 questions
+higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 576 questions
+inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 237 questions
+int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 126 questions
+match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay; 759 questions
+match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay; 1062 questions
+mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 219 questions
+option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 339 questions
+record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 546 questions
+tail_loop.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 186 questions
+tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 180 questions
+while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay; 324 questions
+phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 48 questions
+phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 15 questions
+phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 39 questions
+phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 6 questions
+raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 63 questions
+raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 42 questions
+rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 24 questions
+set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 183 questions
 set_duplicate_slot.fl: not simplified: an assertion of simplify_set_of_closures.ml fails
-set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-set_mutual_recursion.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
+set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 129 questions
+set_mutual_recursion.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 69 questions
 set_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_shared_code__f_N_code
-set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 147 questions
 set_static_group_one_function.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_one_function__f_N_code
 set_static_group_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_shared_code__f_N_code
-set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 114 questions
+set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 51 questions
+set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay; 402 questions
 static_in_loop.fl: not simplified: a fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
-string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay
-try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 12 questions
+switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 15 questions
+switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 27 questions
+switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 78 questions
+switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 21 questions
+try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay; 276 questions
+try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 51 questions
+uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 27 questions
+undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
 
 In all:
   95 units simplified
@@ -118,109 +118,181 @@ In all:
   275 admitted: the model's replay is seen as Simplify's environment
   5629 names in the environments admitted
   275 admitted, and the compiler's replay is seen as Simplify's environment too
+  5604 questions: the type that Simplify has for it in a term (the alias of its canonical simple)
+  5629 questions: the alias of the name itself
+  5629 questions: the type that the environment has for it
+  16862 questions, asked of the table and of reification twice
   5 units not simplified
+  The answers, a prover at a time: those on which the three agree; then how the compiler answers in Simplify's environment: a proof or a result, unknown, invalid, no answer
+    prove_equals_to_simple_of_kind: 16862 agree; 15271, 1591, 0, 0
+    prove_equals_tagged_immediates: 16862 agree; 4386, 12476, 0, 0
+    meet_equals_tagged_immediates: 16862 agree; 4386, 2298, 10178, 0
+    meet_naked_immediates: 16862 agree; 3911, 184, 12767, 0
+    meet_equals_single_tagged_immediate: 16862 agree; 4347, 2337, 10178, 0
+    meet_naked_float32s: 16862 agree; 0, 0, 16862, 0
+    meet_naked_floats: 16862 agree; 0, 0, 16862, 0
+    meet_naked_int8s: 16862 agree; 603, 3, 16256, 0
+    meet_naked_int16s: 16862 agree; 78, 0, 16784, 0
+    meet_naked_int32s: 16862 agree; 81, 0, 16781, 0
+    meet_naked_int64s: 16862 agree; 399, 69, 16394, 0
+    meet_naked_nativeints: 16862 agree; 99, 0, 16763, 0
+    meet_naked_vec128s: 16862 agree; 0, 0, 16862, 0
+    meet_naked_vec256s: 16862 agree; 0, 0, 16862, 0
+    meet_naked_vec512s: 16862 agree; 0, 0, 16862, 0
+    meet_naked_masks: 16862 agree; 0, 0, 16862, 0
+    meet_variant_like: 16862 agree; 7338, 921, 8603, 0
+    prove_variant_like: 16862 agree; 7338, 9524, 0, 0
+    prove_is_a_boxed_or_tagged_number: 16862 agree; 5829, 11033, 0, 0
+    prove_nothing: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_tagged_immediate: 16862 agree; 5769, 11093, 0, 0
+    prove_is_a_boxed_float32: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_float: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_int32: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_int64: 16862 agree; 60, 16802, 0, 0
+    prove_is_a_boxed_nativeint: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_vec128: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_vec256: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_vec512: 16862 agree; 0, 16862, 0, 0
+    prove_is_a_boxed_mask: 16862 agree; 0, 16862, 0, 0
+    prove_is_or_is_not_a_boxed_float: 16862 agree; 9551, 7311, 0, 0
+    prove_unique_tag_and_size: 16862 agree; 1563, 15299, 0, 0
+    prove_is_int: 16862 agree; 9551, 7311, 0, 0
+    prove_is_not_a_pointer: 16862 agree; 9551, 7311, 0, 0
+    meet_is_int_variant_only: 16862 agree; 7344, 915, 8603, 0
+    prove_get_tag: 16862 agree; 1569, 15293, 0, 0
+    meet_is_null: 16862 agree; 9599, 867, 6396, 0
+    prove_unique_fully_constructed_immutable_heap_block: 16862 agree; 1392, 15470, 0, 0
+    meet_single_closures_entry: 16862 agree; 2138, 915, 13809, 0
+    prove_single_closures_entry: 16862 agree; 2138, 14724, 0, 0
+    meet_code_ids: 16862 agree; 2138, 915, 13809, 0
+    prove_code_ids: 16862 agree; 2138, 14724, 0, 0
+    meet_strings: 16862 agree; 9, 915, 15938, 0
+    prove_strings: 16862 agree; 9, 16853, 0, 0
+    prove_tagging_of_simple: 16862 agree; 4560, 12302, 0, 0
+    meet_tagging_of_simple: 16862 agree; 4560, 4331, 7971, 0
+    meet_boxed_float32_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_float_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_int32_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_int64_containing_simple: 16862 agree; 60, 915, 15887, 0
+    meet_boxed_nativeint_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_vec128_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_vec256_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_vec512_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_boxed_mask_containing_simple: 16862 agree; 0, 915, 15947, 0
+    meet_block_field_simple: 16862 agree; 756, 933, 15173, 0
+    meet_project_value_slot_simple: 16862 agree; 477, 2576, 13809, 0
+    meet_project_function_slot_simple: 16862 agree; 2138, 915, 13809, 0
+    prove_alloc_mode_of_boxed_number: 16862 agree; 60, 16802, 0, 0
+    prove_physical_equality: 16862 agree; 11586, 5276, 0, 0
+    reify, every variable at toplevel: 16862 agree; 15623, 1239, 0, 0
+      316 of the results, lifted
+    reify, no variable at toplevel: 16862 agree; 15471, 1391, 0, 0
+      164 of the results, lifted
+    never_holds_locally_allocated_values: 15002 agree; 14000, 1002, 0, 0
+
+No disagreement.
 The environments that Simplify computes for the units of the semantics tests, at -O3, replayed into the Rocq model.
 
-apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-indirect_higher_order.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay
-match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay
-mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay
-record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-tail_loop.fl: 8 environments, 8 admitted, 8 of them with the compiler's replay
-tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
-phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay
-raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay
-set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 39 questions
+arith.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+block_lifted.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 33 questions
+block_load.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 24 questions
+block_load_mut.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+block_load_mut_of_constant.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+boolean_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+boolean_not_of_two.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+box_unbox.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+closure_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 57 questions
+const_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+div_by_zero.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+div_mod.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 15 questions
+exn_extra_args.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 81 questions
+get_tag.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 18 questions
+indirect_higher_order.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 156 questions
+inline_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 45 questions
+inline_in_code.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 42 questions
+inline_in_handler.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 78 questions
+int32_wraps.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 18 questions
+int_not.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 39 questions
+int_ops_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 1785 questions
+int_ops_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 1785 questions
+int_shift.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 27 questions
+int_shift_by_64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 6 questions
+int_shift_imm_by_63.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+int_shift_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 774 questions
+int_shift_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 759 questions
+int_shift_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 948 questions
+int_xor_minus_one.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 12 questions
+kinds_dead_cont.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 9 questions
+kinds_dead_prim.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 33 questions
+kinds_gadt.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 165 questions
+kinds_is_int_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+kinds_naked.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 60 questions
+kinds_opaque_bad.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+kinds_partial_application.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 21 questions
+kinds_partial_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 27 questions
+kinds_tupled.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 51 questions
+kinds_wrong_arity.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+num_conv_for.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 108 questions
+num_conv_int64.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 795 questions
+num_conv_int64_of_int.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 33 questions
+num_conv_int8.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 255 questions
+num_conv_tagged.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 633 questions
+num_conv_wrong_kind.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+add_zero.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 42 questions
+closure_capture.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 486 questions
+constant_folding.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 378 questions
+exported_function.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 108 questions
+exported_table.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 72 questions
+exported_two_functions.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 182 questions
+factorial.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 159 questions
+higher_order.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 576 questions
+inline_function.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 237 questions
+int64_boxed.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 126 questions
+match_variant.fl: 13 environments, 13 admitted, 13 of them with the compiler's replay; 759 questions
+match_variant_local.fl: 15 environments, 15 admitted, 15 of them with the compiler's replay; 1062 questions
+mutual_recursion.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 219 questions
+option_default.fl: 7 environments, 7 admitted, 7 of them with the compiler's replay; 339 questions
+record_project.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 546 questions
+tail_loop.fl: 8 environments, 8 admitted, 8 of them with the compiler's replay; 267 questions
+tuple_swap.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 180 questions
+while_loop.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay; 324 questions
+phys_equal.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 48 questions
+phys_equal_blocks.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 15 questions
+phys_equal_call.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 39 questions
+phys_equal_immediate_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+phys_equal_null.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
+push_unit_return.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 6 questions
+raise_in_call.fl: 6 environments, 6 admitted, 6 of them with the compiler's replay; 63 questions
+raise_over_handler.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 42 questions
+rec_cont.fl: 4 environments, 4 admitted, 4 of them with the compiler's replay; 24 questions
+set_code_in_two_sets.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 183 questions
 set_duplicate_slot.fl: not simplified: an assertion of simplify_set_of_closures.ml fails
-set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-set_mutual_recursion.fl: 11 environments, 11 admitted, 11 of them with the compiler's replay
+set_inline.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 129 questions
+set_mutual_recursion.fl: 11 environments, 11 admitted, 11 of them with the compiler's replay; 531 questions
 set_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_shared_code__f_N_code
-set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
+set_sibling_projection.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 147 questions
 set_static_group_one_function.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_one_function__f_N_code
 set_static_group_shared_code.fl: not simplified: a fatal error: The following code_id has been bound twice: camlSet_static_group_shared_code__f_N_code
-set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay
+set_static_separate_shared_code.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 114 questions
+set_wrong_slot.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 51 questions
+set_wrong_slot_invalid.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+showcase.fl: 9 environments, 9 admitted, 9 of them with the compiler's replay; 429 questions
 static_in_loop.fl: not simplified: a fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
-string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay
-switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay
-try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay
-uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay
-undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
-unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay
+string_length.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 21 questions
+string_length_of_block.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+string_load.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 30 questions
+string_load_past_the_end.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 12 questions
+switch.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 15 questions
+switch_nested.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 33 questions
+switch_on_call.fl: 3 environments, 3 admitted, 3 of them with the compiler's replay; 78 questions
+switch_same_arms.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 27 questions
+try_in_code.fl: 12 environments, 12 admitted, 12 of them with the compiler's replay; 276 questions
+try_raise.fl: 5 environments, 5 admitted, 5 of them with the compiler's replay; 51 questions
+uncaught.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+unchanged.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 27 questions
+undefined_source.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 3 questions
+unsupported_primitive.fl: 1 environments, 1 admitted, 1 of them with the compiler's replay; 9 questions
 
 In all:
   95 units simplified
@@ -228,4 +300,76 @@ In all:
   285 admitted: the model's replay is seen as Simplify's environment
   5864 names in the environments admitted
   285 admitted, and the compiler's replay is seen as Simplify's environment too
+  5836 questions: the type that Simplify has for it in a term (the alias of its canonical simple)
+  5864 questions: the alias of the name itself
+  5864 questions: the type that the environment has for it
+  17564 questions, asked of the table and of reification twice
   5 units not simplified
+  The answers, a prover at a time: those on which the three agree; then how the compiler answers in Simplify's environment: a proof or a result, unknown, invalid, no answer
+    prove_equals_to_simple_of_kind: 17564 agree; 15867, 1697, 0, 0
+    prove_equals_tagged_immediates: 17564 agree; 4485, 13079, 0, 0
+    meet_equals_tagged_immediates: 17564 agree; 4485, 2463, 10616, 0
+    meet_naked_immediates: 17564 agree; 4019, 211, 13334, 0
+    meet_equals_single_tagged_immediate: 17564 agree; 4413, 2535, 10616, 0
+    meet_naked_float32s: 17564 agree; 0, 0, 17564, 0
+    meet_naked_floats: 17564 agree; 0, 0, 17564, 0
+    meet_naked_int8s: 17564 agree; 603, 3, 16958, 0
+    meet_naked_int16s: 17564 agree; 78, 0, 17486, 0
+    meet_naked_int32s: 17564 agree; 81, 0, 17483, 0
+    meet_naked_int64s: 17564 agree; 399, 69, 17096, 0
+    meet_naked_nativeints: 17564 agree; 99, 0, 17465, 0
+    meet_naked_vec128s: 17564 agree; 0, 0, 17564, 0
+    meet_naked_vec256s: 17564 agree; 0, 0, 17564, 0
+    meet_naked_vec512s: 17564 agree; 0, 0, 17564, 0
+    meet_naked_masks: 17564 agree; 0, 0, 17564, 0
+    meet_variant_like: 17564 agree; 7608, 921, 9035, 0
+    prove_variant_like: 17564 agree; 7608, 9956, 0, 0
+    prove_is_a_boxed_or_tagged_number: 17564 agree; 6093, 11471, 0, 0
+    prove_nothing: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_tagged_immediate: 17564 agree; 6033, 11531, 0, 0
+    prove_is_a_boxed_float32: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_float: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_int32: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_int64: 17564 agree; 60, 17504, 0, 0
+    prove_is_a_boxed_nativeint: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_vec128: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_vec256: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_vec512: 17564 agree; 0, 17564, 0, 0
+    prove_is_a_boxed_mask: 17564 agree; 0, 17564, 0, 0
+    prove_is_or_is_not_a_boxed_float: 17564 agree; 10004, 7560, 0, 0
+    prove_unique_tag_and_size: 17564 agree; 1569, 15995, 0, 0
+    prove_is_int: 17564 agree; 10004, 7560, 0, 0
+    prove_is_not_a_pointer: 17564 agree; 10004, 7560, 0, 0
+    meet_is_int_variant_only: 17564 agree; 7614, 915, 9035, 0
+    prove_get_tag: 17564 agree; 1575, 15989, 0, 0
+    meet_is_null: 17564 agree; 10052, 867, 6645, 0
+    prove_unique_fully_constructed_immutable_heap_block: 17564 agree; 1398, 16166, 0, 0
+    meet_single_closures_entry: 17564 agree; 2321, 915, 14328, 0
+    prove_single_closures_entry: 17564 agree; 2321, 15243, 0, 0
+    meet_code_ids: 17564 agree; 2321, 915, 14328, 0
+    prove_code_ids: 17564 agree; 2321, 15243, 0, 0
+    meet_strings: 17564 agree; 9, 915, 16640, 0
+    prove_strings: 17564 agree; 9, 17555, 0, 0
+    prove_tagging_of_simple: 17564 agree; 4668, 12896, 0, 0
+    meet_tagging_of_simple: 17564 agree; 4668, 4670, 8226, 0
+    meet_boxed_float32_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_float_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_int32_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_int64_containing_simple: 17564 agree; 60, 915, 16589, 0
+    meet_boxed_nativeint_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_vec128_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_vec256_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_vec512_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_boxed_mask_containing_simple: 17564 agree; 0, 915, 16649, 0
+    meet_block_field_simple: 17564 agree; 756, 933, 15875, 0
+    meet_project_value_slot_simple: 17564 agree; 477, 2759, 14328, 0
+    meet_project_function_slot_simple: 17564 agree; 2321, 915, 14328, 0
+    prove_alloc_mode_of_boxed_number: 17564 agree; 60, 17504, 0, 0
+    prove_physical_equality: 17564 agree; 11978, 5586, 0, 0
+    reify, every variable at toplevel: 17564 agree; 16221, 1343, 0, 0
+      318 of the results, lifted
+    reify, no variable at toplevel: 17564 agree; 16071, 1493, 0, 0
+      168 of the results, lifted
+    never_holds_locally_allocated_values: 15644 agree; 14642, 1002, 0, 0
+
+No disagreement.

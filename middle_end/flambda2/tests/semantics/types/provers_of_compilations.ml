@@ -25,7 +25,8 @@
  * DEALINGS IN THE SOFTWARE.                                                  *
  ******************************************************************************)
 
-(* The environments that Simplify computes, replayed into the Rocq model.
+(* The provers and reification, asked in the environments that Simplify
+   computes, replayed into the Rocq model.
 
    provers_difftest.ml asks the provers of the compiler and of the model in
    environments that it makes from generated equations. Here the environments
@@ -59,11 +60,25 @@
    with E; and E' with M, which says, where a replay does not give E back,
    whether the model's replay and the compiler's differ from each other.
 
+   In an environment that is admitted, with E' seen as E too, the provers of the
+   table (prover_table.ml) and reification are asked about the names, in E, in
+   E' and in M, and the three answers are compared ([questions], [ask] below): a
+   name is asked about with up to three inputs, and one prover is asked about
+   variables only ([provers_for]). Where the two answers of the compiler agree
+   and the model's is another, the case is shown in full and the run fails: it
+   is a candidate, to be looked into, and not yet a fault of a prover. Where the
+   two answers of the compiler differ, the replay has not given the compiler's
+   answer back, and the run fails otherwise.
+
    What is printed for a file is a line: its environments, those that the
-   model's replay is admitted for, and those of them for which the compiler's
-   replay is seen as E too; and at the end, for all the files, the counts of the
-   losses by reason. With [-why] a file is gone through alone and each
-   environment that is not admitted with both replays is shown.
+   model's replay is admitted for, those of them for which the compiler's replay
+   is seen as E too, and the questions asked; and at the end, for all the files,
+   the counts of the losses by reason and, for each prover, the answers on which
+   the three agree and how the compiler answers. With [-why] a file is gone
+   through alone and each environment that is not admitted with both replays, or
+   in which the three answers to a question are compared and do not agree, is
+   shown. With [-control], an environment made by hand is gone through
+   ([control]).
 
    With [-O3] before the files, Simplify runs with the settings of that flag.
    Nothing else is set: the environments are those of the default flags. *)
@@ -90,6 +105,9 @@ module Model_name_mode = Flambda2_rocq_semantics.FlambdaBindingTime.Name_mode
 module Converter = Flambda2_rocq_types_converter.Type_converter
 module Model_names = Flambda2_rocq_types_converter.Model_names
 module Model_type = Flambda2_rocq_types_converter.Model_type
+module N = Flambda2_rocq_types_converter.Model_numbers
+module A = Flambda2_rocq_types_converter.Prover_answers
+module PT = Prover_table
 
 (* ======================================================================== *)
 (* The names of an environment                                              *)
@@ -743,11 +761,64 @@ let count counts what = add counts what 1
 let number (counts : counts) what =
   Option.value (Hashtbl.find_opt counts.table what) ~default:0
 
+(* What is counted of the answers of a prover has a key of its own: the name of
+   the prover and what is counted, so that the counts of a prover are shown on
+   one line. *)
+let key_of_prover (prover : string) (what : string) : string =
+  String.concat "|" ["asked"; prover; what]
+
+let of_a_prover (key : string) : (string * string) option =
+  match String.split_on_char '|' key with
+  | "asked" :: prover :: what -> Some (prover, String.concat "|" what)
+  | _ -> None
+
+let agree = "agree"
+
+let classes_of_answers =
+  ["a proof or a result"; "unknown"; "invalid"; "no answer"]
+
 let print_counts counts =
+  let order = List.rev counts.order in
   List.iter
     (fun what ->
-      Format.printf "  %d %s@." (Hashtbl.find counts.table what) what)
-    (List.rev counts.order)
+      if Option.is_none (of_a_prover what)
+      then Format.printf "  %d %s@." (Hashtbl.find counts.table what) what)
+    order;
+  let provers =
+    List.fold_left
+      (fun provers key ->
+        match of_a_prover key with
+        | Some (prover, (_ : string)) when not (List.mem prover provers) ->
+          prover :: provers
+        | Some _ | None -> provers)
+      [] order
+    |> List.rev
+  in
+  if not (List.is_empty provers)
+  then
+    Format.printf
+      "  The answers, a prover at a time: those on which the three agree; then \
+       how the compiler answers in Simplify's environment: %s@."
+      (String.concat ", " classes_of_answers);
+  List.iter
+    (fun prover ->
+      let number what = number counts (key_of_prover prover what) in
+      Format.printf "    %s: %d agree; %s@." prover (number agree)
+        (String.concat ", "
+           (List.map
+              (fun what -> string_of_int (number what))
+              classes_of_answers));
+      List.iter
+        (fun key ->
+          match of_a_prover key with
+          | Some (prover', what)
+            when String.equal prover prover'
+                 && (not (String.equal what agree))
+                 && not (List.mem what classes_of_answers) ->
+            Format.printf "      %d %s@." (Hashtbl.find counts.table key) what
+          | Some _ | None -> ())
+        order)
+    provers
 
 (* The counts of one file are written to a file, a count and what is counted on
    each line, for the run that goes through all the files. *)
@@ -775,6 +846,409 @@ let add_counts totals path =
     | exception End_of_file -> close_in channel
   in
   read ()
+
+(* ======================================================================== *)
+(* The questions                                                            *)
+(* ======================================================================== *)
+
+(* How a name is asked about: up to three inputs.
+
+   Simplify asks a prover of the type that it has for a simple of a term
+   ([Simplify_simple]: [TE.type_simple_in_term_exn]), which is the alias of the
+   canonical simple at the name mode normal: that is the first input, for a name
+   that the environment has at that mode and for which that function has an
+   answer (where it raises [Not_found], the name is not asked about with this
+   input). It is the input that Simplify would supply for that name there, not
+   one that Simplify did supply: an environment is reported at the start of a
+   handler, and no prover is called there.
+
+   The second is the alias of the name itself, whatever its mode: types hold
+   such aliases, and a prover is given them when it goes into a type.
+
+   The third is the type that the environment has for the name ([TE.find]): a
+   head, where the name is canonical, or an alias, which may be one that was
+   stored before its target became an alias. Reification answers a simple for an
+   alias of a name that is allowed; it is on this input that it has to say what
+   a type holds. *)
+type input_of =
+  | As_simplify_simple
+  | Raw_alias
+  | Type_found
+
+let print_input_of (input_of : input_of) =
+  match input_of with
+  | As_simplify_simple ->
+    "the type that Simplify has for it in a term (the alias of its canonical \
+     simple)"
+  | Raw_alias -> "the alias of the name itself"
+  | Type_found -> "the type that the environment has for it"
+
+(* What does not change from one environment of a unit to another: the
+   numbering, the table of the provers, and two slots that no type has. *)
+type of_unit =
+  { numbering : Model_names.t;
+    provers : PT.prover list;
+    no_function_slot : M.function_slot;
+    no_value_slot : M.value_slot
+  }
+
+let of_unit () : of_unit =
+  let numbering = Model_names.create () in
+  let unit = Current_unit.get_cu_exn () in
+  let kind_of_value_slot slot =
+    Converter.kind_to_model
+      (Value_slot.kind (Converter.value_slot_of_model numbering slot))
+  in
+  { numbering;
+    provers = PT.provers ~numbering ~kind_of_value_slot;
+    no_function_slot =
+      numbering.function_slots.number
+        (Function_slot.create unit ~name:"no_type_has_it" ~size:1);
+    no_value_slot =
+      numbering.value_slots.number
+        (Value_slot.create unit ~name:"no_type_has_it"
+           ~is_always_immediate:false K.value)
+  }
+
+(* A question about a name of an environment, with what says which it is. *)
+type asked =
+  { about : name_of_env;
+    input_of : input_of;
+    question : PT.question
+  }
+
+(* The first function slot and the first value slot of a type whose expanded
+   head, in the model, is a type of closures. *)
+let slots_of (model_env : Model_env.t) (t : MT.flambda_type) :
+    M.function_slot option * M.value_slot option =
+  let of_closures (Row_like_for_closures cases : MT.row_like_for_closures) =
+    let entries =
+      List.map
+        (fun (_, (case : (_, _, _, _) MT.row_like_case)) ->
+          let (Closures_entry (_, closure_types, value_slot_types)
+                : MT.closures_entry) =
+            case.case_maps_to
+          in
+          closure_types, value_slot_types)
+        cases
+    in
+    let first slots =
+      match List.concat_map slots entries with
+      | (slot, (_ : MT.flambda_type)) :: _ -> Some slot
+      | [] -> None
+    in
+    first fst, first snd
+  in
+  match
+    Option.map Model_expand.Expanded_type.to_type
+      (Model_expand.expand_head model_env t)
+  with
+  | None -> None, None
+  | Some (Type_value (Ok (No_alias (Head_of_kind_value (non_null, _))))) -> (
+    match non_null with
+    | Ok (Closures (closures, _)) -> of_closures closures
+    | Ok (Variant _ | Mutable_block _ | Boxed_number _ | String _)
+    | Unknown | Bottom ->
+      None, None)
+  | Some
+      ( Type_value (Unknown | Bottom | Ok (Equals _))
+      | Type_naked_immediate _ | Type_naked_number _ | Type_rec_info _
+      | Type_region _ ) ->
+    None, None
+
+(* The questions of an environment: for each name, its inputs, which are up to
+   three. The other arguments are made by rules, the same for the three sides:
+
+   - the least name mode of a simple that is answered: normal for the first
+   input, the mode for types for the other two;
+
+   - the kind: that of the name;
+
+   - the index of a field: the place of the name among the names, modulo three;
+
+   - the function slot and the value slot: the first of each in the type, where
+   its expanded head is a type of closures, and otherwise a slot that no type
+   has;
+
+   - the variable (of [never_holds_locally_allocated_values], which is asked of
+   a variable and of no type): the name, where it is a variable; that prover is
+   not asked about a symbol;
+
+   - the second type (of [prove_physical_equality]): the type of the question
+   before of the same input and the same kind, or the type itself;
+
+   - of reification: the variables that are allowed are those of the environment
+   itself; the projections from symbols are the variables that Simplify's
+   environment says are ([TE.find_symbol_projection]), given alike to the three
+   sides; and the variables at toplevel, which an environment does not say, are
+   all the variables here, and none where reification is asked a second time
+   ([with_none_at_toplevel]). None of these is what Simplify gave where it
+   reified. *)
+let questions (of_unit : of_unit) (replayed : replayed)
+    (model_env : Model_env.t) : asked list =
+  let numbering = of_unit.numbering in
+  let env = replayed.env in
+  let variables =
+    List.filter_map
+      (fun { name; _ } ->
+        Name.pattern_match name
+          ~var:(fun variable -> Some variable)
+          ~symbol:(fun _ -> None))
+      replayed.names
+  in
+  let in_model = List.map (Converter.variable_to_model numbering) in
+  let at_toplevel = in_model variables in
+  let symbol_projections =
+    in_model
+      (List.filter
+         (fun variable ->
+           Option.is_some (TE.find_symbol_projection env variable))
+         variables)
+  in
+  let before : (input_of * K.t, MT.flambda_type * TG.t) Hashtbl.t =
+    Hashtbl.create 16
+  in
+  List.concat
+    (List.mapi
+       (fun i ({ name; kind; mode } as about) ->
+         let ask input_of (t : TG.t) : asked list =
+           let asked = Converter.type_to_model numbering t in
+           let other, other_of_compiler =
+             Option.value
+               (Hashtbl.find_opt before (input_of, kind))
+               ~default:(asked, t)
+           in
+           Hashtbl.replace before (input_of, kind) (asked, t);
+           let function_slot, value_slot = slots_of model_env asked in
+           let arguments : PT.arguments =
+             { min_name_mode =
+                 (match input_of with
+                 | As_simplify_simple -> Normal
+                 | Raw_alias | Type_found -> In_types);
+               kind = Converter.kind_to_model kind;
+               field_index = i mod 3;
+               function_slot =
+                 Option.value function_slot ~default:of_unit.no_function_slot;
+               value_slot =
+                 Option.value value_slot ~default:of_unit.no_value_slot;
+               variable =
+                 Name.pattern_match name
+                   ~var:(Converter.variable_to_model numbering)
+                   ~symbol:(fun _ -> N.positive_of_int 1);
+               allowed_in = The_environment;
+               at_toplevel;
+               symbol_projections
+             }
+           in
+           [ { about;
+               input_of;
+               question =
+                 { asked;
+                   other;
+                   arguments;
+                   asked_of_compiler = Lazy.from_val t;
+                   other_of_compiler = Lazy.from_val other_of_compiler
+                 }
+             } ]
+         in
+         (match mode with
+           | Normal -> (
+             match
+               TE.type_simple_in_term_exn env ~min_name_mode:Name_mode.normal
+                 (Simple.name name)
+             with
+             | t, (_ : Simple.t) -> ask As_simplify_simple t
+             | exception Not_found -> [])
+           | In_types | Phantom -> [])
+         @ ask Raw_alias (TG.alias_type_of kind (Simple.name name))
+         @ ask Type_found (TE.find env name (Some kind)))
+       replayed.names)
+
+let with_none_at_toplevel (question : PT.question) : PT.question =
+  { question with arguments = { question.arguments with at_toplevel = [] } }
+
+(* The provers that are asked of a question: those of the table, and reification
+   twice. *)
+let provers_for (of_unit : of_unit) (replayed : replayed)
+    (model_env : Model_env.t) : asked -> PT.prover list =
+  let reification =
+    PT.reification ~numbering:of_unit.numbering ~fewer_in_compiler:replayed.env
+      ~fewer_in_model:model_env
+  in
+  let reifications : PT.prover list =
+    [ { reification with prover = "reify, every variable at toplevel" };
+      { prover = "reify, no variable at toplevel";
+        of_compiler =
+          (fun env question ->
+            reification.of_compiler env (with_none_at_toplevel question));
+        of_model =
+          (fun env question ->
+            reification.of_model env (with_none_at_toplevel question))
+      } ]
+  in
+  let of_a_variable = "never_holds_locally_allocated_values" in
+  fun { about = { name; _ }; _ } ->
+    List.filter
+      (fun (prover : PT.prover) ->
+        Name.is_var name || not (String.equal prover.prover of_a_variable))
+      of_unit.provers
+    @ reifications
+
+(* The three answers to a question: of the compiler in Simplify's environment,
+   of the compiler in its replay, and of the model in its replay. *)
+type answers =
+  { in_simplify : A.answer;
+    in_replay : A.answer;
+    in_model : A.answer
+  }
+
+type verdict =
+  | The_three_agree
+  | The_compiler_differs_in_its_replay
+      (** The replay does not give the compiler's answer back: a failure of this
+          test, and no comparison with the model. *)
+  | The_model_differs
+      (** The two answers of the compiler agree and the model's is another: a
+          candidate, to be looked into. The replay of the model, the converter
+          and the conversion of the answers are on the way as well as the
+          prover. *)
+
+let verdict { in_simplify; in_replay; in_model } : verdict =
+  if not (A.same in_simplify in_replay)
+  then The_compiler_differs_in_its_replay
+  else if A.same in_simplify in_model
+  then The_three_agree
+  else The_model_differs
+
+let class_of_answer (answer : A.answer) : string =
+  match answer with
+  | Proved _ | Known_result _ | Lift _ | Simple _ -> "a proof or a result"
+  | Unknown | Need_meet | Cannot_reify -> "unknown"
+  | Invalid -> "invalid"
+  | Stops _ -> "no answer"
+
+let print_question ppf
+    { about = { name; kind = _; mode };
+      input_of;
+      question =
+        { asked;
+          other;
+          arguments =
+            { min_name_mode;
+              kind;
+              field_index;
+              function_slot;
+              value_slot;
+              variable;
+              allowed_in = _;
+              at_toplevel;
+              symbol_projections
+            };
+          asked_of_compiler;
+          other_of_compiler
+        }
+    } =
+  let variables = Model_type.print_list Model_type.print_variable in
+  Format.fprintf ppf
+    "@[<v>of %a (which the environment has at the mode %s): %s@ the type: %a@ \
+     as the compiler has it: %a@ the second type: %a@ as the compiler has it: \
+     %a@ @[<hov 2>the arguments:@ min_name_mode %s,@ kind %a,@ field %d,@ \
+     function slot %a,@ value slot %a,@ variable %a;@ of reification:@ at \
+     toplevel %a (or none),@ projections from symbols %a@]@]"
+    Name.print name (print_mode mode) (print_input_of input_of) Model_type.print
+    asked TG.print
+    (Lazy.force asked_of_compiler)
+    Model_type.print other TG.print
+    (Lazy.force other_of_compiler)
+    (match min_name_mode with Normal -> "normal" | In_types -> "in types")
+    Model_type.print_kind kind field_index N.print_positive function_slot
+    N.print_positive value_slot Model_type.print_variable variable variables
+    at_toplevel variables symbol_projections
+
+(* The questions of an environment, asked. What is returned is the number of
+   questions, and the cases, each with what to show of it: a case is a triple of
+   answers that is compared and on which the three do not agree. An answer of
+   the compiler that the model has no value for is counted as not compared, and
+   is no case. *)
+type not_an_agreement =
+  { prover : string;
+    asked : asked;
+    answers : answers;
+    is_a_candidate : bool
+  }
+
+let ask (counts : counts) (of_unit : of_unit) (replayed : replayed)
+    (model_env : Model_env.t) (replayed_env : TE.t) :
+    int * not_an_agreement list =
+  let questions = questions of_unit replayed model_env in
+  let provers_for = provers_for of_unit replayed model_env in
+  let found = ref [] in
+  List.iter
+    (fun (asked : asked) ->
+      count counts ("questions: " ^ print_input_of asked.input_of);
+      List.iter
+        (fun (prover : PT.prover) ->
+          let count what = count counts (key_of_prover prover.prover what) in
+          match
+            { in_simplify =
+                PT.answer_of_compiler prover replayed.env asked.question;
+              in_replay =
+                PT.answer_of_compiler prover replayed_env asked.question;
+              in_model = prover.of_model model_env asked.question
+            }
+          with
+          | exception Converter.Not_in_the_model what ->
+            count
+              ("not compared: an answer of the compiler is not in the model: "
+             ^ general what)
+          | answers -> (
+            count (class_of_answer answers.in_simplify);
+            (match answers.in_simplify with
+            | Stops why -> count ("with no answer: " ^ general why)
+            | Lift _ -> count "of the results, lifted"
+            | Proved _ | Unknown | Known_result _ | Need_meet | Invalid
+            | Simple _ | Cannot_reify ->
+              ());
+            match verdict answers with
+            | The_three_agree -> count agree
+            | The_compiler_differs_in_its_replay ->
+              count "THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY";
+              found
+                := { prover = prover.prover;
+                     asked;
+                     answers;
+                     is_a_candidate = false
+                   }
+                   :: !found
+            | The_model_differs ->
+              count "DISAGREE";
+              found
+                := { prover = prover.prover;
+                     asked;
+                     answers;
+                     is_a_candidate = true
+                   }
+                   :: !found))
+        (provers_for asked))
+    questions;
+  List.length questions, List.rev !found
+
+let print_not_an_agreement ppf
+    { prover;
+      asked;
+      answers = { in_simplify; in_replay; in_model };
+      is_a_candidate
+    } =
+  Format.fprintf ppf
+    "@[<v 2>%s, %s:@ %a@ the compiler, in Simplify's environment: %a@ the \
+     compiler, in its replay: %a@ the model: %a@]"
+    (if is_a_candidate
+     then
+       "DISAGREEMENT (the two answers of the compiler agree, the model's is \
+        another)"
+     else "THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY")
+    prover print_question asked A.print in_simplify A.print in_replay A.print
+    in_model
 
 (* ======================================================================== *)
 (* One unit                                                                 *)
@@ -844,15 +1318,24 @@ let simplify filename : (Flambda_unit.t, string) result =
 
 let admitted = "admitted: the model's replay is seen as Simplify's environment"
 
+let questions_asked = "questions, asked of the table and of reification twice"
+
+(* The cases of a file, for the status of the run. *)
+type found =
+  | Nothing
+  | Candidates
+  | Failures_of_the_replay
+
 let with_the_replay =
   "admitted, and the compiler's replay is seen as Simplify's environment too"
 
 (* One file: its environments are replayed and counted. With [why], each
    environment that is not admitted with both replays is shown. *)
-let check_file ~(why : bool) ~(names : bool) filename : counts =
+let check_file ~(why : bool) ~(names : bool) filename : counts * found =
   let shown = Filename.basename filename in
   let counts = create_counts () in
   let count = count counts in
+  let candidates = ref 0 and failures_of_the_replay = ref 0 in
   observations := [];
   (match simplify filename with
   | Error why ->
@@ -860,7 +1343,8 @@ let check_file ~(why : bool) ~(names : bool) filename : counts =
     Format.printf "%s: %s@." shown why
   | Ok (_ : Flambda_unit.t) ->
     count "units simplified";
-    let numbering = Model_names.create () in
+    let of_unit = of_unit () in
+    let numbering = of_unit.numbering in
     let environments = List.rev !observations in
     List.iteri
       (fun i (env, (continuation : Continuation.t)) ->
@@ -926,7 +1410,29 @@ let check_file ~(why : bool) ~(names : bool) filename : counts =
             if of_another_unit ~variable:true
             then count "admitted, with a variable of another unit in its names";
             match replayed.simplify_against_replay with
-            | Seen_the_same -> count with_the_replay
+            | Seen_the_same -> (
+              count with_the_replay;
+              match replayed.model_env, replayed.replayed_env with
+              | Ok model_env, Ok replayed_env ->
+                let questions, found =
+                  ask counts of_unit replayed model_env replayed_env
+                in
+                add counts questions_asked questions;
+                List.iter
+                  (fun (not_an_agreement : not_an_agreement) ->
+                    incr
+                      (if not_an_agreement.is_a_candidate
+                       then candidates
+                       else failures_of_the_replay);
+                    Format.printf "@[<v 2>%s, environment %d, at %a:@ %a@]@."
+                      shown i Continuation.print continuation
+                      print_not_an_agreement not_an_agreement)
+                  found;
+                if not (List.is_empty found)
+                then show (Some replayed) "what was asked in"
+              | Error _, _ | _, Error _ ->
+                (* An environment that is seen the same was made. *)
+                assert false)
             | (Differ _ | Not_compared _) as compared ->
               let what =
                 "admitted, but the compiler's replay is not seen as Simplify's \
@@ -953,10 +1459,16 @@ let check_file ~(why : bool) ~(names : bool) filename : counts =
       environments;
     Format.printf
       "%s: %d environments, %d admitted, %d of them with the compiler's \
-       replay@."
+       replay; %d questions@."
       shown (List.length environments) (number counts admitted)
-      (number counts with_the_replay));
-  counts
+      (number counts with_the_replay)
+      (number counts questions_asked));
+  ( counts,
+    if !candidates > 0
+    then Candidates
+    else if !failures_of_the_replay > 0
+    then Failures_of_the_replay
+    else Nothing )
 
 (* The compiler keeps what it knows of a unit when it goes on to another one in
    the same run. So each file is gone through in a run of its own, from the
@@ -975,7 +1487,13 @@ let each_in_a_run_of_its_own ~(flags : string list) (inputs : string list) =
           (Filename.quote_command Sys.executable_name
              (flags @ ["-one"; counts_file; input]))
       with
-      | 0 ->
+      | (0 | 1 | 4) as status ->
+        if status = 1
+        then count totals "units with a DISAGREEMENT"
+        else if status = 4
+        then
+          count totals
+            "units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY";
         add_counts totals counts_file;
         Sys.remove counts_file
       | status ->
@@ -985,7 +1503,25 @@ let each_in_a_run_of_its_own ~(flags : string list) (inputs : string list) =
     inputs;
   Format.printf "@.In all:@.";
   print_counts totals;
-  let stopped = number totals "units on which this tool stopped" in
+  let disagreements = number totals "units with a DISAGREEMENT"
+  and failures =
+    number totals "units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY"
+  and stopped = number totals "units on which this tool stopped" in
+  Format.printf "@.%s@."
+    (if disagreements > 0
+     then Printf.sprintf "DISAGREEMENTS in %d files." disagreements
+     else if failures > 0
+     then
+       Printf.sprintf
+         "The compiler answers otherwise in its replay in %d files." failures
+     else if stopped > 0
+     then
+       Printf.sprintf
+         "No disagreement in the files gone through; this tool stopped on %d."
+         stopped
+     else "No disagreement.");
+  if disagreements > 0 then exit 1;
+  if failures > 0 then exit 4;
   if stopped > 0 then exit 3
 
 (* A control of the replay and of the gate, on an environment made by hand that
@@ -1100,11 +1636,16 @@ let () =
     check_file ~why ~names (Filename.basename filename)
   in
   match arguments with
-  | ["-one"; counts_file; filename] ->
-    write_counts (one ~why:false filename) counts_file
-  | ["-why"; filename] -> ignore (one ~why:true filename : counts)
+  | ["-one"; counts_file; filename] -> (
+    let counts, found = one ~why:false filename in
+    write_counts counts counts_file;
+    match found with
+    | Nothing -> ()
+    | Candidates -> exit 1
+    | Failures_of_the_replay -> exit 4)
+  | ["-why"; filename] -> ignore (one ~why:true filename : counts * found)
   | ["-why-with-names"; filename] ->
-    ignore (one ~why:true ~names:true filename : counts)
+    ignore (one ~why:true ~names:true filename : counts * found)
   | ["-control"] ->
     Clflags.set_target Clflags.Target.Native;
     control ()

@@ -1,4 +1,4 @@
-# The environments of Simplify, replayed into the Rocq model
+# The provers, asked in the environments of Simplify
 
 `provers_of_compilations.ml`, its list of units
 (`provers_of_compilations.units`) and its expected file. It is run by the
@@ -7,9 +7,11 @@ alias `runtest` of this directory, at the default flags and at `-O3`.
 `provers_difftest.ml` asks the provers in environments that it makes from
 generated equations. This tool takes the typing environments that Simplify
 itself computes for a unit, and makes for each one an environment of the
-model that is seen the same. Today it stops there: it counts the
-environments for which that is done, and each one for which it is not,
-with the reason. No prover is asked yet.
+model that is seen the same. It counts the environments for which that is
+done, and each one for which it is not, with the reason. In the
+environments for which it is done, it asks the provers that the model has
+(`prover_table.ml`), and reification, about the names, and compares three
+answers.
 
 ## It leans on the hook of decision D33
 
@@ -132,15 +134,101 @@ That M answers as E to the readers above, on the names above. It does not
 say that M satisfies the premises of the model's theorems on environments,
 and it does not say that E is right.
 
+## The questions
+
+In each environment that is admitted with both replays, every name is
+asked about, with up to three inputs.
+
+1. The type that Simplify has for the name in a term
+   (`Typing_env.type_simple_in_term_exn` at the mode normal, which is what
+   `Simplify_simple` gives a prover): the alias of the canonical simple.
+   For a name that the environment has at the mode normal, and for which
+   that function has an answer (where it raises `Not_found`, the name is
+   not asked about with this input). This is the
+   input that Simplify would supply for that name there. It is not a
+   question that Simplify asked: an environment is reported at the start
+   of a handler, and no prover is called there.
+2. The alias of the name itself, whatever its mode. Types hold such
+   aliases, and a prover is given them when it goes into a type.
+3. The type that the environment has for the name (`find`): a head where
+   the name is canonical, or an alias, which may be one stored before its
+   target became an alias. Reification answers a simple for the alias of
+   a name that is allowed, so it is on this input that it says what a
+   type holds.
+
+The type of the compiler is the compiler's own, in E and in E'; the
+model's is made from it by the converter. A question belongs to its
+environment: the same name with the same type is asked again in each
+environment that has it.
+
+The other arguments follow rules, the same for the three sides:
+
+- the least name mode of a simple that a prover answers: normal for the
+  first input, the mode for types for the other two;
+- the kind (of `prove_equals_to_simple_of_kind`, and of the field of
+  `meet_block_field_simple`): the kind of the name;
+- the index of a field: the place of the name among the names, modulo 3;
+- the function slot and the value slot: the first of each in the type,
+  where its expanded head is a type of closures; otherwise a slot that no
+  type has. The model takes the kind of the value slot as an argument: it
+  is read off the slot (`Value_slot.kind`);
+- the variable of `never_holds_locally_allocated_values`, which is asked
+  of a variable and of no type: the name, where it is a variable; that
+  prover is not asked about a symbol;
+- the second type of `prove_physical_equality`: the type of the question
+  before of the same input and the same kind, or the type itself.
+
+Reification has three more arguments, and an environment does not have
+what Simplify gives for them. They are a stated policy, the same for the
+three sides, and not what Simplify gave where it reified:
+
+- the variables that are allowed are those of the environment itself (E,
+  E' or M);
+- the projections from symbols are the variables that E says are
+  (`Typing_env.find_symbol_projection`), given alike to the three;
+- the variables at toplevel are all the variables; and reification is
+  asked a second time with none.
+
+## The three answers
+
+Each question is answered by the compiler in E, by the compiler in E', and
+by the model in M, and the answers are compared as values of one type
+(`prover_answers.ml`).
+
+- The three agree. A stop of the compiler that is caught and no answer of
+  the model count as the same answer, as in `provers_difftest.ml`.
+- The two answers of the compiler differ. The replay does not give the
+  compiler's answer back, so there is nothing to compare the model with:
+  a failure of this test, shown, and the run ends with status 4.
+- The two answers of the compiler agree and the model's is another. This
+  is a candidate, to be looked into: the replay of the model, the
+  converter of types and the conversion of the answers are on the way
+  from E to the model's answer, as well as the prover. It is shown with
+  the name, the input, both forms of the two types, the arguments and the
+  three answers, and the run ends with status 1. `-why-with-names` on the
+  file shows the names of the environment too, each with its mode, its
+  canonical element and its type.
+
+An answer of the compiler that the model has no value for is counted as
+not compared.
+
+What agreement says: that on these questions the model's prover answers
+as the compiler's, in an environment that is seen as Simplify's. It does
+not say that the answer is right, and it does not say that the snapshots
+satisfy the premises of the theorems proved of the model's provers.
+
 ## Figures
 
 Of this directory's list (100 units, of which 95 are simplified), as the
 expected file has them: 275 environments at the default flags and 285 at
-`-O3`, all admitted, each with the compiler's replay seen as E too.
+`-O3`, all admitted, each with the compiler's replay seen as E too; 16,862
+and 17,564 questions, and no disagreement.
 
-By hand, on 16 November 2026, with the tool and the tree as they were
-that day (these figures are not made again when the tree, the model or
-the wording of the tool changes; those of the expected file are):
+By hand, on 17 November 2026, with the tool and the tree as they were
+that day. These figures are not made again when the tree, the model or
+the wording of the tool changes; those of the expected file are.
+
+The environments:
 
 | Units | Flags | Reported | Admitted | Arrays | Coercions | Gate |
 |---|---|---|---|---|---|---|
@@ -161,6 +249,28 @@ seen as E too. Of the 740 files, 729 are simplified; of the 2,689 texts,
 of the tree are units on which Simplify stops, which are there to show
 it.
 
+The questions, in the admitted environments:
+
+| Units | Flags | Questions | Answers compared | The three agree |
+|---|---|---|---|---|
+| the tree's 740 files | default | 231,730 | 14,550,471 | 14,550,471 |
+| the same | `-O3` | 271,100 | 17,026,557 | 17,026,557 |
+| the testers' 2,689 texts | default | 2,873,463 | 180,272,352 | 180,272,352 |
+| the same | `-O3` | 3,734,030 | 234,254,457 | 234,254,457 |
+
+An answer is of one of the 61 provers of the table or of reification,
+which is asked twice; `never_holds_locally_allocated_values` is not asked
+about a symbol. In the four runs there is no candidate and no question
+on which the compiler answers otherwise in its replay; none of the
+answers compared is of the class "no answer", which is a stop caught
+where the compiler's prover or reification is asked; and there is no
+answer that the model has no value for. The units on which Simplify
+itself stops are counted above, among those that are not simplified.
+
+Reification, on the testers' texts at the default flags: with every
+variable at toplevel it lifts 148,351 times and cannot reify 482,114 times, of
+2,873,463 questions; with none, 119,195 and 500,147.
+
 ## How to run
 
     dune build --root=. --workspace=duneconf/main.ws \
@@ -170,8 +280,12 @@ it.
     ./provers_of_compilations.exe [-O3] FILE.fl ...
     ./provers_of_compilations.exe [-O3] -why FILE.fl
     ./provers_of_compilations.exe [-O3] -why-with-names FILE.fl
+    ./provers_of_compilations.exe -control
 
 `-why` shows each environment of a file that is not admitted with both
-replays: the first difference, with the name and the two answers.
+replays (the first difference, with the name and the two answers) and
+each environment in which the three answers to a question are compared
+and do not agree.
 `-why-with-names` adds the names of the environment, each with its name
-mode, its canonical element and its type.
+mode, its canonical element and its type. `-control` runs the control
+alone.
