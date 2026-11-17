@@ -134,14 +134,16 @@
      ([bound_code_my_closures]), as FlambdaReaperUnboxing.v does.
 
    What is left out:
-   - The sets of closures whose representation changes (unboxing). The
-     model takes the closures that change from [rc_changed]; where one
-     of the sets kept by [refine_sets_of_closures] changes, the
-     compiler forgets the type if there are several or one may be
+   - In [rewrite], the sets of closures whose representation changes
+     (unboxing). It takes the closures that change from [rc_changed];
+     where one of the sets kept by [refine_sets_of_closures] changes,
+     the compiler forgets the type if there are several or one may be
      external, and otherwise rewrites the type of the closure into one
      of its new representation ([Expr.exactly_this_closure] at the new
      slots, the value slots by [patterns_for_unboxed_fields] with the
-     function slots); the model forgets the type in both cases.
+     function slots); [rewrite] forgets the type in both cases. The
+     compiler's rewriting is [rewrite_arbitrary_u] (below), which is not
+     extracted.
    - [rewrite_kind_with_subkind]: the model has no subkinds.
    - In [rewrite_result_types], the environment of the result types is
      an input, where the compiler adds the extension to the environment
@@ -2048,3 +2050,266 @@ Definition rewrite_result_types_u
     (bindings ++ copies).
 
 End Unboxed.
+
+(* ======================================================================== *)
+(* Closures whose representation changes                                    *)
+(* ======================================================================== *)
+
+(* The closure case of [Rewriter.rewrite] where the one set that
+   [refine_sets_of_closures] keeps changes its representation
+   ([get_set_of_closures_changed_representation]: the representation
+   [repr] of FlambdaReaperUnboxing.v that the changes of representation
+   give its closures) and the closure cannot be external: the type of the
+   closure in the new representation ([Expr.exactly_this_closure] at the
+   new function slot of the closure), with
+   - each function slot of the set at its new slot, of the code id that
+     the type has for it if the closure there may be called, unknown if
+     it is never called ([usages_of_function_slots_for_set_of_closures]);
+   - the closure at each function slot of the set, at its new slot, of
+     the type that the type has for it, rewritten under [Single_source]
+     of that closure;
+   - each new value slot of the representation, of the type at its path
+     (a value slot, then the fields of what is unboxed in turn) in the
+     type, rewritten under the metadata that [patterns_for_unboxed_fields]
+     gives it with the patterns of the function slots, or unknown where
+     it binds no variable.
+   Where several sets are kept, or the closure may be external, the type
+   is forgotten, as the closure case of [rewrite_rule] forgets it where a
+   set changes ([rc_changed]). With [fix_null], the nullability is kept,
+   as in [rewrite_closure]. The rest of the rewriting is [rewrite]'s
+   ([rewrite_arbitrary_u]). None of it is extracted. *)
+
+Section Changed.
+
+Variable fx : fixes.
+Variable ctx : rewrite_context.
+Variable tenv : Typing_env.t.
+Variable canon : canon_fn.
+(* The relation [code_id_my_closure] (FlambdaReaperUnboxing.v,
+   [bound_code_my_closures]). *)
+Variable code_my_closures : finite_map variable.
+(* The changes of representation of the names
+   (FlambdaReaperUnboxing.unit_changed_representations). *)
+Variable reprs : list (node * FlambdaReaperUnboxing.closure_repr).
+
+Local Abbreviation F := (rc_facts ctx).
+Local Abbreviation T := (rc_tables ctx).
+
+(* [usages_of_function_slots_for_set_of_closures]: whether the closure
+   may be called, with any arity or a known one. *)
+Definition closure_called (closure : node) : bool :=
+  match
+    get_one_field_usage_of_constructors ctx [closure]
+      (Field_call_witness Unknown_arity_code_pointer)
+  with
+  | Unknown | Ok _ => true
+  | Bottom =>
+    match
+      get_one_field_usage_of_constructors ctx [closure]
+        (Field_call_witness Known_arity_code_pointer)
+    with
+    | Unknown | Ok _ => true
+    | Bottom => false
+    end
+  end.
+
+(* [patterns_for_unboxed_fields] with the patterns of the function slots:
+   the leaves of the fields [fields] of the representation, at the
+   closure [source] of the type, the closures of the set being read at
+   [reads] ([get_fields_usage_of_constructors]), in the order of the
+   fields; as [unboxed_leaves] at a level, and [unboxed_leaves] for a
+   value slot unboxed in turn. With no field read, the pattern is
+   [Pattern.closure] of the function slots alone, and binds no value
+   slot. *)
+Definition changed_leaves (source : node)
+    (reads : list (field * FlambdaReaperUnboxing.field_use))
+    (fields : FlambdaReaperUnboxing.unboxed_fields) : list unboxed_leaf :=
+  let cls :=
+    classify_field_map
+      (filter (fun f => Keyed.is_bound field_eqb f reads) (map fst fields))
+  in
+  match cls with
+  | Class_empty => []
+  | _ =>
+    flat_map
+      (fun p : field * FlambdaReaperUnboxing.unboxed_field =>
+         let '(f, u) := p in
+         match Keyed.lookup field_eqb f reads with
+         | None => forgotten_leaves f u
+         | Some use =>
+           if forgets_class cls then forgotten_leaves f u
+           else
+             let source_f := get_single_field_source ctx source f in
+             match u with
+             | FlambdaReaperUnboxing.Not_unboxed _ =>
+               [([f], field_kind f, Some (pattern_metadata ctx source_f use))]
+             | FlambdaReaperUnboxing.Unboxed _ =>
+               match use, source_f with
+               | FlambdaReaperUnboxing.Use_known flow_to,
+                 Field_one_source s =>
+                 map (fun l => let '(p, k, m) := l in (f :: p, k, m))
+                   (unboxed_leaves ctx code_my_closures (field_kind f)
+                      (get_direct_usages ctx flow_to) s u)
+               | _, _ => forgotten_leaves f u
+               end
+             end
+         end)
+      fields
+  end.
+
+(* The case of [Rewriter.rewrite] of a closure type whose one set kept
+   changes, with the closure local: its representation, the set, the
+   slot and allocation mode of the closure, and the entry of the type. *)
+Definition changed_rule (usages : rewrite_metadata) (ty : flambda_type)
+    : option
+        (FlambdaReaperUnboxing.closure_repr * set_of_closures * function_slot
+         * Alloc_mode.t * closures_entry) :=
+  if forgets usages then None
+  else
+    match kind ty with
+    | Value =>
+      match Provers.meet_single_closures_entry tenv ty with
+      | Some (Meet_shortcut.Known_result (slot, alloc_mode, entry, _)) =>
+        match entry with
+        | Closures_entry _ closure_types value_slot_types =>
+          let code_ids :=
+            map (fun g => (g, entry_code_id entry g)) (domain closure_types)
+          in
+          let mbl :=
+            if negb (is_nil (domain value_slot_types))
+               || negb (is_nil (domain closure_types))
+               || existsb
+                    (fun p =>
+                       match snd p with
+                       | Or_unknown.Known _ => true
+                       | Or_unknown.Unknown => false
+                       end)
+                    code_ids
+            then Must_be_local
+            else Can_be_external
+          in
+          match refine_sets_of_closures fx ctx usages slot code_ids mbl with
+          | ([set], Must_be_local) =>
+            match Keyed.lookup node_eqb (closure_at set slot) reprs with
+            | Some repr => Some (repr, set, slot, alloc_mode, entry)
+            | None => None
+            end
+          | _ => None
+          end
+        end
+      | _ => None
+      end
+    | _ => None
+    end.
+
+(* The type of the closure in the new representation. *)
+Definition rewrite_changed
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (repr : FlambdaReaperUnboxing.closure_repr) (set : set_of_closures)
+    (slot : function_slot) (alloc_mode : Alloc_mode.t)
+    (entry : closures_entry) (ty : flambda_type) : flambda_type :=
+  let expanded := expand_head tenv ty in
+  let new_slot := FlambdaReaperUnboxing.rename_function_slot repr in
+  let reads :=
+    FlambdaReaperUnboxing.get_fields_of_constructors F T (rc_is_local ctx)
+      (map (fun p => fst (snd p)) set)
+  in
+  let leaves :=
+    changed_leaves (closure_at set slot) reads
+      (FlambdaReaperUnboxing.cr_fields repr)
+  in
+  let ty' :=
+    exactly_this_closure (new_slot slot)
+      (map
+         (fun p : function_slot * (node * Or_unknown.t code_id) =>
+            (new_slot (fst p),
+             if closure_called (fst (snd p))
+             then
+               match entry_code_id entry (fst p) with
+               | Or_unknown.Known code => Or_unknown.Known (Function_type code)
+               | Or_unknown.Unknown => Or_unknown.Unknown
+               end
+             else Or_unknown.Unknown))
+         set)
+      (map
+         (fun p : function_slot * (node * Or_unknown.t code_id) =>
+            (new_slot (fst p),
+             rw (Single_source (fst (snd p)))
+               (destructure_closure
+                  (fun c => row_like_for_closures_get_closure c (fst p))
+                  expanded)))
+         set)
+      (map
+         (fun q : unboxed_leaf * (variable * flambda_kind) =>
+            let '((path, k, m), (slot', _)) := q in
+            (slot',
+             match m with
+             | None => unknown k
+             | Some m => rw m (destructure_path tenv path ty)
+             end))
+         (combine leaves
+            (FlambdaReaperUnboxing.fields_leaves
+               (FlambdaReaperUnboxing.cr_fields repr))))
+      alloc_mode
+  in
+  if fix_null fx && expanded_maybe_null tenv ty
+  then
+    match ty' with
+    | Type_value (Ok (No_alias (Head_of_kind_value non_null _))) =>
+      Type_value (Ok (No_alias (Head_of_kind_value non_null (Maybe_null None))))
+    | _ => ty'
+    end
+  else ty'.
+
+(* [rewrite_arbitrary_type] and [rewrite] with the changes of
+   representation: [rewrite_arbitrary] and [rewrite], but where a set
+   kept changes. *)
+Fixpoint rewrite_arbitrary_u (fuel : nat) (m : rewrite_metadata)
+    (ty : flambda_type) {struct fuel} : flambda_type :=
+  match fuel with
+  | O => unknown (kind ty)
+  | S fuel =>
+    match get_alias_opt ty with
+    | Some alias =>
+      match
+        Typing_env.get_canonical_simple_exn tenv (Some Name_mode.in_types)
+          None alias
+      with
+      | Some (Some (Const c)) => rewrite_u fuel m (type_for_const c)
+      | Some (Some (Var x)) =>
+        if fix_alias fx && forgets m then unknown (kind ty)
+        else
+          alias_type_of (kind ty)
+            (simple_of_name (canon (Name_var x) (kind ty) m))
+      | Some (Some (Symbol s)) =>
+        if fix_alias fx && forgets m then unknown (kind ty)
+        else
+          alias_type_of (kind ty)
+            (simple_of_name (canon (Name_symbol s) (kind ty) m))
+      | Some None | None => unknown (kind ty)
+      end
+    | None => rewrite_u fuel m ty
+    end
+  end
+
+with rewrite_u (fuel : nat) (m : rewrite_metadata) (ty : flambda_type)
+    {struct fuel} : flambda_type :=
+  match fuel with
+  | O => unknown (kind ty)
+  | S fuel =>
+    match changed_rule m ty with
+    | Some (repr, set, slot, alloc_mode, entry) =>
+      rewrite_changed (rewrite_arbitrary_u fuel) repr set slot alloc_mode
+        entry ty
+    | None =>
+      match rewrite_rule fx ctx tenv m ty with
+      | Rule_forget => unknown (kind ty)
+      | Rule_identity =>
+        rewrite_identity fx ctx tenv (rewrite_arbitrary_u fuel) m ty
+      | Rule_closure spec =>
+        rewrite_closure fx tenv (rewrite_arbitrary_u fuel) spec ty
+      end
+    end
+  end.
+
+End Changed.

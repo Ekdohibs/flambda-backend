@@ -42,7 +42,13 @@
    [usages_carry_sources]); the metadata of its value slots holds where
    they are ([follow_field_for_set_at]), and the join of the slots of
    the sets kept describes what that of the set does
-   ([fold_join_covered]). The counterexamples are computed.
+   ([fold_join_covered]). The induction relates a value to its rebuild
+   as [rebuilt_under] does, or, for a closure, by the allocation of the
+   closure that the metadata describes, its set rebuilt with it
+   ([closure_under], [rebuilt_ext]): so is the closure of another slot
+   of the set, under the metadata of that slot, whose closure type need
+   not be an alias in the fragment of [loose]. The counterexamples and
+   the example of a change of representation are computed.
 
    The result types of an unboxed variable of code
    ([rewrite_unboxed_result_type_sound]) are proved level by level of
@@ -985,13 +991,16 @@ Definition slots_covered (acc e : slots_metadata) : Prop :=
        lookup w (fst e) = Some me
        ∧ ∀ a : node, describes sol me a -> describes sol mw a)
   ∧ ∀ (g : function_slot) (p : rewrite_metadata * bool),
-      lookup g (snd acc) = Some p -> is_bound g (snd e) = true.
+      lookup g (snd acc) = Some p ->
+      ∃ pe : rewrite_metadata * bool,
+        lookup g (snd e) = Some pe
+        ∧ ∀ a : node, describes sol (fst pe) a -> describes sol (fst p) a.
 
 Lemma covered_refl (e : slots_metadata) : slots_covered e e.
 Proof.
   split.
   - intros w mw Hw. exists mw. auto.
-  - intros g p Hg. apply is_bound_lookup. exists p. exact Hg.
+  - intros g p Hg. exists p. auto.
 Qed.
 
 Lemma covered_join_left (acc b e : slots_metadata) :
@@ -1004,8 +1013,10 @@ Proof.
     split; [ exact Hme | ].
     intros a H. apply join_metadata_describes. left. exact (Hd a H).
   - intros g p Hg. cbn [join_slots snd] in Hg.
-    apply lookup_inter_slots in Hg as (pa & pb & Ha & _ & _).
-    exact (Hf g pa Ha).
+    apply lookup_inter_slots in Hg as (pa & pb & Ha & _ & ->).
+    destruct (Hf g pa Ha) as (pe & Hpe & Hd). exists pe.
+    split; [ exact Hpe | ].
+    intros a H. cbn [fst]. apply join_metadata_describes. left. exact (Hd a H).
 Qed.
 
 Lemma covered_join_right (acc b : slots_metadata) :
@@ -1017,8 +1028,9 @@ Proof.
     exists mb. split; [ exact Hb | ].
     intros a H. apply join_metadata_describes. right. exact H.
   - intros g p Hg. cbn [join_slots snd] in Hg.
-    apply lookup_inter_slots in Hg as (pa & pb & _ & Hb & _).
-    apply is_bound_lookup. exists pb. exact Hb.
+    apply lookup_inter_slots in Hg as (pa & pb & _ & Hb & ->).
+    exists pb. split; [ exact Hb | ].
+    intros a H. cbn [fst]. apply join_metadata_describes. right. exact H.
 Qed.
 
 Lemma fold_join_keeps (rest : list slots_metadata) (acc e : slots_metadata) :
@@ -1148,15 +1160,15 @@ Lemma eval_const_unallocated (vars : env) (c : const) (w : value) :
   eval_simple vars (Const c) = Some w -> unallocated w.
 Proof. simpl. intros [= <-]. left. exists c. reflexivity. Qed.
 
-Lemma unknown_fragment (vars : env) (k : flambda_kind) :
-  type_in_fragment vars (unknown k).
+Lemma unknown_fragment {loose : bool} (vars : env) (k : flambda_kind) :
+  type_in_fragment_with loose vars (unknown k).
 Proof.
   split; [ destruct k as [ | [] | | ]; reflexivity | ].
   intros s k' w Hin. destruct k as [ | [] | | ]; destruct Hin.
 Qed.
 
-Lemma bottom_fragment (vars : env) (k : flambda_kind) :
-  type_in_fragment vars (bottom k).
+Lemma bottom_fragment {loose : bool} (vars : env) (k : flambda_kind) :
+  type_in_fragment_with loose vars (bottom k).
 Proof.
   split; [ destruct k as [ | [] | | ]; reflexivity | ].
   intros s k' w Hin. destruct k as [ | [] | | ]; destruct Hin.
@@ -1172,18 +1184,18 @@ Qed.
 
 (* The head of a type of kind value that is in the fragment: what it holds
    is. *)
-Definition non_null_in_fragment (vars : env)
+Definition non_null_in_fragment (loose : bool) (vars : env)
     (head : head_of_kind_value_non_null) : Prop :=
-  shaped_non_null head = true
+  shaped_non_null_with loose head = true
   ∧ ∀ (s : simple) (k : flambda_kind) (w : value),
       (s, k) ∈ aliases_of_head_of_kind_value_non_null head ->
       eval_simple vars s = Some w -> unallocated w.
 
-Lemma head_fragment (vars : env) (head : head_of_kind_value_non_null)
-    (is_null : is_null) :
-  type_in_fragment vars
+Lemma head_fragment {loose : bool} (vars : env)
+    (head : head_of_kind_value_non_null) (is_null : is_null) :
+  type_in_fragment_with loose vars
     (Type_value (Ok (No_alias (Head_of_kind_value (Ok head) is_null)))) ->
-  non_null_in_fragment vars head.
+  non_null_in_fragment loose vars head.
 Proof.
   intros [Hcf Hal]. split; [ exact Hcf | ].
   intros s k w Hin. apply (Hal s k w). cbn [aliases_with_kinds
@@ -1191,35 +1203,36 @@ Proof.
   apply in_or_app. left. exact Hin.
 Qed.
 
-Lemma immediates_fragment (vars : env) (is_int : option variable)
+Lemma immediates_fragment {loose : bool} (vars : env)
+    (is_int : option variable)
     (ty : flambda_type) (get_tag : option variable)
     (blocks : Or_unknown.t row_like_for_blocks)
     (extensions : variant_extensions) (is_unique : bool) :
-  non_null_in_fragment vars
+  non_null_in_fragment loose vars
     (Variant is_int (Or_unknown.Known ty) get_tag blocks extensions
        is_unique) ->
-  type_in_fragment vars ty.
+  type_in_fragment_with loose vars ty.
 Proof.
-  intros [Hcf Hal]. cbn [shaped_non_null] in Hcf.
+  intros [Hcf Hal]. cbn [shaped_non_null_with] in Hcf.
   apply andb_true_iff in Hcf as [Hcf _]. split; [ exact Hcf | ].
   intros s k w Hin. apply (Hal s k w).
   cbn [aliases_of_head_of_kind_value_non_null].
   apply in_or_app. right. apply in_or_app. left. exact Hin.
 Qed.
 
-Lemma blocks_fragment (vars : env) (is_int : option variable)
+Lemma blocks_fragment {loose : bool} (vars : env) (is_int : option variable)
     (immediates : Or_unknown.t flambda_type) (get_tag : option variable)
     (blocks : row_like_for_blocks) (extensions : variant_extensions)
     (is_unique : bool) :
-  non_null_in_fragment vars
+  non_null_in_fragment loose vars
     (Variant is_int immediates get_tag (Or_unknown.Known blocks) extensions
        is_unique) ->
-  shaped_blocks blocks = true
+  shaped_blocks_with loose blocks = true
   ∧ ∀ (s : simple) (k : flambda_kind) (w : value),
       (s, k) ∈ aliases_of_row_like_for_blocks blocks ->
       eval_simple vars s = Some w -> unallocated w.
 Proof.
-  intros [Hcf Hal]. cbn [shaped_non_null] in Hcf.
+  intros [Hcf Hal]. cbn [shaped_non_null_with] in Hcf.
   apply andb_true_iff in Hcf as [_ Hcf]. split; [ exact Hcf | ].
   intros s k w Hin. apply (Hal s k w).
   cbn [aliases_of_head_of_kind_value_non_null].
@@ -1228,12 +1241,14 @@ Proof.
 Qed.
 
 (* The fields of a case of blocks in the fragment are. *)
-Lemma block_case_fragment (vars : env) (case : row_like_block_case) :
-  forallb shaped_type (case_maps_to case) = true ->
+Lemma block_case_fragment {loose : bool} (vars : env)
+    (case : row_like_block_case) :
+  forallb (shaped_type_with loose) (case_maps_to case) = true ->
   (∀ (s : simple) (k : flambda_kind) (w : value),
      (s, k) ∈ flat_map aliases_with_kinds (case_maps_to case) ->
      eval_simple vars s = Some w -> unallocated w) ->
-  ∀ ty : flambda_type, ty ∈ case_maps_to case -> type_in_fragment vars ty.
+  ∀ ty : flambda_type,
+    ty ∈ case_maps_to case -> type_in_fragment_with loose vars ty.
 Proof.
   intros Hcf Hal ty Hty. split.
   - rewrite forallb_forall in Hcf. exact (Hcf ty Hty).
@@ -1241,11 +1256,12 @@ Proof.
     exists ty. auto.
 Qed.
 
-Lemma known_case_fragment (vars : env)
+Lemma known_case_fragment {loose : bool} (vars : env)
     (known_tags : Keyed.finite_map Z (Or_unknown.t row_like_block_case))
     (other_tags : Or_bottom.t row_like_block_case) (alloc_mode : Alloc_mode.t)
     (tag : Z) (case : row_like_block_case) :
-  shaped_blocks (Row_like_for_blocks known_tags other_tags alloc_mode)
+  shaped_blocks_with loose
+    (Row_like_for_blocks known_tags other_tags alloc_mode)
   = true ->
   (∀ (s : simple) (k : flambda_kind) (w : value),
      (s, k)
@@ -1253,9 +1269,10 @@ Lemma known_case_fragment (vars : env)
          (Row_like_for_blocks known_tags other_tags alloc_mode) ->
      eval_simple vars s = Some w -> unallocated w) ->
   (tag, Or_unknown.Known case) ∈ known_tags ->
-  ∀ ty : flambda_type, ty ∈ case_maps_to case -> type_in_fragment vars ty.
+  ∀ ty : flambda_type,
+    ty ∈ case_maps_to case -> type_in_fragment_with loose vars ty.
 Proof.
-  intros Hcf Hal Hin. cbn [shaped_blocks] in Hcf.
+  intros Hcf Hal Hin. cbn [shaped_blocks_with] in Hcf.
   apply andb_true_iff in Hcf as [Hcf _]. rewrite forallb_forall in Hcf.
   apply block_case_fragment.
   - exact (Hcf _ Hin).
@@ -1266,10 +1283,10 @@ Proof.
     apply in_or_app. left. exact Hs.
 Qed.
 
-Lemma other_case_fragment (vars : env)
+Lemma other_case_fragment {loose : bool} (vars : env)
     (known_tags : Keyed.finite_map Z (Or_unknown.t row_like_block_case))
     (case : row_like_block_case) (alloc_mode : Alloc_mode.t) :
-  shaped_blocks
+  shaped_blocks_with loose
     (Row_like_for_blocks known_tags (Or_bottom.Ok case) alloc_mode)
   = true ->
   (∀ (s : simple) (k : flambda_kind) (w : value),
@@ -1277,9 +1294,10 @@ Lemma other_case_fragment (vars : env)
      ∈ aliases_of_row_like_for_blocks
          (Row_like_for_blocks known_tags (Or_bottom.Ok case) alloc_mode) ->
      eval_simple vars s = Some w -> unallocated w) ->
-  ∀ ty : flambda_type, ty ∈ case_maps_to case -> type_in_fragment vars ty.
+  ∀ ty : flambda_type,
+    ty ∈ case_maps_to case -> type_in_fragment_with loose vars ty.
 Proof.
-  intros Hcf Hal. cbn [shaped_blocks] in Hcf.
+  intros Hcf Hal. cbn [shaped_blocks_with] in Hcf.
   apply andb_true_iff in Hcf as [_ Hcf].
   apply block_case_fragment; [ exact Hcf | ].
   intros s k w Hs. apply (Hal s k w).
@@ -1287,10 +1305,10 @@ Proof.
   cbn [aliases_of_block_case]. apply in_or_app. left. exact Hs.
 Qed.
 
-Lemma contents_fragment (vars : env) (k : boxable_number)
+Lemma contents_fragment {loose : bool} (vars : env) (k : boxable_number)
     (contents : flambda_type) (alloc_mode : Alloc_mode.t) :
-  non_null_in_fragment vars (Boxed_number k contents alloc_mode) ->
-  type_in_fragment vars contents.
+  non_null_in_fragment loose vars (Boxed_number k contents alloc_mode) ->
+  type_in_fragment_with loose vars contents.
 Proof.
   intros [Hcf Hal]. split; [ exact Hcf | ].
   intros s k' w Hin. exact (Hal s k' w Hin).
@@ -1298,10 +1316,11 @@ Qed.
 
 (* A type that is not an alias, expanded, is itself or unknown or
    bottom. *)
-Lemma of_non_alias_fragment (vars : env) (ty : flambda_type)
+Lemma of_non_alias_fragment {loose : bool} (vars : env) (ty : flambda_type)
     (e : Expanded_type.t) :
   Expanded_type.of_non_alias_type ty = Some e ->
-  type_in_fragment vars ty -> type_in_fragment vars (Expanded_type.to_type e).
+  type_in_fragment_with loose vars ty ->
+  type_in_fragment_with loose vars (Expanded_type.to_type e).
 Proof.
   destruct ty as [d | d | k d | d | d]; destruct d as [ | [h | s] | ];
     cbn; intros He; try discriminate; injection He as <-; cbn;
@@ -1312,8 +1331,9 @@ Proof.
 Qed.
 
 (* The expanded type of a constant. *)
-Lemma create_const_fragment (vars : env) (c : const) :
-  type_in_fragment vars (Expanded_type.to_type (Expanded_type.create_const c)).
+Lemma create_const_fragment {loose : bool} (vars : env) (c : const) :
+  type_in_fragment_with loose vars
+    (Expanded_type.to_type (Expanded_type.create_const c)).
 Proof.
   destruct c as [ | | | | | | | | | | | | | | pk ];
     [ .. | destruct pk as [ | [] | | ] ]; cbn; split;
@@ -1326,19 +1346,21 @@ Qed.
 
 Section Env_fragment.
 
+Context {loose : bool}.
 Variable vars : env.
 Variable tenv : Typing_env.t.
 
-Hypothesis Hfrag : env_in_fragment vars tenv.
+Hypothesis Hfrag : env_in_fragment_with loose vars tenv.
 
-Lemma any_non_null_value_fragment : type_in_fragment vars any_non_null_value.
+Lemma any_non_null_value_fragment :
+  type_in_fragment_with loose vars any_non_null_value.
 Proof.
   split; [ reflexivity | ]. intros s k w Hin. cbn in Hin. destruct Hin.
 Qed.
 
 (* What the environment has for a name is of the fragment. *)
 Lemma find_fragment (n : name) (k : option flambda_kind) (ty : flambda_type) :
-  Typing_env.find tenv n k = Some ty -> type_in_fragment vars ty.
+  Typing_env.find tenv n k = Some ty -> type_in_fragment_with loose vars ty.
 Proof.
   unfold Typing_env.find, Typing_env.find_with_binding_time_and_mode'.
   destruct (Keyed.lookup name_eqb n (Typing_env.names_to_types tenv))
@@ -1357,8 +1379,8 @@ Qed.
 
 (* The head of a type of the fragment is of the fragment. *)
 Lemma expand_head_fragment (t : flambda_type) (e : Expanded_type.t) :
-  expand_head tenv t = Some e -> type_in_fragment vars t ->
-  type_in_fragment vars (Expanded_type.to_type e).
+  expand_head tenv t = Some e -> type_in_fragment_with loose vars t ->
+  type_in_fragment_with loose vars (Expanded_type.to_type e).
 Proof.
   unfold expand_head. destruct (get_alias_opt t) as [s | ] eqn:Ha.
   - destruct (Typing_env.get_canonical_simple_exn tenv
@@ -1381,8 +1403,8 @@ Qed.
 
 End Env_fragment.
 
-Lemma type_for_const_fragment (vars : env) (c : const) :
-  type_in_fragment vars (type_for_const c).
+Lemma type_for_const_fragment {loose : bool} (vars : env) (c : const) :
+  type_in_fragment_with loose vars (type_for_const c).
 Proof.
   destruct c as [ | | | | | | | | | | | | | | pk ];
     [ .. | destruct pk as [ | [] | | ] ]; cbn; split;
@@ -1394,8 +1416,8 @@ Proof.
 Qed.
 
 (* An alias is of the shape of the fragment. *)
-Lemma alias_shaped (t : flambda_type) :
-  is_alias t = true -> shaped_type t = true.
+Lemma alias_shaped {loose : bool} (t : flambda_type) :
+  is_alias t = true -> shaped_type_with loose t = true.
 Proof.
   unfold is_alias.
   destruct t as [d | d | k d | d | d]; destruct d as [ | [h | s] | ];
@@ -1403,14 +1425,14 @@ Proof.
 Qed.
 
 (* A case of closures of a type of the fragment: its slots are among those
-   of its index, its closure types are aliases, and all its types are of
-   the fragment. *)
-Lemma closures_case_fragment (vars : env)
+   of its index, its closure types are aliases unless [loose], and all its
+   types are of the fragment. *)
+Lemma closures_case_fragment {loose : bool} (vars : env)
     (known : finite_map row_like_closures_case) (alloc_mode : Alloc_mode.t)
     (is_null : is_null) (slot : function_slot) (case : row_like_closures_case)
     (fts : finite_map (Or_unknown.t function_type))
     (cts vsts : finite_map flambda_type) :
-  type_in_fragment vars
+  type_in_fragment_with loose vars
     (Type_value
        (Ok
           (No_alias
@@ -1425,12 +1447,14 @@ Lemma closures_case_fragment (vars : env)
       (contents_value_slots (closures_index_contents (case_index case)))
     = true
   ∧ (∀ (g : function_slot) (ty : flambda_type),
-       (g, ty) ∈ cts -> is_alias ty = true ∧ type_in_fragment vars ty)
+       (g, ty) ∈ cts ->
+       (loose = true ∨ is_alias ty = true)
+       ∧ type_in_fragment_with loose vars ty)
   ∧ (∀ (w : value_slot) (ty : flambda_type),
-       (w, ty) ∈ vsts -> type_in_fragment vars ty).
+       (w, ty) ∈ vsts -> type_in_fragment_with loose vars ty).
 Proof.
   intros [Hsh Hal] Hin Hentry.
-  cbn [shaped_type shaped_non_null shaped_closures] in Hsh.
+  cbn [shaped_type_with shaped_non_null_with shaped_closures_with] in Hsh.
   rewrite forallb_forall in Hsh. specialize (Hsh _ Hin). cbn [snd] in Hsh.
   rewrite Hentry in Hsh.
   apply andb_true_iff in Hsh as [Hsh Hvs].
@@ -1449,7 +1473,8 @@ Proof.
   split; [ exact Hcl | split; [ exact Hvl | split ] ].
   - intros g ty Hg. rewrite forallb_forall in Hcts.
     pose proof (Hcts (g, ty) Hg) as Hty. cbn [snd] in Hty.
-    split; [ exact Hty | split; [ exact (alias_shaped ty Hty) | ] ].
+    apply andb_true_iff in Hty as [Hla Hty].
+    split; [ apply orb_true_iff; exact Hla | split; [ exact Hty | ] ].
     intros s k w Hs. apply (Hal_entry s k w). cbn [aliases_of_closures_entry].
     apply in_or_app. left. apply in_flat_map. exists (g, ty). auto.
   - intros w ty Hw. rewrite forallb_forall in Hvs.
@@ -1457,7 +1482,6 @@ Proof.
     intros s k x Hs. apply (Hal_entry s k x). cbn [aliases_of_closures_entry].
     apply in_or_app. right. apply in_flat_map. exists (w, ty). auto.
 Qed.
-
 
 (* The contents of a boxed number of the kind of a field of a boxed
    number. *)
@@ -1679,6 +1703,15 @@ Definition local_value_slots (ctx : rewrite_context)
       end
     end.
 
+Lemma lookup_map_slots {B : Type} (h : function_slot -> B)
+    (fts : list function_slot) (g : function_slot) (b : B) :
+  lookup g (map (fun g' => (g', h g')) fts) = Some b -> b = h g.
+Proof.
+  induction fts as [ | g' fts IH]; [ discriminate | ].
+  cbn [map lookup]. destruct (Pos.eqb_spec g g') as [-> | _];
+    [ intros [= <-]; reflexivity | exact IH ].
+Qed.
+
 Lemma slots_of_local_set_shape (ctx : rewrite_context)
     (vts : list value_slot) (fts : list function_slot)
     (set : set_of_closures) :
@@ -1690,10 +1723,13 @@ Lemma slots_of_local_set_shape (ctx : rewrite_context)
       | None => None
       | Some vs => Some (vs, fsl)
       end
-    ∧ map fst fsl = fts.
+    ∧ map fst fsl = fts
+    ∧ ∀ (g : function_slot) (p : rewrite_metadata * bool),
+        lookup g fsl = Some p -> fst p = Single_source (closure_at set g).
 Proof.
-  eexists. split; [ reflexivity | ].
-  rewrite map_map. cbn [fst]. apply map_id.
+  eexists. split; [ reflexivity | split ].
+  - rewrite map_map. cbn [fst]. apply map_id.
+  - intros g p Hg. apply lookup_map_slots in Hg. rewrite Hg. reflexivity.
 Qed.
 
 Lemma local_value_slots_some (ctx : rewrite_context)
@@ -1984,6 +2020,7 @@ Variable tenv : Typing_env.t.
 Variable canon : canon_fn.
 Variables statics statics' : static_env.
 Variables valuation valuation' : env.
+Variable loose : bool.
 
 Local Abbreviation ctx := (plain_context is_local F T sets).
 Local Abbreviation G := (graph_of_facts F).
@@ -1994,10 +2031,11 @@ Hypothesis Hleast : least_solution is_local F T.
 Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hsets : sets_of_graph G sets.
 Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
-Hypothesis Hfrag : env_in_fragment valuation tenv.
+Hypothesis Hfrag : env_in_fragment_with loose valuation tenv.
 Hypothesis Halloc : statics_allocated sol statics.
 Hypothesis Hst : statics_rebuilt G sol statics statics'.
 Hypothesis Hcopies : copies_valued tenv canon valuation valuation'.
+Hypothesis Hwhole : loose = true -> static_sets_whole sol statics statics'.
 
 Lemma not_local_block (i : nat) (k : flambda_kind) :
   is_local (Field_block i k) = false.
@@ -2013,9 +2051,139 @@ Proof.
   destruct (Hlocal _ H) as [(w & Hw) | (g & Hg)]; discriminate.
 Qed.
 
+(* ------------------------------------------------------------------------ *)
+(* Closures rebuilt with their set                                         *)
+(* ------------------------------------------------------------------------ *)
+
+(* A closure of a set and what the second run has for it: of a set made
+   by a [Let], the closure at [slot] in both runs; of a static set that
+   both runs bind whole, its symbol at [slot]. *)
+Definition set_closure_pair (slot : function_slot)
+    (fdecls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)) (v v' : value) : Prop :=
+  (v = Value_closure_of_set slot fdecls vs
+   ∧ v' = Value_closure_of_set slot fdecls vs')
+  ∨ ∃ (csyms : list (function_slot * symbol)) (s : symbol),
+      v = Value_symbol s ∧ v' = Value_symbol s
+      ∧ lookup slot csyms = Some s
+      ∧ ∀ (g : function_slot) (s_g : symbol),
+          lookup g csyms = Some s_g ->
+          lookup s_g (static_values statics)
+          = Some (Static_closure_of_set g csyms fdecls vs)
+          ∧ lookup s_g (static_values statics')
+            = Some (Static_closure_of_set g csyms fdecls vs').
+
+(* A closure rebuilt with its set, under a metadata that describes the
+   allocation of the closure: what [rebuilt_under] says of a closure, with
+   no node, which might have no use or other sources. The closure of
+   another function slot of the set is rebuilt so under the metadata of
+   that slot. *)
+Definition closure_under (m : rewrite_metadata) (v v' : value) : Prop :=
+  ∃ (slot : function_slot) (fdecls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)) (sites : function_slot -> node),
+    set_closure_pair slot fdecls vs vs' v v'
+    ∧ is_bound slot fdecls = true
+    ∧ set_sites G fdecls sites
+    ∧ for_all_bindings
+        (value_slot_rebuilt G sol (rebuilt_value G sol) fdecls sites vs') vs
+    ∧ describes sol m (sites slot).
+
+Definition rebuilt_ext (m : rewrite_metadata) (v v' : value) : Prop :=
+  rebuilt_under G sol m v v' ∨ closure_under m v v'.
+
+Lemma closure_pair_in_set (slot : function_slot)
+    (fdecls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)) (v v' : value) :
+  set_closure_pair slot fdecls vs vs' v v' -> is_bound slot fdecls = true ->
+  closure_in_set statics v = Some (slot, fdecls, vs)
+  ∧ closure_in_set statics' v' = Some (slot, fdecls, vs').
+Proof.
+  intros Hp Hb. destruct (proj1 (is_bound_lookup slot fdecls) Hb) as [id Hl].
+  destruct Hp as [[-> ->] | (csyms & s & -> & -> & Hs & Hall)].
+  - cbn [closure_in_set]. rewrite Hl. split; reflexivity.
+  - destruct (Hall slot s Hs) as [H1 H2]. cbn [closure_in_set].
+    rewrite H1, H2, Hl. split; reflexivity.
+Qed.
+
+Lemma closure_under_in_set (m : rewrite_metadata) (v v' : value) :
+  closure_under m v v' ->
+  ∃ (slot : function_slot) (fdecls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)),
+    closure_in_set statics v = Some (slot, fdecls, vs)
+    ∧ closure_in_set statics' v' = Some (slot, fdecls, vs').
+Proof.
+  intros (slot & fdecls & vs & vs' & sites & Hp & Hb & _).
+  exists slot, fdecls, vs, vs'. exact (closure_pair_in_set _ _ _ _ _ _ Hp Hb).
+Qed.
+
+(* A closure is no block, boxed number or string. *)
+Lemma closure_not_other (st : static_env) (v : value)
+    (p : function_slot * list (function_slot * code_id)
+         * list (value_slot * value)) :
+  closure_in_set st v = Some p ->
+  block_of st v = None ∧ boxed_number_of st v = None ∧ string_of st v = None.
+Proof.
+  destruct v; cbn [closure_in_set block_of boxed_number_of string_of];
+    try discriminate; try (intros _; auto; fail).
+  destruct (lookup s (static_values st)) as [[] | ]; try discriminate;
+    intros _; auto.
+Qed.
+
+Lemma closure_under_kind (m : rewrite_metadata) (v v' : value) :
+  closure_under m v v' -> kind_of_value v' = kind_of_value v.
+Proof.
+  intros (slot & fdecls & vs & vs' & sites & Hp & _).
+  destruct Hp as [[-> ->] | (csyms & s & -> & -> & _)]; reflexivity.
+Qed.
+
+Lemma closure_under_not_const (m : rewrite_metadata) (c : const) (v' : value)
+    : ~ closure_under m (Value_const c) v'.
+Proof.
+  intros (slot & fdecls & vs & vs' & sites & Hp & _).
+  destruct Hp as [[Habs _] | (csyms & s & Habs & _)]; discriminate Habs.
+Qed.
+
+Lemma ext_kind (m : rewrite_metadata) (v v' : value) :
+  rebuilt_ext m v v' -> kind_of_value v' = kind_of_value v.
+Proof.
+  intros [Hv | Hv];
+    [ exact (rebuilt_under_kind G sol m v v' Hv)
+    | exact (closure_under_kind m v v' Hv) ].
+Qed.
+
+Lemma ext_const (m : rewrite_metadata) (c : const) (v' : value) :
+  rebuilt_ext m (Value_const c) v' -> v' = Value_const c.
+Proof.
+  intros [Hv | Hv]; [ exact (rebuilt_under_const G sol m c v' Hv) | ].
+  destruct (closure_under_not_const m c v' Hv).
+Qed.
+
+Lemma ext_of_const (m : rewrite_metadata) (c : const) :
+  rebuilt_ext m (Value_const c) (Value_const c).
+Proof. left. left. exists c. split; reflexivity. Qed.
+
+Lemma ext_unallocated (m : rewrite_metadata) (v v' : value) :
+  unallocated v -> rebuilt_ext m v v' -> v' = v.
+Proof.
+  intros Hu [Hv | Hv];
+    [ exact (rebuilt_under_unallocated G sol m v v' Hu Hv) | ].
+  destruct Hv as (slot & fdecls & vs & vs' & sites & Hp & _).
+  destruct Hp as [[-> _] | (csyms & s & -> & -> & _)]; [ | reflexivity ].
+  destruct Hu as [(c & Hc') | (s & Hs)]; discriminate.
+Qed.
+
+Lemma ext_not_null (m : rewrite_metadata) (v v' : value) :
+  rebuilt_ext m v v' -> v <> Value_const Null -> v' <> Value_const Null.
+Proof.
+  intros [Hv | Hv]; [ exact (rebuilt_under_not_null G sol m v v' Hv) | ].
+  intros _. destruct Hv as (slot & fdecls & vs & vs' & sites & Hp & _).
+  destruct Hp as [[_ ->] | (csyms & s & _ & -> & _)]; discriminate.
+Qed.
+
 (* What a rewriting of the arbitrary types is asked: to be sound, and to
    give, under a metadata that forgets, a type that every value of the
-   kind has. *)
+   kind has. [rw_sound] is of the first statements; [rw_sound_ext] of the
+   fragment of [loose], with the closures rebuilt with their set. *)
 Definition rw_sound (rw : rewrite_metadata -> flambda_type -> flambda_type)
     : Prop :=
   ∀ (m : rewrite_metadata) (t : flambda_type) (v v' : value),
@@ -2023,10 +2191,17 @@ Definition rw_sound (rw : rewrite_metadata -> flambda_type -> flambda_type)
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v' (rw m t).
 
+Definition rw_sound_ext
+    (rw : rewrite_metadata -> flambda_type -> flambda_type) : Prop :=
+  ∀ (m : rewrite_metadata) (t : flambda_type) (v v' : value),
+    type_in_fragment_with loose valuation t -> rebuilt_ext m v v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v' (rw m t).
+
 Definition rw_forgets (rw : rewrite_metadata -> flambda_type -> flambda_type)
     : Prop :=
   ∀ (m : rewrite_metadata) (t : flambda_type) (v v' : value),
-    forgets m = true -> type_in_fragment valuation t ->
+    forgets m = true -> type_in_fragment_with loose valuation t ->
     type_satisfied statics valuation v t ->
     kind_of_value v' = kind_of_value v ->
     type_satisfied statics' valuation' v' (rw m t).
@@ -2088,14 +2263,19 @@ Qed.
 (* A block of the first run, and what the second has for it. *)
 Lemma block_rebuilt (m : rewrite_metadata) (v v' : value) (tag : Z)
     (fields : list value) :
-  forgets m = false -> rebuilt_under G sol m v v' ->
+  forgets m = false -> rebuilt_ext m v v' ->
   block_of statics v = Some (tag, fields) ->
   ∃ (a : node) (fields' : list value),
     describes sol m a ∧ block_of statics' v' = Some (tag, fields')
     ∧ fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
         fields'.
 Proof.
-  intros Hm [(c & -> & ->) | (n & Hv & Hat & Hhu)] Hblock;
+  intros Hm [Hv0 | Hcu] Hblock;
+    [ | exfalso; destruct (closure_under_in_set m v v' Hcu)
+          as (slot & fdecls & vs & vs' & Hcis & _);
+        rewrite (proj1 (closure_not_other _ _ _ Hcis)) in Hblock;
+        discriminate Hblock ].
+  destruct Hv0 as [(c & -> & ->) | (n & Hv & Hat & Hhu)];
     [ discriminate Hblock | ].
   specialize (Hhu Hm).
   destruct v as [c | code vs | slot decls vs | s | tag0 fields0 | elements | c
@@ -2121,12 +2301,17 @@ Qed.
    forget: the second has the same. *)
 Lemma boxed_rebuilt (m : rewrite_metadata) (v v' : value)
     (k : boxable_number) (c : const) :
-  forgets m = false -> rebuilt_under G sol m v v' ->
+  forgets m = false -> rebuilt_ext m v v' ->
   boxed_number_of statics v = Some c -> kind_of_const c = unboxed_kind k ->
   forgets (follow_field ctx m (Field_boxed_number k)) = false ->
   boxed_number_of statics' v' = Some c.
 Proof.
-  intros Hm [(c0 & -> & ->) | (n & Hv & Hat & Hhu)] Hbox Hkc Hff;
+  intros Hm [Hv0 | Hcu] Hbox Hkc Hff;
+    [ | exfalso; destruct (closure_under_in_set m v v' Hcu)
+          as (slot & fdecls & vs & vs' & Hcis & _);
+        rewrite (proj1 (proj2 (closure_not_other _ _ _ Hcis))) in Hbox;
+        discriminate Hbox ].
+  destruct Hv0 as [(c0 & -> & ->) | (n & Hv & Hat & Hhu)];
     [ discriminate Hbox | ].
   specialize (Hhu Hm).
   destruct v as [c0 | code vs | slot decls vs | s | tag0 fields0 | elements
@@ -2151,10 +2336,15 @@ Qed.
 
 (* A string of the first run is one of the second. *)
 Lemma string_rebuilt (m : rewrite_metadata) (v v' : value) (bytes : list Z) :
-  forgets m = false -> rebuilt_under G sol m v v' ->
+  forgets m = false -> rebuilt_ext m v v' ->
   string_of statics v = Some bytes -> string_of statics' v' = Some bytes.
 Proof.
-  intros Hm [(c & -> & ->) | (n & Hv & Hat & Hhu)] Hstr;
+  intros Hm [Hv0 | Hcu] Hstr;
+    [ | exfalso; destruct (closure_under_in_set m v v' Hcu)
+          as (slot & fdecls & vs & vs' & Hcis & _);
+        rewrite (proj2 (proj2 (closure_not_other _ _ _ Hcis))) in Hstr;
+        discriminate Hstr ].
+  destruct Hv0 as [(c & -> & ->) | (n & Hv & Hat & Hhu)];
     [ discriminate Hstr | ].
   specialize (Hhu Hm).
   destruct v as [c | code vs | slot decls vs | s | tag0 fields0 | elements | c
@@ -2171,7 +2361,7 @@ Qed.
 Section With_rw.
 
 Variable rw : rewrite_metadata -> flambda_type -> flambda_type.
-Hypothesis Hrw : rw_sound rw.
+Hypothesis Hrw : rw_sound_ext rw.
 Hypothesis Hrwf : rw_forgets rw.
 
 (* A field of a block. *)
@@ -2179,7 +2369,7 @@ Lemma field_sound (m : rewrite_metadata) (a : node) (k : nat)
     (field field' : value) (ty : flambda_type) :
   forgets m = false -> describes sol m a ->
   field_rebuilt G sol (rebuilt_value G sol) a k field field' ->
-  type_in_fragment valuation ty ->
+  type_in_fragment_with loose valuation ty ->
   type_satisfied statics valuation field ty ->
   type_satisfied statics' valuation' field' (rw (block_slot ctx m k ty) ty).
 Proof.
@@ -2189,7 +2379,8 @@ Proof.
     eqn:Hfu.
   - destruct (Hused eq_refl) as [Hhu Hrv].
     apply (Hrw _ ty field field' Hfr); [ | exact Hsat ].
-    right. exists from. split; [ exact Hrv | split; [ | intros _; exact Hhu ] ].
+    left. right. exists from.
+    split; [ exact Hrv | split; [ | intros _; exact Hhu ] ].
     exact (follow_field_at ctx is_local Hc m a from _ Hd Hm Hcons
              (not_local_block k _) Hfu).
   - rewrite (Hunused eq_refl).
@@ -2206,7 +2397,8 @@ Lemma fields_sound (m : rewrite_metadata) (a : node) :
   ∀ (tys : list flambda_type) (k : nat) (fields fields' : list value),
     fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) k fields
       fields' ->
-    (∀ ty : flambda_type, ty ∈ tys -> type_in_fragment valuation ty) ->
+    (∀ ty : flambda_type,
+       ty ∈ tys -> type_in_fragment_with loose valuation ty) ->
     fields_satisfied (type_satisfied statics valuation) tys fields ->
     fields_satisfied (type_satisfied statics' valuation')
       (map (fun p => rw (block_slot ctx m (fst p) (snd p)) (snd p))
@@ -2232,8 +2424,8 @@ Lemma block_case_sound (m : rewrite_metadata) (a : node) (tag : Z)
   forgets m = false -> describes sol m a ->
   fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
     fields' ->
-  (∀ ty : flambda_type, ty ∈ case_maps_to case -> type_in_fragment valuation ty)
-  ->
+  (∀ ty : flambda_type,
+     ty ∈ case_maps_to case -> type_in_fragment_with loose valuation ty) ->
   row_like_block_case_satisfied statics valuation tag fields case ->
   row_like_block_case_satisfied statics' valuation' tag fields'
     (rewrite_block_case ctx rw m case).
@@ -2256,7 +2448,7 @@ Lemma blocks_sound (m : rewrite_metadata) (a : node) (tag : Z)
   forgets m = false -> describes sol m a ->
   fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
     fields' ->
-  shaped_blocks blocks = true
+  shaped_blocks_with loose blocks = true
   ∧ (∀ (s : simple) (k : flambda_kind) (w : value),
        (s, k) ∈ aliases_of_row_like_for_blocks blocks ->
        eval_simple valuation s = Some w -> unallocated w) ->
@@ -2287,8 +2479,8 @@ Qed.
 (* A head of kind value that is not null. *)
 Lemma non_null_sound (m : rewrite_metadata)
     (head : head_of_kind_value_non_null) (v v' : value) :
-  forgets m = false -> non_null_in_fragment valuation head ->
-  rebuilt_under G sol m v v' -> v <> Value_const Null ->
+  forgets m = false -> non_null_in_fragment loose valuation head ->
+  rebuilt_ext m v v' -> v <> Value_const Null ->
   head_of_kind_value_non_null_satisfied statics valuation v head ->
   match rewrite_head_of_kind_value_non_null fx ctx rw m head with
   | Unknown => kind_of_value v' = Value
@@ -2304,14 +2496,14 @@ Proof.
     rewrite variant_satisfied in Hsat |- *.
     destruct Hsat as [(i & -> & _ & Himm & _)
                      | (tag & fields & Hblock & _ & _ & Hblocks & _)].
-    + left. rewrite (rebuilt_under_const _ _ m _ v' Hv). exists i.
+    + left. rewrite (ext_const m _ v' Hv). exists i.
       split; [ reflexivity | split; [ exact I | split; [ | exact I ] ] ].
       destruct immediates as [ty | ]; [ | exact I ].
       apply (Hrw m ty (Value_const (Naked_immediate i))
                (Value_const (Naked_immediate i))).
       * exact (immediates_fragment valuation is_int ty get_tag blocks
                  extensions is_unique Hfr).
-      * left. exists (Naked_immediate i). split; reflexivity.
+      * apply ext_of_const.
       * exact Himm.
     + destruct (block_rebuilt m v v' tag fields Hm Hv Hblock)
         as (a & fields' & Hd & Hblock' & Hfields).
@@ -2329,21 +2521,21 @@ Proof.
     destruct Hsat as (c & Hbox & Hkc & Hcontents).
     destruct (forgets (follow_field ctx m (Field_boxed_number k))) eqn:Hff;
       cbn [andb].
-    + rewrite (rebuilt_under_kind _ _ m v v' Hv).
+    + rewrite (ext_kind m v v' Hv).
       exact (boxed_number_of_kind statics v c Hbox).
     + rewrite boxed_number_satisfied. exists c.
       split; [ exact (boxed_rebuilt m v v' k c Hm Hv Hbox Hkc Hff) | ].
       split; [ exact Hkc | ].
       apply (Hrw m contents (Value_const c) (Value_const c)
                (contents_fragment valuation k contents am Hfr));
-        [ left; exists c; split; reflexivity | exact Hcontents ].
+        [ apply ext_of_const | exact Hcontents ].
   - cbn [rewrite_head_of_kind_value_non_null].
     destruct closures as [[ | b known]].
     + rewrite closures_satisfied in Hsat.
       destruct Hsat as (slot & fdecls & vs & _ & Hrow).
       rewrite row_like_for_closures_lookup_iff in Hrow.
       destruct Hrow as (case & Hl & _). discriminate Hl.
-    + rewrite (rebuilt_under_kind _ _ m v v' Hv).
+    + rewrite (ext_kind m v v' Hv).
       exact (proj1 (head_non_null_kind _ _ _ _ Hsat)).
   - cbn [rewrite_head_of_kind_value_non_null].
     rewrite string_satisfied in Hsat |- *.
@@ -2355,8 +2547,8 @@ Qed.
 Lemma head_value_sound (m : rewrite_metadata) (head : head_of_kind_value)
     (v v' : value) :
   forgets m = false ->
-  type_in_fragment valuation (Type_value (Ok (No_alias head))) ->
-  rebuilt_under G sol m v v' ->
+  type_in_fragment_with loose valuation (Type_value (Ok (No_alias head))) ->
+  rebuilt_ext m v v' ->
   head_of_kind_value_satisfied statics valuation v head ->
   head_of_kind_value_satisfied statics' valuation' v'
     (rewrite_head_of_kind_value fx ctx rw m head).
@@ -2365,13 +2557,13 @@ Proof.
   cbn [rewrite_head_of_kind_value].
   rewrite head_of_kind_value_satisfied_eq in Hsat |- *.
   destruct Hsat as [[Hnull His] | [Hnn [Hpart His]]].
-  - left. subst v. rewrite (rebuilt_under_const _ _ m Null v' Hv).
+  - left. subst v. rewrite (ext_const m Null v' Hv).
     split; [ reflexivity | ].
     destruct is_null; [ contradiction | exact I ].
-  - right. split; [ exact (rebuilt_under_not_null _ _ m v v' Hv Hnn) | ].
+  - right. split; [ exact (ext_not_null m v v' Hv Hnn) | ].
     split; [ | destruct is_null; exact I ].
     destruct non_null as [ | h | ]; [ | | contradiction ].
-    + rewrite (rebuilt_under_kind _ _ m v v' Hv). exact Hpart.
+    + rewrite (ext_kind m v v' Hv). exact Hpart.
     + exact (non_null_sound m h v v' Hm (head_fragment valuation h is_null Hfr)
                Hv Hnn Hpart).
 Qed.
@@ -2380,15 +2572,15 @@ Qed.
 Lemma expanded_sound (m : rewrite_metadata) (e : Expanded_type.t)
     (v v' : value) :
   forgets m = false ->
-  type_in_fragment valuation (Expanded_type.to_type e) ->
-  rebuilt_under G sol m v v' ->
+  type_in_fragment_with loose valuation (Expanded_type.to_type e) ->
+  rebuilt_ext m v v' ->
   type_satisfied statics valuation v (Expanded_type.to_type e) ->
   type_satisfied statics' valuation' v' (rewrite_expanded_head fx ctx rw m e).
 Proof.
   intros Hm Hfr Hv Hsat.
   destruct e as [k [ | h | ]]; unfold rewrite_expanded_head;
     cbn [Expanded_type.descr Expanded_type.kind Expanded_type.to_type] in *.
-  - apply unknown_satisfied. rewrite (rebuilt_under_kind _ _ m v v' Hv).
+  - apply unknown_satisfied. rewrite (ext_kind m v v' Hv).
     exact (proj1 (unknown_satisfied _ _ _ _) Hsat).
   - destruct h as [hv | hi | kn ns | hr | hreg].
     + rewrite type_satisfied_value in Hsat |- *.
@@ -2396,33 +2588,33 @@ Proof.
     + rewrite type_satisfied_naked_immediate in Hsat |- *.
       cbn [descr_satisfied] in Hsat |- *.
       destruct Hsat as (i & -> & Hnum & _).
-      rewrite (rebuilt_under_const _ _ m _ v' Hv). exists i.
+      rewrite (ext_const m _ v' Hv). exists i.
       split; [ reflexivity | split; [ exact Hnum | ] ].
       intros relation n [].
     + rewrite type_satisfied_naked_number in Hsat |- *.
       cbn [descr_satisfied] in Hsat |- *.
       destruct Hsat as (c & n & -> & Hk & Hn & Hin).
-      rewrite (rebuilt_under_const _ _ m _ v' Hv). exists c, n. auto.
+      rewrite (ext_const m _ v' Hv). exists c, n. auto.
     + rewrite type_satisfied_rec_info in Hsat |- *.
       cbn [descr_satisfied] in Hsat |- *.
-      rewrite (rebuilt_under_kind _ _ m v v' Hv). exact Hsat.
+      rewrite (ext_kind m v v' Hv). exact Hsat.
     + rewrite type_satisfied_region in Hsat |- *.
       cbn [descr_satisfied] in Hsat |- *.
-      rewrite (rebuilt_under_kind _ _ m v v' Hv). exact Hsat.
+      rewrite (ext_kind m v v' Hv). exact Hsat.
   - exfalso. exact (bottom_satisfied _ _ _ _ Hsat).
 Qed.
 
 (* A type rewritten under [Rule.identity]. *)
 Lemma identity_sound (m : rewrite_metadata) (t : flambda_type) (v v' : value)
     :
-  forgets m = false -> type_in_fragment valuation t ->
-  rebuilt_under G sol m v v' -> type_satisfied statics valuation v t ->
+  forgets m = false -> type_in_fragment_with loose valuation t ->
+  rebuilt_ext m v v' -> type_satisfied statics valuation v t ->
   type_satisfied statics' valuation' v' (rewrite_identity fx ctx tenv rw m t).
 Proof.
   intros Hm Ht Hv Hsat. unfold rewrite_identity.
   destruct (expand_head tenv t) as [e | ] eqn:He;
     [ | exact (sat_unknown_of_kind v v' t Hsat
-                 (rebuilt_under_kind _ _ m v v' Hv)) ].
+                 (ext_kind m v v' Hv)) ].
   pose proof (expand_head_sound statics valuation tenv t e v Henv Hsat He)
     as Hsat_e.
   pose proof (expand_head_fragment valuation tenv Hfrag t e He Ht) as Hfr_e.
@@ -2483,33 +2675,102 @@ Proof.
   rewrite Hlk, Pos.eqb_refl. reflexivity.
 Qed.
 
+(* A closure rebuilt with its set: a closure of the second run of the
+   same set, at the same slot, with the value slots that the rebuild
+   keeps; the closure of another slot of the set is that of the first run
+   if that is a symbol, and is rebuilt with its set under any metadata
+   that describes its allocation. *)
+Lemma closure_under_view (m : rewrite_metadata) (v v' : value)
+    (slot : function_slot) (fdecls : list (function_slot * code_id))
+    (vs : list (value_slot * value)) :
+  closure_under m v v' ->
+  closure_in_set statics v = Some (slot, fdecls, vs) ->
+  ∃ (sites : function_slot -> node) (vs' : list (value_slot * value)),
+    closure_in_set statics' v' = Some (slot, fdecls, vs')
+    ∧ describes sol m (sites slot)
+    ∧ set_sites G fdecls sites
+    ∧ for_all_bindings
+        (value_slot_rebuilt G sol (rebuilt_value G sol) fdecls sites vs') vs
+    ∧ ∀ (g : function_slot) (c' : value),
+        is_bound g fdecls = true ->
+        project_function_slot statics' slot g v' = Some c' ->
+        ∃ c : value,
+          project_function_slot statics slot g v = Some c
+          ∧ (unallocated c -> c' = c)
+          ∧ ∀ mg : rewrite_metadata,
+              describes sol mg (sites g) -> closure_under mg c c'.
+Proof.
+  intros (slot0 & fdecls0 & vs0 & vs' & sites & Hp & Hb & Hsites & Hslots
+          & Hd) Hcis.
+  destruct (closure_pair_in_set _ _ _ _ _ _ Hp Hb) as [Hcis0 Hcis'].
+  rewrite Hcis0 in Hcis. injection Hcis as -> -> ->.
+  exists sites, vs'.
+  split; [ exact Hcis' | split; [ exact Hd | split; [ exact Hsites | ] ] ].
+  split; [ exact Hslots | ].
+  destruct (proj1 (is_bound_lookup slot fdecls) Hb) as [id Hl].
+  intros g c' Hg Hpc'.
+  destruct (proj1 (is_bound_lookup g fdecls) Hg) as [idg Hlg].
+  destruct Hp as [[-> ->] | (csyms & s & -> & -> & Hs & Hall)].
+  - cbn [project_function_slot] in Hpc' |- *.
+    rewrite Pos.eqb_refl, Hl, Hlg in Hpc' |- *. cbn in Hpc' |- *.
+    injection Hpc' as <-.
+    exists (Value_closure_of_set g fdecls vs).
+    split; [ reflexivity | split ].
+    + intros [(c0 & Hc0) | (s0 & Hs0)]; discriminate.
+    + intros mg Hdg. exists g, fdecls, vs, vs', sites.
+      split; [ left; split; reflexivity | ].
+      split; [ exact Hg | split; [ exact Hsites | split; [ exact Hslots | ] ] ].
+      exact Hdg.
+  - destruct (Hall slot s Hs) as [H1 H2].
+    cbn [project_function_slot] in Hpc' |- *.
+    rewrite H1. rewrite H2 in Hpc'.
+    rewrite Pos.eqb_refl, Hl, Hlg in Hpc' |- *. cbn in Hpc' |- *.
+    destruct (lookup g csyms) as [s_g | ] eqn:Hsg; [ | discriminate Hpc' ].
+    cbn in Hpc' |- *. injection Hpc' as <-.
+    exists (Value_symbol s_g). split; [ reflexivity | split; [ auto | ] ].
+    intros mg Hdg. exists g, fdecls, vs, vs', sites.
+    split; [ right; exists csyms, s_g; auto | ].
+    split; [ exact Hg | split; [ exact Hsites | split; [ exact Hslots | ] ] ].
+    exact Hdg.
+Qed.
+
 (* A closure of the first run, rebuilt under a metadata that does not
-   forget: a closure of the second run of the same set, at the same slot,
-   with the value slots that the rebuild keeps, and allocations that hold
-   one another, of which the one at the slot may be at a node where the
-   metadata holds. Its projections are those of the first run, or
-   closures. *)
+   forget: as [closure_under_view] has it, but that the closure of another
+   slot of the set is rebuilt with its set only in the fragment of
+   [loose], and is that of the first run if that is not allocated. *)
 Lemma closure_rebuilt_view (m : rewrite_metadata) (v v' : value)
     (slot : function_slot) (fdecls : list (function_slot * code_id))
     (vs : list (value_slot * value)) :
-  forgets m = false -> rebuilt_under G sol m v v' ->
+  forgets m = false -> rebuilt_ext m v v' ->
   closure_in_set statics v = Some (slot, fdecls, vs) ->
-  ∃ (sites : function_slot -> node) (vs' : list (value_slot * value))
-    (n : node),
+  ∃ (sites : function_slot -> node) (vs' : list (value_slot * value)),
     closure_in_set statics' v' = Some (slot, fdecls, vs')
-    ∧ (∀ g : function_slot,
-         is_bound g fdecls = true ->
-         project_function_slot statics' slot g v'
-         = project_function_slot statics slot g v
-         ∨ ∃ c : value,
-             project_function_slot statics slot g v = Some c
-             ∧ ~ unallocated c)
-    ∧ may_come_from sol (sites slot) n ∧ metadata_at sol m n
+    ∧ describes sol m (sites slot)
     ∧ set_sites G fdecls sites
     ∧ for_all_bindings
-        (value_slot_rebuilt G sol (rebuilt_value G sol) fdecls sites vs') vs.
+        (value_slot_rebuilt G sol (rebuilt_value G sol) fdecls sites vs') vs
+    ∧ ∀ (g : function_slot) (c' : value),
+        is_bound g fdecls = true ->
+        project_function_slot statics' slot g v' = Some c' ->
+        ∃ c : value,
+          project_function_slot statics slot g v = Some c
+          ∧ (unallocated c -> c' = c)
+          ∧ (loose = true ->
+             ∀ mg : rewrite_metadata,
+               describes sol mg (sites g) -> closure_under mg c c').
 Proof.
-  intros Hm [(c & -> & ->) | (n & Hv & Hat & Hhu)] Hcis;
+  intros Hm [Hv | Hcu] Hcis.
+  2:{ destruct (closure_under_view m v v' slot fdecls vs Hcu Hcis)
+        as (sites & vs' & Hcis' & Hd & Hsites & Hslots & Hproj).
+      exists sites, vs'.
+      split; [ exact Hcis' | split; [ exact Hd | split; [ exact Hsites | ] ] ].
+      split; [ exact Hslots | ].
+      intros g c' Hg Hpc'.
+      destruct (Hproj g c' Hg Hpc') as (c & Hpc & Hu & Hcu').
+      exists c.
+      split; [ exact Hpc | split; [ exact Hu | intros _; exact Hcu' ] ].
+  }
+  destruct Hv as [(c & -> & ->) | (n & Hv & Hat & Hhu)];
     [ discriminate Hcis | ].
   specialize (Hhu Hm).
   destruct v as [c | code vs0 | slot0 fdecls0 vs0 | s | tag fields | elements
@@ -2520,15 +2781,26 @@ Proof.
       [ | discriminate ].
     injection Hcis as -> -> ->.
     destruct Hv as (sites & vs' & -> & Hmcf & Hsites & Hslots).
-    exists sites, vs', n.
-    split; [ cbn [closure_in_set]; rewrite Hl0; reflexivity | ].
-    split; [ | split; [ exact Hmcf | split; [ exact Hat | ] ] ];
-      [ | split; [ exact Hsites | exact Hslots ] ].
-    intros g Hg. right. apply is_bound_lookup in Hg as (idg & Hg).
-    exists (Value_closure_of_set g fdecls vs). split.
-    + cbn [project_function_slot]. rewrite Pos.eqb_refl, Hl0, Hg.
-      reflexivity.
-    + intros [(c0 & Hc0) | (s0 & Hs0)]; discriminate.
+    assert (Hb : is_bound slot fdecls = true)
+      by (unfold is_bound; rewrite Hl0; reflexivity).
+    assert (Hd : describes sol m (sites slot)).
+    { apply (Hat (sites slot) Hmcf).
+      apply (has_source_function_slot _ _ _ Hc _ _ (sites slot)
+               (proj2 (Hsites slot id0 Hl0 slot (sites slot))
+                  (conj Hb eq_refl))
+               eq_refl). }
+    destruct (closure_under_view m _ _ slot fdecls vs
+                (ex_intro _ slot (ex_intro _ fdecls (ex_intro _ vs
+                   (ex_intro _ vs' (ex_intro _ sites
+                      (conj (or_introl (conj eq_refl eq_refl))
+                         (conj Hb (conj Hsites (conj Hslots Hd)))))))))
+                (ltac:(cbn [closure_in_set]; rewrite Hl0; reflexivity)))
+      as (sites' & vs'' & Hcis' & Hd' & Hsites' & Hslots' & Hproj).
+    exists sites', vs''.
+    split; [ exact Hcis' | split; [ exact Hd' | split; [ exact Hsites' | ] ] ].
+    split; [ exact Hslots' | ].
+    intros g c' Hg Hpc'. destruct (Hproj g c' Hg Hpc') as (c & Hpc & Hu & Hcu).
+    exists c. split; [ exact Hpc | split; [ exact Hu | intros _; exact Hcu ] ].
   - destruct Hv as (-> & Hmcf & Hhus).
     destruct (lookup s (static_values statics)) as [allocated | ] eqn:Hls;
       [ | discriminate ].
@@ -2541,12 +2813,35 @@ Proof.
       injection Hcis as -> -> ->.
       cbn [static_rebuilt] in Hsr.
       destruct Hsr as (sites & vs' & Hls' & Hsite & Hsites & Hslots).
-      exists sites, vs', n. split.
-      * cbn [closure_in_set]. rewrite Hls', Hl0. reflexivity.
-      * split.
-        -- intros g _. left. cbn [project_function_slot].
-           rewrite Hls, Hls'. reflexivity.
-        -- rewrite Hsite. auto.
+      exists sites, vs'. split.
+      { cbn [closure_in_set]. rewrite Hls', Hl0. reflexivity. }
+      split.
+      { rewrite Hsite. apply (Hat (Node_symbol s) Hmcf).
+        exact (proj1 (Halloc s _ Hls)). }
+      split; [ exact Hsites | split; [ exact Hslots | ] ].
+      intros g c' Hg Hpc'.
+      assert (Hpeq : project_function_slot statics' slot g (Value_symbol s)
+                     = project_function_slot statics slot g (Value_symbol s)).
+      { cbn [project_function_slot]. rewrite Hls, Hls'. reflexivity. }
+      rewrite Hpeq in Hpc'. exists c'.
+      split; [ exact Hpc' | split; [ auto | ] ].
+      intros Hlo mg Hdg.
+      destruct (Hwhole Hlo s slot csyms fdecls vs Hls (Hhus Hhu))
+        as [Hs (vs'' & Hall)].
+      assert (Hvs : vs'' = vs').
+      { destruct (Hall slot s Hs) as [_ H2]. rewrite Hls' in H2.
+        injection H2 as ->. reflexivity. }
+      subst vs''.
+      cbn [project_function_slot] in Hpc'. rewrite Hls in Hpc'.
+      rewrite Pos.eqb_refl, Hl0 in Hpc'.
+      destruct (proj1 (is_bound_lookup g fdecls) Hg) as [idg Hlg].
+      rewrite Hlg in Hpc'. cbn in Hpc'.
+      destruct (lookup g csyms) as [s_g | ] eqn:Hsg; [ | discriminate Hpc' ].
+      cbn in Hpc'. injection Hpc' as <-.
+      exists g, fdecls, vs, vs', sites.
+      split; [ right; exists csyms, s_g; auto | ].
+      split; [ exact Hg | split; [ exact Hsites | split; [ exact Hslots | ] ] ].
+      exact Hdg.
 Qed.
 
 (* [refine_sets_of_closures] keeps the set of an allocation of a closure
@@ -2701,12 +2996,12 @@ Qed.
 Definition rw_alias (rw : rewrite_metadata -> flambda_type -> flambda_type)
     : Prop :=
   ∀ (m : rewrite_metadata) (t : flambda_type) (w : value),
-    is_alias t = true -> type_in_fragment valuation t ->
+    is_alias t = true -> type_in_fragment_with loose valuation t ->
     type_satisfied statics valuation w t ->
     type_satisfied statics' valuation' w (rw m t).
 
 Lemma rewrite_arbitrary_alias (fuel : nat) :
-  rw_sound (rewrite_arbitrary fx ctx tenv canon fuel) ->
+  rw_sound_ext (rewrite_arbitrary fx ctx tenv canon fuel) ->
   rw_alias (rewrite_arbitrary fx ctx tenv canon fuel).
 Proof.
   intros Hrw m t w Hal Ht Hsat.
@@ -2716,7 +3011,7 @@ Proof.
   destruct (proj2 Ht s (kind t) w (get_alias_in_aliases t s Ha) Hs)
     as [(c & ->) | (sym & ->)].
   - apply (Hrw m t (Value_const c) (Value_const c) Ht);
-      [ left; exists c; split; reflexivity | exact Hsat ].
+      [ apply ext_of_const | exact Hsat ].
   - destruct fuel as [ | fuel]; cbn [rewrite_arbitrary];
       [ exact (sat_unknown_of_kind _ _ t Hsat eq_refl) | ].
     rewrite Ha.
@@ -2748,8 +3043,8 @@ Proof. intros H. injection H as H. exact H. Qed.
 Lemma closure_sound (rw : rewrite_metadata -> flambda_type -> flambda_type)
     (m : rewrite_metadata) (t : flambda_type) (v v' : value)
     (spec : closure_rewrite) :
-  rw_sound rw -> rw_alias rw ->
-  type_in_fragment valuation t -> rebuilt_under G sol m v v' ->
+  rw_sound_ext rw -> rw_alias rw ->
+  type_in_fragment_with loose valuation t -> rebuilt_ext m v v' ->
   type_satisfied statics valuation v t ->
   rewrite_rule fx ctx tenv m t = Rule_closure spec ->
   type_satisfied statics' valuation' v' (rewrite_closure fx tenv rw spec t).
@@ -2765,7 +3060,7 @@ Proof.
     as (e & known & isn & He & Hd & Hsingle).
   destruct (closure_of_type t e known am isn slot entry v He Hd Hsingle Hsat)
     as [-> | (fdecls & vs & case & Hcis & Hl & Hent & Hcase)].
-  { rewrite (rebuilt_under_const G sol m Null v' Hv).
+  { rewrite (ext_const m Null v' Hv).
     apply (null_closure fx Hfix_null tenv statics' valuation' rw spec t).
     exact (null_closure_rule fx ctx tenv statics valuation Henv m t spec Hsat
              Hrule0). }
@@ -2781,7 +3076,7 @@ Proof.
   destruct (index_slots fdecls vs (case_index case) Hidx)
     as [Hidx_f Hidx_v].
   destruct (closure_rebuilt_view m v v' slot fdecls vs Hm Hv Hcis)
-    as (sites & vs' & n & Hcis' & Hproj & Hmcf & Hat & Hsites & Hslots).
+    as (sites & vs' & Hcis' & Hdesc & Hsites & Hslots & Hproj).
   pose proof (closure_in_set_slot statics v slot fdecls vs Hcis) as Hslot_b.
   destruct (proj1 (is_bound_lookup slot fdecls) Hslot_b) as [id Hlslot].
   destruct (Hsets fdecls sites slot id Hlslot Hsites)
@@ -2791,10 +3086,6 @@ Proof.
                     (sites slot)).
   { apply (proj2 (Hsites slot id Hlslot slot (sites slot))).
     split; [ exact Hslot_b | reflexivity ]. }
-  assert (Hhs : s_has_source sol (sites slot) = true).
-  { exact (has_source_function_slot _ _ _ Hc _ _ _ Hself eq_refl). }
-  assert (Hdesc : describes sol m (sites slot)).
-  { exact (Hat (sites slot) Hmcf Hhs). }
   (* Its set. *)
   set (nodes0 := map (fun p : function_slot * (node * Or_unknown.t code_id) =>
                         (fst p, fst (snd p))) S0).
@@ -2804,11 +3095,13 @@ Proof.
     cbn [fst snd] in Hp. injection Hp as <- <-.
     exact (HS0in g' c' code Hin). }
   assert (HS0slot : is_bound slot S0 = true) by exact (HS0b slot Hslot_b).
-  assert (Hat_slot : closure_at S0 slot = sites slot).
-  { unfold closure_at.
-    destruct (proj1 (is_bound_lookup slot S0) HS0slot) as [[c code] HlS0].
+  assert (Hat_g : ∀ g : function_slot,
+             is_bound g fdecls = true -> closure_at S0 g = sites g).
+  { intros g Hg. unfold closure_at.
+    destruct (proj1 (is_bound_lookup g S0) (HS0b g Hg)) as [[c code] HlS0].
     rewrite HlS0.
-    exact (proj2 (HS0in slot c code (lookup_in slot (c, code) S0 HlS0))). }
+    exact (proj2 (HS0in g c code (lookup_in g (c, code) S0 HlS0))). }
+  pose proof (Hat_g slot Hslot_b) as Hat_slot.
   assert (Hcodes :
             ∀ p : function_slot * Or_unknown.t code_id,
               p ∈ map (fun g => (g, entry_code_id (Closures_entry fts cts vsts)
@@ -2857,7 +3150,7 @@ Proof.
     exact Hw. }
   (* The slots of the set. *)
   destruct (slots_of_local_set_shape ctx (domain vsts) (domain cts) S0)
-    as (fsl & Hshape & Hfsl).
+    as (fsl & Hshape & Hfsl & Hfsl_md).
   destruct (local_value_slots_some ctx nodes0 (domain vsts)) as (vsl & Hvsl).
   { intros w Hw. destruct (Hin_vs w Hw) as [x Hx].
     destruct (follow_field_for_set_cases ctx nodes0 w) as [Hal | Huse];
@@ -2902,8 +3195,7 @@ Proof.
             ∀ (g : function_slot) (p : rewrite_metadata * bool),
               lookup g fsr = Some p ->
               is_bound g cts = true ∧ is_bound g fdecls = true).
-  { intros g p Hg. pose proof (Hcov_f g p Hg) as Hgb.
-    destruct (proj1 (is_bound_lookup g fsl) Hgb) as [p0 Hp0].
+  { intros g p Hg. destruct (Hcov_f g p Hg) as (p0 & Hp0 & _).
     apply lookup_in in Hp0.
     assert (Hgin : g ∈ domain cts).
     { rewrite <- Hfsl. apply in_map_iff. exists (g, p0). auto. }
@@ -2953,18 +3245,27 @@ Proof.
                    Hd Hsingle).
         destruct (proj1 (is_bound_lookup g cts) Hgc) as [tyg Htyg].
         rewrite Htyg.
-        destruct (Hcta g tyg (lookup_in g tyg cts Htyg)) as [Hal Hfrg].
-        destruct (Hproj g Hgd) as [Heq | (c & Hpc & Hnu)].
-        * rewrite Heq in Hproj'.
-          exact (Hrwa mg tyg closure' Hal Hfrg
-                   (Hcts_sat g tyg closure' Htyg Hproj')).
-        * exfalso. pose proof (Hcts_sat g tyg c Htyg Hpc) as Hsc.
+        destruct (Hcta g tyg (lookup_in g tyg cts Htyg)) as [Hlo Hfrg].
+        destruct (Hproj g closure' Hgd Hproj') as (c & Hpc & Hun & Hcu).
+        pose proof (Hcts_sat g tyg c Htyg Hpc) as Hsc.
+        destruct (is_alias tyg) eqn:Hal.
+        * (* An alias: to a constant or a symbol, kept. *)
           unfold is_alias in Hal.
           destruct (get_alias_opt tyg) as [s | ] eqn:Ha; [ | discriminate ].
           destruct (proj1 (get_alias_satisfied _ _ c tyg s Ha) Hsc)
             as [Hs _].
-          exact (Hnu (proj2 Hfrg s (kind tyg) c (get_alias_in_aliases tyg s Ha)
-                        Hs)).
+          rewrite (Hun (proj2 Hfrg s (kind tyg) c
+                          (get_alias_in_aliases tyg s Ha) Hs)).
+          apply (Hrwa mg tyg c); [ | exact Hfrg | exact Hsc ].
+          unfold is_alias. rewrite Ha. reflexivity.
+        * (* Not an alias: the closure, rebuilt with its set, under the
+             metadata of its slot, which describes its allocation. *)
+          destruct Hlo as [Hlo | Habs]; [ | discriminate Habs ].
+          apply (Hrw mg tyg c closure' Hfrg); [ right | exact Hsc ].
+          apply (Hcu Hlo mg).
+          destruct (Hcov_f g (mg, erase) Hgf) as (pe & Hpe & Hdp).
+          apply Hdp. rewrite (Hfsl_md g pe Hpe), (Hat_g g Hgd).
+          reflexivity.
       + intros w ty' contents Hw Hcont.
         rewrite lookup_map_keys in Hw.
         destruct (lookup w vsr) as [mw | ] eqn:Hwv; [ | discriminate Hw ].
@@ -2976,7 +3277,7 @@ Proof.
                    Hsingle), Hty.
         apply (Hrw mw ty x x').
         * exact (Hvsf w ty (lookup_in w ty vsts Hty)).
-        * right. exists from.
+        * left. right. exists from.
           split; [ exact Hrv | split; [ exact Hatf | intros _; exact Hhuf ] ].
         * exact (Hvsts_sat w ty x Hty Hx). }
   destruct (fix_null fx && expanded_maybe_null tenv t); [ | exact Hty' ].
@@ -2986,12 +3287,12 @@ Qed.
 
 (* The rewriting, by induction on its fuel. *)
 Lemma rewrite_sound (fuel : nat) :
-  rw_sound (rewrite_arbitrary fx ctx tenv canon fuel)
-  ∧ rw_sound (rewrite fx ctx tenv canon fuel).
+  rw_sound_ext (rewrite_arbitrary fx ctx tenv canon fuel)
+  ∧ rw_sound_ext (rewrite fx ctx tenv canon fuel).
 Proof.
   induction fuel as [ | fuel [IHa IHr]]; split; intros m t v v' Ht Hv Hsat.
-  - exact (sat_unknown_of_kind v v' t Hsat (rebuilt_under_kind _ _ m v v' Hv)).
-  - exact (sat_unknown_of_kind v v' t Hsat (rebuilt_under_kind _ _ m v v' Hv)).
+  - exact (sat_unknown_of_kind v v' t Hsat (ext_kind m v v' Hv)).
+  - exact (sat_unknown_of_kind v v' t Hsat (ext_kind m v v' Hv)).
   - cbn [rewrite_arbitrary].
     destruct (get_alias_opt t) as [s | ] eqn:Ha;
       [ | exact (IHr m t v v' Ht Hv Hsat) ].
@@ -3002,19 +3303,19 @@ Proof.
                 (Some Name_mode.in_types) None s)
       as [[[x | sym | c] | ] | ] eqn:Hcan;
       try exact (sat_unknown_of_kind v v' t Hsat
-                   (rebuilt_under_kind _ _ m v v' Hv)).
+                   (ext_kind m v v' Hv)).
     + destruct (fix_alias fx && forgets m);
         [ exact (sat_unknown_of_kind v v' t Hsat
-                   (rebuilt_under_kind _ _ m v v' Hv)) | ].
-      rewrite (rebuilt_under_unallocated _ _ m v v' Hunalloc Hv).
+                   (ext_kind m v v' Hv)) | ].
+      rewrite (ext_unallocated m v v' Hunalloc Hv).
       apply alias_satisfied. split; [ | exact Hkt ].
       change (value_of_name valuation' (canon (Name_var x) (kind t) m)
               = Some v).
       rewrite (Hcopies s (Name_var x) (kind t) m Hcan). exact Hs.
     + destruct (fix_alias fx && forgets m);
         [ exact (sat_unknown_of_kind v v' t Hsat
-                   (rebuilt_under_kind _ _ m v v' Hv)) | ].
-      rewrite (rebuilt_under_unallocated _ _ m v v' Hunalloc Hv).
+                   (ext_kind m v v' Hv)) | ].
+      rewrite (ext_unallocated m v v' Hunalloc Hv).
       apply alias_satisfied. split; [ | exact Hkt ].
       change (value_of_name valuation' (canon (Name_symbol sym) (kind t) m)
               = Some v).
@@ -3031,7 +3332,7 @@ Proof.
                (proj1 (rewrite_forgets fuel)) m t v v'
                (rule_identity_not_forgets m t Hrule) Ht Hv Hsat).
     + exact (sat_unknown_of_kind v v' t Hsat
-               (rebuilt_under_kind _ _ m v v' Hv)).
+               (ext_kind m v v' Hv)).
     + exact (closure_sound (rewrite_arbitrary fx ctx tenv canon fuel) m t v
                v' spec IHa (rewrite_arbitrary_alias fuel IHa) Ht Hv Hsat
                Hrule).
@@ -3039,25 +3340,85 @@ Qed.
 
 End Sound.
 
+(* The rewriting is sound in the fragment of [loose]. *)
+Lemma rewrite_type_sound_in (loose : bool) :
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with loose valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    (loose = true ->
+     static_sets_whole (solution_of_tables T) statics statics') ->
+    copies_valued tenv canon valuation valuation' ->
+    type_in_fragment_with loose valuation t ->
+    rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+         canon fuel m t).
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole Hcopies
+    Ht Hv Hsat.
+  exact (proj1 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
+                  is_local F T sets tenv canon statics statics' valuation
+                  valuation' loose (least_closed_tables is_local F T Hleast)
+                  Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
+                  fuel)
+           m t v v' Ht (or_introl Hv) Hsat).
+Qed.
+
 Theorem rewrite_type_sound : rewrite_type_sound_statement.
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
-    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Ht Hv
-    Hsat.
-  exact (proj1 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
-                  is_local F T sets tenv canon statics statics' valuation
-                  valuation' (least_closed_tables is_local F T Hleast) Hleast
-                  Hlocal Hsets Henv Hfrag Halloc Hst Hcopies fuel)
-           m t v v' Ht Hv Hsat).
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
+  apply (rewrite_type_sound_in false); try assumption.
+  intros H. discriminate H.
 Qed.
 
-Theorem rewrite_symbol_type_sound : rewrite_symbol_type_sound_statement.
+Theorem rewrite_unaliased_type_sound :
+  rewrite_unaliased_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  apply (rewrite_type_sound_in true); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+(* The type of a symbol in the fragment of [loose]. *)
+Lemma rewrite_symbol_type_sound_in (loose : bool) :
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (s : symbol) (allocated : statically_allocated_value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with loose valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    (loose = true ->
+     static_sets_whole (solution_of_tables T) statics statics') ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup s (static_values statics) = Some allocated ->
+    type_satisfied statics' valuation' (Value_symbol s)
+      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+         canon s).
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
-    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl.
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl.
   unfold rewrite_symbol_type, rewrite_concrete_type_of.
   set (ty := concrete_type_of tenv (Name_symbol s) Value).
-  assert (Hty : type_in_fragment valuation ty
+  assert (Hty : type_in_fragment_with loose valuation ty
                 ∧ type_satisfied statics valuation (Value_symbol s) ty).
   { unfold ty, concrete_type_of.
     destruct (Typing_env.find tenv (Name_symbol s) (Some Value))
@@ -3072,15 +3433,32 @@ Proof.
                 (Node_symbol s)) as [Hat Hhu].
   apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
                   is_local F T sets tenv canon statics statics' valuation
-                  valuation' (least_closed_tables is_local F T Hleast) Hleast
-                  Hlocal Hsets Henv Hfrag Halloc Hst Hcopies
+                  valuation' loose (least_closed_tables is_local F T Hleast)
+                  Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
                   (rewrite_fuel tenv ty))
            _ ty (Value_symbol s) (Value_symbol s) Hfr);
     [ | exact Hsat ].
-  right. exists (Node_symbol s).
+  left. right. exists (Node_symbol s).
   split; [ | split; [ exact Hat | exact Hhu ] ].
   cbn [rebuilt_value].
   split; [ reflexivity | split; [ exact (Halloc s allocated Hl) | auto ] ].
+Qed.
+
+Theorem rewrite_symbol_type_sound : rewrite_symbol_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  apply (rewrite_symbol_type_sound_in false); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_unaliased_symbol_type_sound :
+  rewrite_unaliased_symbol_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  apply (rewrite_symbol_type_sound_in true); try assumption.
+  intros _. exact Hwhole.
 Qed.
 
 (* ======================================================================== *)
@@ -3123,12 +3501,13 @@ Proof.
                 (Node_variable code_var)) as [Hat Hhu].
   apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
                   is_local F T sets tenv canon statics statics' valuation
-                  valuation' (least_closed_tables is_local F T Hleast) Hleast
-                  Hlocal Hsets Henv Hfrag Halloc Hst Hcopies
+                  valuation' false (least_closed_tables is_local F T Hleast)
+                  Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies
+                  (fun H => False_ind _ (diff_false_true H))
                   (rewrite_fuel tenv ty0))
            _ ty0 v v' Hfr);
     [ | exact Hsat ].
-  right. exists (Node_variable code_var).
+  left. right. exists (Node_variable code_var).
   split; [ exact Hv | split; [ exact Hat | exact Hhu ] ].
 Qed.
 
@@ -4151,19 +4530,20 @@ Lemma rw_sound_arbitrary (fuel : nat) :
   rw_sound F T statics statics' valuation valuation'
     (rewrite_arbitrary fx ctx tenv canon fuel).
 Proof.
+  intros m t v v' Ht Hv Hsat.
   exact (proj1 (rewrite_sound fx Hfix_boxed Hfix_alias Hfix_refine Hfix_null
                   is_local F T sets tenv canon statics statics' valuation
-                  valuation' Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
-                  Hst
-                  Hcopies fuel)).
+                  valuation' false Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
+                  Hst Hcopies (fun H => False_ind _ (diff_false_true H)) fuel)
+           m t v v' Ht (or_introl Hv) Hsat).
 Qed.
 
 Lemma rw_forgets_arbitrary (fuel : nat) :
-  rw_forgets statics statics' valuation valuation'
+  rw_forgets statics statics' valuation valuation' false
     (rewrite_arbitrary fx ctx tenv canon fuel).
 Proof.
   exact (proj1 (rewrite_forgets fx Hfix_alias is_local F T sets tenv canon
-                  statics statics' valuation valuation' Henv fuel)).
+                  statics statics' valuation valuation' false Henv fuel)).
 Qed.
 
 Lemma unboxed_not_local_block (i : nat) (k : flambda_kind) :
@@ -5246,4 +5626,151 @@ Proof.
   exact (rebuild_exit_relation_holds flag is_local u e T b Hlocal Hslots Hfrag
            Hdc Hrk Hwf Hexits (proj1 Hleast)
            (least_field_used_exact is_local _ T Hleast) Honce Hvals).
+Qed.
+
+(* ======================================================================== *)
+(* Closures whose representation changes                                    *)
+(* ======================================================================== *)
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesProofs
+  FlambdaReaperUnboxingRefinesClosuresSimProofs.
+
+(* A membership of a list computed, as the chain of its equalities. *)
+Ltac in_cases H :=
+  repeat match type of H with
+         | _ ∨ _ => destruct H as [H | H]
+         end;
+  try discriminate H; try contradiction H.
+
+Ltac in_find :=
+  repeat first [ left; reflexivity | right ].
+
+(* The constructors of the graph of the example. *)
+Lemma changed_example_constructors :
+  f_constructor FlambdaReaperUnboxing.Examples.block_in_slot_facts
+  = [(Node_variable 60, Field_call_witness Known_arity_code_pointer,
+      Node_made 7);
+     (Node_variable 60, Field_call_witness Unknown_arity_code_pointer,
+      Node_made 8);
+     (Node_variable 60, Field_value_slot 80, Node_variable 10);
+     (Node_variable 60, Field_function_slot 70, Node_variable 60);
+     (Node_variable 10, Field_block 0 Value, Node_all_constants);
+     (Node_variable 10, Field_block 1 Value, Node_all_constants);
+     (Node_variable 10, Field_is_int, Node_all_constants);
+     (Node_variable 10, Field_get_tag, Node_all_constants);
+     (Node_made 8, Field_return_of_call Exn, Node_made 4);
+     (Node_made 8, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 8, Field_code_id_of_call_witness, Node_code_id 52);
+     (Node_made 7, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 7, Field_return_of_call Exn, Node_made 4);
+     (Node_made 7, Field_code_id_of_call_witness, Node_code_id 52)]%positive.
+Proof. vm_compute. reflexivity. Qed.
+
+(* A constructor of a graph of facts, without unfolding the facts: the
+   kernel would compute them by lazy reduction. *)
+Lemma g_constructor_facts (F : facts) (a : node) (f : field) (b : node) :
+  g_constructor (graph_of_facts F) a f b -> (a, f, b) ∈ f_constructor F.
+Proof. exact (fun H => H). Qed.
+
+Theorem changed_example : changed_example_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ apply type_satisfied_b_iff; vm_compute; reflexivity | ].
+  split; [ | split ].
+  - right. exists ChangedExample.x60. split; [ | split ].
+    + cbn [rebuilt_value ChangedExample.closure].
+      exists (fun _ => ChangedExample.x60),
+        [(80%positive,
+          Value_block 0
+            [Value_const (Tagged_immediate 7); Value_const (Poison Value)])].
+      split; [ reflexivity | split ].
+      { apply may_come_from_self; vm_compute; auto. }
+      split.
+      * intros f id Hf g b. cbn [lookup] in Hf.
+        destruct (Pos.eqb_spec f 70) as [-> | _]; [ | discriminate Hf ].
+        split.
+        -- intros Hcons.
+           apply g_constructor_facts in Hcons.
+           rewrite changed_example_constructors in Hcons.
+           cbn [In] in Hcons. in_cases Hcons.
+           injection Hcons as <- <-.
+           split; [ reflexivity | reflexivity ].
+        -- intros [Hg ->]. unfold is_bound in Hg. cbn [lookup] in Hg.
+           destruct (Pos.eqb g 70) eqn:Hg70; [ | discriminate Hg ].
+           apply Pos.eqb_eq in Hg70. subst g. vm_compute. in_find.
+      * apply for_all_bindings_lookup. intros w x Hw f id Hf Hfu.
+        cbn [lookup] in Hw.
+        destruct (Pos.eqb_spec w 80) as [-> | _]; [ | discriminate Hw ].
+        injection Hw as <-.
+        exists (Node_variable 10%positive),
+          (Value_block 0
+             [Value_const (Tagged_immediate 7); Value_const (Poison Value)]).
+        split; [ | split; [ vm_compute; reflexivity | ] ].
+        { intros f' id' _ b. split.
+          - intros Hcons.
+            apply g_constructor_facts in Hcons.
+            rewrite changed_example_constructors in Hcons.
+            cbn [In] in Hcons. in_cases Hcons.
+            injection Hcons as <-. reflexivity.
+          - intros ->. vm_compute. in_find. }
+        split; [ vm_compute; reflexivity | split; [ reflexivity | ] ].
+        cbn [rebuilt_value].
+        exists (Node_variable 10%positive),
+          [Value_const (Tagged_immediate 7); Value_const (Poison Value)].
+        split; [ apply may_come_from_self; vm_compute; auto | ].
+        split; [ vm_compute; reflexivity | split; [ reflexivity | ] ].
+        cbn [fields_rebuilt kind_of_value kind_of_const].
+        split; [ | split; [ | exact I ] ].
+        -- exists Node_all_constants. split; [ vm_compute; in_find | ].
+           split; [ | intros H; vm_compute in H; discriminate H ].
+           intros _. split; [ vm_compute; reflexivity | ].
+           cbn [rebuilt_value].
+           split; [ vm_compute; reflexivity | reflexivity ].
+        -- exists Node_all_constants. split; [ vm_compute; in_find | ].
+           split; [ intros H; vm_compute in H; discriminate H | ].
+           intros _. reflexivity.
+    + intros a (_ & [Has | Hsrc] & _) _;
+        [ vm_compute in Has; discriminate Has | ].
+      cbn [s_sources solution_of_tables] in Hsrc.
+      apply mem_pair_In in Hsrc. vm_compute in Hsrc. in_cases Hsrc.
+      injection Hsrc as <-. reflexivity.
+    + intros _. vm_compute. reflexivity.
+  - exists [(70%positive, 52%positive)],
+      [(80%positive,
+        Value_block 0
+          [Value_const (Tagged_immediate 7); Value_const (Poison Value)])],
+      [(81%positive, Value_const (Tagged_immediate 7))].
+    split; [ reflexivity | ].
+    split; [ vm_compute; reflexivity | ].
+    split; [ vm_compute; reflexivity | ].
+    split; [ vm_compute; reflexivity | ].
+    vm_compute. constructor; [ split; reflexivity | constructor ].
+  - apply type_satisfied_b_iff. vm_compute. reflexivity.
+Qed.
+
+(* The closures of the example are related as the simulation of the
+   rebuild with unboxing relates them
+   (FlambdaReaperUnboxingRefinesClosuresSimProofs.crel). *)
+Example changed_example_crel :
+  FlambdaReaperUnboxingRefinesClosuresSimProofs.crel
+    FlambdaReaperUnboxing.Examples.block_in_slot_repr
+    ChangedExample.closure_mid ChangedExample.closure'.
+Proof.
+  exists [(70%positive, 52%positive)],
+    [(80%positive,
+      Value_block 0
+        [Value_const (Tagged_immediate 7); Value_const (Poison Value)])],
+    [(81%positive, Value_const (Tagged_immediate 7))].
+  split; [ reflexivity | split; [ vm_compute; reflexivity | ] ].
+  split; [ vm_compute; reflexivity | ].
+  intros w u Hin. cbn in Hin. destruct Hin as [Hin | []].
+  injection Hin as <- <-. eexists. split; [ reflexivity | ].
+  cbn [FlambdaReaperUnboxingRefinesClosuresSimProofs.slot_holds].
+  intros p x k Hp.
+  inversion Hp as [ | k0 fields f u0 p0 x0 k1 Hfu Hsub ]; subst.
+  destruct Hfu as [Hfu | []]. injection Hfu as <- <-.
+  inversion Hsub; subst.
+  eexists. split; [ reflexivity | split; reflexivity ].
 Qed.

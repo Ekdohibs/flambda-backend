@@ -31,13 +31,17 @@
    This file is to be reviewed: [describes], [metadata_at],
    [rebuilt_value] and [statics_rebuilt] (what the rebuild makes of a
    value and of the static environment, with [set_sites], [slot_held]
-   and [value_slot_rebuilt] for closures), the fragment ([shaped_type],
-   [type_in_fragment], [env_in_fragment]), [sets_of_graph],
+   and [value_slot_rebuilt] for closures), the fragment
+   ([shaped_type_with], [type_in_fragment_with], [env_in_fragment_with],
+   and the first statements' [shaped_type], [type_in_fragment],
+   [env_in_fragment]), [static_sets_whole], [sets_of_graph],
    [copies_valued], [rebuild_exit_relation] (what the statement of the
    two runs asks of the simulation of the rebuild), [statics_of_values]
    and [exits_of_values] (its premise on static blocks), [unboxed_values] and
-   [block_fields_of_one_kind] (for unboxed variables of code), the
-   statements, and the examples, against
+   [block_fields_of_one_kind] (for unboxed variables of code),
+   [slot_value_at_path] and [changed_closure_rebuilt] (for the closures
+   whose representation changes), the statements, and the examples,
+   against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
    FlambdaReaperFlowSpec.v (where values may be),
    FlambdaReaperLeastSpec.v (the least solution) and
@@ -119,8 +123,10 @@
    [exactly_this_closure]), and the closure types are aliases, as those
    that Simplify gives a set of closures are. A closure type of a
    closure bound by a [Let] has then none for a function of its set: the
-   closure there is allocated. The second condition excludes the aliases
-   to a variable
+   closure there is allocated. The fragment [loose]
+   ([type_in_fragment_with true]) lets the closure types be of the
+   shape, aliases or not, as a join or the result types of code make
+   them. The second condition excludes the aliases to a variable
    that holds a block: the machine has no identity of allocations, so an
    alias says that two values are equal, not that they are one
    allocation, and two positions of one block may be rebuilt
@@ -161,6 +167,19 @@
      [copies_valued] allows, if the symbol is bound in the first run and
      an allocation of its own there ([statics_allocated], which
      FlambdaReaperFlowSpec.statics_flow gives).
+   - [rewrite_unaliased_type_sound_statement] and
+     [rewrite_unaliased_symbol_type_sound_statement]: the first two for
+     the closure types that are not aliases (the fragment [loose]), of
+     the types and of every type of the environment. The rewriting gives
+     the closure of another function slot of the set the metadata
+     [Single_source] of its allocation, which may have no use and other
+     sources than itself, so that the closure is not rebuilt under that
+     metadata as [rebuilt_under] has it; it is rebuilt with its set,
+     which is what the closure case reads. They ask that the static sets
+     be kept whole ([static_sets_whole]): the closure of a static set at
+     another slot is a symbol that may have no use, and [statics_rebuilt]
+     says nothing of what the second run binds to it. No fault: the
+     rewriting is sound there.
    - [rewrite_result_type_sound_statement]: the type that the result
      types of code give a parameter or a result, rewritten as
      [rewrite_result_types] rewrites it under the metadata of the
@@ -264,22 +283,39 @@
      [(int -> int) or_null] exports that type, and another unit that
      matches on the symbol takes the branch of [This]: it prints 2
      where the program prints [null].
+   - [changed_example_statement]: the closure types of a set whose
+     representation changes, as FlambdaReaperTypes.rewrite_arbitrary_u
+     rewrites them into the new representation, on the unit
+     FlambdaReaperUnboxing.Examples.block_in_slot: the type of the
+     closure, rewritten, is that of the closure at the new function slot
+     with the new value slot of the field of the block unboxed; it holds
+     of the closure of the run of the unit rebuilt with unboxing, which
+     is related to that of the run rebuilt without it as the simulation
+     of FlambdaReaperUnboxingRefinesClosuresSimProofs.v relates them
+     ([changed_closure_rebuilt]), and the latter to the closure of the
+     unit by [rebuilt_under].
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
      the fixes and as the compiler has it.
 
    What is left out:
-   - Of closure types, the closure types of a case that are not aliases:
-     the type of the closure of another function slot of the set is
-     rewritten under the metadata [Single_source] of the allocation of
-     that closure, which may have no use, where a value is rebuilt under
-     a metadata only at a node with a use ([rebuilt_under]), and which
-     may have other sources than itself, where the graph does not say
-     that it has not. Closures of a set of one function with no slot
-     named ([Value_closure], [Static_closure]), which [rel] and
-     [statics_rel] have not either. The partial applications, of which
-     the closure types say nothing ([closure_in_set]).
+   - Of closure types that are not aliases: the statements of result
+     types and of the two runs, and [static_sets_whole] of the runs,
+     which the simulation does not give (its [statics_rel] lets the
+     second run leave unbound a symbol of a static set that has no use).
+     Closures of a set of one function with no slot named
+     ([Value_closure], [Static_closure]): only the older forms
+     [Set_of_closures] and [Static_const_set_of_closures] make them,
+     which no term of the compiler is converted to and which
+     [in_flow_fragment] excludes; [rel], [statics_rel] and [flows] have
+     no case for them; the traversal gives them no constructor at a
+     function slot, so that [set_sites] and [sets_of_graph] cannot
+     identify their sets; and the rewriting reads a set of the compiler
+     by its function slots, where they have the slot
+     [unnamed_function_slot], which a named set may have too. The
+     partial applications, of which the closure types say nothing
+     ([closure_in_set]).
    - The equations of the copies: the statements give each copy the
      value of the name it copies, and say nothing of its own equation.
      That equation is the type of the name rewritten under the metadata
@@ -296,9 +332,12 @@
      of FlambdaWellKindedSpec.v asks it, among much else; the compiler
      reads a static block at its shape, which the model has not got.
    - Unboxing: the rewriting of the types of the closures whose
-     representation changes, which the model forgets (FlambdaReaperTypes.v
-     says what the compiler does), and so the rebuild with a change of
-     representation; the unboxing of closures and of names whose uses
+     representation changes, which [rewrite_arbitrary] forgets and
+     [rewrite_arbitrary_u] rewrites as the compiler does, is stated of
+     one example only ([changed_example_statement]): the statement for
+     every closure, of the three runs as for unboxed variables, is left,
+     and so is the rebuild with a change of representation in the other
+     statements; the unboxing of closures and of names whose uses
      are called (not of [check_unboxed_uses]); the fields of an unboxed
      [my_closure], which the result types give no equation, so that
      there is nothing to state of them. *)
@@ -332,48 +371,53 @@ Definition is_alias (t : flambda_type) : bool :=
    closures, the function slots of which the entry has a closure type,
    and the value slots of which it has a type, are among those of the
    index (condition 8a of FlambdaTypeWellFormedSpec.v), and every closure
-   type is an alias. *)
-Fixpoint shaped_type (t : flambda_type) : bool :=
+   type is an alias, or, if [loose], of the shape. *)
+Fixpoint shaped_type_with (loose : bool) (t : flambda_type) : bool :=
   match t with
   | Type_value (Ok (No_alias (Head_of_kind_value (Ok head) _))) =>
-    shaped_non_null head
+    shaped_non_null_with loose head
   | Type_value _ | Type_naked_immediate _ | Type_naked_number _ _
   | Type_rec_info _ | Type_region _ => true
   end
 
-with shaped_non_null (head : head_of_kind_value_non_null) : bool :=
+with shaped_non_null_with (loose : bool) (head : head_of_kind_value_non_null)
+    : bool :=
   match head with
   | Variant _ immediates _ blocks extensions _ =>
     match immediates with
-    | Or_unknown.Known ty => shaped_type ty
+    | Or_unknown.Known ty => shaped_type_with loose ty
     | Or_unknown.Unknown => true
     end
     && match blocks with
-       | Or_unknown.Known blocks => shaped_blocks blocks
+       | Or_unknown.Known blocks => shaped_blocks_with loose blocks
        | Or_unknown.Unknown => true
        end
-  | Boxed_number _ contents _ => shaped_type contents
-  | Closures closures _ => shaped_closures closures
+  | Boxed_number _ contents _ => shaped_type_with loose contents
+  | Closures closures _ => shaped_closures_with loose closures
   | Mutable_block _ | String _ => true
   end
 
-with shaped_blocks (blocks : row_like_for_blocks) : bool :=
+with shaped_blocks_with (loose : bool) (blocks : row_like_for_blocks)
+    : bool :=
   match blocks with
   | Row_like_for_blocks known_tags other_tags _ =>
     forallb
       (fun p =>
          match snd p with
-         | Or_unknown.Known case => forallb shaped_type (case_maps_to case)
+         | Or_unknown.Known case =>
+           forallb (shaped_type_with loose) (case_maps_to case)
          | Or_unknown.Unknown => true
          end)
       known_tags
     && match other_tags with
-       | Or_bottom.Ok case => forallb shaped_type (case_maps_to case)
+       | Or_bottom.Ok case =>
+         forallb (shaped_type_with loose) (case_maps_to case)
        | Or_bottom.Bottom => true
        end
   end
 
-with shaped_closures (closures : row_like_for_closures) : bool :=
+with shaped_closures_with (loose : bool) (closures : row_like_for_closures)
+    : bool :=
   match closures with
   | Row_like_for_closures known_closures =>
     forallb
@@ -385,11 +429,19 @@ with shaped_closures (closures : row_like_for_closures) : bool :=
            && all_among (domain value_slot_types)
                 (contents_value_slots
                    (closures_index_contents (case_index (snd p))))
-           && forallb (fun q => is_alias (snd q)) closure_types
-           && forallb (fun q => shaped_type (snd q)) value_slot_types
+           && forallb
+                (fun q =>
+                   (loose || is_alias (snd q))
+                   && shaped_type_with loose (snd q))
+                closure_types
+           && forallb (fun q => shaped_type_with loose (snd q))
+                value_slot_types
          end)
       known_closures
   end.
+
+(* The shape of the first statements: every closure type an alias. *)
+Definition shaped_type (t : flambda_type) : bool := shaped_type_with false t.
 
 (* A value that is not allocated: a constant or a symbol. *)
 Definition unallocated (v : value) : Prop :=
@@ -398,20 +450,29 @@ Definition unallocated (v : value) : Prop :=
 (* A type of the fragment: of the shape of the fragment, and every alias,
    of a variable of a relation or of an extension too, to a name that
    holds a constant or a symbol in [valuation]. *)
-Definition type_in_fragment (valuation : env) (t : flambda_type) : Prop :=
-  shaped_type t = true
+Definition type_in_fragment_with (loose : bool) (valuation : env)
+    (t : flambda_type) : Prop :=
+  shaped_type_with loose t = true
   ∧ ∀ (s : simple) (k : flambda_kind) (w : value),
       (s, k) ∈ aliases_with_kinds t ->
       eval_simple valuation s = Some w ->
       unallocated w.
 
 (* Every type of the environment is of the fragment. *)
-Definition env_in_fragment (valuation : env) (tenv : Typing_env.t) : Prop :=
+Definition env_in_fragment_with (loose : bool) (valuation : env)
+    (tenv : Typing_env.t) : Prop :=
   ∀ (n : name) (ty : flambda_type)
     (binding_time_and_mode : Binding_time.With_name_mode.t),
     Keyed.lookup name_eqb n (Typing_env.names_to_types tenv)
     = Some (ty, binding_time_and_mode) ->
-    type_in_fragment valuation ty.
+    type_in_fragment_with loose valuation ty.
+
+(* The fragment of the first statements: closure types are aliases. *)
+Definition type_in_fragment (valuation : env) (t : flambda_type) : Prop :=
+  type_in_fragment_with false valuation t.
+
+Definition env_in_fragment (valuation : env) (tenv : Typing_env.t) : Prop :=
+  env_in_fragment_with false valuation tenv.
 
 (* ======================================================================== *)
 (* What the rebuild makes of a value                                        *)
@@ -589,6 +650,32 @@ Definition statics_allocated (statics : static_env) : Prop :=
     lookup s (static_values statics) = Some allocated ->
     may_come_from sol (Node_symbol s) (Node_symbol s).
 
+(* The static sets of closures are kept whole: where the first run binds
+   a symbol with a use to the closure of a static set at [slot], the set
+   names that symbol for [slot], and each run binds every symbol of the
+   set to the closure of the set at the slot of the symbol, with the value
+   slots of the first and those [vs'] of the second. The rebuild keeps or
+   removes a static set whole (FlambdaReaperRebuild.static_const_is_used);
+   the run of a well-formed unit binds the symbols of its sets so
+   (FlambdaClosuresSpec.static_sets_bound). *)
+Definition static_sets_whole (statics statics' : static_env) : Prop :=
+  ∀ (s : symbol) (slot : function_slot)
+    (closure_symbols : list (function_slot * symbol))
+    (function_decls : list (function_slot * code_id))
+    (vs : list (value_slot * value)),
+    lookup s (static_values statics)
+    = Some (Static_closure_of_set slot closure_symbols function_decls vs) ->
+    s_has_usage sol (Node_symbol s) = true ->
+    lookup slot closure_symbols = Some s
+    ∧ ∃ vs' : list (value_slot * value),
+        ∀ (g : function_slot) (s_g : symbol),
+          lookup g closure_symbols = Some s_g ->
+          lookup s_g (static_values statics)
+          = Some (Static_closure_of_set g closure_symbols function_decls vs)
+          ∧ lookup s_g (static_values statics')
+            = Some
+                (Static_closure_of_set g closure_symbols function_decls vs').
+
 (* The static values of the fragment of the model: a static block holds
    values, and a static boxed number a number of a kind that can be
    boxed (as FlambdaWellKindedSpec.allocated_well_kinded asks of them).
@@ -724,6 +811,52 @@ Definition rewrite_symbol_type_sound_statement : Prop :=
       (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
          canon s).
 
+(* The first statement for the types whose closure types need not be
+   aliases ([type_in_fragment_with true], of every type of the
+   environment too), the static sets of closures being kept whole. *)
+Definition rewrite_unaliased_type_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+         canon fuel m t).
+
+(* The second statement for those types. *)
+Definition rewrite_unaliased_symbol_type_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (s : symbol) (allocated : statically_allocated_value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup s (static_values statics) = Some allocated ->
+    type_satisfied statics' valuation' (Value_symbol s)
+      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+         canon s).
+
 (* The type that the result types of code give a parameter or a result,
    [type_var], which holds of its value [v] in the first run (the
    environment of the result types has a type for it), rewritten
@@ -848,6 +981,157 @@ Definition rewrite_unboxed_result_type_sound_with (fx : fixes) : Prop :=
 
 Definition rewrite_unboxed_result_type_sound_statement : Prop :=
   rewrite_unboxed_result_type_sound_with all_fixes.
+
+(* ======================================================================== *)
+(* Closures whose representation changes                                    *)
+(* ======================================================================== *)
+
+(* The value at the path of a new value slot of a representation, in the
+   value slots [vs] of a closure: the old value slot, then the fields of
+   what it holds. *)
+Definition slot_value_at_path (vs : list (value_slot * value))
+    (path : list field) : option value :=
+  match path with
+  | Field_value_slot w :: path =>
+    match lookup w vs with
+    | Some x => value_at_path path x
+    | None => None
+    end
+  | _ => None
+  end.
+
+(* A closure of a set whose representation [r] changes, as the run of
+   the unit rebuilt without unboxing has it ([v]) and as the run of the
+   unit rebuilt with unboxing has it ([v']): in the second, the closure at
+   the new function slot of the set of the same functions at their new
+   slots, whose value slots are the new slots of the representation, in
+   its order, each holding what the old slot holds in the first at the
+   path of the new slot. It is what the simulation of
+   FlambdaReaperUnboxingRefinesClosuresSimProofs.v has of them ([crel]),
+   with the value slots that the rebuild makes
+   (FlambdaReaperUnboxing.changed_value_slots). *)
+Definition changed_closure_rebuilt (r : FlambdaReaperUnboxing.closure_repr)
+    (v v' : value) : Prop :=
+  ∃ (decls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)),
+    v = Value_closure_of_set (FlambdaReaperUnboxing.cr_current r) decls vs
+    ∧ v'
+      = Value_closure_of_set (FlambdaReaperUnboxing.current_slot r)
+          (FlambdaReaperUnboxing.rename_function_decls r decls) vs'
+    ∧ lookup (FlambdaReaperUnboxing.current_slot r)
+        (FlambdaReaperUnboxing.rename_function_decls r decls)
+      = lookup (FlambdaReaperUnboxing.cr_current r) decls
+    ∧ map fst vs'
+      = map fst
+          (FlambdaReaperUnboxing.fields_leaves
+             (FlambdaReaperUnboxing.cr_fields r))
+    ∧ Forall2
+        (fun (pk : list field * flambda_kind) (x' : value) =>
+           slot_value_at_path vs (fst pk) = Some x'
+           ∧ kind_of_value x' = snd pk)
+        (FlambdaReaperUnboxingRefinesCallsSpec.fields_paths
+           (FlambdaReaperUnboxing.cr_fields r))
+        (map snd vs').
+
+(* The unit FlambdaReaperUnboxing.Examples.block_in_slot, with the tables
+   of the solver: the closure [x60] at the function slot 70 of a set of
+   the code 52 holds in its value slot 80 the block [x10] of 7 and 8,
+   whose field 0 its code reads. The set changes its representation
+   ([block_in_slot_repr]): the slot 80 is unboxed, its field 0 the new
+   value slot 81, and the function slot is the new 82. The type of [x60]
+   says that it is the closure at 70 of the code 52 with the block of [= 7]
+   and [= 8] at 80; in the run of the unit, [x60] is [closure]; in that
+   of the unit rebuilt without unboxing, the field 1 of the block, which
+   nothing reads, is poison ([closure_mid]); in that of the unit rebuilt
+   with unboxing, the closure is at 82 with 7 at 81 ([closure']). *)
+Module ChangedExample.
+
+Local Open Scope positive_scope.
+
+Definition x60 : node := Node_variable 60.
+
+Definition reprs : list (node * FlambdaReaperUnboxing.closure_repr) :=
+  FlambdaReaperUnboxing.unit_changed_representations
+    FlambdaReaperUnboxing.Examples.no_local
+    FlambdaReaperUnboxing.Examples.block_in_slot_facts
+    FlambdaReaperUnboxing.Examples.block_in_slot_tables
+    FlambdaReaperUnboxing.Examples.block_in_slot_dominated
+    [Node_variable 10] [x60] FlambdaReaperUnboxing.Examples.block_in_slot.
+
+Definition sets : list set_of_closures :=
+  [[(70, (x60, Or_unknown.Known 52))]].
+
+(* The context of the rebuild with unboxing: the closures that change
+   are those of [reprs]. *)
+Definition context : rewrite_context :=
+  Rewrite_context FlambdaReaperUnboxing.Examples.block_in_slot_facts
+    FlambdaReaperUnboxing.Examples.block_in_slot_tables
+    FlambdaReaperUnboxing.Examples.no_local sets (map fst reprs).
+
+Definition code_my_closures : finite_map variable :=
+  FlambdaReaperUnboxing.bound_code_my_closures
+    FlambdaReaperUnboxing.Examples.block_in_slot.
+
+Definition closure_type : flambda_type :=
+  at_least_this_closure 70 [(70, Or_unknown.Known (Function_type 52))] []
+    [(80,
+      immutable_block false 0 (Scannable Value_only) Alloc_mode.Heap
+        [this_tagged_immediate 7; this_tagged_immediate 8])]
+    Alloc_mode.Heap.
+
+Definition rewritten : flambda_type :=
+  exactly_this_closure 82 [(82, Or_unknown.Known (Function_type 52))]
+    [(82, unknown Value)] [(81, this_tagged_immediate 7)] Alloc_mode.Heap.
+
+Definition closure : value :=
+  Value_closure_of_set 70 [(70, 52)]
+    [(80,
+      Value_block 0
+        [Value_const (Tagged_immediate 7); Value_const (Tagged_immediate 8)])].
+
+Definition closure_mid : value :=
+  Value_closure_of_set 70 [(70, 52)]
+    [(80,
+      Value_block 0
+        [Value_const (Tagged_immediate 7); Value_const (Poison Value)])].
+
+Definition closure' : value :=
+  Value_closure_of_set 82 [(82, 52)] [(81, Value_const (Tagged_immediate 7))].
+
+End ChangedExample.
+
+(* The closure types of a set whose representation changes, rewritten as
+   [rewrite_arbitrary_u] rewrites them, on the example: the type of [x60]
+   under its metadata, [Single_source x60], is that of the closure at 82
+   of the code 52 with [= 7] at 81, where [rewrite_arbitrary] forgets it;
+   it holds of [closure'], which the two rebuilds relate to [closure], of
+   which the type holds. *)
+Definition changed_example_statement : Prop :=
+  ChangedExample.reprs
+  = [(ChangedExample.x60, FlambdaReaperUnboxing.Examples.block_in_slot_repr);
+     (Node_made 5%positive,
+      FlambdaReaperUnboxing.Examples.block_in_slot_repr);
+     (Node_variable 41%positive,
+      FlambdaReaperUnboxing.Examples.block_in_slot_repr)]
+  ∧ rewrite_arbitrary_u all_fixes ChangedExample.context Typing_env.create
+      (fun n _ _ => n) ChangedExample.code_my_closures ChangedExample.reprs
+      6 (Single_source ChangedExample.x60) ChangedExample.closure_type
+    = ChangedExample.rewritten
+  ∧ rewrite_arbitrary all_fixes ChangedExample.context Typing_env.create
+      (fun n _ _ => n) 6 (Single_source ChangedExample.x60)
+      ChangedExample.closure_type
+    = unknown Value
+  ∧ type_satisfied empty_static_env [] ChangedExample.closure
+      ChangedExample.closure_type
+  ∧ rebuilt_under
+      (graph_of_facts FlambdaReaperUnboxing.Examples.block_in_slot_facts)
+      (solution_of_tables FlambdaReaperUnboxing.Examples.block_in_slot_tables)
+      (Single_source ChangedExample.x60) ChangedExample.closure
+      ChangedExample.closure_mid
+  ∧ changed_closure_rebuilt FlambdaReaperUnboxing.Examples.block_in_slot_repr
+      ChangedExample.closure_mid ChangedExample.closure'
+  ∧ type_satisfied empty_static_env [] ChangedExample.closure'
+      ChangedExample.rewritten.
 
 (* ======================================================================== *)
 (* The two runs                                                             *)
