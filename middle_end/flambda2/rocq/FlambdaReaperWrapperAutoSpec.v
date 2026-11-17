@@ -60,12 +60,13 @@
      a least solution and a table of [to_unbox] that passes
      [check_to_unbox_fixed].
 
-   Not proved here: [check_unknown_widgets] and [check_unknown_witnesses],
-   which [indirect_arm_needs_no_source_statement] asks for the calls of
-   unknown arity. They need the same invariant for the witnesses of
-   unknown arity of code deps, and one as [check_widgets_read_only] for
-   the nodes that calls read off their callee with the field of unknown
-   arity. *)
+   [check_unknown_widgets] and [check_unknown_witnesses], which
+   [indirect_arm_needs_no_source_statement] asks for the calls of unknown
+   arity, are proved in FlambdaReaperWrapperUnknownSpec.v, with the
+   statement for those calls; the table of [to_unbox] derived from the
+   solution passes [check_to_unbox_fixed]
+   (FlambdaReaperWrapperDerivedSpec.v, with the statements for that
+   table). *)
 
 From Stdlib Require Import List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

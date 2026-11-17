@@ -126,8 +126,8 @@
    field of the callee). The first two are proved of the traversal
    (FlambdaReaperWrapperShapeSpec.v, which states the statements here
    without them); [check_known_witnesses] with the flag [Auto]
-   (FlambdaReaperWrapperAutoSpec.v); the checks of unknown arity are
-   not.
+   (FlambdaReaperWrapperAutoSpec.v); the checks of unknown arity with
+   any flag (FlambdaReaperWrapperUnknownSpec.v).
 
    Calls of unknown arity with several groups of arguments are not lifted
    to the unit: their results are read through a chain of witnesses, one

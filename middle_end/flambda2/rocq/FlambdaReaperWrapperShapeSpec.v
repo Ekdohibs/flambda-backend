@@ -52,19 +52,19 @@
 
    [check_known_witnesses] is proved of the traversal with the flag
    [Auto], the only mode the compiler keeps
-   (FlambdaReaperWrapperAutoSpec.v). Not proved: [check_unknown_widgets]
-   and [check_unknown_witnesses]. Their facts hold of the traversal (a
-   witness of code is made by [prepare_code] and is the base of no other
-   constructor; nothing is aliased into it; a call reads off its callee
-   only what the field of a closure holds, a witness of a code dep or,
-   for code that the unit does not bind, a node with any source), but
-   the proof needs the invariant of FlambdaReaperWrapperAutoProofs.v
-   extended to the witnesses of unknown arity and to the reads of a call
-   of several groups. [conts_counted] at toplevel and [plain_kinds] are
-   checks of the term already: the first is the arity of each jump and
-   each call, which [well_formed_unit] does not check and the compiler's
-   terms have; the second is needed as the rebuild keeps a parameter of
-   kind [Region] or [Rec_info] without a use. *)
+   (FlambdaReaperWrapperAutoSpec.v); [check_unknown_widgets] and
+   [check_unknown_witnesses] of the traversal with every flag
+   (FlambdaReaperWrapperUnknownSpec.v: a witness of unknown arity of
+   code is made by [prepare_code], and nothing is aliased into it; a
+   call reads with the field of unknown arity only into nodes that it
+   makes, what the field of a closure holds, a witness of a code dep or,
+   for code that the unit does not bind, a node with any source, or for
+   a call of several groups the next witness). [conts_counted] at
+   toplevel and [plain_kinds] are checks of the term already: the first
+   is the arity of each jump and each call, which [well_formed_unit] does
+   not check and the compiler's terms have; the second is needed as the
+   rebuild keeps a parameter of kind [Region] or [Rec_info] without a
+   use. *)
 
 From Stdlib Require Import List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
