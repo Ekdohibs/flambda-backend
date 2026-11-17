@@ -53,9 +53,40 @@
    stays, as in FlambdaBlockLoadSpec.v and FlambdaUnboxSpec.v, which this
    file follows: what is known of a variable, and what mentions it in an
    argument, is forgotten under a binder of it; a handler of a
-   non-recursive continuation is gone into, with what is known where it
-   is defined; the handlers of recursive ones and the bodies of code are
-   left as they are.
+   continuation is gone into, with what is known where the continuation
+   is defined, less what mentions the parameters of the handler; the
+   bodies of code are left as they are.
+
+   That is so of the handler of a non-recursive continuation and of each
+   handler of recursive ones, which a loop is; the two files named above
+   leave the handlers of recursive ones as they are. Such a handler can
+   run many times, each time under the variables of its closure, which
+   do not change, with its parameters bound again; and what is known
+   holds at the heap and the read record that the [Let] by which it is
+   known left and at any that they have evolved to ([computed_holds],
+   [array_made_holds]). So what is known where the [Let_cont] is holds
+   each time the handler is entered, once what mentions its parameters
+   is forgotten. Simplify has such knowledge in a loop too: when it
+   simplifies a handler of a recursive [Let_cont], it does so under an
+   environment that it makes from the one where the [Let_cont] is, with
+   the parameters of the handler added at unknown types
+   (simplify/simplify_let_cont_expr.ml, [prepare_dacc_for_handlers]
+   with [env_at_fork], then [simplify_single_recursive_handler]; it
+   simplifies the handlers that can be reached, where this pass goes
+   into all of them), and an environment has the applications that
+   Simplify has seen of the primitives that it may share (the field
+   [cse] of simplify/env/downwards_env.ml) and the types of the
+   variables in scope. So in a loop Simplify can use again what a
+   primitive gave before the loop. That is said of what it may do, for
+   the primitives that it shares, and not of every primitive; it is no
+   statement about the term that Simplify gives. Two cases were seen in
+   units: the length of a string that is the bound of a [for] loop,
+   which the bounds check of a read in the loop takes again, is taken
+   once after Simplify; and the length of an array made before a loop,
+   which Simplify has from the type that the allocation gave the
+   variable, is a number in the loop after Simplify.
+   FlambdaLoopAliasesSpec.follow_aliases_in_loops is the same step for
+   aliases.
 
    One thing more is known under a [Let] of the untagging of a
    variable: that the variable holds the tagging of what the [Let]
@@ -456,7 +487,9 @@ Fixpoint share_primitives_knowing (known : computed) (e : expr) : expr :=
     Let_cont_non_recursive k (share_primitives_in_handler known h)
       (share_primitives_knowing known body)
   | Let_cont_recursive handlers body =>
-    Let_cont_recursive handlers (share_primitives_knowing known body)
+    Let_cont_recursive
+      (map (fun '(k, h) => (k, share_primitives_in_handler known h)) handlers)
+      (share_primitives_knowing known body)
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
   end
 with share_primitives_in_handler (known : computed)
