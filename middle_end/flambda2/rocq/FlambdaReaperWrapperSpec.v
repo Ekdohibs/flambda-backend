@@ -123,7 +123,9 @@
    code, arguments are given only to the witnesses of calls, a witness is
    put only in the field of its arity of the closures of its code, and
    the nodes read off a callee with one field have the sources of that
-   field of the callee); they are not proved of the traversal.
+   field of the callee). The first two are proved of the traversal
+   (FlambdaReaperWrapperShapeSpec.v, which states the statements here
+   without them); the others are not.
 
    Calls of unknown arity with several groups of arguments are not lifted
    to the unit: their results are read through a chain of witnesses, one
