@@ -227,7 +227,28 @@
    ([code_entered_ret]: the third case of [conts_related] takes a
    continuation without a mask as one that keeps every result), and
    [ret_ok] takes such a return continuation for the calls of unknown
-   arity of any shape ([returned_either]). *)
+   arity of any shape ([returned_either]).
+
+   The exit. The relation keeps, besides what the refinement needs, what
+   FlambdaReaperTypesSpec.rebuild_exit_relation asks of the static
+   environments where the unit exits ([rebuild_exit_statics], and
+   [exit_statics_rel] for what it gives): an allocation of a block or a
+   boxed number has a source, and the fields of a block are values (the
+   machine tests them where a primitive makes the block); a value slot
+   kept is at a node that has a source, any source where it holds a
+   constant (from the flow of the simple it is made of); and, where
+   [sets_exact] holds, the allocations of the closures of a set hold
+   only the facts of their set ([sites_exact]), the closures of a static
+   set as those of a [Let] ([static_sites_rel]), with their value slots
+   related at each allocation. [sets_exact] is [False] for the statements
+   of the refinement, which ask nothing more of the unit; it is
+   [closures_exact] of the unit for the exit: every [Let] of a closure,
+   and every binding of a static closure, of the unit is made where the
+   graph holds exactly the facts of its set ([node_exact]), which a run
+   keeps of every state it reaches ([state_exact], [run_exact]: no
+   expression is run that is not of the unit), and which
+   FlambdaReaperClosuresExactProofs.v proves of a unit that binds each
+   variable once. *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -589,6 +610,9 @@ Variable partials : Prop.
    stands for each location of the first that the rebuild keeps. *)
 Variable located : location -> option node.
 Variable β : location -> location -> Prop.
+(* Whether the allocations of the closures hold only the facts of their
+   sets ([sites_exact]). *)
+Variable sets_exact : Prop.
 
 (* What the second run has for a value of the first at a node with any
    usage: the same, but for the value slots of the closures in it, which
@@ -649,27 +673,50 @@ Fixpoint witness_chain (P : node -> Prop) (g : nat) (W : node) : Prop :=
       ∧ may_come_from sol W W
   end.
 
+(* The allocations [sites] of the closures of a set whose functions are
+   [decls] hold, at a function slot, the allocation of the closure there
+   and nothing else; at a value slot, one that [kept] keeps, and one node,
+   which they all hold there. *)
+Definition sites_exact (decls : list (function_slot * code_id))
+    (sites : function_slot -> node) : Prop :=
+  ∀ (f : function_slot) (id : code_id),
+    lookup f decls = Some id ->
+    (∀ (g : function_slot) (b : node),
+       g_constructor G (sites f) (Field_function_slot g) b ->
+       is_bound g decls = true ∧ b = sites g)
+    ∧ ∀ (w : value_slot) (b : node),
+        g_constructor G (sites f) (Field_value_slot w) b ->
+        kept w = true
+        ∧ ∀ (g : function_slot) (id' : code_id) (b' : node),
+            lookup g decls = Some id' ->
+            g_constructor G (sites g) (Field_value_slot w) b' <-> b' = b.
+
 (* The value [v] of the first run may be at the node [n], and [v'] is
    what the second run has for it. A constant is the same in the second
    run, at a node with any source; the poison of the kinds [Region] and
    [Rec_info], which is the only value of those kinds, may be at any
    node, as the rebuild gives it for an argument of those kinds at a
-   parameter that has no use, which the code keeps. A block has in the
-   second run its tag, each field used related, and poison in the
-   others. A closure has the nodes of the closures of its set ([sites])
-   as FlambdaReaperFlowSpec.flows has them; in the second run it is of
-   the same set, with the value slots that the rebuild keeps ([exact]:
-   all), and a value slot kept and used at one of these nodes is related
-   there. The elements of an immutable array are related at nodes with
-   any usage. A partial application, if the runs may have any, has its
-   closure related at some node [m] that has a use, and observed equal,
-   and an arity of one parameter at least; what the last of the
-   witnesses that its groups reach from the allocations that [m] may
-   come from returns first may come to [n]; and it has in the second run
-   arguments of the same kinds, each related at the parameters that have
-   a use of the witnesses that its group reaches: those that the code of
-   the closure reads. A location has an allocation that may come to [n],
-   and the second run has the location that [β] gives it. *)
+   parameter that has no use, which the code keeps. A block has an
+   allocation of its own, which has a source; its fields are values; it
+   has in the second run its tag, each field used related, and poison in
+   the others. A boxed number has an allocation that has a source. A
+   closure has the nodes of the closures of its set ([sites]) as
+   FlambdaReaperFlowSpec.flows has them, which, if [sets_exact], hold
+   nothing else at their function slots and one node at each value slot
+   ([sites_exact]); in the second run it is of the same set, with the
+   value slots that the rebuild keeps ([exact]: all), and a value slot
+   kept is at a node that has a source, any source if it is a constant,
+   and, used at one of these nodes, is related there. The elements of an
+   immutable array are related at nodes with any usage. A partial
+   application, if the runs may have any, has its closure related at
+   some node [m] that has a use, and observed equal, and an arity of one
+   parameter at least; what the last of the witnesses that its groups
+   reach from the allocations that [m] may come from returns first may
+   come to [n]; and it has in the second run arguments of the same kinds,
+   each related at the parameters that have a use of the witnesses that
+   its group reaches: those that the code of the closure reads. A
+   location has an allocation that may come to [n], and the second run
+   has the location that [β] gives it. *)
 Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
   match v with
   | Value_const c =>
@@ -688,9 +735,12 @@ Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
                ∧ (s_field_used sol a (Field_block i Value) = false ->
                   field' = Value_const (Poison Value)))
           0 fields fields'
+      ∧ s_has_source sol a = true
+      ∧ Forall (fun field => kind_of_value field = Value) fields
   | Value_boxed_number c =>
     ∃ (a : node) (bn : boxable_number) (from : node),
       may_come_from sol a n
+      ∧ s_has_source sol a = true
       ∧ is_number_of_kind bn c = true
       ∧ g_constructor G a (Field_boxed_number bn) from
       ∧ v' = (if s_field_used sol a (Field_boxed_number bn) then v
@@ -717,6 +767,7 @@ Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
       may_come_from sol (sites slot) n
       ∧ v' = Value_closure_of_set slot function_decls value_slots'
       ∧ (exact -> value_slots' = value_slots)
+      ∧ (sets_exact -> sites_exact function_decls sites)
       ∧ ∀ (f : function_slot) (id : code_id),
           lookup f function_decls = Some id ->
           may_come_from sol (sites f) (sites f)
@@ -729,6 +780,9 @@ Fixpoint rel (v : value) (n : node) (v' : value) {struct v} : Prop :=
                  kept w = true ->
                  ∃ from : node,
                    g_constructor G (sites f) (Field_value_slot w) from
+                   ∧ s_has_source sol from = true
+                   ∧ (∀ c : const, x = Value_const c ->
+                      s_any_source sol from = true)
                    ∧ (s_field_used sol (sites f) (Field_value_slot w) = true ->
                       ∃ x' : value,
                         lookup w value_slots' = Some x'
@@ -785,6 +839,8 @@ Definition slot_rel (a : node) (value_slots' : list (value_slot * value))
   kept w = true ->
   ∃ from : node,
     g_constructor G a (Field_value_slot w) from
+    ∧ s_has_source sol from = true
+    ∧ (∀ c : const, x = Value_const c -> s_any_source sol from = true)
     ∧ (s_field_used sol a (Field_value_slot w) = true ->
        ∃ x' : value,
          lookup w value_slots' = Some x'
@@ -799,7 +855,7 @@ Proof.
   - intros [-> _]. reflexivity.
   - intros (a & fields' & _ & -> & _). reflexivity.
   - intros (_ & elements' & -> & _). reflexivity.
-  - intros (a & bn & from & _ & _ & _ & ->).
+  - intros (a & bn & from & _ & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
   - intros (a & l' & _ & _ & -> & _). reflexivity.
   - intros [_ (m & closure' & args' & -> & _)]. reflexivity.
@@ -816,7 +872,7 @@ Proof.
   - destruct Hrel as [-> _]. discriminate.
   - destruct Hrel as (a & fields' & _ & -> & _). discriminate.
   - destruct Hrel as (_ & elements' & -> & _). discriminate.
-  - destruct Hrel as (a & bn & from & _ & _ & _ & ->).
+  - destruct Hrel as (a & bn & from & _ & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); discriminate.
   - destruct (Hv l0 eq_refl).
   - destruct Hrel as [_ (m & closure' & args' & -> & _)]. discriminate.
@@ -831,7 +887,7 @@ Proof.
   - intros [-> _]. reflexivity.
   - intros (a & fields' & _ & -> & _). reflexivity.
   - intros (_ & elements' & -> & _). reflexivity.
-  - intros (a & bn & from & _ & _ & _ & ->).
+  - intros (a & bn & from & _ & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
   - intros (a & l' & _ & _ & -> & _). reflexivity.
   - intros [_ (m & closure' & args' & -> & _)]. reflexivity.
@@ -847,7 +903,7 @@ Proof.
   - intros [Heq _]. exact (eq_sym Heq).
   - intros (a & fields' & _ & Heq & _). discriminate Heq.
   - intros (_ & elements' & Heq & _). discriminate Heq.
-  - intros (a & bn & from & _ & _ & _ & Heq).
+  - intros (a & bn & from & _ & _ & _ & _ & Heq).
     destruct (s_field_used sol a (Field_boxed_number bn)); discriminate Heq.
   - intros (a & l' & _ & _ & Heq & _). discriminate Heq.
   - intros [_ (m & closure' & args' & Heq & _)]. discriminate Heq.
@@ -1099,7 +1155,7 @@ Proof.
     exists vs'. split; [ reflexivity | exact Hex ].
   - intros s n v' Hn (-> & Ha & _). split; [ reflexivity | ].
     destruct Ha as (_ & _ & _ & Hau & _). exact (Hau Hn).
-  - intros tag fields IH n v' Hn (a & fields' & Ha & -> & Hfields).
+  - intros tag fields IH n v' Hn (a & fields' & Ha & -> & Hfields & _).
     exists fields'. split; [ reflexivity | ].
     destruct Ha as (_ & _ & _ & Hau & _). specialize (Hau Hn).
     revert fields' Hfields. generalize 0 as k.
@@ -1121,7 +1177,8 @@ Proof.
     + reflexivity.
     + split; [ reflexivity | exact Hs ].
     + exact (Hw m w' Hm Hrel).
-  - intros c n v' Hn (a & bn & from & (_ & _ & _ & Hau & _) & _ & Hcons & ->).
+  - intros c n v' Hn
+      (a & bn & from & (_ & _ & _ & Hau & _) & _ & _ & Hcons & ->).
     rewrite (field_used_any_usage _ _ _ Hc _ _ _ Hcons (Hau Hn)
                (boxed_field_not_local bn)).
     reflexivity.
@@ -1155,6 +1212,417 @@ Proof.
 Qed.
 
 End Rel.
+
+(* ======================================================================== *)
+(* The closures that the graph holds exactly                                *)
+(* ======================================================================== *)
+
+(* The graph holds at [N], the allocation of the first closure of a set
+   whose functions are [decls], at its function slots only functions of
+   the set, one node each; each of these nodes holds at its function
+   slots and its value slots what [N] holds; and [N] holds at a value
+   slot, one that [keep] keeps, one node. *)
+Definition node_exact (G : graph) (keep : value_slot -> bool) (N : node)
+    (decls : list (function_slot * code_id)) : Prop :=
+  (∀ (g : function_slot) (b : node),
+     g_constructor G N (Field_function_slot g) b -> is_bound g decls = true)
+  ∧ (∀ (g : function_slot) (b b' : node),
+       g_constructor G N (Field_function_slot g) b ->
+       g_constructor G N (Field_function_slot g) b' -> b' = b)
+  ∧ (∀ (g : function_slot) (M : node),
+       g_constructor G N (Field_function_slot g) M ->
+       (∀ (h : function_slot) (b : node),
+          g_constructor G M (Field_function_slot h) b
+          <-> g_constructor G N (Field_function_slot h) b)
+       ∧ ∀ (w : value_slot) (b : node),
+           g_constructor G M (Field_value_slot w) b
+           <-> g_constructor G N (Field_value_slot w) b)
+  ∧ ∀ (w : value_slot) (b : node),
+      g_constructor G N (Field_value_slot w) b ->
+      keep w = true
+      ∧ ∀ b' : node, g_constructor G N (Field_value_slot w) b' -> b' = b.
+
+(* The allocations of the closures of a set, the first at a node that
+   the graph holds exactly and holding the closures of the set at their
+   function slots, hold exactly the facts of the set. *)
+Lemma node_exact_sites (G : graph) (keep : value_slot -> bool)
+    (decls : list (function_slot * code_id)) (sites : function_slot -> node)
+    (slot : function_slot) (id0 : code_id) :
+  lookup slot decls = Some id0 -> node_exact G keep (sites slot) decls ->
+  (∀ (f : function_slot) (id : code_id),
+     lookup f decls = Some id ->
+     ∀ (g : function_slot) (id' : code_id),
+       lookup g decls = Some id' ->
+       g_constructor G (sites f) (Field_function_slot g) (sites g)) ->
+  sites_exact G keep decls sites.
+Proof.
+  intros Hslot (E1 & E2 & E3 & E4) Hfs f id Hf.
+  pose proof (Hfs slot id0 Hslot f id Hf) as Hxf.
+  destruct (E3 f (sites f) Hxf) as [Efn Evs].
+  split.
+  - intros g b Hb. apply Efn in Hb.
+    pose proof (E1 g b Hb) as Hg. split; [ exact Hg | ].
+    destruct (proj1 (is_bound_lookup g decls) Hg) as [idg Hidg].
+    exact (E2 g (sites g) b (Hfs slot id0 Hslot g idg Hidg) Hb).
+  - intros w b Hb. apply Evs in Hb.
+    destruct (E4 w b Hb) as [Hk Huniq]. split; [ exact Hk | ].
+    intros g id' b' Hg.
+    destruct (E3 g (sites g) (Hfs slot id0 Hslot g id' Hg)) as [_ Evs_g].
+    rewrite Evs_g. split; [ exact (Huniq b') | intros ->; exact Hb ].
+Qed.
+
+(* The closures of the term, made by a [Let] or statically, are made at
+   nodes that the graph holds exactly ([node_exact]); a static set has a
+   symbol for each of its functions and no other. *)
+Definition named_exact (G : graph) (keep : value_slot -> bool)
+    (x : variable) (d : named) : Prop :=
+  match d with
+  | Closure_of_set _ decls _ => node_exact G keep (Node_variable x) decls
+  | Simple _ | Prim _ _ | Set_of_closures _ _ | Project_value_slot _ _
+  | Project_value_slot_from _ _ _ | Project_function_slot _ _ _ =>
+    True
+  end.
+
+Fixpoint closures_exact (G : graph) (keep : value_slot -> bool) (e : expr)
+    : Prop :=
+  match e with
+  | Let x _ d body => named_exact G keep x d ∧ closures_exact G keep body
+  | Let_static bindings body =>
+    every (binding_exact G keep) bindings ∧ closures_exact G keep body
+  | Let_cont_non_recursive _ h body =>
+    handler_exact G keep h ∧ closures_exact G keep body
+  | Let_cont_recursive handlers body =>
+    every (fun '(_, h) => handler_exact G keep h) handlers
+    ∧ closures_exact G keep body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => True
+  end
+with handler_exact (G : graph) (keep : value_slot -> bool)
+    (h : continuation_handler) : Prop :=
+  match h with
+  | Handler _ _ handler => closures_exact G keep handler
+  end
+with binding_exact (G : graph) (keep : value_slot -> bool)
+    (binding : static_binding) : Prop :=
+  match binding with
+  | Bind_code _ c => code_exact G keep c
+  | Bind_deleted_code _ => True
+  | Bind_symbol s (Static_const_closure_of_set _ closure_symbols decls _) =>
+    node_exact G keep (Node_symbol s) decls
+    ∧ ∀ g : function_slot, is_bound g closure_symbols = is_bound g decls
+  | Bind_symbol _ _ => True
+  end
+with code_exact (G : graph) (keep : value_slot -> bool) (c : code) : Prop :=
+  match c with
+  | Code _ _ _ _ _ body => closures_exact G keep body
+  end.
+
+(* What a continuation stands for has its handlers [handler_exact]. *)
+Inductive cont_exact (G : graph) (keep : value_slot -> bool)
+    : cont_value -> Prop :=
+  | Closure_exact (h : continuation_handler) (vars : env)
+      (conts : cont_env)
+      (recursive : list (continuation * continuation_handler)) :
+    handler_exact G keep h ->
+    every (fun '(_, h) => handler_exact G keep h) recursive ->
+    (∀ (k : continuation) (c : cont_value),
+       (k, c) ∈ conts -> cont_exact G keep c) ->
+    cont_exact G keep (Closure h vars conts recursive)
+  | Outer_exact (k : continuation) : cont_exact G keep (Outer k)
+  | Extra_args_exact (c : cont_value) (extra : list value) :
+    cont_exact G keep c -> cont_exact G keep (Extra_args c extra)
+  | Over_application_exact (remaining : list value)
+      (remaining_arity return_arity : arity)
+      (return_to exn_to : cont_value) :
+    cont_exact G keep return_to -> cont_exact G keep exn_to ->
+    cont_exact G keep
+      (Over_application remaining remaining_arity return_arity return_to
+         exn_to).
+
+(* A state whose expression, continuations and code are [closures_exact]:
+   every state that the run of a unit that is reaches. *)
+Definition state_exact (G : graph) (keep : value_slot -> bool) (s : state)
+    : Prop :=
+  closures_exact G keep (state_expr s)
+  ∧ (∀ (k : continuation) (c : cont_value),
+       (k, c) ∈ state_conts s -> cont_exact G keep c)
+  ∧ ∀ (id : code_id) (c : code),
+      (id, c) ∈ static_code (state_statics s) -> code_exact G keep c.
+
+Section Exact.
+
+Variable G : graph.
+Variable keep : value_slot -> bool.
+
+Lemma every_in_exact {A : Type} (P : A -> Prop) (l : list A) (a : A) :
+  every P l -> a ∈ l -> P a.
+Proof.
+  intros H Hin. exact (proj1 (FlambdaMapProofs.every_in A P l) H a Hin).
+Qed.
+
+Lemma resolve_exact (k : continuation) (conts : cont_env) :
+  (∀ (k' : continuation) (c : cont_value),
+     (k', c) ∈ conts -> cont_exact G keep c) ->
+  cont_exact G keep (resolve k conts).
+Proof.
+  intros Hc. unfold resolve.
+  destruct (lookup k conts) as [c | ] eqn:Hl; [ | constructor ].
+  exact (Hc k c (lookup_in _ _ _ Hl)).
+Qed.
+
+Lemma with_extra_args_exact (c : cont_value) (extra : list value) :
+  cont_exact G keep c -> cont_exact G keep (with_extra_args c extra).
+Proof.
+  intros H. destruct extra; [ exact H | constructor; exact H ].
+Qed.
+
+Lemma rec_closures_exact
+    (handlers : list (continuation * continuation_handler)) (vars : env)
+    (conts : cont_env) :
+  every (fun '(_, h) => handler_exact G keep h) handlers ->
+  (∀ (k : continuation) (c : cont_value),
+     (k, c) ∈ conts -> cont_exact G keep c) ->
+  ∀ (k : continuation) (c : cont_value),
+    (k, c) ∈ rec_closures handlers vars conts -> cont_exact G keep c.
+Proof.
+  intros Hh Hc k c Hin. unfold rec_closures in Hin.
+  apply in_map_iff in Hin as ([k' h] & Heq & Hin). injection Heq as <- <-.
+  constructor; [ | exact Hh | exact Hc ].
+  exact (every_in_exact (fun '(_, h) => handler_exact G keep h) _ (k', h) Hh
+           Hin).
+Qed.
+
+Lemma call_code_exact (closure : value) (c : code) (vs : list value)
+    (args_arity return_arity : arity) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record) (s : state) :
+  code_exact G keep c -> cont_exact G keep return_to ->
+  cont_exact G keep exn_to ->
+  (∀ (id : code_id) (c' : code),
+     (id, c') ∈ static_code statics -> code_exact G keep c') ->
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp
+    rd
+  = Step s ->
+  state_exact G keep s.
+Proof.
+  intros Hcode Hr He Hst Hcall. unfold call_code in Hcall.
+  destruct (binds_statics (code_body c)); [ discriminate Hcall | ].
+  destruct (negb _); [ discriminate Hcall | ].
+  destruct (bind_params _ _ _) as [vars | ]; [ | discriminate Hcall ].
+  injection Hcall as <-.
+  split; [ destruct c; exact Hcode | split; [ | exact Hst ] ].
+  intros k c' [[= _ <-] | [[= _ <-] | []]]; assumption.
+Qed.
+
+(* The code of a call is bound. *)
+Lemma shape_code_in (statics : static_env) (callee : value)
+    (kind : call_kind) (vs : list value) (args_arity return_arity : arity)
+    (shape : call_shape) :
+  shape_of_call statics callee kind vs args_arity return_arity
+  = Some shape ->
+  match shape with
+  | Full_call _ c _ _ | Over_call _ c _ _ _ _ =>
+    ∃ id : code_id, (id, c) ∈ static_code statics
+  | Partial_call _ => True
+  end.
+Proof.
+  assert (Hcl : ∀ closure kind vs args_arity,
+            shape_of_closure_call statics closure kind vs args_arity
+              return_arity
+            = Some shape ->
+            match shape with
+            | Full_call _ c _ _ | Over_call _ c _ _ _ _ =>
+              ∃ id : code_id, (id, c) ∈ static_code statics
+            | Partial_call _ => True
+            end).
+  { intros closure kind' vs' aa Hs. unfold shape_of_closure_call in Hs.
+    destruct (closure_of statics closure) as [[called slots] | ];
+      [ | discriminate Hs ].
+    destruct (match kind' with
+              | Direct named => Pos.eqb called named
+              | Indirect => true
+              end);
+      [ | discriminate Hs ].
+    destruct (lookup called (static_code statics)) as [c | ] eqn:Hl;
+      [ | discriminate Hs ].
+    destruct (arguments_for_code statics c vs' aa) as [[vs2 aa2] | ];
+      [ | discriminate Hs ].
+    cbv beta iota in Hs. unfold shape_of_code_call in Hs.
+    destruct (Nat.eqb _ _).
+    { injection Hs as <-. exists called. exact (lookup_in _ _ _ Hl). }
+    destruct (negb _); [ discriminate Hs | ].
+    destruct (Nat.ltb _ _).
+    { injection Hs as <-. exists called. exact (lookup_in _ _ _ Hl). }
+    destruct (code_is_tupled c); [ discriminate Hs | ].
+    injection Hs as <-. exact I. }
+  intros Hs. unfold shape_of_call in Hs.
+  destruct kind; [ exact (Hcl _ _ _ _ Hs) | ].
+  destruct (partial_application_of callee) as [[[closure applied] aa] | ];
+    [ | exact (Hcl _ _ _ _ Hs) ].
+  destruct args_arity; [ discriminate Hs | ].
+  destruct (kinds_eqb _ _); [ exact (Hcl _ _ _ _ Hs) | discriminate Hs ].
+Qed.
+
+Lemma run_call_exact (return_partial : value -> step_result)
+    (statics : static_env) (callee : value) (kind : call_kind)
+    (vs : list value) (args_arity return_arity : arity)
+    (return_to exn_to : cont_value) (hp : heap) (rd : read_record)
+    (s : state) :
+  (∀ (partial : value) (s' : state),
+     return_partial partial = Step s' -> state_exact G keep s') ->
+  cont_exact G keep return_to -> cont_exact G keep exn_to ->
+  (∀ (id : code_id) (c : code),
+     (id, c) ∈ static_code statics -> code_exact G keep c) ->
+  run_call return_partial
+    (shape_of_call statics callee kind vs args_arity return_arity)
+    return_arity return_to exn_to statics hp rd
+  = Step s ->
+  state_exact G keep s.
+Proof.
+  intros Hpartial Hr He Hst Hrun.
+  destruct (shape_of_call statics callee kind vs args_arity return_arity)
+    as [shape | ] eqn:Hshape; [ | discriminate Hrun ].
+  pose proof (shape_code_in _ _ _ _ _ _ _ Hshape) as Hbound.
+  destruct shape as [closure c vs' aa | closure c vs' remaining aa ra
+                    | partial];
+    cbn [run_call] in Hrun.
+  - destruct Hbound as (id & Hin).
+    exact (call_code_exact _ _ _ _ _ _ _ _ _ _ _ (Hst id c Hin) Hr He Hst
+             Hrun).
+  - destruct Hbound as (id & Hin).
+    refine (call_code_exact _ _ _ _ _ _ _ _ _ _ _ (Hst id c Hin) _ He Hst
+              Hrun).
+    constructor; assumption.
+  - exact (Hpartial partial s Hrun).
+Qed.
+
+Lemma apply_cont_value_exact (c : cont_value) :
+  cont_exact G keep c ->
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+    (s : state),
+    (∀ (id : code_id) (c' : code),
+       (id, c') ∈ static_code statics -> code_exact G keep c') ->
+    apply_cont_value c vs statics hp rd = Step s -> state_exact G keep s.
+Proof.
+  induction 1 as [h vars conts recursive Hh Hrec Hconts _
+                 | k | c extra _ IH
+                 | remaining ra rta return_to exn_to Hr IHr He _ ];
+    intros vs statics hp rd s Hst Hstep; cbn [apply_cont_value] in Hstep.
+  - destruct h as [params metadata handler].
+    destruct (kinds_eqb _ _); [ | discriminate Hstep ].
+    destruct (bind_params params vs vars) as [handler_vars | ];
+      [ | discriminate Hstep ].
+    injection Hstep as <-.
+    split; [ exact Hh | split; [ | exact Hst ] ].
+    intros k c Hin. cbn [state_conts] in Hin.
+    apply in_app_or in Hin as [Hin | Hin];
+      [ exact (rec_closures_exact recursive vars conts Hrec Hconts k c Hin)
+      | exact (Hconts k c Hin) ].
+  - discriminate Hstep.
+  - exact (IH _ statics hp rd s Hst Hstep).
+  - destruct vs as [ | v [ | ]]; try discriminate Hstep.
+    refine (run_call_exact _ _ _ _ _ _ _ _ _ _ _ _ _ Hr He Hst Hstep).
+    intros partial s' Hs'. exact (IHr _ statics hp rd s' Hst Hs').
+Qed.
+
+Lemma eval_static_bindings_exact (vars : env) :
+  ∀ (bindings : list static_binding) (statics statics' : static_env),
+    every (binding_exact G keep) bindings ->
+    (∀ (id : code_id) (c : code),
+       (id, c) ∈ static_code statics -> code_exact G keep c) ->
+    eval_static_bindings vars bindings statics = Some statics' ->
+    ∀ (id : code_id) (c : code),
+      (id, c) ∈ static_code statics' -> code_exact G keep c.
+Proof.
+  induction bindings as [ | b bindings IH]; intros statics statics' Hb Hst
+    Hev; cbn [eval_static_bindings] in Hev.
+  - injection Hev as <-. exact Hst.
+  - destruct Hb as [Hb Hbs].
+    destruct b as [id c | id | s const].
+    + destruct (lookup id (static_code statics)); [ discriminate Hev | ].
+      refine (IH _ _ Hbs _ Hev).
+      intros id' c' [[= _ <-] | Hin]; [ exact Hb | exact (Hst id' c' Hin) ].
+    + exact (IH _ _ Hbs Hst Hev).
+    + destruct (lookup s (static_values statics)); [ discriminate Hev | ].
+      destruct (eval_static_const vars const) as [allocated | ];
+        [ | discriminate Hev ].
+      exact (IH (Static_env (static_code statics)
+                   ((s, allocated) :: static_values statics))
+               _ Hbs Hst Hev).
+Qed.
+
+Lemma step_exact (s s' : state) :
+  state_exact G keep s -> step s = Step s' -> state_exact G keep s'.
+Proof.
+  destruct s as [e vars conts statics hp rd].
+  intros (He & Hconts & Hst) Hstep.
+  destruct e as [x kind d body | bindings body | k h body | handlers body
+                | ap | ac | scrutinee arms | ];
+    cbn [state_expr closures_exact] in He; cbn [step] in Hstep.
+  - destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+      [ | discriminate Hstep ].
+    destruct (kind_eqb _ _); [ | discriminate Hstep ].
+    injection Hstep as <-. exact (conj (proj2 He) (conj Hconts Hst)).
+  - destruct (eval_static_bindings vars bindings statics) as [statics2 | ]
+      eqn:Hev; [ | discriminate Hstep ].
+    injection Hstep as <-.
+    split; [ exact (proj2 He) | split; [ exact Hconts | ] ].
+    exact (eval_static_bindings_exact vars bindings statics statics2
+             (proj1 He) Hst Hev).
+  - injection Hstep as <-. destruct He as [Hh Hb].
+    split; [ exact Hb | split; [ | exact Hst ] ].
+    intros k' c [[= _ <-] | Hin]; [ | exact (Hconts k' c Hin) ].
+    constructor; [ exact Hh | exact I | exact Hconts ].
+  - destruct (handlers_bind_statics handlers); [ discriminate Hstep | ].
+    injection Hstep as <-. destruct He as [Hh Hb].
+    split; [ exact Hb | split; [ | exact Hst ] ].
+    intros k' c Hin. cbn [state_conts] in Hin.
+    apply in_app_or in Hin as [Hin | Hin];
+      [ exact (rec_closures_exact handlers vars conts Hh Hconts k' c Hin)
+      | exact (Hconts k' c Hin) ].
+  - destruct (eval_simple vars (ap_callee ap)) as [callee | ];
+      [ | discriminate Hstep ].
+    destruct (eval_simples vars (ap_args ap)) as [vs | ];
+      [ | discriminate Hstep ].
+    destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ];
+      [ | discriminate Hstep ].
+    unfold call_function in Hstep.
+    refine (run_call_exact _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hst Hstep).
+    + intros partial s2 Hs2.
+      exact (apply_cont_value_exact _ (resolve_exact _ _ Hconts) _ _ _ _ _
+               Hst Hs2).
+    + exact (resolve_exact _ _ Hconts).
+    + exact (with_extra_args_exact _ _ (resolve_exact _ _ Hconts)).
+  - destruct (eval_simples vars (ac_args ac)) as [vs | ];
+      [ | discriminate Hstep ].
+    exact (apply_cont_value_exact _ (resolve_exact _ _ Hconts) _ _ _ _ _ Hst
+             Hstep).
+  - destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate Hstep ].
+    destruct (naked_immediate_of_value v); [ | discriminate Hstep ].
+    destruct (find_arm _ arms); [ | discriminate Hstep ].
+    injection Hstep as <-. exact (conj I (conj Hconts Hst)).
+  - discriminate Hstep.
+Qed.
+
+Lemma run_exact (n : nat) :
+  ∀ s s' : state,
+    state_exact G keep s -> run n s = Step s' -> state_exact G keep s'.
+Proof.
+  induction n as [ | n IH]; intros s s' Hs Hrun; cbn [run] in Hrun.
+  - injection Hrun as <-. exact Hs.
+  - destruct (step s) as [s1 | | ] eqn:Hstep; try discriminate Hrun.
+    exact (IH s1 s' (step_exact s s1 Hs Hstep) Hrun).
+Qed.
+
+Lemma initial_exact (e : expr) :
+  closures_exact G keep e ->
+  state_exact G keep
+    (State e [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros He. split; [ exact He | split ].
+  - intros k c [].
+  - intros id c [].
+Qed.
+
+End Exact.
 
 (* ======================================================================== *)
 (* What the unit asks of an expression                                      *)
@@ -3009,6 +3477,9 @@ Variable preserve_direct_calls : bool.
 Variable unit_code_ids : list code_id.
 Variable first_fresh : positive.
 Variable exact : bool.
+(* Whether the closures of the run are made where the graph has only the
+   facts of their sets: [closures_exact] of the unit. *)
+Variable sets_exact : Prop.
 (* The table of [cannot_change_calling_convention], the code deps and the
    metadata of the code of the unit, of the rebuild with changes of
    calling convention (FlambdaReaperCallingConventions.v). *)
@@ -3138,11 +3609,23 @@ Abbreviation statics_flow_ := (statics_flow G sol keep called located).
 (* The location of the second run that stands for one of the first. *)
 Abbreviation beta := (kept_beta sol heap_prims located).
 Abbreviation rel :=
-  (rel G sol keep called (exact = true) True located beta).
+  (rel G sol keep called (exact = true) True located beta sets_exact).
 Abbreviation field_rel :=
-  (field_rel G sol keep called (exact = true) True located beta).
+  (field_rel G sol keep called (exact = true) True located beta sets_exact).
 Abbreviation slot_rel :=
-  (slot_rel G sol keep called (exact = true) True located beta).
+  (slot_rel G sol keep called (exact = true) True located beta sets_exact).
+Abbreviation rel_read_ :=
+  (rel_read G sol keep called (exact = true) True located beta
+     sets_exact).
+Abbreviation rel_alias_ :=
+  (rel_alias G sol keep called (exact = true) True located beta
+     sets_exact).
+Abbreviation rel_escape_ :=
+  (rel_escape G sol keep called (exact = true) True located beta
+     sets_exact).
+Abbreviation rel_au_sim_ :=
+  (rel_au_sim G sol keep called (exact = true) True located beta
+     sets_exact).
 Abbreviation sim := (sim sol (exact = true) True located beta).
 
 (* The code [id] does not change its calling convention. *)
@@ -3249,7 +3732,7 @@ Proof.
   - cbn [rel]. split; [ reflexivity | split ].
     + exact (may_come_from_any is_local G sol Hc _ _ Hx (fun _ => Hs)).
     + intros _. exact (au_hu _ _ _ Hc _ Hs).
-  - exact (rel_escape G sol keep called (exact = true) True located beta
+  - exact (rel_escape_
       is_local Hc w _ _
       w' Hx
              (fun _ => Hm) Hrel).
@@ -3260,7 +3743,7 @@ Proof.
   intros [(-> & [(c & ->) | (s & -> & Hs)]) | (m & Hm & Hrel)].
   - reflexivity.
   - split; [ reflexivity | exact Hs ].
-  - exact (rel_au_sim G sol keep called (exact = true) True located beta
+  - exact (rel_au_sim_
       is_local Hc Hlocal _ _ _ Hm Hrel).
 Qed.
 
@@ -3325,13 +3808,31 @@ Definition static_other_rel (s : symbol)
   end
   ∧ (hu (Node_symbol s) -> found <> None).
 
+(* The closure of a static set at [slot], bound to [s], with the value
+   slots [vs] in the first run and [vs'] in the second: the allocations
+   of the closures of its set ([sites]), that at [slot] the symbol, hold
+   exactly the facts of the set ([sites_exact]) and one another at their
+   function slots, and its value slots are related at each of them. *)
+Definition static_sites_rel (s : symbol) (slot : function_slot)
+    (decls : list (function_slot * code_id))
+    (vs vs' : list (value_slot * value)) : Prop :=
+  ∃ sites : function_slot -> node,
+    sites slot = Node_symbol s
+    ∧ sites_exact G keep decls sites
+    ∧ ∀ (f : function_slot) (id : code_id),
+        lookup f decls = Some id ->
+        (∀ (g : function_slot) (id' : code_id),
+           lookup g decls = Some id' ->
+           g_constructor G (sites f) (Field_function_slot g) (sites g))
+        ∧ slots_related (slot_rel (sites f) vs') vs [].
+
 (* What the second static environment binds, the first does; a symbol
    with a use is bound in both to related blocks; and the first binds
    only blocks and closures of static sets, which the second binds with
-   related value slots or not at all, and binds if they have a use, and
-   boxed numbers, strings and immutable arrays ([static_other_rel]); the
-   second binds the code of the first, rebuilt, or none if the code id
-   has no use. *)
+   related value slots ([static_sites_rel] if [sets_exact]) or not at
+   all, and binds if they have a use, and boxed numbers, strings and
+   immutable arrays ([static_other_rel]); the second binds the code of
+   the first, rebuilt, or none if the code id has no use. *)
 Definition statics_rel (statics statics' : static_env) : Prop :=
   (∀ s : symbol,
      lookup s (static_values statics) = None ->
@@ -3358,7 +3859,9 @@ Definition statics_rel (statics statics' : static_env) : Prop :=
                    = Some (Static_closure_of_set slot closure_symbols
                              function_decls vs')
                    ∧ (exact = true -> vs' = vs)
-                   ∧ slots_related (slot_rel (Node_symbol s) vs') vs [])
+                   ∧ slots_related (slot_rel (Node_symbol s) vs') vs []
+                   ∧ (sets_exact -> static_sites_rel s slot function_decls vs
+                                      vs'))
             ∧ (hu (Node_symbol s) ->
                lookup s (static_values statics') <> None))
        ∨ static_other_rel s allocated (lookup s (static_values statics')))
@@ -3435,8 +3938,8 @@ Proof.
     unfold rewrite_simple, kept_simple. cbv zeta. rewrite Hk.
     destruct (is_var_used sol x (kind_of_value v)) eqn:Hu.
     + destruct (Hused eq_refl) as (v' & Hl & Hrel). exists v'.
-      split;
-        [ exact Hl | split; [ exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel) | ] ].
+      split; [ exact Hl | split ];
+        [ exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel) | ].
       intros _. split; [ reflexivity | exact Hrel ].
     + exists (Value_const (Poison (kind_of_value v))).
       split; [ reflexivity | split; [ reflexivity | discriminate ] ].
@@ -3568,7 +4071,7 @@ Lemma block_of_rel (statics statics' : static_env) (v v' : value) (n : node)
 Proof.
   intros [_ [Hblocks _]] Hrel Hn Hb.
   destruct (block_of_cases _ _ _ _ Hb) as [-> | (s & -> & Hl)].
-  - destruct Hrel as (a & fields' & Ha & -> & Hf).
+  - destruct Hrel as (a & fields' & Ha & -> & Hf & _).
     exists a, fields'. auto.
   - destruct Hrel as (-> & Ha & Hhu).
     destruct (Hblocks s tag fields Hl (Hhu Hn)) as (fields' & Hl' & Hf).
@@ -3603,7 +4106,7 @@ Proof.
     + rewrite (Hnone s Hl). reflexivity.
   - discriminate Hb.
   - destruct Hrel as (_ & elements' & -> & _). reflexivity.
-  - destruct Hrel as (a & bn & from & _ & _ & _ & ->).
+  - destruct Hrel as (a & bn & from & _ & _ & _ & _ & ->).
     destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
   - destruct Hrel as (a & l' & _ & _ & -> & _). reflexivity.
   - destruct Hrel as [_ (m & closure' & args' & -> & _)]. reflexivity.
@@ -3619,7 +4122,7 @@ Lemma bound_if_symbol_rel (statics statics' : static_env) (v v' : value)
 Proof.
   intros [_ [Hblocks [Honly _]]] Hrel Hn Hb.
   destruct v' as [ | | | s | | | | | ]; try reflexivity.
-  pose proof (rel_symbol _ _ _ _ _ _ _ _ _ _ _ Hrel) as ->.
+  pose proof (rel_symbol _ _ _ _ _ _ _ _ _ _ _ _ Hrel) as ->.
   destruct Hrel as (_ & _ & Hhu). simpl in Hb |- *.
   destruct (lookup s (static_values statics)) as [allocated | ] eqn:Hl;
     [ | discriminate Hb ].
@@ -3644,7 +4147,7 @@ Proof.
     Hfields; simpl in Hfields |- *; try contradiction; [ exact I | ].
   destruct Hfields as [(from & Hcons & Hused & _) Hrest]. split.
   - pose proof (block_field_not_local is_local Hlocal k Value) as Hl.
-    apply (rel_au_sim G sol keep called (exact = true) True located beta
+    apply (rel_au_sim_
              is_local Hc Hlocal field from field');
       [ exact (any_usage_constructor _ _ _ Hc _ _ _ Hau Hcons Hl) | ].
     apply Hused. exact (field_used_any_usage _ _ _ Hc _ _ _ Hcons Hau Hl).
@@ -3857,7 +4360,7 @@ Proof.
     as Hl.
   pose proof (field_used_read is_local G sol Hc a base (Node_variable x) from
                 _ Hl Hcons Hacc Ha Hx) as Hu.
-  pose proof (rel_read G sol keep called (exact = true) True located beta
+  pose proof (rel_read_
       is_local Hc _ _ _
       _ _
     _ _ Hl
@@ -3873,8 +4376,8 @@ Proof.
       | Immediate => is_tagged_immediate loaded
       end).
   { destruct fk;
-      [ rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel')
-      | rewrite (rel_tagged _ _ _ _ _ _ _ _ _ _ _ Hrel') ];
+      [ rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel')
+      | rewrite (rel_tagged _ _ _ _ _ _ _ _ _ _ _ _ Hrel') ];
       reflexivity. }
   rewrite Hcond.
   destruct (match fk with
@@ -3918,7 +4421,7 @@ Proof.
     destruct (fields_related_nth' _ _ _ _ _ _ Hfr Hi)
       as (v & Hv & from & _ & Hused & Hpoison).
     destruct (s_field_used sol a (Field_block i Value)) eqn:Hu.
-    - rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ (Hused Hu)).
+    - rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ (Hused Hu)).
       rewrite Forall_forall in Hkinds. exact (Hkinds v (nth_error_In _ _ Hv)).
     - rewrite (Hpoison Hu). reflexivity. }
   assert (Hlen' : length fields' = length fields)
@@ -3941,7 +4444,7 @@ Proof.
   pose proof (block_field_not_local is_local Hlocal i Value) as Hl.
   pose proof (field_used_read is_local G sol Hc a n p from _ Hl Hcons Hacc Ha
                 Hp) as Hu.
-  exact (rel_read G sol keep called (exact = true) True located beta is_local Hc
+  exact (rel_read_ is_local Hc
       _ _ _ _ _
            _ _ Hl Hcons Hacc Ha (Hused Hu)).
 Qed.
@@ -3954,7 +4457,7 @@ Lemma is_int_rel (statics statics' : static_env) (v1 v1' : value)
   eval_is_int statics' true v1' = eval_is_int statics true v1.
 Proof.
   intros Hst Hrel Hn. unfold eval_is_int.
-  rewrite (rel_tagged _ _ _ _ _ _ _ _ _ _ _ Hrel).
+  rewrite (rel_tagged _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
   destruct (is_tagged_immediate v1); [ reflexivity | ].
   destruct (block_of statics v1) as [[tag fields] | ] eqn:Hb.
   - destruct (block_of_rel statics statics' v1 v1' n tag fields Hst Hrel Hn Hb)
@@ -3994,7 +4497,7 @@ Proof.
   destruct (boxed_number_of statics v1) as [c | ] eqn:Hbx;
     [ | discriminate Hev ].
   destruct (boxed_number_of_cases _ _ _ Hbx) as [-> | (s & -> & Hl)].
-  - destruct Hrel as (a & bn' & from & Ha & Hk & Hcons & ->).
+  - destruct Hrel as (a & bn' & from & Ha & _ & Hk & Hcons & ->).
     destruct (is_number_of_kind bn c) eqn:Hkind; [ | discriminate Hev ].
     pose proof (is_number_of_kind_unique _ _ _ Hk Hkind) as Heq.
     subst bn'.
@@ -4059,9 +4562,11 @@ Proof.
     exists (Value_boxed_number c). split.
     + rewrite (unary_target en vars' statics' (Box_number bn) s1 _ Hr Hs1').
       cbn [eval_unary_primitive]. rewrite Hk. reflexivity.
-    + exists (Node_variable x), bn, (node_of_simple s1). rewrite Hused. auto.
+    + exists (Node_variable x), bn, (node_of_simple s1). rewrite Hused.
+      pose proof (proj1 Hself). auto.
   - exists (Value_const (Poison Value)). split; [ reflexivity | ].
-    exists (Node_variable x), bn, (node_of_simple s1). rewrite Hused. auto.
+    exists (Node_variable x), bn, (node_of_simple s1). rewrite Hused.
+    pose proof (proj1 Hself). auto.
 Qed.
 
 (* A block made: its fields used are related. *)
@@ -4101,7 +4606,7 @@ Proof.
       destruct (fields_related_nth' _ _ _ _ _ _ Hf Hi) as (w & Hw & _).
       destruct (Hpoint i w v' Hw Hi) as [-> | (n & Hrel & _)];
         [ reflexivity | ].
-      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel).
+      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
       exact (Hkinds w (nth_error_In _ _ Hw)). }
     assert (Hbound' : forallb (bound_if_symbol statics') vs' = true).
     { apply forallb_forall. intros v' Hin. apply In_nth_error in Hin as [i Hi].
@@ -4111,10 +4616,14 @@ Proof.
       exact (bound_if_symbol_rel statics statics' w v' n Hst Hrel Hn
                (Hbound w (nth_error_In _ _ Hw))). }
     rewrite Hkinds', Hbound'. reflexivity.
-  - exists (Node_variable x), vs'.
-    split; [ | split; [ reflexivity | exact Hf ] ].
-    exact (alloc_self is_local G sol Hc _ _ _ His
-             (as_hs _ _ _ Hc _ (consts_any_source is_local G sol Hc Hconsts))).
+  - pose proof (alloc_self is_local G sol Hc _ _ _ His
+                  (as_hs _ _ _ Hc _
+                     (consts_any_source is_local G sol Hc Hconsts)))
+      as Hself.
+    exists (Node_variable x), vs'.
+    split; [ exact Hself | split; [ reflexivity | split; [ exact Hf | ] ] ].
+    split; [ exact (proj1 Hself) | ].
+    apply Forall_forall. intros w Hw. apply kind_eqb_eq. exact (Hkinds w Hw).
 Qed.
 Lemma rewrite_simple_au (en : rebuild_env) (vars vars' : env) (s : simple)
     (w : value) :
@@ -4528,16 +5037,17 @@ Lemma rel_project_function_slot (slot o : function_slot)
   rel (Value_closure_of_set o decls vs) y (Value_closure_of_set o decls vs').
 Proof.
   intros Hl Hl0 Hl1 Hacc Hrel. cbn [rel] in Hrel.
-  destruct Hrel as (sites & vs'' & Hmay & Heq & Hex & Hall).
+  destruct Hrel as (sites & vs'' & Hmay & Heq & Hex & Hse & Hall).
   injection Heq as <-.
   destruct (Hall slot id0 Hl0) as (_ & _ & Hfs & _).
-  apply (rel_read G sol keep called (exact = true) True located beta is_local Hc
+  apply (rel_read_ is_local Hc
       _ _ _ _ _
       _ _ Hl
            (Hfs o id1 Hl1) Hacc Hmay).
   cbn [rel]. exists sites, vs'.
   split; [ exact (proj1 (Hall o id1 Hl1)) | ].
-  split; [ reflexivity | split; [ exact Hex | exact Hall ] ].
+  split; [ reflexivity | split; [ exact Hex | split; [ exact Hse | ] ] ].
+  exact Hall.
 Qed.
 
 (* The value of a [Let] of a projection, that the rebuild keeps: a
@@ -4582,10 +5092,11 @@ Proof.
     + destruct (lookup slot0 decls0) as [id0 | ] eqn:Hl0;
         [ | discriminate Hcis ].
       injection Hcis as -> -> ->.
-      cbn [rel] in Hrel. destruct Hrel as (sites & vs' & Hmay & -> & _ & Hall).
+      cbn [rel] in Hrel.
+      destruct Hrel as (sites & vs' & Hmay & -> & _ & _ & Hall).
       destruct (Hall pf id0 Hl0) as (_ & _ & _ & Hsr).
       destruct (proj1 (slots_related_iff _ _) Hsr w v Hw Hk)
-        as (from & Hcons & Hfu).
+        as (from & Hcons & _ & _ & Hfu).
       pose proof (field_used_read is_local G sol Hc _ _ _ _ _ Hl Hcons Hacc
                     Hmay Hx) as Hused_w.
       destruct (Hfu Hused_w) as (x' & Hx' & Hrelx).
@@ -4594,7 +5105,7 @@ Proof.
       exists x'. split.
       * unfold project_value_slot. simpl. rewrite Hl0. simpl.
         rewrite Pos.eqb_refl. exact Hx'.
-      * exact (rel_read G sol keep called (exact = true) True located beta
+      * exact (rel_read_
           is_local Hc _ _
           _ _ _
         _ _ Hl
@@ -4612,10 +5123,10 @@ Proof.
              | [(sl & sy & de & vs0 & Heq & Htarget & Hbound) | ([] & _)]];
           [ discriminate Heq | ].
         injection Heq as <- <- <- <-.
-        destruct Htarget as [Hnone | (vs' & Hls' & _ & Hsr)];
+        destruct Htarget as [Hnone | (vs' & Hls' & _ & Hsr & _)];
           [ destruct (Hbound (Hhu_s Hc_hu) Hnone) | ].
         destruct (proj1 (slots_related_iff _ _) Hsr w v Hw Hk)
-          as (from & Hcons & Hfu).
+          as (from & Hcons & _ & _ & Hfu).
         pose proof (field_used_read is_local G sol Hc _ _ _ _ _ Hl Hcons Hacc
                       Hmay Hx) as Hused_w.
         destruct (Hfu Hused_w) as (x' & Hx' & Hrelx).
@@ -4624,7 +5135,7 @@ Proof.
         exists x'. split.
         -- unfold project_value_slot. simpl. rewrite Hls'. simpl.
            rewrite Hl0. simpl. rewrite Pos.eqb_refl. exact Hx'.
-        -- exact (rel_read G sol keep called (exact = true) True located beta
+        -- exact (rel_read_
             is_local Hc _
             _ _
           _ _ _ _
@@ -4687,7 +5198,7 @@ Proof.
         rewrite Hs'. eexists. split.
         -- unfold project_function_slot. simpl. rewrite Hls'. simpl.
            rewrite Pos.eqb_refl, Hl0, Hl1, Hs'0. reflexivity.
-        -- apply (rel_read G sol keep called (exact = true) True located beta
+        -- apply (rel_read_
             is_local Hc _
             _ _
           _ _ _ _
@@ -4729,7 +5240,7 @@ Proof.
     pose proof (has_usage_alias _ _ _ Hc _ _ Hx Hal') as Hs_hu.
     destruct (Hkept (kept_of_hu en s Hs_hu)) as [_ Hrel].
     exists v'. split; [ exact Hs' | ].
-    exact (rel_alias G sol keep called (exact = true) True located beta is_local
+    exact (rel_alias_ is_local
         Hc _ _ _ _
         Hal'
       Hrel).
@@ -4901,7 +5412,7 @@ Qed.
 Lemma value_slots_rel (en : rebuild_env) (vars vars' : env)
     (bound : list node) (value_slots : list (value_slot * simple))
     (vs : list (value_slot * value)) :
-  env_ok (env_kinds en) vars vars' ->
+  env_ok (env_kinds en) vars vars' -> env_flows_ vars ->
   eval_value_slots vars value_slots = Some vs ->
   ∃ vs' : list (value_slot * value),
     eval_value_slots vars' (rebuild_value_slots sol en bound value_slots)
@@ -4915,7 +5426,7 @@ Lemma value_slots_rel (en : rebuild_env) (vars vars' : env)
            ∧ simple_noted noted s) ->
         slots_related (slot_rel a vs') vs [].
 Proof.
-  intros Henv Hev.
+  intros Henv Hvars Hev.
   assert (Hex : ∃ vs' : list (value_slot * value),
             eval_value_slots vars' (rebuild_value_slots sol en bound
                                       value_slots)
@@ -4939,7 +5450,12 @@ Proof.
   - intros a Ha Hcons. apply slots_related_iff. intros w x Hx Hk.
     destruct (eval_value_slots_lookup _ _ _ _ _ Hev Hx) as (s & Hs & Hsx).
     destruct (Hcons w s Hs Hk) as [Hc_ Hnoted].
-    exists (node_of_simple s). split; [ exact Hc_ | intros Hused ].
+    pose proof (simple_flows is_local G sol noted cds keep located Hc Hconsts
+                  Hsyms _ _ _ Hvars Hnoted Hsx) as Hfx.
+    exists (node_of_simple s). split; [ exact Hc_ | ].
+    split; [ exact (FlambdaReaperFlowProofs.flows_has_source is_local G sol
+                      keep called located x _ Hc Hfx) | ].
+    split; [ intros c ->; exact Hfx | intros Hused ].
     assert (Hb : existsb (fun n => s_field_used sol n (Field_value_slot w))
                    bound = true).
     { apply existsb_exists. exists a. auto. }
@@ -4958,10 +5474,11 @@ Qed.
    static set are kept if a symbol of the set has a use, with the value
    slots that the rebuild keeps. *)
 Lemma static_bindings_rel (en : rebuild_env) (vars vars' : env) :
-  env_ok (env_kinds en) vars vars' ->
+  env_ok (env_kinds en) vars vars' -> env_flows_ vars ->
   ∀ (bindings : list static_binding) (statics statics' statics2 : static_env),
     forallb (binding_checked exact codes) bindings = true ->
     every binding_edges_ bindings ->
+    (sets_exact -> every (binding_exact G keep) bindings) ->
     statics_rel statics statics' ->
     eval_static_bindings vars bindings statics = Some statics2 ->
     ∃ statics2' : static_env,
@@ -4969,10 +5486,15 @@ Lemma static_bindings_rel (en : rebuild_env) (vars vars' : env) :
       = Some statics2'
       ∧ statics_rel statics2 statics2'.
 Proof.
-  intros Henv. induction bindings as [ | b bindings IH];
-    intros statics statics' statics2 Hfrag Hedges Hst Hev; simpl in Hev.
+  intros Henv Hvars. induction bindings as [ | b bindings IH];
+    intros statics statics' statics2 Hfrag Hedges Hbx Hst Hev;
+    simpl in Hev.
   - injection Hev as <-. exists statics'. split; [ reflexivity | exact Hst ].
   - destruct Hedges as [Hb Hbindings]. simpl in Hfrag.
+    assert (Hbx' : sets_exact -> every (binding_exact G keep) bindings)
+      by (intros Hse; exact (proj2 (Hbx Hse))).
+    assert (Hbx_b : sets_exact -> binding_exact G keep b)
+      by (intros Hse; exact (proj1 (Hbx Hse))).
     apply andb_true_iff in Hfrag as [Hfrag_b Hfrag].
     destruct (binding_checked_cases _ _ _ Hfrag_b)
       as [Hnc | (id & c & -> & _ & _)].
@@ -4985,14 +5507,14 @@ Proof.
       cbn [flat_map rebuild_binding_cc]. unfold is_code_id_used.
       destruct (s_has_usage sol (Node_code_id id)) eqn:Hu.
       - cbn [app eval_static_bindings]. rewrite Hl'.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ exact Hnone | split; [ exact Hblocks | split ] ];
           [ exact Honly | ].
         intros id'. simpl.
         destruct (Pos.eqb_spec id' id) as [-> | _];
           [ left; reflexivity | exact (Hcode id') ].
       - cbn [app eval_static_bindings].
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ exact Hnone | split; [ exact Hblocks | split ] ];
           [ exact Honly | ].
         intros id'. simpl.
@@ -5002,7 +5524,7 @@ Proof.
     destruct b as [id c | id | s [ | slot syms decls value_slots | tag fields
                                  | contents | bytes | elements ]];
       simpl in Hnc; try discriminate Hnc; simpl in Hb.
-    + exact (IH _ _ _ Hfrag Hbindings Hst Hev).
+    + exact (IH _ _ _ Hfrag Hbindings Hbx' Hst Hev).
     + apply andb_true_iff in Hnc as [_ Hself].
       destruct (lookup slot syms) as [s0 | ] eqn:Hss; [ | discriminate Hself ].
       apply Pos.eqb_eq in Hself. subst s0.
@@ -5014,12 +5536,13 @@ Proof.
         [ | discriminate Hev ].
       cbv beta iota in Hev.
       destruct Hst as (Hnone & Hblocks & Honly & Hcode).
-      destruct Hb as (_ & _ & _ & Hslots).
+      destruct Hb as (_ & _ & Hfslots & Hslots).
       cbn [flat_map rebuild_binding_cc static_const_is_used].
       destruct (existsb (fun '(_, sym) => is_symbol_used sol sym) syms)
         eqn:Hused.
       * set (bound := map (fun '(_, sym) => Node_symbol sym) syms).
-        destruct (value_slots_rel en vars vars' bound value_slots vs Henv Hvs)
+        destruct (value_slots_rel en vars vars' bound value_slots vs Henv
+                    Hvars Hvs)
           as (vs' & Hvs' & Hempty & Hrel).
         assert (Hs_in : Node_symbol s ∈ bound).
         { apply (in_map (fun '(_, sym) => Node_symbol sym) syms (slot, s)).
@@ -5028,7 +5551,7 @@ Proof.
         rewrite (Hnone s Hl).
         cbn [eval_static_const]. rewrite Hid. fold bound. rewrite Hvs'.
         cbv beta iota.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5046,8 +5569,56 @@ Proof.
               rewrite He in Hfrag_b. simpl in Hfrag_b.
               destruct value_slots;
                 [ exact (Hempty eq_refl) | discriminate Hfrag_b ].
-           ++ exact (Hrel _ Hs_in Hslots).
-      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
+           ++ split; [ exact (Hrel _ Hs_in Hslots) | ].
+              intros Hse. cbn [binding_exact] in Hbx_b.
+              destruct (Hbx_b Hse) as [Hnx Hdom].
+              set (sites := fun g => match lookup g syms with
+                                     | Some sym => Node_symbol sym
+                                     | None => Node_symbol s
+                                     end).
+              assert (Hsite : sites slot = Node_symbol s)
+                by (unfold sites; rewrite Hss; reflexivity).
+              assert (Hfs_s : ∀ (g : function_slot) (id' : code_id),
+                         lookup g decls = Some id' ->
+                         g_constructor G (Node_symbol s)
+                           (Field_function_slot g) (sites g)).
+              { intros g id' Hg.
+                assert (Hgb : is_bound g syms = true).
+                { rewrite Hdom. apply is_bound_lookup. exists id'.
+                  exact Hg. }
+                destruct (proj1 (is_bound_lookup g syms) Hgb) as [sym Hsym].
+                unfold sites. rewrite Hsym. exact (proj1 (Hfslots g sym Hsym)).
+              }
+              assert (Hfs : ∀ (f : function_slot) (id : code_id),
+                         lookup f decls = Some id ->
+                         ∀ (g : function_slot) (id' : code_id),
+                           lookup g decls = Some id' ->
+                           g_constructor G (sites f) (Field_function_slot g)
+                             (sites g)).
+              { intros f id Hf g id' Hg.
+                destruct Hnx as (_ & _ & E3 & _).
+                apply (proj1 (E3 f (sites f) (Hfs_s f id Hf)) g (sites g)).
+                exact (Hfs_s g id' Hg). }
+              exists sites. split; [ exact Hsite | split ].
+              ** apply (node_exact_sites G keep decls sites slot id0 Hid);
+                   [ rewrite Hsite; exact Hnx | exact Hfs ].
+              ** intros f id Hf. split; [ exact (Hfs f id Hf) | ].
+                 apply Hrel.
+                 --- assert (Hfb : is_bound f syms = true).
+                     { rewrite Hdom. apply is_bound_lookup. exists id.
+                       exact Hf. }
+                     destruct (proj1 (is_bound_lookup f syms) Hfb)
+                       as [sym Hsym].
+                     unfold sites. rewrite Hsym.
+                     exact (in_map (fun '(_, sym) => Node_symbol sym) syms
+                              (f, sym) (lookup_in _ _ _ Hsym)).
+                 --- intros w x Hw Hk.
+                     destruct (Hslots w x Hw Hk) as [Hcons Hnoted].
+                     split; [ | exact Hnoted ].
+                     destruct Hnx as (_ & _ & E3 & _).
+                     apply (proj2 (E3 f (sites f) (Hfs_s f id Hf)) w).
+                     exact Hcons.
+      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5078,7 +5649,7 @@ Proof.
           as (vs' & Hvs' & Hf & _).
         cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
         cbn [eval_static_const]. rewrite Hvs'. cbv beta iota.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5091,7 +5662,7 @@ Proof.
            destruct (Pos.eqb s' s);
              [ injection Hl' as <-; left; eexists _, _; reflexivity
              | exact (Honly s' allocated Hl') ].
-      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
+      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5130,12 +5701,11 @@ Proof.
           exists v'. split.
           - cbn [rewrite_or_variable]. rewrite (is_var_used_hu x _ Hhx).
             exact Hl'.
-          - right. exact (rel_au_sim G sol keep called (exact = true) True
-              located beta is_local Hc Hlocal _ _ _ Hx Hrel). }
+          - right. exact (rel_au_sim_ is_local Hc Hlocal _ _ _ Hx Hrel). }
         destruct Hcontents as (v' & Hv' & Hvv).
         cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
         cbn [eval_static_const]. rewrite Hv'. cbv beta iota.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5147,7 +5717,7 @@ Proof.
            injection Hl' as <-. right. right.
            split; [ right; exists v'; split; [ reflexivity | exact Hvv ]
                   | intros _; discriminate ].
-      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
+      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5170,7 +5740,7 @@ Proof.
       destruct (s_has_usage sol (Node_symbol s)) eqn:Hu.
       * cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
         cbn [eval_static_const]. cbv beta iota.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5181,7 +5751,7 @@ Proof.
            destruct (Pos.eqb s' s); [ | exact (Honly s' allocated Hl') ].
            injection Hl' as <-. right. right.
            split; [ right; reflexivity | intros _; discriminate ].
-      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
+      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5228,7 +5798,7 @@ Proof.
           rewrite Hvs' in Hvs''. injection Hvs'' as <-. exact Hall. }
         cbn [app eval_static_bindings]. rewrite (Hnone s Hl).
         cbn [eval_static_const]. rewrite Hvs'. cbv beta iota.
-        refine (IH _ _ _ Hfrag Hbindings _ Hev).
+        refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl' |- *.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -5241,7 +5811,7 @@ Proof.
            injection Hl' as <-. right. right.
            split; [ right; exists vs'; split; [ reflexivity | exact Hels ]
                   | intros _; discriminate ].
-      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings _ Hev).
+      * cbn [app]. refine (IH _ _ _ Hfrag Hbindings Hbx' _ Hev).
         split; [ | split; [ | split; [ | intros id'; exact (Hcode id') ] ] ].
         -- intros s' Hl'. simpl in Hl'.
            destruct (Pos.eqb s' s); [ discriminate Hl' | exact (Hnone s' Hl') ].
@@ -6754,7 +7324,7 @@ Proof.
     assert (Hsim : sim field field').
     { destruct (Hused (field_used_any_usage _ _ _ Hc _ _ _ Hcons Hau Hl))
         as [Hrel | [_ Hel]].
-      - exact (rel_au_sim G sol keep called (exact = true) True located beta
+      - exact (rel_au_sim_
                  is_local Hc Hlocal _ _ _
                  (any_usage_constructor _ _ _ Hc _ _ _ Hau Hcons Hl) Hrel).
       - exact (element_rel_sim _ _ Hel). }
@@ -6946,7 +7516,7 @@ Proof.
     destruct (is_var_used sol x (kind_of_value v)) eqn:Hu.
     + destruct (proj2 (Henv x v Hs) Hu) as (v'' & Hl & Hrel).
       simpl in Hs'. rewrite Hl in Hs'. injection Hs' as <-.
-      exact (rel_not_location _ _ _ _ _ _ _ _ _ _ _ _ Hrel Hv).
+      exact (rel_not_location _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel Hv).
     + simpl in Hs'. injection Hs' as <-. discriminate.
   - unfold rewrite_simple in Hs'.
     destruct (is_symbol_used _ _); simpl in Hs'; injection Hs' as <-;
@@ -7141,7 +7711,7 @@ Lemma rel_target_location (v : value) (n : node) (l' : location) :
   rel v n (Value_location l') -> ∃ l : location, v = Value_location l.
 Proof.
   intros Hrel. destruct v as [ | | | | | | | l | ];
-    try (exfalso; exact (rel_not_location _ _ _ _ _ _ _ _ _ _ _ l' Hrel
+    try (exfalso; exact (rel_not_location _ _ _ _ _ _ _ _ _ _ _ _ l' Hrel
                            (fun l0 H => ltac:(discriminate H)) eq_refl)).
   exists l. reflexivity.
 Qed.
@@ -7169,14 +7739,14 @@ Lemma element_rel_kind (w w' : value) :
   element_rel w w' -> kind_of_value w' = kind_of_value w.
 Proof.
   intros [(-> & _) | (m & _ & Hrel)]; [ reflexivity | ].
-  exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel).
+  exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
 Qed.
 
 Lemma element_rel_tagged (w w' : value) :
   element_rel w w' -> is_tagged_immediate w' = is_tagged_immediate w.
 Proof.
   intros [(-> & _) | (m & _ & Hrel)]; [ reflexivity | ].
-  exact (rel_tagged _ _ _ _ _ _ _ _ _ _ _ Hrel).
+  exact (rel_tagged _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
 Qed.
 
 (* A value of the first run that is an integer is the same in the
@@ -7337,7 +7907,7 @@ Proof.
     cbn [eval_simple] in Hs'. rewrite Hl in Hs'. injection Hs' as ->.
     destruct w' as [ | | | s0 | | | | l' | ];
       try (split; [ reflexivity | intros l0 E; discriminate E ]).
-    + pose proof (rel_symbol _ _ _ _ _ _ _ _ _ _ _ Hrel) as ->.
+    + pose proof (rel_symbol _ _ _ _ _ _ _ _ _ _ _ _ Hrel) as ->.
       destruct Hrel as (_ & _ & Hhu).
       assert (Hy : hu (Node_variable y))
         by (destruct (is_var_used_cases y _ Hu) as [H | [E | E]];
@@ -7669,12 +8239,11 @@ Proof.
                      ∧ is_tagged_immediate loaded'
                        = is_tagged_immediate loaded).
       { destruct (Hused Hu) as [Hr | [-> Hel]].
-        - split; [ exact (rel_read G sol keep called (exact = true) True
-                            located beta is_local Hc a (Node_variable y)
+        - split; [ exact (rel_read_ is_local Hc a (Node_variable y)
                             (Node_variable x) from _ loaded loaded' Hnl Hcons
                             Hacc Hma Hr) | ].
-          split; [ exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hr)
-                 | exact (rel_tagged _ _ _ _ _ _ _ _ _ _ _ Hr) ].
+          split; [ exact (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hr)
+                 | exact (rel_tagged _ _ _ _ _ _ _ _ _ _ _ _ Hr) ].
         - destruct mut0; cbn [load_allowed] in Hal; try discriminate Hal.
           split; [ | split; [ exact (element_rel_kind _ _ Hel)
                             | exact (element_rel_tagged _ _ Hel) ] ].
@@ -8182,7 +8751,7 @@ Proof.
       rewrite forallb_forall in Hk.
       destruct (Hpos i w w' Hw Hi) as [-> | (n & Hrel & _)];
         [ reflexivity | ].
-      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel).
+      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
       exact (Hk w (nth_error_In _ _ Hw)). }
     destruct (heaps_rel_alloc_kept hp hp' x (Cell_block mut tag vs)
                 (Cell_block mut tag vs') Hheap Hhp (Hal eq_refl) Hx)
@@ -8408,7 +8977,7 @@ Proof.
         rewrite (exec_target_eval en vars vars' statics statics' hp hp' rcd'
                    x p args vs w' Henv Hst Hheap Hvs Hb Hdisp Hev'').
         cbv beta iota.
-        rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel), kind_eqb_refl.
+        rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel), kind_eqb_refl.
         reflexivity.
       + split; [ exact Hflow' | ].
         exists ctx, (bind_variables en [(x, kind_of_value w)]), ce, rets.
@@ -8488,7 +9057,7 @@ Proof.
     destruct Hcell as (v' & hp1' & Hexec' & Hrel & Hheap1).
     eexists. split.
     + rewrite step_let_exec, Hexec'. cbv beta iota.
-      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel), kind_eqb_refl.
+      rewrite (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel), kind_eqb_refl.
       reflexivity.
     + split; [ exact Hflow' | ].
       exists ctx, (bind_variables en [(x, kind_of_value v)]), ce, rets.
@@ -8530,11 +9099,12 @@ Lemma let_answered (x : variable) (kind : flambda_kind) (d : named)
   related (State (Let x kind d body) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd') ->
   alloc_ok located (State (Let x kind d body) vars conts statics hp rcd) ->
+  (sets_exact -> named_exact G keep x d) ->
   answered_r related
     (State (Let x kind d body) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd').
 Proof.
-  intros Hrel Halloc.
+  intros Hrel Halloc Hnx.
   destruct (touches_heap vars d) eqn:Htouch.
   { exact (let_heap_answered x kind d body vars vars' conts conts' statics
              statics' hp hp' rcd rcd' e' Hrel Halloc Htouch). }
@@ -8623,7 +9193,7 @@ Proof.
       eexists. split.
       * rewrite (rebuilt_let_step en vars vars' x x _ d _ _ _ _ _ Henv Hnoheap
                    Hsrc Hnoloc),
-          Hev', (rel_kind _ _ _ _ _ _ _ _ _ _ _ Hrel),
+          Hev', (rel_kind _ _ _ _ _ _ _ _ _ _ _ _ Hrel),
           kind_eqb_refl.
         reflexivity.
       * split; [ exact Hflow' | ].
@@ -8659,7 +9229,7 @@ Proof.
       [ | discriminate Hev ].
     injection Hev as <-.
     set (bound := set_closure_nodes F (Node_variable x)).
-    destruct (value_slots_rel en vars vars' bound value_slots vs Henv Hvs)
+    destruct (value_slots_rel en vars vars' bound value_slots vs Henv Hvars Hvs)
       as (vs' & Hvs' & Hempty & Hslots_rel).
     assert (Hev' : eval_named statics' vars'
                      (Closure_of_set slot decls
@@ -8694,10 +9264,15 @@ Proof.
         split; [ exact Hcons | ]. simpl. rewrite node_eqb_refl. left.
         reflexivity. }
       split; [ rewrite <- Hsx; exact (proj1 (Hall slot id0 Hid)) | ].
-      split; [ reflexivity | split; [ | exact Hall ] ].
-      intros He. apply Hempty. unfold named_checked in Hfrag.
-      rewrite He in Hfrag. simpl in Hfrag.
-      destruct value_slots; [ reflexivity | discriminate Hfrag ]. }
+      split; [ reflexivity | split; [ | split; [ | exact Hall ] ] ].
+      - intros He. apply Hempty. unfold named_checked in Hfrag.
+        rewrite He in Hfrag. simpl in Hfrag.
+        destruct value_slots; [ reflexivity | discriminate Hfrag ].
+      - intros Hse.
+        apply (node_exact_sites G keep decls sites slot id0 Hid);
+          [ rewrite Hsx; exact (Hnx Hse) | ].
+        intros f id Hf g id' Hg.
+        exact (proj1 (proj2 (proj2 (Hall f id Hf))) g id' Hg). }
     pose proof (projections_live x slot decls vs id0 Hid Hflows
                   (other_slots slot decls) ctx ce body
                   (other_slots_bound slot decls) Hbody_edges) as Hlive_p.
@@ -8750,10 +9325,12 @@ Lemma let_static_answered (bindings : list static_binding) (body : expr)
     (e' : expr) :
   related (State (Let_static bindings body) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd') ->
+  (sets_exact -> every (binding_exact G keep) bindings) ->
   answered_r related
     (State (Let_static bindings body) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd').
 Proof.
+  intros Hrel Hbx. revert Hrel.
   related_intro. destruct He as [Hbindings Hbody_edges].
   destruct Hok as (Hlive & Hexits & Hscr & Hcf & Hkd & Hnr).
   simpl in Hexits, Hscr, Hcf, Hnr. apply fresh_kinded_let_static in Hkd.
@@ -8765,8 +9342,8 @@ Proof.
   unfold answered_h. rewrite step_let_static in Hflow' |- *.
   destruct (eval_static_bindings vars bindings statics) as [statics2 | ]
     eqn:Hev; [ | exact I ].
-  destruct (static_bindings_rel en vars vars' Henv bindings statics statics'
-              statics2 Hfrag Hbindings Hst Hev)
+  destruct (static_bindings_rel en vars vars' Henv Hvars bindings statics
+              statics' statics2 Hfrag Hbindings Hbx Hst Hev)
     as (statics2' & Hev' & Hst2).
   rewrite rebuild_let_static_eq in Ht. subst e'.
   right. left. eexists. split.
@@ -9203,7 +9780,7 @@ Proof.
   assert (Hal : s_alias sol n (node_of_simple s) = true).
   { apply (alias_input _ _ _ Hc). apply (Haliases _ Hce).
     exact (nth_error_combine _ _ i _ _ Hn Hs). }
-  apply (rel_alias G sol keep called (exact = true) True located beta is_local
+  apply (rel_alias_ is_local
       Hc v _ _ v'
       Hal).
   apply (Hrels i s v v' Hs Hv Hv').
@@ -10249,10 +10826,10 @@ Proof.
   - destruct Hv.
   - destruct (lookup slot decls) as [id0 | ] eqn:Hl; [ | discriminate Hcl ].
     injection Hcl as -> _.
-    destruct Hv as (sites & vs' & Hn & Hv' & Hex & Hall).
+    destruct Hv as (sites & vs' & Hn & Hv' & Hex & Hse & Hall).
     exists (sites slot). split; [ exact Hn | split ].
     + exists sites, vs'. split; [ exact (proj1 (Hall slot id Hl)) | ].
-      exact (conj Hv' (conj Hex Hall)).
+      exact (conj Hv' (conj Hex (conj Hse Hall))).
     + exact (proj1 (proj2 (Hall slot id Hl))).
   - destruct (lookup s (static_values statics))
       as [[ | slot syms decls slots0 | | | | | ] | ] eqn:Hls;
@@ -10659,7 +11236,7 @@ Proof.
   destruct (Hon 0 r p eq_refl Hp) as [Hhu Hrel]. split.
   - exact (read_hu _ _ _ _ _ Hl Hcons Hacc Hw Hhu).
   - intros v v' Hv. apply Hrel.
-    exact (rel_read G sol keep called (exact = true) True located beta is_local
+    exact (rel_read_ is_local
         Hc
              _ _ _ _ _ v v' Hl Hcons Hacc Hw Hv).
 Qed.
@@ -10672,10 +11249,8 @@ Proof.
   intros Hw Harg Hpar Hhs.
   apply (argument_transfer _ _ _ Hc (fun n => rel v n v') w base to_ from i);
     [ | | exact Hw | exact Harg | exact Hpar | exact Hhs ].
-  - intros x y. exact (rel_alias G sol keep called (exact = true) True
-      located beta is_local Hc v x y v').
-  - intros x m. exact (rel_escape G sol keep called (exact = true) True
-      located beta is_local Hc v x m v').
+  - intros x y. exact (rel_alias_ is_local Hc v x y v').
+  - intros x m. exact (rel_escape_ is_local Hc v x m v').
 Qed.
 
 (* What a call reads of the witness of the code, at a node of the code,
@@ -10687,7 +11262,7 @@ Proof.
   intros Hl Hcons Hacc Hw. split.
   - exact (read_hu _ _ _ _ _ Hl Hcons Hacc Hw).
   - intros v v' Hv.
-    exact (rel_read G sol keep called (exact = true) True located beta is_local
+    exact (rel_read_ is_local
         Hc
              _ _ _ _ _ v v' Hl Hcons Hacc Hw Hv).
 Qed.
@@ -12319,7 +12894,7 @@ Proof.
                       Hextra)
             as (extra2 & Hextra2 & _ & Hrels_x).
           rewrite Hextra' in Hextra2. injection Hextra2 as <-.
-          apply (rel_alias G sol keep called (exact = true) True located beta
+          apply (rel_alias_
               is_local Hc v
               _ _
                    v' Hal).
@@ -12879,7 +13454,7 @@ Proof.
                       Hextra)
             as (extra2 & Hextra2 & _ & Hrels_x).
           rewrite Hextra' in Hextra2. injection Hextra2 as <-.
-          apply (rel_alias G sol keep called (exact = true) True located beta
+          apply (rel_alias_
               is_local Hc v
               _ _
                    v' Hal).
@@ -13452,10 +14027,10 @@ Proof.
     destruct (Hcode_rets id params mc ret exn_k md cbody Hexf0 Hin_codes)
       as [Hraise_c Hrc_c].
     assert (Hrel_mc : rel callee (Node_variable mc) callee').
-    { apply (rel_alias G sol keep called (exact = true) True located beta
+    { apply (rel_alias_
         is_local Hc _ _
                _ _ (alias_input _ _ _ Hc _ _ Hmc)).
-      apply (rel_alias G sol keep called (exact = true) True located beta
+      apply (rel_alias_
           is_local Hc _ _
                _ _ (alias_propagate _ _ _ Hc _ _ _ Hlive' Hprop)).
       exact Hrel_b. }
@@ -13550,7 +14125,7 @@ Proof.
                          Hsyms _ _ _ Hvars
                          (Hnoted_args s (nth_error_In _ _ Hs)) Hsv))
           as Hhs.
-        apply (rel_alias G sol keep called (exact = true) True located beta
+        apply (rel_alias_
             is_local Hc _
                  _ _ _ Hal_pq).
         exact (rel_argument w witness q (node_of_simple s) i v v' Hw
@@ -13628,10 +14203,10 @@ Proof.
   subst cd'.
   (* [my_closure] and the parameters. *)
   assert (Hrel_mc : rel callee (Node_variable mc) callee').
-  { apply (rel_alias G sol keep called (exact = true) True located beta is_local
+  { apply (rel_alias_ is_local
       Hc _ _ _ _
              (alias_input _ _ _ Hc _ _ Hmc)).
-    apply (rel_alias G sol keep called (exact = true) True located beta is_local
+    apply (rel_alias_ is_local
         Hc _ _ _ _
              (alias_propagate _ _ _ Hc _ _ _ Hlive' Hprop)).
     exact Hrel_b. }
@@ -13678,7 +14253,7 @@ Proof.
                       Hsyms
                      _ _ _ Hvars (Hnoted_args s (nth_error_In _ _ Hs)) Hsv))
       as Hhs.
-    apply (rel_alias G sol keep called (exact = true) True located beta is_local
+    apply (rel_alias_ is_local
         Hc _ _ _ _
              Hal_pq).
     exact (rel_argument w witness q (node_of_simple s) i v v' Hw
@@ -13900,7 +14475,7 @@ Proof.
     pose proof (any_usage_input _ _ _ Hc _ (Hunit _ p Hpin)) as Hau.
     apply exits_rel_intro; [ exact Hheap | ].
     split; [ | exact I ].
-    exact (rel_au_sim G sol keep called (exact = true) True located beta
+    exact (rel_au_sim_
              is_local Hc Hlocal _ _ _ Hau (Hnp w w' Hrel)).
   - (* A handler that code returns to. *)
     assert (Hargs : ∀ (i : nat) (p : variable) (v v' : value),
@@ -14837,7 +15412,7 @@ Proof.
     destruct (nth_error_combine_inv _ _ _ _ _ HLg) as [Hf _].
     rewrite Hgrp in Hf. injection Hf as <-.
     destruct (code_chain_nth G _ _ _ _ _ _ _ Hcch HLg) as (Hpar & _).
-    apply (rel_alias G sol keep called (exact = true) True located beta is_local
+    apply (rel_alias_ is_local
         Hc _ _ _
              _ Hal_pq).
     exact (args_rel_nth _ _ _ _ HA i v v' g kk W q Hv Hv' (Hpos_eq _ _ _ Hpos)
@@ -14854,10 +15429,10 @@ Proof.
             env_ok [(mc, Value)] [(mc, closure)] [(mc, closure')]).
   { intros Hlive0.
     assert (Hrel_mc : rel closure (Node_variable mc) closure').
-    { apply (rel_alias G sol keep called (exact = true) True located beta
+    { apply (rel_alias_
         is_local Hc _ _
                _ _ (alias_input _ _ _ Hc _ _ Hmc)).
-      apply (rel_alias G sol keep called (exact = true) True located beta
+      apply (rel_alias_
           is_local Hc _ _
                _ _ (alias_propagate _ _ _ Hc _ _ _ Hlive0 Hprop)).
       exact Hrel_b. }
@@ -15444,10 +16019,10 @@ Proof.
   { destruct callee; try discriminate Hclosure; reflexivity. }
   assert (Henv0 : env_ok [(mc, Value)] [(mc, callee)] [(mc, callee')]).
   { assert (Hrel_mc : rel callee (Node_variable mc) callee').
-    { apply (rel_alias G sol keep called (exact = true) True located beta
+    { apply (rel_alias_
         is_local Hc _ _
                _ _ (alias_input _ _ _ Hc _ _ Hmc)).
-      apply (rel_alias G sol keep called (exact = true) True located beta
+      apply (rel_alias_
           is_local Hc _ _
                _ _ (alias_propagate _ _ _ Hc _ _ _ Hlive' Hprop)).
       exact Hrel_b. }
@@ -15475,7 +16050,7 @@ Proof.
     pose proof (alias_input _ _ _ Hc _ _
                   (Hps p q (nth_error_combine _ _ _ _ _ Hp Hq))) as Hal_pq.
     pose proof (has_usage_alias _ _ _ Hc _ _ Hu Hal_pq) as Hhu_q.
-    apply (rel_alias G sol keep called (exact = true) True located beta is_local
+    apply (rel_alias_ is_local
         Hc _ _ _
              _ Hal_pq).
     exact (Hrelf i q v v' (Hacc i q Hq) Hhu_q Hv Hv'). }
@@ -16536,7 +17111,7 @@ Proof.
                       Hextra)
             as (extra2 & Hextra2 & _ & Hrels_x).
           rewrite Hextra' in Hextra2. injection Hextra2 as <-.
-          apply (rel_alias G sol keep called (exact = true) True located beta
+          apply (rel_alias_
               is_local Hc
                    v _ _ v' Hal).
           apply (Hrels_x i s v v' Hs Hv Hv').
@@ -16772,15 +17347,19 @@ Proof.
 Qed.
 
 Lemma related_answered (s t : state) :
-  related s t -> alloc_ok located s -> answered_r related s t.
+  related s t -> alloc_ok located s ->
+  (sets_exact -> closures_exact G keep (state_expr s)) ->
+  answered_r related s t.
 Proof.
   rewrite (state_eta s), (state_eta t).
   destruct (state_expr s)
     as [x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
-    intros Hrel Halloc.
-  - exact (let_answered _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel Halloc).
-  - exact (let_static_answered _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
+    intros Hrel Halloc Hxs.
+  - exact (let_answered _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel Halloc
+             (fun Hse => proj1 (Hxs Hse))).
+  - exact (let_static_answered _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel
+             (fun Hse => proj1 (Hxs Hse))).
   - exact (let_cont_non_recursive_answered _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
   - exact (let_cont_recursive_answered _ _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
   - exact (apply_answered _ _ _ _ _ _ _ _ _ _ _ _ Hrel).
@@ -16848,12 +17427,13 @@ Lemma unit_refines (e : expr) :
   edges None (unit_conts u) e ->
   (∀ k : continuation, k ∈ free_continuations_of_expr e -> unit_cont k) ->
   expr_ok None [] FlambdaReaperRebuild.empty_env (unit_conts u) [] e ->
+  (sets_exact -> closures_exact G keep e) ->
   refines_heap_with exits_rel
     (State e [] [] empty_static_env empty_heap no_reads)
     (State (rebuild FlambdaReaperRebuild.empty_env e) [] [] empty_static_env
        empty_heap no_reads).
 Proof.
-  intros He Hfree Hok.
+  intros He Hfree Hok Hxe.
   set (s0 := State e [] [] empty_static_env empty_heap no_reads).
   apply (bounded_refines exits_rel exits_rel measure (max_spine e) s0);
     [ | auto ].
@@ -16866,7 +17446,10 @@ Proof.
     apply (answered_h_mono exits_rel measure (related L)).
     + intros s' t' Hstep Hrel'. split; [ | exact Hrel' ].
       exact (run_then_step i s0 s s' Hrun Hstep).
-    + exact (related_answered L s t Hrel (HL i s Hi Hrun)).
+    + refine (related_answered L s t Hrel (HL i s Hi Hrun) _).
+      intros Hse.
+      exact (proj1 (run_exact G keep i s0 s
+                      (initial_exact G keep e (Hxe Hse)) Hrun)).
   - intros i s t [Hrun _]. exact (run_measure_bound e i s Hrun).
 Qed.
 
@@ -16877,6 +17460,7 @@ Lemma unit_exit_related (e : expr) :
   edges None (unit_conts u) e ->
   (∀ k : continuation, k ∈ free_continuations_of_expr e -> unit_cont k) ->
   expr_ok None [] FlambdaReaperRebuild.empty_env (unit_conts u) [] e ->
+  (sets_exact -> closures_exact G keep e) ->
   ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
     (rd : read_record),
     run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
@@ -16890,7 +17474,7 @@ Lemma unit_exit_related (e : expr) :
       ∧ step t = Exit k vs' hp' rd' ∧ exits_rel vs hp vs' hp'
       ∧ related L s t.
 Proof.
-  intros He Hfree Hok n s k vs hp rd Hrun Hstep.
+  intros He Hfree Hok Hxe n s k vs hp rd Hrun Hstep.
   set (s0 := State e [] [] empty_static_env empty_heap no_reads) in *.
   destruct (located_exists (S n) s0) as (L & HL).
   set (Rn := fun (i : nat) (s t : state) => run i s0 = Step s ∧ related L s t).
@@ -16900,12 +17484,46 @@ Proof.
     apply (answered_h_mono exits_rel measure (related L)).
     - intros s' t' Hstep' Hrel'. split; [ | exact Hrel' ].
       exact (run_then_step i s0 s1 s' Hrun1 Hstep').
-    - exact (related_answered L s1 t1 Hrel1 (HL i s1 Hi Hrun1)). }
+    - refine (related_answered L s1 t1 Hrel1 (HL i s1 Hi Hrun1) _).
+      intros Hse.
+      exact (proj1 (run_exact G keep i s0 s1
+                      (initial_exact G keep e (Hxe Hse)) Hrun1)). }
   destruct (bshrinking_exit_related exits_rel measure (S n) Rn Hans n s0 _ s
               k vs hp rd ltac:(lia)
               (conj eq_refl (initial_related L e He Hfree Hok)) Hrun Hstep)
     as (j & m & t & vs' & hp' & rd' & Hm & Ht & HE & _ & Hrel).
   exists L, m, t, vs', hp', rd'. auto.
+Qed.
+
+(* The same, without the primitives of the heap: the second run exits
+   with the same heap, and the static environments of the two exits are
+   related ([statics_rel]). *)
+Lemma unit_exit_statics (e : expr) :
+  edges None (unit_conts u) e ->
+  (∀ k : continuation, k ∈ free_continuations_of_expr e -> unit_cont k) ->
+  expr_ok None [] FlambdaReaperRebuild.empty_env (unit_conts u) [] e ->
+  (sets_exact -> closures_exact G keep e) -> ~ heap_prims ->
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    ∃ (L : location -> option node) (m : nat) (t : state)
+      (vs' : list value) (rd' : read_record),
+      run m
+        (State (rebuild FlambdaReaperRebuild.empty_env e) [] []
+           empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ statics_rel L (state_statics s) (state_statics t).
+Proof.
+  intros He Hfree Hok Hxe Hnh n s k vs hp rd Hrun Hstep.
+  destruct (unit_exit_related e He Hfree Hok Hxe n s k vs hp rd Hrun Hstep)
+    as (L & m & t & vs' & hp' & rd' & Hm & Ht & [_ HE] & Hrel).
+  destruct (HE Hnh) as [-> _].
+  exists L, m, t, vs', rd'.
+  split; [ exact Hm | split; [ exact Ht | ] ].
+  destruct Hrel as [_ (ctx & en & ce & rets & _ & _ & _ & _ & Hst & _)].
+  exact Hst.
 Qed.
 
 End Run.
@@ -18825,6 +19443,7 @@ Proof.
     || (intros; discriminate)
     || (intros ? ? ? ? ? ? ? ? ? _ Hch;
         destruct (code_change_all_unchanged _ _ _ _ _ _ _ Hch))
+    || exact (fun Hf : False => False_ind _ Hf)
     || exact (conj I (conj (ex_intro _ []
                               (conj (conj (fun k H => H) rets_nil_bound)
                                  (exits_bound_unit u e Hexits Hfree)))
@@ -19034,6 +19653,7 @@ Proof.
             (unit_codes e) (static_names symbols_of_binding e) u
             (if hb then True else False) F b);
     eassumption || reflexivity || (intros; reflexivity)
+    || exact (fun Hf : False => False_ind _ Hf)
     || exact (conj I (conj (ex_intro _ []
                               (conj (conj (fun k H => H) rets_nil_bound)
                                  (exits_bound_unit u e Hexits Hfree)))
@@ -20654,4 +21274,272 @@ Proof.
   - injection H as -> -> -> ->. exists 0, t.
     split; [ reflexivity | exact Ht ].
   - discriminate H.
+Qed.
+
+(* ======================================================================== *)
+(* The static environments where the unit exits                           *)
+(* ======================================================================== *)
+
+(* A run without the primitives of the heap reaches only states without a
+   location. *)
+Lemma free_run_no_location (e : expr) (n : nat) (s : state) :
+  FlambdaHeapFreeSpec.expr_free_of_heap e = true ->
+  run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+  statics_no_location (state_statics s).
+Proof.
+  intros He.
+  assert (Hgen : ∀ (n : nat) (s0 : state),
+            FlambdaHeapFreeProofs.state_free s0 -> state_no_location s0 ->
+            run n s0 = Step s -> state_no_location s).
+  { induction n0 as [ | n0 IH]; intros s0 Hfree Hnl Hrun.
+    - injection Hrun as <-. exact Hnl.
+    - rewrite run_succ in Hrun.
+      pose proof (free_step_no_location s0 Hfree Hnl) as Hs.
+      destruct (step s0) as [s' | k' vs' hp' rd' | ] eqn:Hstep;
+        try discriminate Hrun.
+      exact (IH s' (proj1 Hs) (proj2 Hs) Hrun). }
+  intros Hrun.
+  assert (Hnl : state_no_location s).
+  { apply (Hgen n (State e [] [] empty_static_env empty_heap no_reads)
+             ltac:(split; [ exact He | split; [ constructor | ] ];
+                          intros id c Hl; discriminate Hl)
+             ltac:(split; [ | reflexivity ];
+                   split; [ constructor | split; [ exact I | ] ];
+                   split; [ constructor | apply heap_values_all_empty ])
+             Hrun). }
+  destruct Hnl as [(_ & _ & Hst & _) _].
+  exact (statics_no_location_of _ Hst).
+Qed.
+
+(* What the static environments of the two runs are where the unit exits,
+   the closures being made where the graph has only the facts of their
+   sets ([statics_rel], with [sets_exact]), for some code deps,
+   allocations of the locations and arguments of the rebuild that the
+   relation reads only of code. *)
+Definition exit_statics_rel (G : graph) (sol : solution)
+    (keep : value_slot -> bool) (statics statics' : static_env) : Prop :=
+  ∃ (cds : finite_map code_dep) (F : facts) (b : bool)
+    (ids : list code_id) (first_fresh : positive) (cc : node -> bool)
+    (code_deps : finite_map code_dep)
+    (code_metadatas : finite_map code_metadata)
+    (located : location -> option node),
+    statics_rel G sol cds keep False F b ids first_fresh false True cc
+      code_deps code_metadatas located statics statics'.
+
+(* Where a unit of the fragment exits, whose closures are made where the
+   graph has only the facts of their sets, the rebuilt unit exits through
+   the same continuation with the same heap, from a state whose static
+   environment is related to that of the unit ([exit_statics_rel]); the
+   static environment of the unit has no location. *)
+Lemma rebuild_exit_statics (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  any_kind_arguments e = true ->
+  results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e) e ->
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ exit_statics_rel (graph_of_facts (traverse_unit flag u e))
+          (solution_of_tables T) (unit_kept e) (state_statics s)
+          (state_statics t)
+      ∧ statics_no_location (state_statics s).
+Proof.
+  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hxe.
+  pose proof (proj1 (flow_fragment_free _ _) e
+                (proj1 (in_fragment_parts false e Hfrag))) as Hfree_e.
+  assert (Hkinded : calls_kinded [] e = true).
+  { apply (proj1 calls_kinded_of_results e [] [] [] Hrk).
+    intros k' l Hl. discriminate Hl. }
+  pose proof (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
+    as Hcf.
+  assert (Hrk_ex : false = false -> results_kinded [] [] e = true)
+    by (intros _; exact Hrk).
+  rename preserve_direct_calls into b.
+  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
+  pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
+    as Hexact.
+  destruct (traverse_unit_keeps flag u e (∀ f : field, is_local f = false) false
+              Hfrag Hslots)
+    as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
+        & Hkeys & Hkeep_alive & _).
+  pose proof (traverse_unit_scrutinees false (unit_codes e) flag u e Hcf)
+    as Hscr.
+  set (F := traverse_unit flag u e) in *.
+  set (G := graph_of_facts F) in *.
+  set (sol := solution_of_tables T) in *.
+  assert (Hclosed : code_closed e = true).
+  { unfold well_formed_unit in Hwf.
+    destruct (code_closed e); [ reflexivity | ].
+    rewrite andb_false_r in Hwf. discriminate Hwf. }
+  assert (Hfresh : among (fresh_name (names_of e)) (continuations_of e)
+                   = false).
+  { apply not_true_iff_false. intros E. apply among_In in E.
+    pose proof (fresh_name_fresh (names_of e)) as Hff.
+    apply not_true_iff_false in Hff. apply Hff. apply among_In.
+    unfold names_of. apply in_or_app. right. exact E. }
+  assert (Hagree0 : kinds_agree [] (env_conts FlambdaReaperRebuild.empty_env)
+                      [] []).
+  { intros k m Hl. discriminate Hl. }
+  (* The calls raise to exception handlers, with extra arguments only to
+     handlers in scope. *)
+  assert (Hraises : raises_kept [] e = true).
+  { assert (Hue : unit_exn_handlers_well_formed (unit_exn u) e = true).
+    { unfold well_formed_unit in Hwf.
+      destruct (unit_exn_handlers_well_formed (unit_exn u) e);
+        [ reflexivity | ].
+      rewrite andb_false_r in Hwf. discriminate Hwf. }
+    unfold unit_exn_handlers_well_formed in Hue.
+    apply andb_true_iff in Hue as [Hue Hewf].
+    apply andb_true_iff in Hue as [Hways _].
+    apply (proj1 raises_kept_of_well_formed e [] Hewf);
+      [ intros k Hl; discriminate Hl | ].
+    intros k _ Hk. unfold ways_out_well_formed in Hways.
+    rewrite forallb_forall in Hways. specialize (Hways k Hk).
+    apply andb_true_iff in Hways as [_ Hg]. apply negb_true_iff in Hg.
+    exact Hg. }
+  assert (Hxagree0 : exn_agree (env_conts FlambdaReaperRebuild.empty_env)
+                       []).
+  { intros k. exact I. }
+  pose proof (proj1 (unit_codes_checked G false (unit_codes e)
+                       (fresh_name (names_of e))) e None
+                [] [] Hscr Hcf Hraises Hclosed Hkinded Hfresh)
+    as Hcode_checks.
+  (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
+  pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
+                (static_names symbols_of_binding e)
+                (∀ f : field, is_local f = false)
+                (if false then True else False)) as [Hnames _].
+  destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
+  assert (Hcds : ∀ (id : code_id) (cd : code_dep),
+            lookup id cds = Some cd -> known_witness_edges G id cd).
+  { intros id cd Hl.
+    assert (Hid : id ∈ static_names code_ids_of_binding e).
+    { apply Hkeys. apply (in_map fst cds (id, cd)).
+      exact (lookup_in _ _ _ Hl). }
+    destruct (Hcode_names id Hid) as (c & _ & Hcode).
+    destruct c as [params mc ret exn metadata body].
+    destruct Hcode as (cd' & Hin' & Hw & _).
+    rewrite (lookup_nodup_in _ _ _ Hnd Hin') in Hl. injection Hl as <-.
+    exact Hw. }
+  assert (Hunit_syms : ∀ s : symbol,
+            among s (static_names symbols_of_binding e) = true ->
+            may_come_from sol (Node_symbol s) (Node_symbol s)).
+  { intros s Hs. apply among_In in Hs.
+    destruct (Hsym_names s Hs) as (const & Hb).
+    destruct const as [ | slot syms decls vs | t fields | | | ];
+      simpl in Hb; try contradiction.
+    - destruct Hb as (Hslot & Hdep & _). unfold is_bound in Hslot.
+      destruct (lookup slot decls) as [id | ] eqn:Hl; [ | discriminate Hslot ].
+      exact (called_alloc is_local G sol cds Hc Hcds _ _
+               (Hdeps _ (Hdep id eq_refl))).
+    - destruct Hb as (_ & His & _).
+      exact (alloc_self is_local G sol Hc _ _ _ His
+               (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))).
+    - exact (boxed_self is_local G sol Hc Hconsts _ _ Hb).
+    - exact (any_source_self is_local G sol Hc _
+               (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
+    - destruct elements as [ | el els ].
+      + exact (any_source_self is_local G sol Hc _
+                 (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
+      + destruct Hb as (_ & His & _).
+        exact (alloc_self is_local G sol Hc _ _ _ His
+                 (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
+  assert (Hsyms : ∀ s : symbol,
+            noted s -> may_come_from sol (Node_symbol s) (Node_symbol s)).
+  { intros s Hs.
+    destruct (among s (static_names symbols_of_binding e)) eqn:Hunit_s;
+      [ exact (Hunit_syms s Hunit_s) | ].
+    apply (may_come_from_self is_local G sol _ Hc).
+    exact (any_source_input _ _ _ Hc _ (Himported s Hs Hunit_s)). }
+  (* The continuations that the unit names are its own. *)
+  assert (Hfree : ∀ k : continuation,
+            k ∈ free_continuations_of_expr e -> unit_cont u k).
+  { assert (Hnames_in : names_in_scope (unit_return u) (unit_exn u) e = true).
+    { unfold well_formed_unit in Hwf.
+      destruct (names_in_scope (unit_return u) (unit_exn u) e);
+        [ reflexivity | ].
+      rewrite andb_false_r in Hwf. discriminate Hwf. }
+    unfold names_in_scope, names_among in Hnames_in.
+    apply andb_true_iff in Hnames_in as [_ Hks].
+    intros k Hk.
+    pose proof (proj1 (all_among _ _) Hks k (proj2 (among_In _ _) Hk)) as Hin.
+    apply among_In in Hin. destruct Hin as [<- | [<- | []]];
+      [ left | right ]; reflexivity. }
+  assert (Hcc0 : cc_closed G sol (fun _ => true) (fun _ => true))
+    by (constructor; intros; reflexivity).
+  assert (Hcode_rets :
+    ∀ (id : code_id) (params : list variable) (mc : variable)
+      (ret exn : continuation) (md : code_metadata) (body : expr),
+      false = false ->
+      (id, Code params mc ret exn md body) ∈ unit_codes e ->
+      (ret <> exn -> no_raise_to ret body = true)
+      ∧ (length params = length (unarize (cm_params_arity md)) ->
+         ret_calls_ok
+           (rev (with_kinds params (unarize (cm_params_arity md)))
+            ++ [(mc, Value)])
+           ret (unarize (cm_result_arity md)) body
+         = true))
+    by (intros id params mc ret exn md body Hex;
+        exact (code_rets_of_unit u e Hwf (Hrk_ex Hex) id params mc ret exn md
+                 body)).
+  intros n s k vs hp rd Hrun Hstep.
+  unfold rebuild_unit_from_tables, rebuild_unit.
+  (* The rebuild where no code changes its calling convention. *)
+  rewrite <- (rebuild_expr_cc_unchanged F sol (fun _ => true) [] b
+                (static_names code_ids_bound e) (bound_code_metadata e)
+                (fresh_name (names_of e)) (fun _ _ => eq_refl)).
+  assert (Hx : ∃ (L : location -> option node) (m : nat) (t : state)
+                 (vs' : list value) (rd' : read_record),
+             run m
+               (State
+                  (rebuild_expr_cc F sol (fun _ => true) [] b
+                     (static_names code_ids_bound e) (bound_code_metadata e)
+                     (fresh_name (names_of e)) FlambdaReaperRebuild.empty_env
+                     e)
+                  [] [] empty_static_env empty_heap no_reads)
+             = Step t
+             ∧ step t = Exit k vs' hp rd'
+             ∧ statics_rel G sol cds (unit_kept e) False F b
+                 (static_names code_ids_bound e) (fresh_name (names_of e))
+                 false True (fun _ => true) [] (bound_code_metadata e) L
+                 (state_statics s) (state_statics t)).
+  { eapply (unit_exit_statics is_local G sol noted deps cds (unit_kept e)
+              (unit_codes e) (static_names symbols_of_binding e) u False F b);
+      eassumption || reflexivity || (intros; reflexivity)
+      || (intros; discriminate)
+      || (intros ? ? ? ? ? ? ? ? ? _ Hch;
+          destruct (code_change_all_unchanged _ _ _ _ _ _ _ Hch))
+      || exact (fun _ : True => Hxe)
+      || exact (fun H : False => H)
+      || exact (conj I (conj (ex_intro _ []
+                                (conj (conj (fun k H => H) rets_nil_bound)
+                                   (exits_bound_unit u e Hexits Hfree)))
+                              (conj Hscr (conj Hcf (conj (conj Hfresh
+                                 (conj (ex_intro _ [] (conj Hkinded Hagree0))
+                                    (ex_intro _ [] (conj Hraises Hxagree0))))
+                                 (fun r K H => rets_nil_any _ r K H)))))). }
+  destruct Hx as (L & m & t & vs' & rd' & Hm & Ht & Hst).
+  exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | split ] ].
+  - exists cds, F, b, (static_names code_ids_bound e),
+      (fresh_name (names_of e)), (fun _ => true), [], (bound_code_metadata e),
+      L.
+    exact Hst.
+  - exact (free_run_no_location e n s Hfree_e Hrun).
 Qed.

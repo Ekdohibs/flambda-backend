@@ -34,7 +34,8 @@
    and [value_slot_rebuilt] for closures), the fragment ([shaped_type],
    [type_in_fragment], [env_in_fragment]), [sets_of_graph],
    [copies_valued], [rebuild_exit_relation] (what the statement of the
-   two runs asks of the simulation of the rebuild), [unboxed_values] and
+   two runs asks of the simulation of the rebuild), [statics_of_values]
+   and [exits_of_values] (its premise on static blocks), [unboxed_values] and
    [block_fields_of_one_kind] (for unboxed variables of code), the
    statements, and the examples, against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
@@ -81,18 +82,20 @@
    its slot being the symbol, a boxed number and a string as they are,
    and no closure of a set of one function with no slot named
    ([Static_closure], which [statics_rel] has not either)
-   ([statics_rebuilt]). Differences with [rel]: the fields of a block
-   are taken at their kind (the traversal of the model gives every field
-   of a block the kind value, [Field_block i Value], and [rel] makes an
-   unused field poison of kind value); a used field has a use at the
-   node that holds it, which follows from [field_used_exact] where an
-   allocation holds one node in each field, as those of the traversal
-   do; and of a closure, [rel] has the allocations [sites], each holding
-   those of the closures of the set and each value slot kept at some
-   node, but neither that they hold nothing else, which is true where
-   each variable is bound once (each holds what its [Let] gives it), nor
-   that one of them uses a value slot only where the second run has it,
-   which is what [rebuild_value_slots] keeps.
+   ([statics_rebuilt]). The fields of a block are taken at their kind
+   ([field_rebuilt]), as the compiler reads the field of a static block,
+   at the kind that the shape of the block gives it
+   (Static_const.block_field_kind). That is a choice to review: the
+   model's traversal reads every field of a block at the kind value
+   ([Field_block i Value]) and its rebuild makes an unused field poison
+   of kind value, so the two readings agree on blocks of values, which
+   the blocks that a primitive makes are, and the statement of the two
+   runs asks it of the static blocks where the unit exits
+   ([exits_of_values]). The model's reading, at the kind value, was
+   weighed and set aside: an unused field of another kind would then be
+   rebuilt as poison of kind value, of which the type of the field,
+   rewritten at its own kind, does not hold, and the statements of the
+   rewriting would be false of a static block of a naked number.
 
    What a metadata says of an allocation ([describes]), as the comment
    before [rewrite_metadata] in types_rewriter.ml says it: [No_source],
@@ -205,19 +208,21 @@
      of the simulation of FlambdaReaperRebuildProofs.v, that the
      static environments of the two exits are related by
      [statics_rebuilt], and that every symbol bound in the first is an
-     allocation of its own. [rebuild_exit_relation] is stated here and
-     not proved; it is to be proved under the premises of
-     FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, from
-     [statics_rel] and [flow_invariant], which [related] has at every
-     state. [statics_rebuilt] asks things that [statics_rel] does not
-     say: the fields of a block at their own kind, where [rel] has them
-     all of kind value, which they are in the blocks of the traversal;
-     a use at the node of each field used, which [field_used_exact]
-     gives where an allocation holds one node in each field, as the
-     allocations of the traversal do; and of the closures of a static
-     set and of the closures in fields, what is said above of closures,
-     where [rel] relates their value slots at the node of the symbol
-     only.
+     allocation of its own.
+   - [rebuild_exit_relation_holds_statement]: [rebuild_exit_relation]
+     holds under the premises of
+     FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, of a
+     unit that binds each variable once
+     (FlambdaReaperLeastSpec.variables_bound_once) and whose static
+     blocks hold values where it exits ([exits_of_values]). The first
+     makes the allocations of the closures of a set hold, at their
+     function slots and value slots, the facts of the set and no other,
+     which [set_sites] and [slot_held] ask; the second is what
+     [field_rebuilt] needs of a field of a static block, and is needed
+     ([naked_field_exit_relation_statement]).
+   - [exported_types_sound_end_to_end_statement]: the statement of the
+     two runs with no premise on the relation of the runs, for a unit
+     of those premises and the least solution of its graph.
    - [boxed_fix_needed_statement] and [alias_fix_needed_statement]: the
      first statement is false without the fix of a boxed number whose
      contents have no use, and without that of the aliases under a
@@ -283,9 +288,13 @@
      alias in the case of another tag of a variant, whose fields have the
      metadata of the fields of the case taken); there the copy is to have
      no value.
-   - The proof of [rebuild_exit_relation] (see above), and for result
-     types, the relation of the values of the runs at a return of code
-     (of the two runs, and for an unboxed variable, of the three).
+   - For result types, the relation of the values of the runs at a
+     return of code (of the two runs, and for an unboxed variable, of
+     the three).
+   - A premise on the term in place of [exits_of_values], a premise on
+     the runs: the fields of the static blocks of kind value. The check
+     of FlambdaWellKindedSpec.v asks it, among much else; the compiler
+     reads a static block at its shape, which the model has not got.
    - Unboxing: the rewriting of the types of the closures whose
      representation changes, which the model forgets (FlambdaReaperTypes.v
      says what the compiler does), and so the rebuild with a change of
@@ -580,6 +589,24 @@ Definition statics_allocated (statics : static_env) : Prop :=
     lookup s (static_values statics) = Some allocated ->
     may_come_from sol (Node_symbol s) (Node_symbol s).
 
+(* The static values of the fragment of the model: a static block holds
+   values, and a static boxed number a number of a kind that can be
+   boxed (as FlambdaWellKindedSpec.allocated_well_kinded asks of them).
+   The model's static block has no shape: its traversal and its rebuild
+   read every field as a value. *)
+Definition statics_of_values (statics : static_env) : Prop :=
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    match allocated with
+    | Static_block _ fields =>
+      ∀ v : value, v ∈ fields -> kind_of_value v = Value
+    | Static_boxed_number contents =>
+      boxable_number_of_kind (kind_of_value contents) <> None
+    | Static_closure _ _ | Static_closure_of_set _ _ _ _ | Static_string _
+    | Static_immutable_array _ | Static_imported _ =>
+      True
+    end.
+
 (* ======================================================================== *)
 (* What a metadata says                                                     *)
 (* ======================================================================== *)
@@ -834,14 +861,14 @@ Definition rewrite_unboxed_result_type_sound_statement : Prop :=
    environment [statics'] [statics_rebuilt] relates to [statics]; and
    every symbol that [statics] binds is an allocation of its own
    ([statics_allocated], which FlambdaReaperFlowSpec.statics_flow
-   gives). It is to be proved under the premises of
-   FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, from
-   [statics_rel] and [flow_invariant], which [related] has at every
-   state, and is not proved here: [statics_rebuilt] asks things that
-   [statics_rel] does not say (see the header). Under those premises
-   alone it is false of a unit whose static block holds a value of
-   another kind than [Value] ([naked_field_exit_relation_statement]);
-   what it asks but [statics_rebuilt] holds ([rebuild_exits_statement]). *)
+   gives). It holds under the premises of
+   FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, each
+   variable bound once and the static blocks holding values where the
+   unit exits ([rebuild_exit_relation_holds_statement]). Without the last
+   it is false of a unit whose static block holds a value of another kind
+   than [Value] ([naked_field_exit_relation_statement]); what it asks but
+   [statics_rebuilt] holds under the first alone
+   ([rebuild_exits_statement]). *)
 Definition rebuild_exit_relation (G : graph) (sol : solution) (e e' : expr)
     : Prop :=
   ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
@@ -853,6 +880,15 @@ Definition rebuild_exit_relation (G : graph) (sol : solution) (e e' : expr)
         run m (State e' [] [] empty_static_env empty_heap no_reads) = Step t
         ∧ step t = Exit k vs' hp rd'
         ∧ statics_rebuilt G sol (state_statics s) (state_statics t).
+
+(* Where the unit exits, its static values are of the fragment
+   ([statics_of_values]): its static blocks hold values. *)
+Definition exits_of_values (e : expr) : Prop :=
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    statics_of_values (state_statics s).
 
 (* The types that the reaper exports for the symbols of a unit hold of
    them where the rebuilt unit exits: where the unit exits from a state
@@ -1277,7 +1313,14 @@ Definition result_types_example_statement : Prop :=
    model's static block has no shape, the blocks of its fragment being
    blocks of values (FlambdaWellKindedSpec.v), and nothing makes a unit
    keep to that. So the statement needs a premise that the static blocks
-   of the unit hold values. *)
+   of the unit hold values: [exits_of_values], with which it holds
+   ([rebuild_exit_relation_holds_statement]). The reading of
+   [field_rebuilt] is the compiler's, at the kind of the field; at the
+   kind value, as the model's traversal reads it, the relation would hold
+   of this unit, and the statements of the rewriting would be false of a
+   unit whose static block holds a naked number that nothing reads (the
+   rebuild makes it poison of kind value, and the type of the field,
+   rewritten at its own kind, does not hold of that). *)
 Module NakedFieldExample.
 
 Local Open Scope positive_scope.
@@ -1366,7 +1409,8 @@ Definition naked_field_exit_relation_statement : Prop :=
    [rebuild_refines_observably_statement]). What is left is
    [statics_rebuilt] of the static environments of the two states that
    exit, which [naked_field_exit_relation_statement] makes false of some
-   units. *)
+   units, and [rebuild_exit_relation_holds_statement] gives, each
+   variable bound once and the static blocks holding values. *)
 Definition rebuild_exits_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
@@ -1392,3 +1436,81 @@ Definition rebuild_exits_statement : Prop :=
              [] [] empty_static_env empty_heap no_reads)
         = Step t
         ∧ step t = Exit k vs' hp rd'.
+
+(* [rebuild_exit_relation] holds under the premises of
+   [rebuild_refines_observably_statement], if the unit binds each
+   variable once (FlambdaReaperLeastSpec.variables_bound_once) and its
+   static values are of the fragment where it exits ([exits_of_values]).
+   The first gives the closures what [statics_rebuilt] asks of them: the
+   allocations of the closures of a set, as the traversal makes them,
+   hold at their function slots and their value slots the facts of their
+   set and no other ([set_sites], [slot_held]). The second gives the
+   fields of a static block the kind at which the traversal reads them,
+   which [field_rebuilt] asks, and a static boxed number a number, which
+   the rebuild keeps as it is; [naked_field_exit_relation_statement]
+   shows it needed. *)
+Definition rebuild_exit_relation_holds_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* [exported_types_sound_statement] with no premise on the runs but
+   [exits_of_values]: for a unit of the premises of
+   [rebuild_exit_relation_holds_statement] and the least solution of its
+   graph (which passes the checks of the solution that the rebuild asks),
+   where the unit exits from a state whose static environment and a
+   valuation satisfy a typing environment of the fragment, the rebuilt
+   unit exits through the same continuation, and the type of each symbol
+   bound, rewritten, holds of the symbol there. *)
+Definition exported_types_sound_end_to_end_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    least_solution is_local (traverse_unit flag u e) T ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).

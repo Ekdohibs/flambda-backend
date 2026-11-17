@@ -4933,3 +4933,317 @@ Proof.
       as (m' & t & Ht & Hexit).
     exists m', t, vs', rd'. split; assumption.
 Qed.
+
+(* ------------------------------------------------------------------------ *)
+(* From the relation of the simulation to [statics_rebuilt]                 *)
+(* ------------------------------------------------------------------------ *)
+
+Module RP := FlambdaReaperRebuildProofs.
+
+Section Exit.
+
+Variable is_local : field -> bool.
+Variable G : graph.
+Variable sol : solution.
+Hypothesis Hc : closed is_local G sol.
+Hypothesis Hexact : field_used_exact is_local G sol.
+
+(* A field used holds what has a use, local or not. *)
+Lemma used_field_hu (a from : node) (f : field) :
+  s_field_used sol a f = true -> g_constructor G a f from ->
+  s_has_usage sol from = true.
+Proof.
+  intros Hused Hcons.
+  destruct (Hexact a f Hused)
+    as (from0 & _ & [[Hau Hl] | [(usage & v & Hus & Hacc & Hhu)
+                                | [(x & Hau & Hrd & Hhx)
+                                  | (usage & v & Hsrc & Hl & Hau & Hacc
+                                     & Hhu)]]]).
+  - exact (has_usage_any _ _ _ Hc _
+             (any_usage_constructor _ _ _ Hc _ _ _ Hau Hcons Hl)).
+  - destruct (is_local f) eqn:Hl.
+    + exact (has_usage_alias _ _ _ Hc _ _ Hhu
+               (alias_local_constructor_usage _ _ _ Hc _ _ _ _ _ Hl Hcons
+                  Hus Hacc)).
+    + destruct (s_any_usage sol a) eqn:Ha.
+      * exact (has_usage_any _ _ _ Hc _
+                 (any_usage_constructor _ _ _ Hc _ _ _ Ha Hcons Hl)).
+      * exact (has_usage_alias _ _ _ Hc _ _ Hhu
+                 (alias_constructor_usage _ _ _ Hc _ _ _ _ _ Hcons Hus Ha
+                    Hacc)).
+  - destruct (is_local f) eqn:Hl.
+    + exact (has_usage_alias _ _ _ Hc _ _ Hhx
+               (alias_escaping_reading _ _ _ Hc _ _ _
+                  (escaping_field_rule _ _ _ Hc _ _ _ Hau Hcons Hl) Hrd)).
+    + exact (has_usage_any _ _ _ Hc _
+               (any_usage_constructor _ _ _ Hc _ _ _ Hau Hcons Hl)).
+  - exact (has_usage_alias _ _ _ Hc _ _ Hhu
+             (alias_local_accessor_source _ _ _ Hc _ _ _ _ _ Hl Hacc Hsrc
+                Hcons)).
+Qed.
+
+Variable kept : value_slot -> bool.
+Variable called : node -> code_id -> Prop.
+Variable exact partials : Prop.
+Variable located : location -> option node.
+Variable β : location -> location -> Prop.
+
+Abbreviation rel := (RP.rel G sol kept called exact partials located β True).
+Abbreviation slot_rel :=
+  (RP.slot_rel G sol kept called exact partials located β True).
+
+(* What the simulation has of the closures of a set, of which it relates
+   a closure or a static closure, is what [rebuilt_value] and
+   [static_rebuilt] ask of them, given what is asked of the value slots
+   in turn ([P]). *)
+Lemma closure_rebuilt (P : value -> node -> value -> Prop)
+    (decls : list (function_slot * code_id)) (sites : function_slot -> node)
+    (vs vs' : list (value_slot * value)) :
+  RP.sites_exact G kept decls sites ->
+  (∀ (f : function_slot) (id : code_id),
+     lookup f decls = Some id ->
+     (∀ (g : function_slot) (id' : code_id),
+        lookup g decls = Some id' ->
+        g_constructor G (sites f) (Field_function_slot g) (sites g))
+     ∧ RP.slots_related (slot_rel (sites f) vs') vs []) ->
+  (∀ (w : value_slot) (x : value) (from : node) (x' : value),
+     lookup w vs = Some x -> rel x from x' ->
+     (∀ c : const, x = Value_const c -> s_any_source sol from = true) ->
+     P x from x') ->
+  set_sites G decls sites
+  ∧ for_all_bindings (value_slot_rebuilt G sol P decls sites vs') vs.
+Proof.
+  intros Hse Hall HP. split.
+  - intros f id Hf g b. split.
+    + intros Hb. exact (proj1 (Hse f id Hf) g b Hb).
+    + intros [Hg ->]. destruct (proj1 (is_bound_lookup g decls) Hg)
+        as [id' Hg'].
+      exact (proj1 (Hall f id Hf) g id' Hg').
+  - apply (proj2 (for_all_bindings_lookup _ _ vs)).
+    intros w x Hl f id Hf Hused.
+    destruct (Hexact _ _ Hused) as (from0 & Hcons0 & _).
+    destruct (proj2 (Hse f id Hf) w from0 Hcons0) as [Hk Hheld].
+    destruct (proj1 (RP.slots_related_iff _ _) (proj2 (Hall f id Hf)) w x Hl
+                Hk)
+      as (from & Hcons & Hhs & Has & Hfu).
+    assert (Heq : from = from0) by exact (proj1 (Hheld f id from Hf) Hcons).
+    subst from.
+    pose proof (used_field_hu _ _ _ Hused Hcons) as Hhu.
+    destruct (Hfu Hused) as (x' & Hx' & Hrel).
+    exists from0, x'.
+    split; [ intros g id' Hg b; exact (Hheld g id' b Hg) | ].
+    split; [ exact Hhs | split; [ exact Hhu | split; [ exact Hx' | ] ] ].
+    exact (HP w x from0 x' Hl (Hrel Hhu) Has).
+Qed.
+
+(* A value of the first run without a location, related by the simulation
+   at [n] to one of the second, is rebuilt as [rebuilt_value] says, if
+   [n] has any source where the value is a constant. *)
+Lemma rel_rebuilt_value :
+  ∀ (v : value) (n : node) (v' : value),
+    rel v n v' -> locations_of_value v = [] ->
+    (∀ c : const, v = Value_const c -> s_any_source sol n = true) ->
+    rebuilt_value G sol v n v'.
+Proof.
+  apply (FlambdaHeapProofs.value_induction
+           (fun v => ∀ (n : node) (v' : value),
+              rel v n v' -> locations_of_value v = [] ->
+              (∀ c : const, v = Value_const c ->
+               s_any_source sol n = true) ->
+              rebuilt_value G sol v n v'));
+    cbn [RP.rel rebuilt_value locations_of_value].
+  - intros c n v' [_ ->] _ Has. split; [ exact (Has c eq_refl) | reflexivity ].
+  - intros code slots _ n v' [].
+  - intros slot decls vs IH n v' (sites & vs' & Hmay & -> & _ & Hse & Hall)
+      Hloc _.
+    exists sites, vs'. split; [ reflexivity | split; [ exact Hmay | ] ].
+    apply (closure_rebuilt (rebuilt_value G sol) decls sites vs vs'
+             (Hse I)).
+    + intros f id Hf. destruct (Hall f id Hf) as (_ & _ & Hfs & Hsr).
+      exact (conj Hfs Hsr).
+    + intros w x from x' Hl Hrel Has.
+      rewrite Forall_forall in IH.
+      apply (IH (w, x) (lookup_in _ _ _ Hl) from x' Hrel); [ | exact Has ].
+      pose proof (proj1 (RP.flat_map_nil_iff _ _) Hloc) as Hl0.
+      exact (Hl0 (w, x) (lookup_in _ _ _ Hl)).
+  - intros s n v' (-> & Hmay & Hhu) _ _.
+    split; [ reflexivity | split; [ exact Hmay | exact Hhu ] ].
+  - intros tag fields IH n v' (a & fields' & Hmay & -> & Hf & Hhs & Hk)
+      Hloc _.
+    exists a, fields'.
+    split; [ exact Hmay | split; [ exact Hhs | split; [ reflexivity | ] ] ].
+    pose proof (proj1 (RP.flat_map_nil_iff _ _) Hloc) as Hl0.
+    clear Hloc. rename Hl0 into Hloc.
+    revert fields' Hf. generalize 0 as i.
+    induction IH as [ | field fields Hfield _ IHf]; intros i [ | field' fields']
+      Hf; cbn [RP.fields_related fields_rebuilt] in Hf |- *;
+      try contradiction; [ exact I | ].
+    apply Forall_cons_iff in Hk as [Hkf Hk].
+    destruct Hf as [(from & Hcons & Hused & Hunused) Hrest].
+    split.
+    + rewrite Hkf. exists from.
+      split; [ exact Hcons | split ].
+      * intros Hu.
+        split; [ exact (used_field_hu _ _ _ Hu Hcons) | ].
+        apply (Hfield from field' (Hused Hu));
+          [ exact (Hloc field (or_introl eq_refl)) | ].
+        intros c ->. pose proof (Hused Hu) as Hr. cbn [RP.rel] in Hr.
+        cbn [kind_of_value] in Hkf. rewrite Hkf in Hr.
+        exact (proj1 Hr eq_refl).
+      * exact Hunused.
+    + exact (IHf Hk (fun v Hv => Hloc v (or_intror Hv)) (S i) fields'
+               Hrest).
+  - intros elements _ n v' (_ & elements' & -> & _) _ _.
+    exists elements'. reflexivity.
+  - intros c n v' (a & bn & from & Hmay & Hhs & Hk & Hcons & ->) _ _.
+    exists a, bn, from. auto.
+  - intros l n v' _ Hloc _. discriminate Hloc.
+  - intros callee args arity _ _ n v' [_ (m & closure' & args' & -> & _)] _
+      _.
+    exists closure', args'. reflexivity.
+Qed.
+
+End Exit.
+
+(* The static environments that the simulation relates where the unit
+   exits ([RP.exit_statics_rel]) are related by [statics_rebuilt], if the
+   first holds no location and its static values are of the fragment. *)
+Lemma statics_rel_rebuilt (is_local : field -> bool) (G : graph)
+    (sol : solution) (keep : value_slot -> bool)
+    (statics statics' : static_env) :
+  closed is_local G sol -> field_used_exact is_local G sol ->
+  RP.exit_statics_rel G sol keep statics statics' ->
+  RP.statics_no_location statics -> statics_of_values statics ->
+  statics_rebuilt G sol statics statics'.
+Proof.
+  intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds & located
+                    & Hnone & Hblocks & Honly & _)
+    Hnl Hvals s allocated Hl Hhu.
+  pose proof (Hvals s allocated Hl) as Hval.
+  assert (Hloc : ∀ v : value, v ∈ FlambdaHeapSpec.values_of_static allocated ->
+                 locations_of_value v = []).
+  { intros v Hv. apply RP.no_location_iff. exact (Hnl s allocated v Hl Hv). }
+  destruct (Honly s allocated Hl)
+    as [(tag & fields & ->)
+       | [(slot & syms & decls & vs & -> & Htarget & Hbound)
+         | (Ho & Hbound)]].
+  - destruct (Hblocks s tag fields Hl Hhu) as (fields' & Hl' & Hf).
+    exists fields'. split; [ exact Hl' | ].
+    cbn [FlambdaHeapSpec.values_of_static] in Hloc.
+    clear Hl Hl' Hblocks Honly. revert fields' Hf. generalize 0 as i.
+    induction fields as [ | field fields IH]; intros i [ | field' fields']
+      Hf; cbn [RP.fields_related fields_rebuilt] in Hf |- *;
+      try contradiction; [ exact I | ].
+    destruct Hf as [(from & Hcons & Hused & Hunused) Hrest].
+    assert (Hkf : kind_of_value field = Value)
+      by exact (Hval field (or_introl eq_refl)).
+    split.
+    + unfold field_rebuilt. rewrite Hkf. exists from.
+      split; [ exact Hcons | split; [ | exact Hunused ] ].
+      intros Hu.
+      split; [ exact (used_field_hu is_local G sol Hc Hexact _ _ _ Hu Hcons)
+             | ].
+      apply (rel_rebuilt_value is_local G sol Hc Hexact _ _ _ _ _ _ field
+               from field' (Hused Hu));
+        [ exact (Hloc field (or_introl eq_refl)) | ].
+      intros c ->. pose proof (Hused Hu) as Hr. cbn [RP.rel] in Hr.
+      cbn [kind_of_value] in Hkf. rewrite Hkf in Hr.
+      exact (proj1 Hr eq_refl).
+    + exact (IH (fun v Hv => Hloc v (or_intror Hv))
+               (fun v Hv => Hval v (or_intror Hv)) (S i) fields' Hrest).
+  - destruct Htarget as [Hn | (vs' & Hls' & _ & _ & Hsites)];
+      [ destruct (Hbound Hhu Hn) | ].
+    destruct (Hsites I) as (sites & Hsite & Hse & Hall).
+    exists sites, vs'.
+    split; [ exact Hls' | split; [ exact Hsite | ] ].
+    apply (closure_rebuilt is_local G sol Hc Hexact _ _ _ _ _ _
+             (rebuilt_value G sol) decls sites vs vs' Hse Hall).
+    intros w x from x' Hlw Hrel Has.
+    apply (rel_rebuilt_value is_local G sol Hc Hexact _ _ _ _ _ _ x from x'
+             Hrel); [ | exact Has ].
+    apply Hloc. cbn [FlambdaHeapSpec.values_of_static].
+    apply in_map_iff. exists (w, x). split; [ reflexivity | ].
+    exact (lookup_in _ _ _ Hlw).
+  - destruct allocated as [ | | | contents | bytes | elements | ];
+      cbn [static_rebuilt]; cbn [RP.static_other_rel] in Ho;
+      try contradiction.
+    + destruct Ho as [Hn | (v' & Hls' & Hv')];
+        [ destruct (Hbound Hhu Hn) | ].
+      rewrite Hls'. f_equal. f_equal.
+      destruct Hv' as [Hv' | Hsim]; [ exact Hv' | ].
+      destruct contents as [c | | | | | | | | ];
+        cbn [kind_of_value boxable_number_of_kind] in Hval;
+        try (exfalso; exact (Hval eq_refl)).
+      exact Hsim.
+    + destruct Ho as [Hn | Hls']; [ destruct (Hbound Hhu Hn) | exact Hls' ].
+    + destruct Ho as [Hn | (elements' & Hls' & _)];
+        [ destruct (Hbound Hhu Hn) | ].
+      exists elements'. exact Hls'.
+Qed.
+
+(* [rebuild_exit_relation] of a unit whose closures are made where the
+   graph has only the facts of their sets ([RP.closures_exact]) and whose
+   static values are of the fragment where it exits. *)
+Lemma exit_relation_of_exact (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  RP.closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+    e ->
+  exits_of_values e ->
+  rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) e
+    (rebuild_unit_from_tables (traverse_unit flag u e) T
+       preserve_direct_calls e).
+Proof.
+  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hxe
+    Hvals n s k vs hp rd Hrun Hstep.
+  split.
+  - exact (proj1 (rebuild_exits flag is_local u e T preserve_direct_calls n s
+                    k vs hp rd Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
+                    Hcheck_exact Hrun Hstep)).
+  - destruct (RP.rebuild_exit_statics flag is_local u e T
+                preserve_direct_calls Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits
+                Hcheck Hcheck_exact Hxe n s k vs hp rd Hrun Hstep)
+      as (m & t & vs' & rd' & Hm & Ht & Hst & Hnl).
+    exists m, t, vs', rd'.
+    split; [ exact Hm | split; [ exact Ht | ] ].
+    exact (statics_rel_rebuilt is_local _ _ _ _ _
+             (check_closed_sound is_local _ _ Hcheck)
+             (check_field_used_exact_sound is_local _ _ Hcheck_exact) Hst Hnl
+             (Hvals n s k vs hp rd Hrun Hstep)).
+Qed.
+
+From OxCamlFlambda2 Require FlambdaReaperClosuresExactProofs.
+
+Theorem rebuild_exit_relation_holds : rebuild_exit_relation_holds_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
+    Hcheck_exact Honce Hvals.
+  apply (exit_relation_of_exact flag is_local u e T b Hlocal Hslots Hfrag Hdc
+           Hrk Hwf Hexits Hcheck Hcheck_exact); [ | exact Hvals ].
+  exact (FlambdaReaperClosuresExactProofs.closures_exact_of_bound_once flag u
+           e Hfrag Hwf Honce).
+Qed.
+
+Theorem exported_types_sound_end_to_end :
+  exported_types_sound_end_to_end_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+    Hvals Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  apply (exported_types_sound flag is_local u e T b sets tenv canon valuation
+           valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets);
+    try assumption.
+  exact (rebuild_exit_relation_holds flag is_local u e T b Hlocal Hslots Hfrag
+           Hdc Hrk Hwf Hexits (proj1 Hleast)
+           (least_field_used_exact is_local _ T Hleast) Honce Hvals).
+Qed.
