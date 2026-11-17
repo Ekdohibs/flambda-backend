@@ -254,12 +254,12 @@
    FlambdaReaperFlowProofs.WithLocal, for a premise [slots_read] of the
    facts of a projection that gives the rule of the fix
    ([Hslots_read]): [True] and the check of the fix for the statements
-   with local fields ([rebuild_refines_checked_local]), that no field is
-   local before the fix ([rebuild_exit_statics]). A projection of a
-   local field is related through the alias that the fix gives
-   ([rel_read_slot]); the field that a kept projection reads is used,
-   and what it holds has a use, without the fix
-   ([FlambdaReaperFlowProofs.field_used_read_slot],
+   with local fields ([rebuild_refines_checked_local],
+   [rebuild_exit_statics_local]), of which those before the fix are
+   corollaries. A projection of a local field is related through the
+   alias that the fix gives ([rel_read_slot]); the field that a kept
+   projection reads is used, and what it holds has a use, without the
+   fix ([FlambdaReaperFlowProofs.field_used_read_slot],
    [field_used_hu_slot]). *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
@@ -21509,18 +21509,19 @@ Definition exit_statics_rel (G : graph) (sol : solution)
    graph has only the facts of their sets, the rebuilt unit exits through
    the same continuation with the same heap, from a state whose static
    environment is related to that of the unit ([exit_statics_rel]); the
-   static environment of the unit has no location. *)
-Lemma rebuild_exit_statics (flag : reaper_preserve_direct_calls)
+   static environment of the unit has no location. With local fields, the
+   tables passing the check of the fix. *)
+Lemma rebuild_exit_statics_local (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) :
   is_local_slots_only is_local ->
-  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
   in_flow_fragment e = true ->
   any_kind_arguments e = true ->
   results_kinded [] [] e = true ->
   well_formed_unit u e = true ->
   exits_one_value u e = true ->
   check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e) e ->
   ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
@@ -21540,7 +21541,7 @@ Lemma rebuild_exit_statics (flag : reaper_preserve_direct_calls)
           (state_statics t)
       ∧ statics_no_location (state_statics s).
 Proof.
-  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hxe.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Hxe.
   pose proof (proj1 (flow_fragment_free _ _) e
                 (proj1 (in_fragment_parts false e Hfrag))) as Hfree_e.
   assert (Hkinded : calls_kinded [] e = true).
@@ -21554,8 +21555,7 @@ Proof.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
     as Hexact.
-  destruct (traverse_unit_keeps flag u e (∀ f : field, is_local f = false) false
-              Hfrag Hslots)
+  destruct (traverse_unit_keeps flag u e True false Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & _).
   pose proof (traverse_unit_scrutinees false (unit_codes e) flag u e Hcf)
@@ -21602,8 +21602,7 @@ Proof.
     as Hcode_checks.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
-                (static_names symbols_of_binding e)
-                (∀ f : field, is_local f = false)
+                (static_names symbols_of_binding e) True
                 (if false then True else False)) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id : code_id) (cd : code_dep),
@@ -21699,14 +21698,13 @@ Proof.
                  (static_names code_ids_bound e) (fresh_name (names_of e))
                  false True (fun _ => true) [] (bound_code_metadata e) L
                  (state_statics s) (state_statics t)).
-  { assert (Hslots_read :
-              (∀ f : field, is_local f = false) ->
-              local_reads_used is_local G sol)
-      by exact (FlambdaReaperLocalFieldsProofs.local_reads_used_no_local
-                 is_local G sol).
+  { assert (Hslots_read : True -> local_reads_used is_local G sol)
+      by (intros _;
+          exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+                   is_local _ _ Hlrs)).
     eapply (unit_exit_statics is_local G sol noted deps cds (unit_kept e)
-              (unit_codes e) (static_names symbols_of_binding e) u False
-              (∀ f : field, is_local f = false) F b);
+              (unit_codes e) (static_names symbols_of_binding e) u False True
+              F b);
       eassumption || reflexivity || (intros; reflexivity)
       || (intros; discriminate)
       || (intros ? ? ? ? ? ? ? ? ? _ Hch;
@@ -21727,4 +21725,46 @@ Proof.
       L.
     exact Hst.
   - exact (free_run_no_location e n s Hfree_e Hrun).
+Qed.
+
+(* Where a unit of the fragment exits, whose closures are made where the
+   graph has only the facts of their sets, the rebuilt unit exits through
+   the same continuation with the same heap, from a state whose static
+   environment is related to that of the unit ([exit_statics_rel]); the
+   static environment of the unit has no location. *)
+Lemma rebuild_exit_statics (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  any_kind_arguments e = true ->
+  results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e) e ->
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ exit_statics_rel (graph_of_facts (traverse_unit flag u e))
+          (solution_of_tables T) (unit_kept e) (state_statics s)
+          (state_statics t)
+      ∧ statics_no_location (state_statics s).
+Proof.
+  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hxe.
+  exact (rebuild_exit_statics_local flag is_local u e T preserve_direct_calls
+           Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (old_premise_local_reads_used flag is_local u e T Hlocal Hslots)
+           Hcheck_exact Hxe).
 Qed.

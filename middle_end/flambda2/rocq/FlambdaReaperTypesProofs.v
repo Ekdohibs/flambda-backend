@@ -50,6 +50,19 @@
    not be an alias in the fragment of [loose]. The counterexamples and
    the example of a change of representation are computed.
 
+   Of a least solution, the proofs read that it is closed, has no stale
+   tuple, and two facts of its derivations ([usages_carry_sources],
+   [has_source_sources]); these hold as well of a least solution of the
+   rules with the fix of local fields, by the same induction on the
+   derivations ([least_either]), so that each statement is proved of the
+   two. The runs keep the static sets whole
+   ([rebuild_exit_relation_whole_holds]): the rebuild keeps the sets of
+   a term well-formed ([rebuild_sets_well_formed]), so that the rebuilt
+   unit binds the symbols of its static sets together
+   ([rebuilt_sets_bound], from FlambdaClosuresProofs.sets_inv), as the
+   unit does; and the simulation binds in the second run each symbol of
+   a static set that has a use ([statics_rel_whole]).
+
    The result types of an unboxed variable of code
    ([rewrite_unboxed_result_type_sound]) are proved level by level of
    its unboxing ([leaves_sound]): at a level, a value of the first run
@@ -72,7 +85,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperSolution
   FlambdaReaperSolutionSpec FlambdaReaperSolutionProofs
   FlambdaReaperFlowSpec FlambdaReaperLeast FlambdaReaperLeastSpec
-  FlambdaReaperLeastProofs FlambdaReaperTypes FlambdaReaperTypesSpec.
+  FlambdaReaperLeastProofs FlambdaReaperLocalFields FlambdaReaperTypes
+  FlambdaReaperTypesSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeGrammarProofs FlambdaTypeMeaningSpec FlambdaTypeMeaningProofs
   FlambdaBindingTime FlambdaTypingEnv FlambdaTypingEnvSpec
@@ -419,26 +433,51 @@ Qed.
 (* What a least solution gives                                              *)
 (* ======================================================================== *)
 
+(* A least solution of the rules before the fix of local fields, or of
+   those with it: what the proofs read of a least solution holds of
+   both. *)
+Definition least_either (is_local : field -> bool) (F : facts) (T : tables)
+    : Prop :=
+  least_solution is_local F T ∨ least_solution_local is_local F T.
+
 Section Least_facts.
 
 Variable is_local : field -> bool.
 Variable F : facts.
 Variable T : tables.
-Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hleast : least_either is_local F T.
 
 Local Abbreviation G := (graph_of_facts F).
 Local Abbreviation sol := (solution_of_tables T).
 
 Lemma least_closed_tables : closed is_local G sol.
-Proof. exact (least_closed is_local F T Hleast). Qed.
+Proof.
+  destruct Hleast as [Hl | Hl];
+    [ exact (least_closed is_local F T Hl)
+    | exact (least_local_closed is_local F T Hl) ].
+Qed.
 
 Lemma usages_not_any (x u : node) :
   s_usages sol x u = true -> s_any_usage sol x = false.
-Proof. exact (proj1 (least_no_stale is_local F T x u Hleast)). Qed.
+Proof.
+  destruct Hleast as [Hl | Hl];
+    [ exact (proj1 (least_no_stale is_local F T x u Hl)) | ].
+  intros H.
+  pose proof (least_local_derivable is_local F T Hl (Atom_usages x u) H)
+    as Hd.
+  inversion Hd; subst; assumption.
+Qed.
 
 Lemma sources_not_any (x s : node) :
   s_sources sol x s = true -> s_any_source sol x = false.
-Proof. exact (proj2 (least_no_stale is_local F T x s Hleast)). Qed.
+Proof.
+  destruct Hleast as [Hl | Hl];
+    [ exact (proj2 (least_no_stale is_local F T x s Hl)) | ].
+  intros H.
+  pose proof (least_local_derivable is_local F T Hl (Atom_sources x s) H)
+    as Hd.
+  inversion Hd; subst; assumption.
+Qed.
 
 (* What may come to a node may come to each of its usages, which have
    any source if the node has. *)
@@ -449,24 +488,44 @@ Lemma usages_carry_sources (x u : node) :
      s_sources sol u s = true ∨ s_any_source sol u = true)
   ∧ (s_any_source sol x = true -> s_any_source sol u = true).
 Proof.
-  intros H.
-  pose proof (least_derivable is_local F T Hleast (Atom_usages x u) H) as Hd.
-  clear H. remember (Atom_usages x u) as atom eqn:Ha. revert x u Ha.
-  induction Hd; intros x0 u0 Ha; try discriminate Ha.
-  - injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
-  - injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
-  - injection Ha as <- <-.
-    destruct (IHHd1 to_ usage eq_refl) as [IHs IHa].
-    pose proof (least_holds is_local F T Hleast _ Hd2) as Halias.
-    cbn [holds] in Halias. split.
-    + intros s Hs.
-      destruct (s_any_source sol to_) eqn:Hat;
-        [ right; exact (IHa eq_refl) | ].
-      apply IHs.
-      exact (sources_alias _ _ _ least_closed_tables from to_ s Hs
-               (sources_not_any from s Hs) Halias Hat).
-    + intros Has. apply IHa.
-      exact (any_source_alias _ _ _ least_closed_tables from to_ Halias Has).
+  intros H. destruct Hleast as [Hl | Hl].
+  - pose proof (least_derivable is_local F T Hl (Atom_usages x u) H) as Hd.
+    clear H. remember (Atom_usages x u) as atom eqn:Ha. revert x u Ha.
+    induction Hd; intros x0 u0 Ha; try discriminate Ha.
+    + injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
+    + injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
+    + injection Ha as <- <-.
+      destruct (IHHd1 to_ usage eq_refl) as [IHs IHa].
+      pose proof (least_holds is_local F T Hl _ Hd2) as Halias.
+      cbn [holds] in Halias. split.
+      * intros s Hs.
+        destruct (s_any_source sol to_) eqn:Hat;
+          [ right; exact (IHa eq_refl) | ].
+        apply IHs.
+        exact (sources_alias _ _ _ least_closed_tables from to_ s Hs
+                 (sources_not_any from s Hs) Halias Hat).
+      * intros Has. apply IHa.
+        exact (any_source_alias _ _ _ least_closed_tables from to_ Halias
+                 Has).
+  - pose proof (least_local_derivable is_local F T Hl (Atom_usages x u) H)
+      as Hd.
+    clear H. remember (Atom_usages x u) as atom eqn:Ha. revert x u Ha.
+    induction Hd; intros x0 u0 Ha; try discriminate Ha.
+    + injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
+    + injection Ha as <- <-. split; [ intros s Hs; left; exact Hs | auto ].
+    + injection Ha as <- <-.
+      destruct (IHHd1 to_ usage eq_refl) as [IHs IHa].
+      pose proof (least_local_holds is_local F T Hl _ Hd2) as Halias.
+      cbn [holds] in Halias. split.
+      * intros s Hs.
+        destruct (s_any_source sol to_) eqn:Hat;
+          [ right; exact (IHa eq_refl) | ].
+        apply IHs.
+        exact (sources_alias _ _ _ least_closed_tables from to_ s Hs
+                 (sources_not_any from s Hs) Halias Hat).
+      * intros Has. apply IHa.
+        exact (any_source_alias _ _ _ least_closed_tables from to_ Halias
+                 Has).
 Qed.
 
 (* A node that has a source has any source, or a source that has a
@@ -476,40 +535,75 @@ Lemma has_source_sources (x : node) :
   s_any_source sol x = true
   ∨ ∃ y : node, s_sources sol x y = true ∧ s_has_source sol y = true.
 Proof.
-  intros H.
-  pose proof (least_derivable is_local F T Hleast (Atom_has_source x) H)
-    as Hd.
-  clear H. remember (Atom_has_source x) as atom eqn:Ha. revert x Ha.
-  induction Hd; intros x0 Ha; try discriminate Ha; injection Ha as <-.
-  - left. exact (least_holds is_local F T Hleast _ Hd).
-  - destruct (s_any_source sol to_) eqn:Hat; [ left; reflexivity | right ].
-    pose proof (least_holds is_local F T Hleast _ Hd2) as Halias.
-    cbn [holds] in Halias.
-    destruct (IHHd1 from eq_refl) as [Haf | (y & Hy & Hhy)].
-    + rewrite (any_source_alias _ _ _ least_closed_tables from to_ Halias Haf)
-        in Hat.
-      discriminate Hat.
-    + exists y. split; [ | exact Hhy ].
-      exact (sources_alias _ _ _ least_closed_tables from to_ y Hy
-               (sources_not_any from y Hy) Halias Hat).
-  - destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
-    exists base. split.
-    + exact (sources_constructor _ _ _ least_closed_tables from relation base
-               H Hab).
-    + exact (least_holds is_local F T Hleast (Atom_has_source base)
-               (by_has_source_constructor _ _ _ from relation base Hd H)).
-  - destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
-    exists base. split.
-    + exact (sources_constructor _ _ _ least_closed_tables from relation base
-               H Hab).
-    + exact (has_source_function_slot _ _ _ least_closed_tables from relation
-               base H H0).
-  - destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
-    exists base. split.
-    + exact (sources_parameter _ _ _ least_closed_tables to_ relation base H
-               Hab).
-    + exact (has_source_parameter _ _ _ least_closed_tables to_ relation base
-               (least_holds is_local F T Hleast _ Hd) H).
+  intros H. destruct Hleast as [Hl | Hl].
+  - pose proof (least_derivable is_local F T Hl (Atom_has_source x) H)
+      as Hd.
+    clear H. remember (Atom_has_source x) as atom eqn:Ha. revert x Ha.
+    induction Hd; intros x0 Ha; try discriminate Ha; injection Ha as <-.
+    + left. exact (least_holds is_local F T Hl _ Hd).
+    + destruct (s_any_source sol to_) eqn:Hat; [ left; reflexivity | right ].
+      pose proof (least_holds is_local F T Hl _ Hd2) as Halias.
+      cbn [holds] in Halias.
+      destruct (IHHd1 from eq_refl) as [Haf | (y & Hy & Hhy)].
+      * rewrite (any_source_alias _ _ _ least_closed_tables from to_ Halias
+                   Haf)
+          in Hat.
+        discriminate Hat.
+      * exists y. split; [ | exact Hhy ].
+        exact (sources_alias _ _ _ least_closed_tables from to_ y Hy
+                 (sources_not_any from y Hy) Halias Hat).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_constructor _ _ _ least_closed_tables from relation
+                 base H Hab).
+      * exact (least_holds is_local F T Hl (Atom_has_source base)
+                 (by_has_source_constructor _ _ _ from relation base Hd H)).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_constructor _ _ _ least_closed_tables from relation
+                 base H Hab).
+      * exact (has_source_function_slot _ _ _ least_closed_tables from
+                 relation base H H0).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_parameter _ _ _ least_closed_tables to_ relation base
+                 H Hab).
+      * exact (has_source_parameter _ _ _ least_closed_tables to_ relation
+                 base (least_holds is_local F T Hl _ Hd) H).
+  - pose proof (least_local_derivable is_local F T Hl (Atom_has_source x) H)
+      as Hd.
+    clear H. remember (Atom_has_source x) as atom eqn:Ha. revert x Ha.
+    induction Hd; intros x0 Ha; try discriminate Ha; injection Ha as <-.
+    + left. exact (least_local_holds is_local F T Hl _ Hd).
+    + destruct (s_any_source sol to_) eqn:Hat; [ left; reflexivity | right ].
+      pose proof (least_local_holds is_local F T Hl _ Hd2) as Halias.
+      cbn [holds] in Halias.
+      destruct (IHHd1 from eq_refl) as [Haf | (y & Hy & Hhy)].
+      * rewrite (any_source_alias _ _ _ least_closed_tables from to_ Halias
+                   Haf)
+          in Hat.
+        discriminate Hat.
+      * exists y. split; [ | exact Hhy ].
+        exact (sources_alias _ _ _ least_closed_tables from to_ y Hy
+                 (sources_not_any from y Hy) Halias Hat).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_constructor _ _ _ least_closed_tables from relation
+                 base H Hab).
+      * exact (least_local_holds is_local F T Hl (Atom_has_source base)
+                 (byl_has_source_constructor _ _ _ from relation base Hd H)).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_constructor _ _ _ least_closed_tables from relation
+                 base H Hab).
+      * exact (has_source_function_slot _ _ _ least_closed_tables from
+                 relation base H H0).
+    + destruct (s_any_source sol base) eqn:Hab; [ left; reflexivity | right ].
+      exists base. split.
+      * exact (sources_parameter _ _ _ least_closed_tables to_ relation base
+                 H Hab).
+      * exact (has_source_parameter _ _ _ least_closed_tables to_ relation
+                 base (least_local_holds is_local F T Hl _ Hd) H).
 Qed.
 
 Variable sets : list set_of_closures.
@@ -2027,7 +2121,7 @@ Local Abbreviation G := (graph_of_facts F).
 Local Abbreviation sol := (solution_of_tables T).
 
 Hypothesis Hc : closed is_local G sol.
-Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hleast : least_either is_local F T.
 Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hsets : sets_of_graph G sets.
 Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
@@ -3346,7 +3440,7 @@ Lemma rewrite_type_sound_in (loose : bool) :
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
     (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (v v' : value),
-    least_solution is_local F T ->
+    least_either is_local F T ->
     is_local_slots_only is_local ->
     sets_of_graph (graph_of_facts F) sets ->
     typing_env_satisfied_strictly statics valuation tenv ->
@@ -3379,6 +3473,16 @@ Theorem rewrite_type_sound : rewrite_type_sound_statement.
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_type_sound_in false); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_type_sound_local : rewrite_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
   apply (rewrite_type_sound_in false); try assumption.
   intros H. discriminate H.
 Qed.
@@ -3388,6 +3492,17 @@ Theorem rewrite_unaliased_type_sound :
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_type_sound_in true); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_type_sound_local :
+  rewrite_unaliased_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
   apply (rewrite_type_sound_in true); try assumption.
   intros _. exact Hwhole.
 Qed.
@@ -3398,7 +3513,7 @@ Lemma rewrite_symbol_type_sound_in (loose : bool) :
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
     (s : symbol) (allocated : statically_allocated_value),
-    least_solution is_local F T ->
+    least_either is_local F T ->
     is_local_slots_only is_local ->
     sets_of_graph (graph_of_facts F) sets ->
     typing_env_satisfied_strictly statics valuation tenv ->
@@ -3448,6 +3563,17 @@ Theorem rewrite_symbol_type_sound : rewrite_symbol_type_sound_statement.
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_symbol_type_sound_in false); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_symbol_type_sound_local :
+  rewrite_symbol_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
   apply (rewrite_symbol_type_sound_in false); try assumption.
   intros H. discriminate H.
 Qed.
@@ -3457,6 +3583,17 @@ Theorem rewrite_unaliased_symbol_type_sound :
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_symbol_type_sound_in true); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_symbol_type_sound_local :
+  rewrite_unaliased_symbol_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
   apply (rewrite_symbol_type_sound_in true); try assumption.
   intros _. exact Hwhole.
 Qed.
@@ -3485,11 +3622,34 @@ Proof.
     cbn. intros [= <-]. reflexivity.
 Qed.
 
-Theorem rewrite_result_type_sound : rewrite_result_type_sound_statement.
+(* The type of a result in the fragment of [loose]. *)
+Lemma rewrite_result_type_sound_in (loose : bool) :
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (code_var type_var : variable) (v v' : value),
+    least_either is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with loose valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    (loose = true ->
+     static_sets_whole (solution_of_tables T) statics statics') ->
+    copies_valued tenv canon valuation valuation' ->
+    Typing_env.find tenv (Name_var type_var) None <> None ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v' ->
+    type_satisfied statics' valuation' v'
+      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+         canon code_var type_var).
 Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
-    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies
-    Hfind Hl Hv.
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole
+    Hcopies Hfind Hl Hv.
   unfold rewrite_result_type, rewrite_concrete_type_of, kind_of_name.
   destruct (Typing_env.find tenv (Name_var type_var) None) as [ty0 | ] eqn:Hf;
     [ | contradiction ].
@@ -3501,14 +3661,56 @@ Proof.
                 (Node_variable code_var)) as [Hat Hhu].
   apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
                   is_local F T sets tenv canon statics statics' valuation
-                  valuation' false (least_closed_tables is_local F T Hleast)
-                  Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies
-                  (fun H => False_ind _ (diff_false_true H))
+                  valuation' loose (least_closed_tables is_local F T Hleast)
+                  Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
                   (rewrite_fuel tenv ty0))
            _ ty0 v v' Hfr);
     [ | exact Hsat ].
   left. right. exists (Node_variable code_var).
   split; [ exact Hv | split; [ exact Hat | exact Hhu ] ].
+Qed.
+
+Theorem rewrite_result_type_sound : rewrite_result_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_result_type_sound_in false is_local F T sets tenv canon statics
+           statics' valuation valuation'); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_result_type_sound_local :
+  rewrite_result_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_result_type_sound_in false is_local F T sets tenv canon statics
+           statics' valuation valuation'); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_unaliased_result_type_sound :
+  rewrite_unaliased_result_type_sound_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_result_type_sound_in true is_local F T sets tenv canon statics
+           statics' valuation valuation'); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_result_type_sound_local :
+  rewrite_unaliased_result_type_sound_local_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_result_type_sound_in true is_local F T sets tenv canon statics
+           statics' valuation valuation'); try assumption.
+  intros _. exact Hwhole.
 Qed.
 
 (* ======================================================================== *)
@@ -3527,6 +3729,50 @@ Proof.
            tenv canon (state_statics s) (state_statics t) valuation
            valuation' sym allocated
            Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl).
+Qed.
+
+Theorem exported_types_sound_local : exported_types_sound_local_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_symbol_type_sound_local is_local (traverse_unit flag u e) T
+           sets tenv canon (state_statics s) (state_statics t) valuation
+           valuation' sym allocated
+           Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl).
+Qed.
+
+Theorem exported_unaliased_types_sound :
+  exported_unaliased_types_sound_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst & Hwhole)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_unaliased_symbol_type_sound is_local (traverse_unit flag u e)
+           T sets tenv canon (state_statics s) (state_statics t) valuation
+           valuation' sym allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst
+           Hwhole Hcopies Hl).
+Qed.
+
+Theorem exported_unaliased_types_sound_local :
+  exported_unaliased_types_sound_local_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst & Hwhole)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_unaliased_symbol_type_sound_local is_local
+           (traverse_unit flag u e) T sets tenv canon (state_statics s)
+           (state_statics t) valuation valuation' sym allocated Hleast Hlocal
+           Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl).
 Qed.
 
 (* ======================================================================== *)
@@ -4510,7 +4756,7 @@ Local Abbreviation cm := (U.bound_code_my_closures e).
 Local Abbreviation unboxed :=
   (fst (U.unit_unboxed_fields F T dominated to_unbox e)).
 
-Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hleast : least_either is_local F T.
 Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hsets : sets_of_graph G sets.
 Hypothesis Hkinds : block_fields_of_one_kind G.
@@ -5242,6 +5488,17 @@ Proof.
   intros is_local F T sets dominated to_unbox e tenv canon statics statics'
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
+Qed.
+
+Theorem rewrite_unboxed_result_type_sound_local :
+  rewrite_unboxed_result_type_sound_local_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
   eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
 Qed.
 
@@ -5285,22 +5542,22 @@ Proof.
     destruct Hcons as [H | [H | [H | []]]]; discriminate H.
 Qed.
 
-Theorem rebuild_exits : rebuild_exits_statement.
+Theorem rebuild_exits_local : rebuild_exits_local_statement.
 Proof.
-  intros flag is_local u e T b n s k vs hp rd Hlocal Hslots Hfrag Hany Hrk
-    Hwf Hexits Hcheck Hexact Hrun Hstep.
+  intros flag is_local u e T b n s k vs hp rd Hlocal Hfrag Hany Hrk Hwf
+    Hexits Hcheck Hlrs Hexact Hrun Hstep.
   split.
-  - destruct (FlambdaReaperFlowProofs.flow_sound flag is_local u e T n Hlocal
-                Hslots
+  - destruct (FlambdaReaperFlowProofs.flow_sound_local flag is_local u e T n
+                Hlocal
                 (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e
                    Hfrag)
-                Hcheck)
+                Hcheck Hlrs)
       as (located & Hflows).
     rewrite Hrun in Hflows. destruct Hflows as (_ & _ & Hst & _).
     intros x allocated Hl. exact (proj1 (Hst x allocated Hl)).
-  - destruct (FlambdaReaperRebuildProofs.rebuild_refines_observably flag
-                is_local u e T b Hlocal Hslots Hfrag Hany Hrk Hwf Hexits
-                Hcheck Hexact)
+  - destruct (FlambdaReaperRebuildProofs.rebuild_refines_observably_local
+                flag is_local u e T b Hlocal Hfrag Hany Hrk Hwf Hexits Hcheck
+                Hlrs Hexact)
       as [Hfwd _].
     assert (Hb : behaves (State e [] [] empty_static_env empty_heap no_reads)
                    (Exits k vs hp)).
@@ -5312,6 +5569,17 @@ Proof.
     destruct (FlambdaReaperRebuildProofs.run_exit_state m _ k vs' hp rd' Hm)
       as (m' & t & Ht & Hexit).
     exists m', t, vs', rd'. split; assumption.
+Qed.
+
+Theorem rebuild_exits : rebuild_exits_statement.
+Proof.
+  intros flag is_local u e T b n s k vs hp rd Hlocal Hslots Hfrag Hany Hrk
+    Hwf Hexits Hcheck Hexact.
+  exact (rebuild_exits_local flag is_local u e T b n s k vs hp rd Hlocal Hfrag
+           Hany Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hexact).
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -5564,6 +5832,44 @@ Qed.
 (* [rebuild_exit_relation] of a unit whose closures are made where the
    graph has only the facts of their sets ([RP.closures_exact]) and whose
    static values are of the fragment where it exits. *)
+Lemma exit_relation_of_exact_local (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  RP.closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+    e ->
+  exits_of_values e ->
+  rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) e
+    (rebuild_unit_from_tables (traverse_unit flag u e) T
+       preserve_direct_calls e).
+Proof.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Hxe Hvals
+    n s k vs hp rd Hrun Hstep.
+  split.
+  - exact (proj1 (rebuild_exits_local flag is_local u e T
+                    preserve_direct_calls n s k vs hp rd Hlocal Hfrag Hdc Hrk
+                    Hwf Hexits Hcheck Hlrs Hcheck_exact Hrun Hstep)).
+  - destruct (RP.rebuild_exit_statics_local flag is_local u e T
+                preserve_direct_calls Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+                Hlrs Hcheck_exact Hxe n s k vs hp rd Hrun Hstep)
+      as (m & t & vs' & rd' & Hm & Ht & Hst & Hnl).
+    exists m, t, vs', rd'.
+    split; [ exact Hm | split; [ exact Ht | ] ].
+    exact (statics_rel_rebuilt is_local _ _ _ _ _
+             (check_closed_sound is_local _ _ Hcheck)
+             (check_field_used_exact_sound is_local _ _ Hcheck_exact) Hst Hnl
+             (Hvals n s k vs hp rd Hrun Hstep)).
+Qed.
+
 Lemma exit_relation_of_exact (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) :
@@ -5584,48 +5890,457 @@ Lemma exit_relation_of_exact (flag : reaper_preserve_direct_calls)
     (rebuild_unit_from_tables (traverse_unit flag u e) T
        preserve_direct_calls e).
 Proof.
-  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact Hxe
-    Hvals n s k vs hp rd Hrun Hstep.
-  split.
-  - exact (proj1 (rebuild_exits flag is_local u e T preserve_direct_calls n s
-                    k vs hp rd Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
-                    Hcheck_exact Hrun Hstep)).
-  - destruct (RP.rebuild_exit_statics flag is_local u e T
-                preserve_direct_calls Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits
-                Hcheck Hcheck_exact Hxe n s k vs hp rd Hrun Hstep)
-      as (m & t & vs' & rd' & Hm & Ht & Hst & Hnl).
-    exists m, t, vs', rd'.
-    split; [ exact Hm | split; [ exact Ht | ] ].
-    exact (statics_rel_rebuilt is_local _ _ _ _ _
-             (check_closed_sound is_local _ _ Hcheck)
-             (check_field_used_exact_sound is_local _ _ Hcheck_exact) Hst Hnl
-             (Hvals n s k vs hp rd Hrun Hstep)).
+  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact.
+  exact (exit_relation_of_exact_local flag is_local u e T preserve_direct_calls
+           Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact).
 Qed.
 
 From OxCamlFlambda2 Require FlambdaReaperClosuresExactProofs.
 
+Theorem rebuild_exit_relation_holds_local :
+  rebuild_exit_relation_holds_local_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs
+    Hcheck_exact Honce Hvals.
+  apply (exit_relation_of_exact_local flag is_local u e T b Hlocal Hfrag Hdc
+           Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact); [ | exact Hvals ].
+  exact (FlambdaReaperClosuresExactProofs.closures_exact_of_bound_once flag u
+           e Hfrag Hwf Honce).
+Qed.
+
 Theorem rebuild_exit_relation_holds : rebuild_exit_relation_holds_statement.
 Proof.
   intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
-    Hcheck_exact Honce Hvals.
-  apply (exit_relation_of_exact flag is_local u e T b Hlocal Hslots Hfrag Hdc
-           Hrk Hwf Hexits Hcheck Hcheck_exact); [ | exact Hvals ].
-  exact (FlambdaReaperClosuresExactProofs.closures_exact_of_bound_once flag u
-           e Hfrag Hwf Honce).
+    Hcheck_exact.
+  exact (rebuild_exit_relation_holds_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact).
+Qed.
+
+Theorem exported_types_sound_end_to_end_local :
+  exported_types_sound_end_to_end_local_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals
+    Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  destruct (least_local_checks is_local _ T Hleast) as [Hcheck Hlrs].
+  apply (exported_types_sound_local flag is_local u e T b sets tenv canon
+           valuation valuation' n s k vs hp rd sym allocated Hlocal Hleast
+           Hsets);
+    try assumption.
+  exact (rebuild_exit_relation_holds_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck Hlrs
+           (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
 Qed.
 
 Theorem exported_types_sound_end_to_end :
   exported_types_sound_end_to_end_statement.
 Proof.
   intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
-    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
-    Hvals Hsets Hrun Hstep Henv Hfr Hcopies Hl.
-  apply (exported_types_sound flag is_local u e T b sets tenv canon valuation
-           valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets);
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast.
+  exact (exported_types_sound_end_to_end_local flag is_local u e T b sets tenv
+           canon valuation valuation' n s k vs hp rd sym allocated Hlocal Hfrag
+           Hdc Hrk Hwf Hexits
+           (least_local_of_least is_local _ T Hleast
+              (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+                 is_local u e T Hlocal Hslots))).
+Qed.
+
+(* ------------------------------------------------------------------------ *)
+(* The static sets kept whole                                               *)
+(* ------------------------------------------------------------------------ *)
+
+From OxCamlFlambda2 Require FlambdaClosuresSpec FlambdaClosuresProofs
+  FlambdaWellFormedProofs.
+
+(* The rebuild keeps the sets of a term well-formed: it keeps the
+   function slots of a set, and keeps or removes the bindings of a
+   static set together, as their symbols ([static_const_is_used]). *)
+Section Rebuilt_sets.
+
+Variable F : facts.
+Variable sol : solution.
+Variable b : bool.
+Variable ids : list code_id.
+Variable ff : positive.
+
+Local Abbreviation rebuild := (rebuild_expr F sol b ids ff).
+Local Abbreviation rebuild_h := (rebuild_handler F sol b ids ff).
+Local Abbreviation rebuild_b := (rebuild_binding F sol b ids ff).
+
+(* A binding rebuilt has the code ids and the symbols of the sets of the
+   binding. *)
+Lemma rebuild_binding_shape (en : rebuild_env) (bd bd' : static_binding) :
+  bd' ∈ rebuild_b en bd ->
+  static_set_code_ids bd' = static_set_code_ids bd
+  ∧ (∀ c : static_binding,
+       binds_symbol_of_set bd' c = binds_symbol_of_set bd c)
+  ∧ ∀ c : static_binding,
+      binds_symbol_of_set c bd' = binds_symbol_of_set c bd.
+Proof.
+  destruct bd as [id c | id | s const]; cbn [rebuild_binding].
+  - destruct (is_code_id_used sol id); intros [<- | []];
+      (split; [ reflexivity | split ]); intros c';
+      destruct c' as [ | | s' [ ] ]; reflexivity.
+  - intros [<- | []]. auto.
+  - destruct (static_const_is_used sol s const); [ | intros [] ].
+    intros [<- | []].
+    split; [ destruct const; reflexivity | split ]; intros c';
+      destruct const; destruct c' as [ | | s' [ ] ]; reflexivity.
+Qed.
+
+(* [static_sets_code_disjoint] of a group whose bindings are mapped to
+   at most one each, of the same shape. *)
+Lemma code_disjoint_flat_map
+    (f : static_binding -> list static_binding) :
+  (∀ bd : static_binding, f bd = [] ∨ ∃ bd', f bd = [bd']) ->
+  (∀ bd bd' : static_binding,
+     bd' ∈ f bd ->
+     static_set_code_ids bd' = static_set_code_ids bd
+     ∧ (∀ c : static_binding,
+          binds_symbol_of_set bd' c = binds_symbol_of_set bd c)
+     ∧ ∀ c : static_binding,
+         binds_symbol_of_set c bd' = binds_symbol_of_set c bd) ->
+  ∀ l : list static_binding,
+    static_sets_code_disjoint l = true ->
+    static_sets_code_disjoint (flat_map f l) = true.
+Proof.
+  intros Hone Hshape. induction l as [ | bd l IH]; [ reflexivity | ].
+  cbn [static_sets_code_disjoint flat_map].
+  intros H. apply andb_true_iff in H as [Hall Hl].
+  destruct (Hone bd) as [-> | (bd' & Hbd)]; [ exact (IH Hl) | ].
+  rewrite Hbd. cbn [app static_sets_code_disjoint].
+  rewrite (IH Hl), andb_true_r.
+  destruct (Hshape bd bd' (ltac:(rewrite Hbd; left; reflexivity)))
+    as (Hcodes & Hsym & _).
+  apply forallb_forall. intros b2' Hin.
+  apply in_flat_map in Hin as (b2 & Hb2 & Hin).
+  destruct (Hshape b2 b2' Hin) as (Hcodes2 & _ & Hsym2).
+  rewrite Hsym, Hsym2, Hcodes, Hcodes2.
+  exact (proj1 (forallb_forall _ _) Hall b2 Hb2).
+Qed.
+
+Lemma rebuild_bindings_whole (en : rebuild_env)
+    (bindings : list static_binding) :
+  forallb (static_set_whole bindings) bindings = true ->
+  forallb (static_set_whole (flat_map (rebuild_b en) bindings))
+    (flat_map (rebuild_b en) bindings)
+  = true.
+Proof.
+  intros H. apply forallb_forall. intros bd' Hin'.
+  apply in_flat_map in Hin' as (bd & Hin & Hbd').
+  pose proof (proj1 (forallb_forall _ _) H bd Hin) as Hw.
+  destruct bd as [id c | id | s const]; cbn [rebuild_binding] in Hbd'.
+  - destruct (is_code_id_used sol id); destruct Hbd' as [<- | []];
+      reflexivity.
+  - destruct Hbd' as [<- | []]. reflexivity.
+  - destruct (static_const_is_used sol s const) eqn:Hused;
+      [ | destruct Hbd' ].
+    destruct Hbd' as [<- | []].
+    destruct const as [code vss | slot syms decls vss | tag fields | contents
+                      | bytes | elements];
+      try reflexivity.
+    cbn [rebuild_static_const static_set_whole] in Hw |- *.
+    apply andb_true_iff in Hw as [Hw Hall]. rewrite Hw. cbn [andb].
+    apply forallb_forall. intros [slot' s'] Hin_s.
+    pose proof (proj1 (forallb_forall _ _) Hall (slot', s') Hin_s) as Hex.
+    cbn beta iota in Hex.
+    apply existsb_exists in Hex as (bd2 & Hbd2 & Hbinds).
+    apply FlambdaClosuresProofs.binds_symbol_to_sound in Hbinds.
+    subst bd2.
+    apply existsb_exists.
+    eexists. split.
+    + apply in_flat_map.
+      exists (Bind_symbol s' (Static_const_closure_of_set slot' syms decls
+                                vss)).
+      split; [ exact Hbd2 | ].
+      cbn [rebuild_binding]. cbn [static_const_is_used] in Hused |- *.
+      rewrite Hused. left. reflexivity.
+    + cbn [rebuild_static_const binds_symbol_to]. rewrite Pos.eqb_refl.
+      destruct (static_const_eq_dec _ _) as [_ | Hne];
+        [ reflexivity | exfalso; apply Hne; reflexivity ].
+Qed.
+
+Lemma rebuild_let_static_unfold (en : rebuild_env)
+    (bindings : list static_binding) (body : expr) :
+  rebuild en (Let_static bindings body)
+  = Let_static (flat_map (rebuild_b en) bindings)
+      (rebuild (bind_variables en []) body).
+Proof. reflexivity. Qed.
+
+Lemma sets_well_formed_let_static (bindings : list static_binding)
+    (body : expr) :
+  sets_well_formed (Let_static bindings body)
+  = forallb (static_set_whole bindings) bindings
+    && static_sets_code_disjoint bindings
+    && forallb binding_sets_well_formed bindings
+    && sets_well_formed body.
+Proof. reflexivity. Qed.
+
+Lemma rebuild_sets_well_formed :
+  (∀ (e : expr) (en : rebuild_env),
+     sets_well_formed e = true -> sets_well_formed (rebuild en e) = true)
+  ∧ ∀ (h : continuation_handler) (en : rebuild_env) (dc : bool)
+      (mask : list bool),
+      handler_sets_well_formed h = true ->
+      handler_sets_well_formed (rebuild_h en dc mask h) = true.
+Proof.
+  apply FlambdaReaperFlowProofs.expr_handler_ind.
+  - intros x kind d body IH en H. cbn [sets_well_formed] in H.
+    apply andb_true_iff in H as [Hd Hb].
+    cbn [rebuild_expr].
+    destruct (is_pending_projection en x d).
+    + cbn [sets_well_formed]. rewrite Hd. exact (IH _ Hb).
+    + destruct d; cbn [named_sets_well_formed] in Hd;
+        repeat match goal with
+               | |- sets_well_formed (if ?c then _ else _) = true =>
+                 destruct c
+               end;
+        try reflexivity; try exact (IH _ Hb);
+        cbn [sets_well_formed]; rewrite (IH _ Hb), andb_true_r;
+        [ .. | exact Hd ];
+        unfold rebuild_named;
+        repeat match goal with
+               | |- named_sets_well_formed (match ?c with _ => _ end) = true
+                 => destruct c
+               | |- named_sets_well_formed (if ?c then _ else _) = true =>
+                 destruct c
+               end;
+        reflexivity.
+  - intros bindings body Hcodes IH en H.
+    rewrite sets_well_formed_let_static in H.
+    apply andb_true_iff in H as [H Hb].
+    apply andb_true_iff in H as [H Hbs].
+    apply andb_true_iff in H as [Hwhole Hdisj].
+    rewrite rebuild_let_static_unfold, sets_well_formed_let_static.
+    rewrite (rebuild_bindings_whole en bindings Hwhole).
+    rewrite (code_disjoint_flat_map (rebuild_b en)); [ | | | exact Hdisj ].
+    + rewrite (IH _ Hb), !andb_true_r. cbn [andb].
+      apply forallb_forall. intros bd' Hin'.
+      apply in_flat_map in Hin' as (bd & Hin & Hbd').
+      pose proof (proj1 (forallb_forall _ _) Hbs bd Hin) as Hw.
+      destruct bd as [id c | id | s const]; cbn [rebuild_binding] in Hbd'.
+      * destruct (is_code_id_used sol id); destruct Hbd' as [<- | []];
+          [ | reflexivity ].
+        pose proof (Hcodes id c Hin) as Hc.
+        destruct c as [params mc ret exn md cbody].
+        cbn [binding_sets_well_formed code_sets_well_formed code_body
+             rebuild_code] in Hw, Hc |- *.
+        destruct (existsb _ _); [ reflexivity | exact (Hc _ Hw) ].
+      * destruct Hbd' as [<- | []]. reflexivity.
+      * destruct (static_const_is_used sol s const); [ | destruct Hbd' ].
+        destruct Hbd' as [<- | []]. reflexivity.
+    + intros bd. destruct bd as [id c | id | s const]; cbn [rebuild_binding].
+      * destruct (is_code_id_used sol id); right; eexists; reflexivity.
+      * right. eexists. reflexivity.
+      * destruct (static_const_is_used sol s const);
+          [ right; eexists; reflexivity | left; reflexivity ].
+    + exact (rebuild_binding_shape en).
+  - intros k h body IHh IH en H. cbn [sets_well_formed] in H.
+    apply andb_true_iff in H as [Hh Hb].
+    cbn [rebuild_expr].
+    destruct (among k _); [ | exact (IH _ Hb) ].
+    cbn [sets_well_formed]. rewrite (IHh _ _ _ Hh). exact (IH _ Hb).
+  - intros handlers body IHh IH en H. cbn [sets_well_formed] in H.
+    apply andb_true_iff in H as [Hh Hb].
+    cbn [rebuild_expr sets_well_formed]. rewrite (IH _ Hb), andb_true_r.
+    apply forallb_forall. intros [k h'] Hin.
+    apply in_map_iff in Hin as ([k0 h0] & Heq & Hin). injection Heq as <- <-.
+    apply IHh with (k := k0); [ exact Hin | ].
+    exact (proj1 (forallb_forall _ _) Hh (k0, h0) Hin).
+  - intros ap en _. cbn [rebuild_expr]. unfold rebuild_apply.
+    destruct (_ || _); [ reflexivity | ]. unfold make_apply_wrapper.
+    destruct (lookup _ _); [ destruct (forallb _ _) | ]; reflexivity.
+  - intros ac en _. cbn [rebuild_expr]. unfold rebuild_apply_cont.
+    destruct (rewrite_apply_cont _ _ _); reflexivity.
+  - intros scrutinee arms en _. cbn [rebuild_expr]. unfold rebuild_switch.
+    destruct (Keyed.is_empty _); reflexivity.
+  - intros en _. reflexivity.
+  - intros params metadata handler IH en dc mask H.
+    cbn [rebuild_handler handler_sets_well_formed] in H |- *.
+    destruct (dc && _); [ reflexivity | exact (IH _ H) ].
+Qed.
+
+End Rebuilt_sets.
+
+(* The rebuilt unit of a well-formed unit binds its static sets whole
+   wherever it runs to. *)
+Lemma rebuilt_sets_bound (F : facts) (T : tables) (b : bool)
+    (u : unit_interface) (e : expr) (m : nat) (t : state) :
+  well_formed_unit u e = true ->
+  run m
+    (State (rebuild_unit_from_tables F T b e) [] [] empty_static_env
+       empty_heap no_reads)
+  = Step t ->
+  FlambdaClosuresSpec.static_sets_bound (state_statics t).
+Proof.
+  intros Hwf Hm.
+  assert (Hsets : sets_well_formed (rebuild_unit_from_tables F T b e) = true).
+  { unfold rebuild_unit_from_tables, rebuild_unit.
+    apply (proj1 (rebuild_sets_well_formed F (solution_of_tables T) b _ _)).
+    exact (FlambdaWellFormedProofs.well_formed_unit_sets_well_formed u e
+             Hwf). }
+  exact (proj2 (proj2 (proj2
+           (FlambdaClosuresProofs.sets_inv_run m _ t
+              (FlambdaClosuresProofs.sets_inv_initial _ Hsets) Hm)))).
+Qed.
+
+(* The static environments that the simulation relates where the unit
+   exits keep the static sets whole, if each run binds the symbols of
+   its sets together: a symbol of a set that has a use is bound in the
+   second run, to a closure of the same set. *)
+Lemma statics_rel_whole (G : graph) (sol : solution)
+    (keep : value_slot -> bool) (statics statics' : static_env) :
+  RP.exit_statics_rel G sol keep statics statics' ->
+  FlambdaClosuresSpec.static_sets_bound statics ->
+  FlambdaClosuresSpec.static_sets_bound statics' ->
+  static_sets_whole sol statics statics'.
+Proof.
+  intros (cds & F & b & ids & ff & cc & cdeps & cmds & located & _ & _
+          & Honly & _)
+    Hbound Hbound' s slot syms decls vs Hl Hhu.
+  destruct (Hbound s slot syms decls vs Hl) as [Hslot Hset].
+  split; [ exact Hslot | ].
+  destruct (Honly s _ Hl)
+    as [(tag & fields & Heq)
+       | [(slot0 & syms0 & decls0 & vs0 & Heq & Htarget & Hbinds)
+         | (Ho & _)]];
+    [ discriminate Heq | | destruct Ho ].
+  injection Heq as <- <- <- <-.
+  destruct Htarget as [Hn | (vs' & Hls' & _)]; [ destruct (Hbinds Hhu Hn) | ].
+  exists vs'. intros g s_g Hg.
+  split; [ exact (Hset g s_g (lookup_in _ _ _ Hg)) | ].
+  exact (proj2 (Hbound' s slot syms decls vs' Hls') g s_g
+           (lookup_in _ _ _ Hg)).
+Qed.
+
+(* [rebuild_exit_relation_whole] of a unit whose closures are made where
+   the graph has only the facts of their sets and whose static values
+   are of the fragment where it exits. *)
+Lemma exit_relation_whole_of_exact_local (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  RP.closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+    e ->
+  exits_of_values e ->
+  rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) e
+    (rebuild_unit_from_tables (traverse_unit flag u e) T
+       preserve_direct_calls e).
+Proof.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Hxe Hvals
+    n s k vs hp rd Hrun Hstep.
+  split.
+  - exact (proj1 (rebuild_exits_local flag is_local u e T
+                    preserve_direct_calls n s k vs hp rd Hlocal Hfrag Hdc Hrk
+                    Hwf Hexits Hcheck Hlrs Hcheck_exact Hrun Hstep)).
+  - destruct (RP.rebuild_exit_statics_local flag is_local u e T
+                preserve_direct_calls Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+                Hlrs Hcheck_exact Hxe n s k vs hp rd Hrun Hstep)
+      as (m & t & vs' & rd' & Hm & Ht & Hst & Hnl).
+    exists m, t, vs', rd'.
+    split; [ exact Hm | split; [ exact Ht | split ] ].
+    + exact (statics_rel_rebuilt is_local _ _ _ _ _
+               (check_closed_sound is_local _ _ Hcheck)
+               (check_field_used_exact_sound is_local _ _ Hcheck_exact) Hst
+               Hnl (Hvals n s k vs hp rd Hrun Hstep)).
+    + apply (statics_rel_whole _ _ _ _ _ Hst).
+      * exact (FlambdaClosuresProofs.well_formed_sets_bound u e n s Hwf Hrun).
+      * exact (rebuilt_sets_bound _ T preserve_direct_calls u e m t Hwf Hm).
+Qed.
+
+Lemma exit_relation_whole_of_exact (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  RP.closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+    e ->
+  exits_of_values e ->
+  rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) e
+    (rebuild_unit_from_tables (traverse_unit flag u e) T
+       preserve_direct_calls e).
+Proof.
+  intros Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck Hcheck_exact.
+  exact (exit_relation_whole_of_exact_local flag is_local u e T
+           preserve_direct_calls Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact).
+Qed.
+
+Theorem rebuild_exit_relation_whole_holds_local :
+  rebuild_exit_relation_whole_holds_local_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs
+    Hcheck_exact Honce Hvals.
+  apply (exit_relation_whole_of_exact_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact); [ | exact Hvals ].
+  exact (FlambdaReaperClosuresExactProofs.closures_exact_of_bound_once flag u
+           e Hfrag Hwf Honce).
+Qed.
+
+Theorem rebuild_exit_relation_whole_holds :
+  rebuild_exit_relation_whole_holds_statement.
+Proof.
+  intros flag is_local u e T b Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hcheck
+    Hcheck_exact.
+  exact (rebuild_exit_relation_whole_holds_local flag is_local u e T b Hlocal
+           Hfrag Hdc Hrk Hwf Hexits Hcheck
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal Hslots)
+           Hcheck_exact).
+Qed.
+
+Theorem exported_unaliased_types_sound_end_to_end_local :
+  exported_unaliased_types_sound_end_to_end_local_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals
+    Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  destruct (least_local_checks is_local _ T Hleast) as [Hcheck Hlrs].
+  apply (exported_unaliased_types_sound_local flag is_local u e T b sets tenv
+           canon valuation valuation' n s k vs hp rd sym allocated Hlocal Hleast
+           Hsets);
     try assumption.
-  exact (rebuild_exit_relation_holds flag is_local u e T b Hlocal Hslots Hfrag
-           Hdc Hrk Hwf Hexits (proj1 Hleast)
-           (least_field_used_exact is_local _ T Hleast) Honce Hvals).
+  exact (rebuild_exit_relation_whole_holds_local flag is_local u e T b Hlocal
+           Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs
+           (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
+Qed.
+
+Theorem exported_unaliased_types_sound_end_to_end :
+  exported_unaliased_types_sound_end_to_end_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast.
+  exact (exported_unaliased_types_sound_end_to_end_local flag is_local u e T b
+           sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hfrag Hdc Hrk Hwf Hexits
+           (least_local_of_least is_local _ T Hleast
+              (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+                 is_local u e T Hlocal Hslots))).
 Qed.
 
 (* ======================================================================== *)

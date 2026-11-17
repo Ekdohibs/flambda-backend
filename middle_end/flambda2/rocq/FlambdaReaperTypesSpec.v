@@ -36,8 +36,10 @@
    and the first statements' [shaped_type], [type_in_fragment],
    [env_in_fragment]), [static_sets_whole], [sets_of_graph],
    [copies_valued], [rebuild_exit_relation] (what the statement of the
-   two runs asks of the simulation of the rebuild), [statics_of_values]
-   and [exits_of_values] (its premise on static blocks), [unboxed_values] and
+   two runs asks of the simulation of the rebuild) and
+   [rebuild_exit_relation_whole] (the same for closure types that are
+   not aliases), [statics_of_values] and [exits_of_values] (its premise
+   on static blocks), [unboxed_values] and
    [block_fields_of_one_kind] (for unboxed variables of code),
    [slot_value_at_path] and [changed_closure_rebuilt] (for the closures
    whose representation changes), the statements, and the examples,
@@ -179,7 +181,8 @@
      be kept whole ([static_sets_whole]): the closure of a static set at
      another slot is a symbol that may have no use, and [statics_rebuilt]
      says nothing of what the second run binds to it. No fault: the
-     rewriting is sound there.
+     rewriting is sound there. The runs keep the static sets whole
+     ([rebuild_exit_relation_whole_holds_statement]).
    - [rewrite_result_type_sound_statement]: the type that the result
      types of code give a parameter or a result, rewritten as
      [rewrite_result_types] rewrites it under the metadata of the
@@ -188,7 +191,8 @@
      It is the type of the copy that [rewrite_result_types] makes, to
      which the new parameter is an alias. Of the runs, it asks the values
      of the variable in the two, related, as the simulation has them at
-     a return of code.
+     a return of code. [rewrite_unaliased_result_type_sound_statement]:
+     the same for the fragment [loose].
    - [rewrite_unboxed_result_type_sound_statement]: the same of a
      parameter or a result whose variable of code the unboxing of
      FlambdaReaperUnboxing.v unboxes ([unit_unboxed_fields]): the code
@@ -227,7 +231,11 @@
      of the simulation of FlambdaReaperRebuildProofs.v, that the
      static environments of the two exits are related by
      [statics_rebuilt], and that every symbol bound in the first is an
-     allocation of its own.
+     allocation of its own. [exported_unaliased_types_sound_statement]:
+     the same for the fragment [loose], from
+     [rewrite_unaliased_symbol_type_sound_statement] and
+     [rebuild_exit_relation_whole], which asks also [static_sets_whole]
+     of the static environments of the two exits.
    - [rebuild_exit_relation_holds_statement]: [rebuild_exit_relation]
      holds under the premises of
      FlambdaReaperRebuildSpec.rebuild_refines_observably_statement, of a
@@ -239,9 +247,26 @@
      which [set_sites] and [slot_held] ask; the second is what
      [field_rebuilt] needs of a field of a static block, and is needed
      ([naked_field_exit_relation_statement]).
-   - [exported_types_sound_end_to_end_statement]: the statement of the
-     two runs with no premise on the relation of the runs, for a unit
-     of those premises and the least solution of its graph.
+     [rebuild_exit_relation_whole_holds_statement]:
+     [rebuild_exit_relation_whole] under the same premises. The rebuild
+     keeps or removes the bindings of a static set together, as one of
+     its symbols has a use or none (FlambdaReaperRebuild.static_const_is_used),
+     so that the rebuilt unit of a well-formed unit binds its static sets
+     whole as the unit does (FlambdaClosuresSpec.static_sets_bound, of
+     the run of each); and the simulation binds in the second run each
+     symbol of a static set that has a use, to a closure of the same set.
+   - [exported_types_sound_end_to_end_statement] and
+     [exported_unaliased_types_sound_end_to_end_statement]: the
+     statements of the two runs with no premise on the relation of the
+     runs, for a unit of those premises and the least solution of its
+     graph.
+   - The statements with local fields (the section Local fields): each
+     statement above that asks a least solution or that no field be
+     local, of its name with [_local], for a least solution of the rules
+     with the fix of local fields ([least_solution_local]) and with the
+     check of the fix ([check_local_reads_used]) in place of the premise
+     that no field is local or no slot projected. Those of a unit before
+     the fix are corollaries.
    - [boxed_fix_needed_statement] and [alias_fix_needed_statement]: the
      first statement is false without the fix of a boxed number whose
      contents have no use, and without that of the aliases under a
@@ -300,11 +325,10 @@
      the fixes and as the compiler has it.
 
    What is left out:
-   - Of closure types that are not aliases: the statements of result
-     types and of the two runs, and [static_sets_whole] of the runs,
-     which the simulation does not give (its [statics_rel] lets the
-     second run leave unbound a symbol of a static set that has no use).
-     Closures of a set of one function with no slot named
+   - Of closure types that are not aliases: the result types of the
+     unboxed variables of code
+     ([rewrite_unboxed_result_type_sound_statement] is of the fragment of
+     aliases). Closures of a set of one function with no slot named
      ([Value_closure], [Static_closure]): only the older forms
      [Set_of_closures] and [Static_const_set_of_closures] make them,
      which no term of the compiler is converted to and which
@@ -348,7 +372,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaPrimitiveSpec FlambdaSemanticsSpec
   FlambdaWellFormedSpec FlambdaReaperGraphSpec FlambdaReaperTraversal
   FlambdaReaperSolution FlambdaReaperRebuild FlambdaReaperFlowSpec
-  FlambdaReaperLeastSpec FlambdaReaperTypes.
+  FlambdaReaperLeastSpec FlambdaReaperLocalFields FlambdaReaperTypes.
 From OxCamlFlambda2 Require FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesCallsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
@@ -888,6 +912,32 @@ Definition rewrite_result_type_sound_with (fx : fixes) : Prop :=
 Definition rewrite_result_type_sound_statement : Prop :=
   rewrite_result_type_sound_with all_fixes.
 
+(* [rewrite_result_type_sound_statement] for the types whose closure
+   types need not be aliases, the static sets of closures being kept
+   whole. *)
+Definition rewrite_unaliased_result_type_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (code_var type_var : variable) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    Typing_env.find tenv (Name_var type_var) None <> None ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v' ->
+    type_satisfied statics' valuation' v'
+      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+         canon code_var type_var).
+
 (* The field [f] of a value: a field of a block, or the contents of a
    boxed number (as FlambdaReaperUnboxingRefinesProofs.field_value). *)
 Definition field_of_value (f : field) (w : value) : option value :=
@@ -1199,6 +1249,60 @@ Definition exported_types_sound_statement : Prop :=
     step s = Exit k vs hp rd ->
     typing_env_satisfied_strictly (state_statics s) valuation tenv ->
     env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+(* [rebuild_exit_relation], with the static sets of closures kept whole
+   in the static environments of the two exits ([static_sets_whole]):
+   what the statement of the two runs for the closure types that are not
+   aliases asks of the simulation. *)
+Definition rebuild_exit_relation_whole (G : graph) (sol : solution)
+    (e e' : expr) : Prop :=
+  ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    statics_allocated sol (state_statics s)
+    ∧ ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+        run m (State e' [] [] empty_static_env empty_heap no_reads) = Step t
+        ∧ step t = Exit k vs' hp rd'
+        ∧ statics_rebuilt G sol (state_statics s) (state_statics t)
+        ∧ static_sets_whole sol (state_statics s) (state_statics t).
+
+(* The statement of the two runs for the types whose closure types need
+   not be aliases ([env_in_fragment_with true]), given
+   [rebuild_exit_relation_whole]. *)
+Definition exported_unaliased_types_sound_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    least_solution is_local (traverse_unit flag u e) T ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e) ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
     copies_valued tenv canon valuation valuation' ->
     lookup sym (static_values (state_statics s)) = Some allocated ->
     ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
@@ -1784,6 +1888,473 @@ Definition exported_types_sound_end_to_end_statement : Prop :=
     step s = Exit k vs hp rd ->
     typing_env_satisfied_strictly (state_statics s) valuation tenv ->
     env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+(* [rebuild_exit_relation_whole] holds under the premises of
+   [rebuild_exit_relation_holds_statement]. The rebuild keeps or removes
+   a static set whole (FlambdaReaperRebuild.static_const_is_used), so
+   that the rebuilt unit, as the unit, binds the symbols of its static
+   sets together (FlambdaClosuresSpec.static_sets_bound, of the runs of
+   both); and the simulation binds in the second run each symbol of a
+   static set that has a use. *)
+Definition rebuild_exit_relation_whole_holds_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* [exported_unaliased_types_sound_statement] with no premise on the runs
+   but [exits_of_values], for a unit of the premises of
+   [rebuild_exit_relation_whole_holds_statement] and the least solution
+   of its graph, as [exported_types_sound_end_to_end_statement]. *)
+Definition exported_unaliased_types_sound_end_to_end_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    least_solution is_local (traverse_unit flag u e) T ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+(* ======================================================================== *)
+(* Local fields                                                             *)
+(* ======================================================================== *)
+
+(* The statements with local fields ([-reaper-local-fields]), under the
+   fix of FlambdaReaperLocalFieldsSpec.v. Each is the statement of its
+   name without [_local], with a least solution of the rules with the fix
+   ([least_solution_local]) in place of [least_solution], and the check
+   of the fix ([check_local_reads_used]) in place of the premise
+   [(∀ f, is_local f = false) ∨ projection_free e = true]. The statements
+   of a unit before the fix are corollaries: the old premise implies the
+   check (FlambdaReaperFlowSpec.old_premise_local_reads_used_statement),
+   and a least solution that passes it is one of the rules with the fix
+   (FlambdaReaperLeastSpec.least_local_of_least_statement). Those of a
+   graph and its tables are not, nor are these corollaries of them: the
+   least solution of the rules with the fix may lose tuples of [usages]
+   that the one before it has
+   (FlambdaReaperLeastSpec.local_fix_drops_usages_statement). The two
+   are proved of a least solution of the rules before the fix or with
+   it. *)
+
+(* The statements of a graph and its tables, for a least solution of the
+   rules with the fix. *)
+Definition rewrite_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (v v' : value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    type_in_fragment valuation t ->
+    rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+         canon fuel m t).
+
+Definition rewrite_symbol_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (s : symbol) (allocated : statically_allocated_value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup s (static_values statics) = Some allocated ->
+    type_satisfied statics' valuation' (Value_symbol s)
+      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+         canon s).
+
+Definition rewrite_unaliased_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (v v' : value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+         canon fuel m t).
+
+Definition rewrite_unaliased_symbol_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (s : symbol) (allocated : statically_allocated_value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup s (static_values statics) = Some allocated ->
+    type_satisfied statics' valuation' (Value_symbol s)
+      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+         canon s).
+
+Definition rewrite_result_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (code_var type_var : variable) (v v' : value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    Typing_env.find tenv (Name_var type_var) None <> None ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v' ->
+    type_satisfied statics' valuation' v'
+      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+         canon code_var type_var).
+
+Definition rewrite_unaliased_result_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
+    (statics statics' : static_env) (valuation valuation' : env)
+    (code_var type_var : variable) (v v' : value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    Typing_env.find tenv (Name_var type_var) None <> None ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v' ->
+    type_satisfied statics' valuation' v'
+      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+         canon code_var type_var).
+
+Definition rewrite_unboxed_result_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
+    (ws : list value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    Keyed.lookup node_eqb (Node_variable code_var)
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = Some fields ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v_mid ->
+    unboxed_values fields v_mid ws ->
+    Forall2 (type_satisfied statics' valuation') ws
+      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
+         tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
+         type_var fields).
+
+(* The statements of the two runs given the relation of the runs, for a
+   least solution of the rules with the fix. *)
+Definition exported_types_sound_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e) ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+Definition exported_unaliased_types_sound_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e) ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+(* The statements of the exit, with the check of the fix. *)
+Definition rebuild_exits_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (n : nat) (s : state)
+    (k : continuation) (vs : list value) (hp : heap) (rd : read_record),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+        run m
+          (State
+             (rebuild_unit_from_tables (traverse_unit flag u e) T
+                preserve_direct_calls e)
+             [] [] empty_static_env empty_heap no_reads)
+        = Step t
+        ∧ step t = Exit k vs' hp rd'.
+
+Definition rebuild_exit_relation_holds_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    rebuild_exit_relation (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+Definition rebuild_exit_relation_whole_holds_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    rebuild_exit_relation_whole (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T) e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* The statements of the two runs with no premise on the runs, for the
+   least solution of the rules with the fix. *)
+Definition exported_types_sound_end_to_end_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment valuation tenv ->
+    copies_valued tenv canon valuation valuation' ->
+    lookup sym (static_values (state_statics s)) = Some allocated ->
+    ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
+      run m
+        (State
+           (rebuild_unit_from_tables (traverse_unit flag u e) T
+              preserve_direct_calls e)
+           [] [] empty_static_env empty_heap no_reads)
+      = Step t
+      ∧ step t = Exit k vs' hp rd'
+      ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
+          (rewrite_symbol_type all_fixes
+             (plain_context is_local (traverse_unit flag u e) T sets) tenv
+             canon sym).
+
+Definition exported_unaliased_types_sound_end_to_end_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (sets : list set_of_closures)
+    (tenv : Typing_env.t) (canon : canon_fn) (valuation valuation' : env)
+    (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record) (sym : symbol)
+    (allocated : statically_allocated_value),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    least_solution_local is_local (traverse_unit flag u e) T ->
+    variables_bound_once e = true ->
+    exits_of_values e ->
+    sets_of_graph (graph_of_facts (traverse_unit flag u e)) sets ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+    step s = Exit k vs hp rd ->
+    typing_env_satisfied_strictly (state_statics s) valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
     copies_valued tenv canon valuation valuation' ->
     lookup sym (static_values (state_statics s)) = Some allocated ->
     ∃ (m : nat) (t : state) (vs' : list value) (rd' : read_record),
