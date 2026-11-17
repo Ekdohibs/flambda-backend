@@ -309,6 +309,79 @@ let () =
        ( k,
          Handler ([], Model.make_handler_metadata [], call (Some [old])),
          bind [old; newer] Model.Invalid ));
+  (* A [Let_cont] whose body has a way to the handler, by the text: the
+     extension reads the term and runs nothing. [entered] is the continuation
+     whose handler has the call; the body goes to it, or to [other], or first to
+     [binds_first], whose handler binds the newer version and goes on to
+     [entered]. *)
+  let entered = S.positive_of_int 3 in
+  let other = S.positive_of_int 4 in
+  let binds_first = S.positive_of_int 5 in
+  let no_params body : Model.continuation_handler =
+    Handler ([], Model.make_handler_metadata [], body)
+  in
+  let jump cont : Model.apply_cont =
+    { ac_continuation = cont; ac_args = []; ac_trap_action = None }
+  in
+  (* Two ways, one to each, whatever the scrutinee is. *)
+  let either first second : Model.expr =
+    Switch
+      ( Const (Naked_immediate (S.z_of_int 0)),
+        [S.z_of_int 0, jump first; S.z_of_int 1, jump second] )
+  in
+  let binds_newer_then_enters =
+    no_params (bind [newer] (Apply_cont (jump entered)))
+  in
+  extension
+    "the newer version bound on the one way of the body of a Let_cont to its \
+     handler, the call in the handler: in scope, added"
+    ~older:[old, None; newer, Some old]
+    (bind [old]
+       (Let_cont_non_recursive
+          ( entered,
+            no_params (call (Some [old])),
+            bind [newer] (Apply_cont (jump entered)) )));
+  extension
+    "two ways of the body of a Let_cont to its handler, the newer version \
+     bound before both: in scope in the handler, added"
+    ~older:[old, None; newer, Some old]
+    (bind [old]
+       (Let_cont_non_recursive
+          ( entered,
+            no_params (call (Some [old])),
+            bind [newer] (either entered entered) )));
+  extension
+    "two ways of the body of a Let_cont to its handler, the newer version \
+     bound on one of them: not in scope in the handler, not added"
+    ~older:[old, None; newer, Some old]
+    (bind [old]
+       (Let_cont_non_recursive
+          ( entered,
+            no_params (call (Some [old])),
+            Let_cont_non_recursive
+              (binds_first, binds_newer_then_enters, either entered binds_first)
+          )));
+  extension
+    "a recursive group of two continuations, the newer version bound before \
+     both ways of the body to them: in scope in the handlers, added"
+    ~older:[old, None; newer, Some old]
+    (bind [old]
+       (Let_cont_recursive
+          ( [ entered, no_params (call (Some [old]));
+              other, no_params (Apply_cont (jump entered)) ],
+            bind [newer] (either entered other) )));
+  extension
+    "a recursive group of two continuations, the newer version bound on the \
+     way of the body to the one whose handler has the call, and not on its way \
+     to the other: in scope in neither handler, not added"
+    ~older:[old, None; newer, Some old]
+    (bind [old]
+       (Let_cont_recursive
+          ( [ entered, no_params (call (Some [old]));
+              other, no_params (Apply_cont (jump entered)) ],
+            Let_cont_non_recursive
+              (binds_first, binds_newer_then_enters, either other binds_first)
+          )));
   extension
     "three listed, one of them twice, and one added: in one order on the \
      numbers of the model, none twice"

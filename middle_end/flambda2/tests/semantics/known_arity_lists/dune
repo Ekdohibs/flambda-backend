@@ -11,12 +11,13 @@
 ;; lists.expected is what ../../tools/flknownaritylists.exe prints: the
 ;; extension, and that test of a state, computed on terms of the model that
 ;; are made in that program, one for each case that the compiler makes
-;; rarely or never (a chain through code declared deleted, a missing link,
-;; a cycle, a call in the code of the prefix, the empty list, a version out
-;; of scope, a run that stops at a call for its list alone or for something
-;; else). `dune promote` updates it. Two units from OCaml are in
-;; ../ocaml/pairs/ (known_arity_lists_*.ml), which has the rules that
-;; compile a source with its own flags.
+;; rarely or never (a chain through code declared deleted, a missing link, a
+;; cycle, a call in the code of the prefix, the empty list, a version out of
+;; scope, a version that the body of a Let_cont binds on some of its ways to
+;; a handler and not on others, a run that stops at a call for its list
+;; alone or for something else). `dune promote` updates it. Two units from
+;; OCaml are in ../ocaml/pairs/ (known_arity_lists_*.ml), which has the
+;; rules that compile a source with its own flags.
 
 (rule
  (with-stdout-to

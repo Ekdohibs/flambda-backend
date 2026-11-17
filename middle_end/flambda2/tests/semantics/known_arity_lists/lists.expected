@@ -45,6 +45,18 @@ the newer version bound by a group after the code that has the call: out of scop
     a chain from newer: reaches the list
 the newer version bound by the body of a Let_cont, the call in its handler: in scope, added
   in the unit: [old; newer]
+the newer version bound on the one way of the body of a Let_cont to its handler, the call in the handler: in scope, added
+  in the unit: [old; newer]
+two ways of the body of a Let_cont to its handler, the newer version bound before both: in scope in the handler, added
+  in the unit: [old; newer]
+two ways of the body of a Let_cont to its handler, the newer version bound on one of them: not in scope in the handler, not added
+  in the unit: [old]
+    a chain from newer: reaches the list
+a recursive group of two continuations, the newer version bound before both ways of the body to them: in scope in the handlers, added
+  in the unit: [old; newer]
+a recursive group of two continuations, the newer version bound on the way of the body to the one whose handler has the call, and not on its way to the other: in scope in neither handler, not added
+  in the unit: [old]
+    a chain from newer: reaches the list
 three listed, one of them twice, and one added: in one order on the numbers of the model, none twice
   in the unit: [old; root; newer; left]
 
