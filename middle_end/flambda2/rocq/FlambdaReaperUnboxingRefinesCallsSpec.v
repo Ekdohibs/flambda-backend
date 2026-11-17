@@ -29,7 +29,10 @@
    variant, refines its unit across calls: code whose parameters and
    results are unboxed, and code that keeps its calling convention, called
    directly, in tail position or not, with or without the wrapper of
-   [make_apply_wrapper].
+   [make_apply_wrapper]; and calls whose code is not known, of unknown
+   arity or of known arity, full calls, partial applications and
+   over-applications, where every code of the unit keeps its calling
+   convention.
 
    This file is to be reviewed: the fragment ([calls_unboxing]), the
    statements and the examples, against FlambdaReaperUnboxing.v and
@@ -104,6 +107,23 @@
    alike, the extra argument whose parameter has no use dropped, and the
    rebuilt unit refines the unit up to observation.
 
+   [poison_arg_example_statement]: a unit that gives the pair [x10], whose
+   field it reads, to code that cannot change its calling convention (it
+   escapes) and has no use of its parameter, with the tables of the least
+   solution: the rules of the fix unbox [x10], the mask of the call keeps
+   no argument, the unit is of the fragment, the rebuild in the mode of the
+   fix gives the call poison, and the rebuilt unit refines the unit up to
+   observation.
+
+   [escaping_argument_calls_statement]: the unit of the fault of the
+   compiler FlambdaReaperUnboxingSpec.escaping_argument_unit, which gives
+   an unboxed argument to a parameter with a use of code that cannot
+   change its calling convention, and calls that parameter, with the
+   tables of the solver: with the rules of the fix nothing is unboxed and
+   the unit is of the fragment, and the rebuilt unit refines it; with
+   those of the branch the argument [x10] is unboxed, the mask of the call
+   keeps it, and the unit is not of the fragment.
+
    The fragment ([calls_unboxing]), for the unboxed fields that the tables
    give ([unit_unboxed_fields]), the solution and the table:
    - The local unboxing of FlambdaReaperUnboxingRefinesSpec.v: an unboxed
@@ -137,7 +157,8 @@
      too, is described by the decision of a continuation of fixed arity
      ([code_exn_decision]): kept, with a use or with none, so that the
      code raises poison where the exception has no use; not unboxed.
-   - Calls ([call_ok]): direct, of the code they are known to call, at
+   - Calls ([call_ok]) of code that is known: direct, of the code they
+     are known to call ([code_id_actually_called]), at
      the arities of that code (any number of groups of parameters and of
      results), by a variable that is used and not unboxed, returning to a
      handler of the term or, in tail position, to the return continuation
@@ -152,12 +173,13 @@
      ([exn_param_ok], [result_ok]): the first rebuild keeps them, they
      are not unboxed, and one with a use takes an exception that the
      callee raises with a use. Each argument is given to a parameter of
-     the code as [arg_ok] says; to code that keeps its calling
-     convention, both rebuilds give the arguments that the callee uses as
-     they are and the others as poison (FlambdaReaperRebuild.v,
+     code that changes its calling convention as [arg_ok] says; to code
+     that keeps it, both rebuilds give the arguments that the callee uses
+     as they are and the others as poison (FlambdaReaperRebuild.v,
      [rebuild_arguments]), so the two must read the same uses and an
-     argument given as it is be a constant, a symbol or a name with a use
-     ([kept_args_ok]). Each result is given to a parameter of the
+     argument given as it is be a constant, a symbol or a name with a use,
+     not unboxed; one given as poison may be an unboxed name
+     ([kept_args_ok], [masked_args_ok]). Each result is given to a parameter of the
      continuation of the same kind ([result_ok]): one deleted or kept with
      no use, whatever the callee does with it; one kept, of a result that
      the callee keeps (with a use, if the callee keeps its calling
@@ -171,6 +193,21 @@
      change keeps the result and the parameter alike: otherwise it makes
      a wrapper where the rebuild with unboxing does not, which the proof
      does not relate.
+   - Calls whose code is not known ([ind_call_ok]): of unknown arity, or
+     of known arity with no one code id that the solution gives, by a
+     variable that is used and not unboxed. Both rebuilds give them the
+     arguments at the mask of the call ([call_mask], [masked_args_ok]),
+     and expect every result, as calls of code that keeps its calling
+     convention. A call may call the code of any closure, so every code of
+     the unit must be one it may call ([ind_code_ok]): it keeps its
+     calling convention; its results, where they are of the return arity
+     of the call, are given to the parameters of its continuation as
+     those of code called directly are; and a single result of kind
+     [Value], which an over-application calls, has a use. The
+     continuation takes the results as [ind_results] are given (none
+     unboxed), and the exception continuation the exception of
+     [ind_exn_decision]: with no use if some code of the unit raises with
+     none.
    - [check_unboxed_uses]: no use of an unboxed name is called or has a
      function slot read from it, so that [add_usages_through_function_slots]
      adds no use to the fields of an unboxed name. *)
@@ -393,26 +430,47 @@ Definition code_pdescs (id : code_id) (metadata : code_metadata)
   | _, _ => None
   end.
 
-(* The arguments of a call of [f], of code that keeps its calling
-   convention, which both rebuilds give as they are where the callee uses
-   them and as poison elsewhere: the two read the same uses, the second
-   with the names unboxed taken to have none, and each argument given as
-   it is is a constant, a symbol or a name with a use. *)
-Definition kept_args_ok (f : variable) (args : list simple) : bool :=
-  let mask :=
-    arguments_used_by_known_arity_call F sol (Node_variable f) args
-  in
-  forallb2 Bool.eqb mask
-    (arguments_used_by_known_arity_call F
-       (solution_without_unboxed sol unboxed) (Node_variable f) args)
+(* The arguments [args] of a call that both rebuilds give as they are
+   where the mask of the first, [mask], keeps them and as poison
+   elsewhere ([FlambdaReaperRebuild.rebuild_arguments]): the second reads
+   the same mask, [mask_u], with the names unboxed taken to have no use;
+   an argument given as it is is not an unboxed name, and is a constant,
+   a symbol or a name with a use; one given as poison may be anything, an
+   unboxed name among others, which both give as the poison of its
+   kind. *)
+Definition masked_args_ok (mask mask_u : list bool) (args : list simple)
+    : bool :=
+  forallb2 Bool.eqb mask mask_u
   && forallb2
        (fun keep a =>
           negb keep
-          || match a with
-             | Var z => s_has_usage sol (Node_variable z)
-             | Symbol _ | Const _ => true
-             end)
+          || plain_simple unboxed a
+             && match a with
+                | Var z => s_has_usage sol (Node_variable z)
+                | Symbol _ | Const _ => true
+                end)
        mask args.
+
+(* The arguments of a direct call of [f], of code that keeps its calling
+   convention, at the mask of a call of known arity. *)
+Definition kept_args_ok (f : variable) (args : list simple) : bool :=
+  masked_args_ok
+    (arguments_used_by_known_arity_call F sol (Node_variable f) args)
+    (arguments_used_by_known_arity_call F
+       (solution_without_unboxed sol unboxed) (Node_variable f) args)
+    args.
+
+(* The mask of the arguments of a call [ap] of [f] whose code is not known
+   ([rebuild_arguments]), read off the solution [s]. *)
+Definition call_mask (s : solution) (f : variable) (ap : apply_expr)
+    : list bool :=
+  match ap_call_kind ap with
+  | Direct _ =>
+    arguments_used_by_known_arity_call F s (Node_variable f) (ap_args ap)
+  | Indirect =>
+    arguments_used_by_unknown_arity_call F s (Node_variable f)
+      (ap_args_arity ap)
+  end.
 
 (* The parameter [k] of the handler that a call returns to, given the
    result [r] of the callee. *)
@@ -462,6 +520,92 @@ Definition exn_cont_ok (kinds : finite_map flambda_kind)
   | Some _ => false
   end.
 
+(* A call whose code is not known, of unknown arity or of known arity
+   but with no one code id that the solution gives, may call the code of
+   any closure: both rebuilds give it the arguments that the mask keeps
+   and expect every result. Its results, as the second run takes them:
+   kept, with a use where the continuation [kps] keeps the result with a
+   use, and with none elsewhere ([kinds] are those of the results). *)
+Fixpoint ind_results (kps : list pdesc) (kinds : list flambda_kind)
+    : list pdesc :=
+  match kps, kinds with
+  | kp :: kps, kind :: kinds =>
+    Pdesc
+      (match pd_decision kp with
+       | Decided (Keep _) => Decided (Keep kind)
+       | Decided Delete | Unbox _ | Keep_unused _ => Keep_unused kind
+       end)
+      true kind
+    :: ind_results kps kinds
+  | _, _ => []
+  end.
+
+Definition is_kept_used (d : decision) : bool :=
+  match d with
+  | Decided (Keep _) => true
+  | Decided Delete | Unbox _ | Keep_unused _ => false
+  end.
+
+(* Its exception: with a use, unless some code of the unit raises with
+   none. *)
+Definition ind_exn_decision : decision :=
+  if forallb
+       (fun '(id, _) =>
+          match code_exn_decision id with
+          | Some d => is_kept_used d
+          | None => true
+          end)
+       codes
+  then Decided (Keep Value)
+  else Keep_unused Value.
+
+(* The code [id] of the unit, which a call whose code is not known may
+   call, returning to the parameters [kps] at the return arity [RA]: it
+   keeps its calling convention, so that the two rebuilds call it alike;
+   its results, where they are of the arity of the call, are given to
+   [kps] as those of code called directly are ([result_ok]); and a single
+   result of kind [Value], which an over-application calls, has a use. *)
+Definition ind_code_ok (kps : list pdesc) (RA : arity) (id : code_id)
+    (md : code_metadata) : bool :=
+  match
+    code_change_u sol cannot_change code_deps unit_code_ids unboxed id md,
+    code_pdescs id md, code_exn_decision id
+  with
+  | Not_changing_u, Some (_, rds), Some _ =>
+    Nat.eqb (length rds) (length (unarize (cm_result_arity md)))
+    && (negb (arity_eqb (cm_result_arity md) RA)
+        || forallb2 result_ok kps rds)
+    && (negb (arity_eqb (cm_result_arity md) [Singleton Value])
+        || forallb (fun r => is_kept_used (pd_decision r)) rds)
+  | _, _, _ => false
+  end.
+
+(* A call [ap] of [f] whose code is not known: [f] is used and not
+   unboxed; the arguments are given at the mask of the call
+   ([masked_args_ok]); the call returns to a handler of the term or, in
+   tail position, to the return continuation of the code it is in, which
+   takes the results as [ind_results] are given; its exception
+   continuation takes the exception of [ind_exn_decision]; and every code
+   of the unit is one it may call ([ind_code_ok]). *)
+Definition ind_call_ok (kinds : finite_map flambda_kind)
+    (C : finite_map (list pdesc * bool)) (ap : apply_expr) (f : variable)
+    : bool :=
+  plain_simple unboxed (Var f) && is_var_used sol f Value
+  && Nat.eqb (length (ap_args ap)) (length (unarize (ap_args_arity ap)))
+  && masked_args_ok (call_mask sol f ap)
+       (call_mask (solution_without_unboxed sol unboxed) f ap) (ap_args ap)
+  && exn_cont_ok kinds C (ap_exn_continuation ap)
+       (Pdesc ind_exn_decision true Value) (ap_exn_extra_args ap)
+  && match lookup (ap_continuation ap) C with
+     | Some (kps, true) =>
+       let kinds_r := unarize (ap_return_arity ap) in
+       Nat.eqb (length kps) (length kinds_r)
+       && forallb2 result_ok kps (ind_results kps kinds_r)
+       && forallb (fun '(id, md) => ind_code_ok kps (ap_return_arity ap) id md)
+            codes
+     | _ => false
+     end.
+
 Definition call_ok (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) : bool :=
   match ap_call_kind ap, ap_callee ap, code_id_actually_called F sol ap with
@@ -482,7 +626,13 @@ Definition call_ok (kinds : finite_map flambda_kind)
            && Nat.eqb (length rds)
                 (length (unarize (cm_result_arity metadata)))
            && forallb pdesc_ok pds && forallb pdesc_ok rds
-           && args_ok2 kinds pds (ap_args ap)
+           && match
+                code_change_u sol cannot_change code_deps unit_code_ids
+                  unboxed id metadata
+              with
+              | Not_changing_u => true
+              | Changing_u _ _ => args_ok2 kinds pds (ap_args ap)
+              end
            && match code_exn_decision id with
               | Some d =>
                 exn_cont_ok kinds C (ap_exn_continuation ap)
@@ -504,6 +654,7 @@ Definition call_ok (kinds : finite_map flambda_kind)
          end
        | None => false
        end
+  | _, Var f, None => ind_call_ok kinds C ap f
   | _, _, _ => false
   end.
 
@@ -969,3 +1120,122 @@ Definition exn_example_statement : Prop :=
       ExnExample.unit_expr
     = ExnExample.rebuilt
   ∧ program_refines_observably ExnExample.unit_expr ExnExample.rebuilt.
+
+(* An unboxed argument given to code that keeps its calling convention,
+   at a parameter with no use. The code 50 escapes (its closure [x60] is
+   in the block that the unit returns), so that it cannot change its
+   calling convention, and has no use of its parameter [x40]. The unit
+   allocates the pair [x10], reads its first field into [x11], which it
+   returns, and calls 50 with [x10]. The tables are the least solution of
+   the rules; the rules of the fix unbox [x10]. The mask of the call keeps
+   no argument, so that both rebuilds give the call poison, and the rebuild
+   with unboxing binds [x11] to the variable of the field. *)
+Module PoisonArgExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4
+          (make_code_metadata [Singleton Value] [Singleton Value])
+          (return_to 3 [int 0]))]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 10 Value (make_block [int 5; int 6])
+          (Let 11 Value (load 0 (Var 10))
+             (Let_cont_non_recursive 20
+                (Handler [30] (make_handler_metadata [Value])
+                   (Let 31 Value (make_block [Var 60; Var 11])
+                      (return_to 1 [Var 31])))
+                (Apply (call_50 [Var 10] 20)))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match compute_least no_local facts 40 with
+  | Some T => T
+  | None => empty_tables
+  end.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox_fixed no_local facts tables cannot_change max_unbox_size
+    false.
+
+(* The rebuilt unit: [x10] is its field, the variable 61; the call is given
+   poison and returns to a wrapper, the parameter of 20 having no use. *)
+Definition rebuilt : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4
+          (make_code_metadata [Singleton Value] [Singleton Value])
+          (return_to 3 [int 0]))]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 61 Value (Simple (int 5))
+          (Let 11 Value (Simple (Var 61))
+             (Let_cont_non_recursive 20
+                (Handler [] (make_handler_metadata [])
+                   (Let 31 Value (make_block [Var 60; Var 11])
+                      (return_to 1 [Var 31])))
+                (Let_cont_non_recursive 62
+                   (Handler [62] (make_handler_metadata [Value])
+                      (return_to 20 []))
+                   (Apply (call_50 [Const (Poison Value)] 62))))))).
+
+End PoisonArgExample.
+
+Definition poison_arg_example_statement : Prop :=
+  PoisonArgExample.to_unbox = [Node_variable 10%positive]
+  ∧ mem_node (Node_code_id 50%positive) PoisonArgExample.cannot_change = true
+  ∧ arguments_used_by_known_arity_call PoisonArgExample.facts
+      (solution_of_tables PoisonArgExample.tables)
+      (Node_variable 60%positive) [Var 10%positive]
+    = [false]
+  ∧ calls_unboxing PoisonArgExample.facts PoisonArgExample.tables
+      PoisonArgExample.cannot_change PoisonArgExample.code_deps
+      PoisonArgExample.dominated PoisonArgExample.to_unbox
+      PoisonArgExample.unit_expr
+    = true
+  ∧ check_unboxed_reads PoisonArgExample.facts PoisonArgExample.tables
+      PoisonArgExample.dominated PoisonArgExample.to_unbox
+    = true
+  ∧ rebuild_unit_unbox_fixed PoisonArgExample.facts PoisonArgExample.tables
+      PoisonArgExample.cannot_change PoisonArgExample.code_deps
+      PoisonArgExample.dominated PoisonArgExample.to_unbox true
+      PoisonArgExample.unit_expr
+    = PoisonArgExample.rebuilt
+  ∧ program_refines_observably PoisonArgExample.unit_expr
+      PoisonArgExample.rebuilt.
+
+(* The unit of FlambdaReaperUnboxingSpec.escaping_argument_unit, the fault
+   of the compiler that gives an unboxed argument to a parameter with a
+   use of code that keeps its calling convention: with the tables that the
+   rules of the fix give, nothing is unboxed and the unit is of the
+   fragment, its call of its parameter [x40] a call whose code is not
+   known; with those that the rules of the branch give, [x10] is unboxed
+   and given to a parameter that the mask of the call keeps, and the unit
+   is not of the fragment. The unit rebuilt in the mode of the fix refines
+   the unit. *)
+Definition escaping_argument_calls_statement : Prop :=
+  let F := FlambdaReaperUnboxingSpec.escaping_argument_facts in
+  let T := FlambdaReaperUnboxingSpec.escaping_argument_tables in
+  let cc := FlambdaReaperUnboxingSpec.escaping_argument_cannot_change in
+  let cd := FlambdaReaperUnboxingSpec.escaping_argument_code_deps in
+  let dom := FlambdaReaperUnboxingSpec.escaping_argument_dominated in
+  let e := FlambdaReaperUnboxingSpec.escaping_argument_unit in
+  let to_unbox := FlambdaReaperUnboxingSpec.escaping_argument_to_unbox in
+  calls_unboxing F T cc cd dom (to_unbox true) e = true
+  ∧ check_unboxed_reads F T dom (to_unbox true) = true
+  ∧ arguments_used_by_known_arity_call F (solution_of_tables T)
+      (Node_variable 60%positive) [Var 10%positive]
+    = [true]
+  ∧ calls_unboxing F T cc cd dom (to_unbox false) e = false
+  ∧ program_refines_observably e
+      (rebuild_unit_unbox_fixed F T cc cd dom (to_unbox true) true e).

@@ -58,8 +58,13 @@
    an [Apply_cont] are ([get_extra_args_fst], [get_args_rel2]).
    Code that keeps its calling convention, and its calls, are related
    apart ([code_rebuilt_nc], [call_rebuilt_nc]): both rebuilds give the
-   same arguments ([args_rel2_mask]), and its result, kept with or
-   without a use, is returned as the callee keeps it. Where the fix and
+   same arguments, poison where the mask of the call does not keep them,
+   an unboxed name among them ([args_rel2_mask]), and its result, kept
+   with or without a use, is returned as the callee keeps it. A call
+   whose code is not known ([call_rebuilt_ind]) is related as one of such
+   code, at a shape whose results are those that the continuation takes
+   ([ind_results]) and that every code of the unit fits
+   ([ind_shape_targets], [ind_fits]). Where the fix and
    its variant differ, a result kept with no use, the proof is by cases
    on [tail].
    What the second rebuild keeps of an unboxed allocation, and the reads
@@ -594,12 +599,12 @@ Definition CSf (id : code_id) : option code_shape :=
            (arity_of_grouped_decisions_u
               (prepend_first [Decided Delete]
                  (group_by_parameter (cm_params_arity md) pd)))
-           (arity_of_decisions_u rd) (pshape1 (Pdesc d true Value)))
+           (arity_of_decisions_u rd) (pshape1 (Pdesc d true Value)) false)
     | Not_changing_u, Some (pds, rds) =>
       Some
         (Code_shape (flat_map pshape_of pds) (flat_map pshape_of rds)
            (flat_map kept_kind rds) (cm_params_arity md)
-           (cm_result_arity md) (pshape1 (Pdesc d true Value)))
+           (cm_result_arity md) (pshape1 (Pdesc d true Value)) true)
     | _, None => None
     end
   | _, _ => None
@@ -2210,7 +2215,7 @@ Proof.
                     (Code_shape (flat_map pshape_of pds)
                        (flat_map pshape_of rds) (flat_map kept_kind rds)
                        (cm_params_arity md) (cm_result_arity md)
-                       (pshape1 (Pdesc de true Value)))).
+                       (pshape1 (Pdesc de true Value)) true)).
   { unfold CSf. rewrite Hcodes, Hde, Hnc, Hpd'. reflexivity. }
   rewrite <- Hpds in Hlen, Hdok, Hpok, Hcs.
   rewrite <- (nc_pdescs kinds_p) in Hlen, Hdok, Hpok, Hcs.
@@ -2236,10 +2241,11 @@ Proof.
                        (map is_kept (map Keep kinds_p)) kinds_p))
                  (flat_map pshape_of rds) (flat_map kept_kind rds)
                  (cm_params_arity md) (cm_result_arity md)
-                 (pshape1 (Pdesc de true Value)))).
+                 (pshape1 (Pdesc de true Value)) true)).
   { intros b b' Hbs. split; [ exact Hcs | ].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ reflexivity | ].
+    split; [ intros _; split; reflexivity | ].
     split; [ exact Htup | split; [ exact Htup | ] ].
     split; [ reflexivity | split; [ exact Hmcf | ] ].
     split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
@@ -2435,7 +2441,7 @@ Proof.
                           (prepend_first [Decided Delete]
                              (group_by_parameter (cm_params_arity md) pd)))
                        (arity_of_decisions_u rd)
-                       (pshape1 (Pdesc de true Value)))).
+                       (pshape1 (Pdesc de true Value)) false)).
   { unfold CSf. rewrite Hcodes, Hde, Hchu'. unfold code_pdescs.
     rewrite Hchu', Hchc'. reflexivity. }
   destruct (code_params_rel2 params pd pd_cc (unarize (cm_params_arity md))
@@ -2460,6 +2466,7 @@ Proof.
           rewrite !length_map, prepend_first_length,
             !group_by_parameter_length.
           reflexivity. }
+        split; [ intros H; discriminate H | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split; [ reflexivity | split; [ exact Hmcf | ] ].
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
@@ -2492,6 +2499,7 @@ Proof.
           rewrite !length_map, prepend_first_length,
             !group_by_parameter_length.
           reflexivity. }
+        split; [ intros H; discriminate H | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split; [ reflexivity | split; [ exact Hmcf | ] ].
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
@@ -2739,7 +2747,7 @@ Proof.
   intros Hcall Hexn Hk Hk' He Hk0 Hlk Ht.
   split; [ exact (uc_call unboxed dead CSf K ap ap' cs k sh Hcall Hexn Hk Hk'
                     Hlk Ht) | ].
-  pose proof Hcall as (id & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & He').
+  pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & He').
   cbn [free_continuations_of_expr binds_statics].
   rewrite Hk, Hk', He'. split; [ reflexivity | split; [ reflexivity | ] ].
   rewrite He, Hk0. intros x Hx. exact Hx.
@@ -2777,7 +2785,7 @@ Proof.
   intros Hcall Hexn Hk Hw Hwe He Hk0 Hlk Hok.
   split; [ exact (uc_call_wrap unboxed dead CSf K ap ap' cs k sh w wps wmd
                     wargs Hcall Hexn Hk Hw Hwe Hlk Hok) | ].
-  pose proof Hcall as (id & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & He').
+  pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & He').
   rewrite fc_wrap by (try exact Hw; rewrite He'; intros H; apply Hwe;
                       symmetry; exact H).
   cbn [free_continuations_of_expr binds_statics].
@@ -2806,7 +2814,7 @@ Proof.
   split; [ exact (uc_call_wraps unboxed dead CSf K ap ap' cs k sh KS wc cps
                     cmd cargs w wps wmd wargs Hcall Hexn Hwc Hw Hwce Hwe Hlk
                     Hcmd Hok) | ].
-  pose proof Hcall as (id & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & _ & He').
+  pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & He').
   rewrite (fc_wrap wc) by (try exact Hwc; intros H; apply Hwce;
                            symmetry; exact H).
   rewrite (fc_wrap w) by (try exact Hw; rewrite He'; intros H; apply Hwe;
@@ -2866,39 +2874,48 @@ Proof.
   intros kind Hin. apply in_map_iff in Hin as (k & Heq & _). discriminate Heq.
 Qed.
 
-(* The arguments of a call of code that keeps its calling convention:
-   those that the callee uses as they are, the others poison. *)
+(* The arguments of a call at a mask of both runs: those that the mask
+   keeps as they are, the others poison, of the kind of the argument, an
+   unboxed name among them. *)
 Lemma args_rel2_mask (en : rebuild_env) (args : list simple) :
   ∀ (mask : list bool) (kinds : list flambda_kind),
     length args = length kinds ->
     forallb2
       (fun keep a =>
          negb keep
-         || match a with
-            | Var z => s_has_usage sol (Node_variable z)
-            | Symbol _ | Const _ => true
-            end)
+         || FlambdaReaperUnboxingRefinesSpec.plain_simple unboxed a
+            && match a with
+               | Var z => s_has_usage sol (Node_variable z)
+               | Symbol _ | Const _ => true
+               end)
       mask args
     = true ->
-    forallb (plain_simple unboxed) args = true ->
+    (∀ z, z ∈ variables_in_simples args -> fresh z) ->
     args_rel2 unboxed dead (map (fun _ => Psh_plain) kinds)
       (mask_arguments en mask args) (mask_arguments en mask args).
 Proof.
   induction args as [ | a args IH]; intros [ | b mask] [ | k kinds] Hlen
-    Hused Hplain; simpl in Hlen, Hused; try discriminate Hlen;
+    Hused Hfr; simpl in Hlen, Hused; try discriminate Hlen;
     try discriminate Hused.
   - apply args_rel2_beyond. reflexivity.
-  - cbn [forallb] in Hplain. apply andb_true_iff in Hplain as [Ha Hplain].
-    apply andb_true_iff in Hused as [Hb Hused].
+  - apply andb_true_iff in Hused as [Hb Hused].
     cbn [map mask_arguments]. apply args_rel2_plain;
-      [ | exact (IH mask kinds ltac:(lia) Hused Hplain) ].
+      [ | refine (IH mask kinds ltac:(lia) Hused _);
+          intros z Hz; apply Hfr; cbn [variables_in_simples];
+          apply in_or_app; right; exact Hz ].
     destruct b; cbn [negb orb] in Hb.
-    + destruct a as [z | sym | c]; [ | exact Ha | reflexivity ].
-      apply plain2_iff. split; [ exact Ha | ].
+    + apply andb_true_iff in Hb as [Ha Hb].
+      assert (Ha' : plain_simple unboxed a = true).
+      { apply strong_simple2; [ exact Ha | ].
+        intros z Hz. apply Hfr. cbn [variables_in_simples].
+        apply in_or_app. left. exact Hz. }
+      destruct a as [z | sym | c]; [ | exact Ha' | reflexivity ].
+      apply plain2_iff. split; [ exact Ha' | ].
       destruct (among z dead) eqn:Hd; [ | reflexivity ].
       rewrite (dead_unused z Hd) in Hb. discriminate Hb.
     + destruct a; reflexivity.
 Qed.
+
 
 Lemma args_ok2_keep (kenv : finite_map flambda_kind) (args : list simple) :
   ∀ kinds : list flambda_kind,
@@ -4463,12 +4480,13 @@ Lemma call_rebuilt_nc (en : rebuild_env) (enu : unbox_env)
   = true ->
   (∀ z, z ∈ variables_in_apply ap -> fresh z) ->
   ap_exn_continuation ap <> ff -> ap_exn_continuation ap <> ffu ->
+  code_id_actually_called F sol ap <> None ->
   apply_change_u F sol cannot_change code_deps unit_code_ids codes unboxed ap
   = Not_changing_u ->
   uc_result (K_of C) (free_continuations_of_expr (Apply ap))
     (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
-  intros Hci Hok Hfresh Hff Hffu Hac.
+  intros Hci Hok Hfresh Hff Hffu Hsome Hac.
   destruct ap as [callee ckind args k exn extra AA RA].
   cbn [ap_callee ap_call_kind ap_args ap_continuation ap_exn_continuation
        ap_exn_extra_args ap_args_arity ap_return_arity] in *.
@@ -4479,10 +4497,10 @@ Proof.
   unfold call_ok in Hok. cbn [ap_call_kind ap_callee ap ap_args
     ap_continuation ap_exn_continuation ap_exn_extra_args ap_args_arity
     ap_return_arity] in Hok.
-  destruct ckind as [id | ]; [ | discriminate Hok ].
+  destruct ckind as [id | ]; [ | exfalso; apply Hsome; reflexivity ].
   destruct callee as [f | sym | cst]; try discriminate Hok.
   destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
-    [ | discriminate Hok ].
+    [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hfused].
   apply andb_true_iff in Hok as [Hid Hfplain].
@@ -4576,7 +4594,7 @@ Proof.
   (* The arguments, the same in both runs. *)
   unfold rebuild_arguments.
   cbn [ap_callee ap_call_kind ap_args node_of_simple].
-  unfold kept_args_ok in Hkept.
+  unfold kept_args_ok, masked_args_ok in Hkept.
   apply andb_true_iff in Hkept as [Hmeq Hmused].
   apply forallb2_eqb_eq in Hmeq. rewrite <- Hmeq.
   rewrite (mask_arguments_kinds (ue_env enu) en args (ci_kinds _ _ _ Hci)).
@@ -4584,9 +4602,8 @@ Proof.
     in *.
   set (A := mask_arguments en m args).
   rewrite length_map in Halen.
-  assert (Hplain : forallb (plain_simple unboxed) args = true).
-  { apply strong_simples2; [ exact (args_ok2_keep _ args kinds Halen Hargs) | ].
-    intros z Hz. apply Hfresh. unfold variables_in_apply.
+  assert (Hfargs : ∀ z, z ∈ variables_in_simples args -> fresh z).
+  { intros z Hz. apply Hfresh. unfold variables_in_apply.
     cbn [ap_callee ap_args variables_in_simple app]. right.
     apply in_or_app. left. exact Hz. }
   set (cs := Code_shape
@@ -4595,7 +4612,7 @@ Proof.
                      kinds))
                (flat_map pshape_of rds) (flat_map kept_kind rds)
                (cm_params_arity md) (cm_result_arity md)
-               (pshape1 (Pdesc de true Value))).
+               (pshape1 (Pdesc de true Value)) true).
   assert (HCS : CSf id = Some cs).
   { unfold CSf. rewrite Hcodes, Hde, Hnc, Hpd'. reflexivity. }
   match goal with
@@ -4604,13 +4621,14 @@ Proof.
     set (ap1 := X); set (ap1u := Y)
   end.
   assert (Hcall : call_rel unboxed dead CSf ap1 ap1u cs).
-  { exists id. split; [ reflexivity | split; [ reflexivity | ] ].
-    split; [ exact HCS | ].
+  { split;
+      [ left; exists id;
+        split; [ reflexivity | split; [ reflexivity | exact HCS ] ] | ].
     split; [ reflexivity | ].
     split; [ apply (plain2_of f Value Hfx); [ | reflexivity | exact Hfused ];
              apply Hfresh; left; reflexivity | ].
     split; [ cbn [cs cs_params ap1 ap1u ap_args]; rewrite plain_shapes;
-             exact (args_rel2_mask en args m kinds Halen Hmused Hplain) | ].
+             exact (args_rel2_mask en args m kinds Halen Hmused Hfargs) | ].
     split; [ cbn [cs cs_params]; rewrite plain_shapes;
              apply plain_shapes_no_dead | ].
     split; [ reflexivity | split; [ reflexivity | ] ].
@@ -4648,6 +4666,413 @@ Proof.
   - rewrite (ci_dec _ _ _ Hci k), HCk. reflexivity.
   - apply Hfresh_eq.
 Qed.
+(* The arguments of a call of a variable, at the mask of the call. *)
+Lemma rebuild_arguments_mask (s : solution) (en : rebuild_env)
+    (ap : apply_expr) (f : variable) :
+  ap_callee ap = Var f ->
+  rebuild_arguments F s en ap
+  = mask_arguments en (call_mask F s f ap) (ap_args ap).
+Proof.
+  intros Hc. unfold rebuild_arguments, call_mask. rewrite Hc.
+  cbn [node_of_simple]. destruct (ap_call_kind ap); reflexivity.
+Qed.
+
+(* The results of code that keeps its calling convention, as the code
+   dep gives them: kept, with a use or not. *)
+Definition kept_result (r : pdesc) : Prop :=
+  pd_keep r = true
+  ∧ (pd_decision r = Decided (Keep (pd_kind r))
+     ∨ pd_decision r = Keep_unused (pd_kind r)).
+
+Lemma fixed_rds_kept (nodes : list node) (kinds : list flambda_kind) :
+  existsb is_unbox (fixed_arity_decisions sol unboxed nodes kinds) = false ->
+  Forall kept_result
+    (pdescs_of (fixed_arity_decisions sol unboxed nodes kinds)
+       (map (fun _ => true) (fixed_arity_decisions sol unboxed nodes kinds))
+       kinds).
+Proof.
+  unfold fixed_arity_decisions. revert kinds.
+  induction nodes as [ | nd nodes IH]; intros [ | k kinds] Hu;
+    [ constructor | constructor | constructor | ].
+  cbn [existsb combine map] in Hu. apply orb_false_iff in Hu as [Hu1 Hu].
+  cbn [combine map pdescs_of].
+  constructor; [ | exact (IH kinds Hu) ].
+  destruct (unboxed_of_node unboxed nd) as [fields | ];
+    [ discriminate Hu1 | ].
+  split; [ reflexivity | ].
+  destruct (is_node_used sol nd k); [ left | right ]; reflexivity.
+Qed.
+
+Lemma kept_results_kinds (rds : list pdesc) :
+  Forall kept_result rds -> flat_map kept_kind rds = map pd_kind rds.
+Proof.
+  induction 1 as [ | r rds [Hk _] _ IH]; [ reflexivity | ].
+  cbn [flat_map map]. unfold kept_kind at 1. rewrite Hk, IH. reflexivity.
+Qed.
+
+Lemma pdescs_of_kinds (kinds : list flambda_kind) :
+  ∀ (ds : list decision) (keeps : list bool),
+    length (pdescs_of ds keeps kinds) = length kinds ->
+    map pd_kind (pdescs_of ds keeps kinds) = kinds.
+Proof.
+  induction kinds as [ | k kinds IH]; intros [ | d ds] [ | b keeps] Hl;
+    cbn [pdescs_of length] in Hl |- *; try discriminate Hl;
+    try reflexivity.
+  cbn [map pd_kind]. rewrite (IH ds keeps ltac:(lia)). reflexivity.
+Qed.
+
+Lemma ind_results_kinds (kps : list pdesc) :
+  ∀ kinds : list flambda_kind,
+    length kps = length kinds ->
+    flat_map kept_kind (ind_results kps kinds) = kinds.
+Proof.
+  induction kps as [ | kp kps IH]; intros [ | k kinds] Hl; simpl in Hl;
+    try discriminate Hl; [ reflexivity | ].
+  cbn [ind_results flat_map]. unfold kept_kind at 1. cbn [pd_keep pd_kind].
+  rewrite (IH kinds ltac:(lia)). reflexivity.
+Qed.
+
+Lemma ind_results_no_unboxed (kps : list pdesc) :
+  ∀ kinds : list flambda_kind,
+    no_unboxed (flat_map pshape_of (ind_results kps kinds)).
+Proof.
+  induction kps as [ | kp kps IH]; intros [ | k kinds] fields Hin;
+    [ exact Hin | exact Hin | exact Hin | ].
+  cbn [ind_results flat_map] in Hin. apply in_app_or in Hin as [Hin | Hin];
+    [ | exact (IH kinds fields Hin) ].
+  unfold pshape_of in Hin. cbn [pd_keep pd_decision] in Hin.
+  destruct (pd_decision kp) as [[kk | ] | fs | kk];
+    destruct Hin as [Hin | []]; discriminate Hin.
+Qed.
+
+Lemma ind_results_ok (kps : list pdesc) :
+  ∀ kinds : list flambda_kind,
+    forallb pdesc_ok kps = true ->
+    forallb2 result_ok kps (ind_results kps kinds) = true ->
+    forallb pdesc_ok (ind_results kps kinds) = true.
+Proof.
+  induction kps as [ | kp kps IH]; intros [ | k kinds] Hok Hres;
+    try reflexivity.
+  cbn [ind_results forallb2] in Hres. cbn [forallb] in Hok.
+  cbn [ind_results forallb].
+  apply andb_true_iff in Hok as [Hkp Hok].
+  apply andb_true_iff in Hres as [Hr Hres].
+  rewrite (IH kinds Hok Hres), andb_true_r.
+  unfold result_ok in Hr. cbn [pd_kind] in Hr.
+  apply andb_true_iff in Hr as [Hkind _]. apply kind_eqb_eq in Hkind.
+  subst k.
+  unfold pdesc_ok in Hkp |- *. apply andb_true_iff in Hkp as [Hkk _].
+  cbn [pd_kind pd_decision pd_keep]. rewrite Hkk. cbn [andb].
+  destruct (pd_decision kp) as [[kk | ] | fs | kk];
+    cbn [pd_keep pd_kind andb]; apply kind_eqb_refl.
+Qed.
+
+Lemma ind_results_cc (kps : list pdesc) :
+  ∀ kinds : list flambda_kind,
+    length kps = length kinds ->
+    combine (map cc_dec (ind_results kps kinds))
+      (map pd_kind (ind_results kps kinds))
+    = map (fun k => (Keep k, k)) kinds
+    ∧ ∀ n : positive,
+        freshen_decisions (map (fun k => (Decided (Keep k), k)) kinds) n
+        = freshen_decisions
+            (combine (map pd_decision (ind_results kps kinds))
+               (map pd_kind (ind_results kps kinds)))
+            n.
+Proof.
+  induction kps as [ | kp kps IH]; intros [ | k kinds] Hl; simpl in Hl;
+    try discriminate Hl; [ split; [ reflexivity | intros n; reflexivity ] | ].
+  destruct (IH kinds ltac:(lia)) as [H1 H2].
+  cbn [ind_results map combine]. split.
+  - cbn [cc_dec pd_keep pd_kind]. rewrite H1. reflexivity.
+  - intros n. cbn [pd_decision pd_kind].
+    destruct (pd_decision kp) as [[kk | ] | fs | kk]; cbn [freshen_decisions];
+      rewrite H2; reflexivity.
+Qed.
+
+(* The results of code that a call whose code is not known may call fit
+   those that the call takes. *)
+Lemma ind_fits (kps : list pdesc) :
+  ∀ (rds : list pdesc) (kinds : list flambda_kind),
+    forallb2 result_ok kps rds = true ->
+    forallb2 result_ok kps (ind_results kps kinds) = true ->
+    Forall kept_result rds ->
+    Forall2 fits (flat_map pshape_of rds)
+      (flat_map pshape_of (ind_results kps kinds)).
+Proof.
+  induction kps as [ | kp kps IH]; intros [ | r rds] [ | k kinds] H1 H2 Hk;
+    try discriminate H1; try discriminate H2; try exact (Forall2_nil _).
+  cbn [forallb2 ind_results] in H1, H2.
+  apply andb_true_iff in H1 as [Hr1 H1]. apply andb_true_iff in H2 as [Hr2 H2].
+  inversion Hk as [ | r0 rds0 [Hkeep Hdec] Hk' ]; subst.
+  cbn [flat_map]. apply Forall2_app; [ | exact (IH rds kinds H1 H2 Hk') ].
+  unfold result_ok in Hr1, Hr2. cbn [pd_kind pd_decision] in Hr2.
+  apply andb_true_iff in Hr1 as [Hkind1 Hr1].
+  apply andb_true_iff in Hr2 as [Hkind2 _].
+  apply kind_eqb_eq in Hkind1, Hkind2.
+  unfold pshape_of. rewrite Hkeep. cbn [pd_keep pd_decision].
+  destruct Hdec as [Hdec | Hdec]; rewrite Hdec in Hr1 |- *;
+    destruct (pd_decision kp) as [[kk | ] | fs | kk];
+    cbn in Hr1; try discriminate Hr1;
+    constructor; try constructor.
+  all: rewrite <- Hkind1, <- Hkind2; constructor.
+Qed.
+
+(* The shape at which a call whose code is not known is made: every code
+   of the unit may be called at it. *)
+Lemma ind_shape_targets (kps : list pdesc) (AA RA : arity) :
+  length kps = length (unarize RA) ->
+  forallb2 result_ok kps (ind_results kps (unarize RA)) = true ->
+  forallb
+    (fun '(id, md) =>
+       ind_code_ok sol cannot_change code_deps unit_code_ids unboxed kps RA
+         id md)
+    codes
+  = true ->
+  ind_targets CSf
+    (Code_shape (map (fun _ => Psh_plain) (unarize AA))
+       (flat_map pshape_of (ind_results kps (unarize RA)))
+       (flat_map kept_kind (ind_results kps (unarize RA))) AA RA
+       (pshape1 (Pdesc (ind_exn_decision sol code_deps codes unboxed) true
+                   Value))
+       true).
+Proof.
+  intros Hklen Hres Hall.
+  split; [ | split; [ | split ] ].
+  - intros id cs' Hcs'. unfold CSf in Hcs'.
+    destruct (lookup id codes) as [md | ] eqn:Hmd; [ | discriminate Hcs' ].
+    destruct (code_exn_decision sol code_deps unboxed id) as [d | ] eqn:Hd;
+      [ | discriminate Hcs' ].
+    assert (Hin : (id, md) ∈ codes)
+      by exact (keyed_lookup_in Pos.eqb Pos.eqb_eq id md codes Hmd).
+    pose proof (proj1 (forallb_forall _ codes) Hall (id, md) Hin) as Hok.
+    cbn beta iota in Hok. unfold ind_code_ok in Hok. rewrite Hd in Hok.
+    destruct (code_change_u sol cannot_change code_deps unit_code_ids unboxed
+                id md)
+      as [ | pd rd] eqn:Hnc; [ | discriminate Hok ].
+    destruct (code_pdescs sol cannot_change code_deps unit_code_ids unboxed
+                id md)
+      as [[pds rds] | ] eqn:Hpd; [ | discriminate Hok ].
+    injection Hcs' as <-.
+    assert (Hncc : code_calling_convention_change sol cannot_change
+                     code_deps unit_code_ids id md
+                   = Not_changing_calling_convention).
+    { unfold code_change_u in Hnc. unfold code_calling_convention_change.
+      destruct (cannot_change_calling_convention cannot_change unit_code_ids
+                  id);
+        [ reflexivity | ].
+      destruct (lookup id code_deps); [ discriminate Hnc | reflexivity ]. }
+    unfold code_pdescs in Hpd. rewrite Hnc, Hncc in Hpd.
+    destruct (lookup id code_deps) as [cd | ] eqn:Hcd; [ | discriminate Hpd ].
+    destruct (cm_is_tupled md
+              || existsb is_unbox
+                   (fixed_arity_decisions sol unboxed (cd_return cd)
+                      (unarize (cm_result_arity md))))
+      eqn:Htup; [ discriminate Hpd | ].
+    apply orb_false_iff in Htup as [_ Hnu].
+    injection Hpd as Hpds Hrds. subst pds rds.
+    pose proof (fixed_rds_kept _ _ Hnu) as Hkept.
+    set (rd := fixed_arity_decisions sol unboxed (cd_return cd)
+                 (unarize (cm_result_arity md))) in *.
+    set (rds := pdescs_of rd (map (fun _ => true) rd)
+                  (unarize (cm_result_arity md))) in *.
+    apply andb_true_iff in Hok as [Hok Hone].
+    apply andb_true_iff in Hok as [Hrlen Hfit].
+    apply Nat.eqb_eq in Hrlen.
+    split; [ reflexivity | ].
+    split; [ cbn [cs_params]; rewrite plain_shapes;
+             apply Forall_forall; intros o Ho;
+             apply in_map_iff in Ho as (? & <- & _); reflexivity | ].
+    split.
+    { cbn [cs_result_kinds cs_result_arity].
+      rewrite (kept_results_kinds rds Hkept).
+      exact (pdescs_of_kinds _ _ _ Hrlen). }
+    split.
+    { cbn [cs_exn]. destruct (code_exn_decision_cases id d Hd) as [Hdc _].
+      unfold ind_exn_decision.
+      match goal with
+      | |- context [forallb ?g codes] => destruct (forallb g codes) eqn:Hfa
+      end;
+        destruct Hdc as [-> | ->]; unfold pshape1; cbn [pd_decision];
+        try constructor.
+      exfalso. pose proof (proj1 (forallb_forall _ codes) Hfa (id, md) Hin)
+        as H. cbn beta iota in H. rewrite Hd in H. discriminate H. }
+    split.
+    { cbn [cs_result_arity cs_results]. intros Hra.
+      rewrite Hra, (proj2 (arity_eqb_eq RA RA) eq_refl) in Hfit.
+      exact (ind_fits kps rds (unarize RA) Hfit Hres Hkept). }
+    { cbn [cs_result_arity cs_results]. intros Hone'.
+      rewrite Hone',
+        (proj2 (arity_eqb_eq [Singleton Value] [Singleton Value]) eq_refl)
+        in Hone.
+      rewrite Hone' in Hrlen.
+      change (length (unarize [Singleton Value])) with 1 in Hrlen.
+      clearbody rds.
+      destruct rds as [ | r [ | r' rest]]; cbn [length] in Hrlen;
+        try discriminate Hrlen.
+      inversion Hkept as [ | r0 l0 [Hkeep Hdec] _ ]; subst.
+      cbn in Hone.
+      cbn [flat_map]. unfold pshape_of. rewrite Hkeep.
+      destruct Hdec as [Hdec | Hdec]; rewrite Hdec in Hone |- *;
+        cbn in Hone; [ reflexivity | discriminate Hone ]. }
+  - apply Forall_forall. intros o Ho. apply in_map_iff in Ho as (? & <- & _).
+    reflexivity.
+  - apply ind_results_no_unboxed.
+  - cbn [cs_result_kinds cs_result_arity].
+    exact (ind_results_kinds kps (unarize RA) Hklen).
+Qed.
+
+(* A call whose code is not known: both rebuilds give the arguments at the
+   mask of the call, the same, and expect every result, as a call of code
+   that keeps its calling convention; the call is related at the shape of
+   [ind_shape_targets]. *)
+Lemma call_rebuilt_ind (en : rebuild_env) (enu : unbox_env)
+    (C : finite_map (list pdesc * bool)) (ap : apply_expr) :
+  cinv C en enu ->
+  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed
+    (env_kinds en) C ap
+  = true ->
+  (∀ z, z ∈ variables_in_apply ap -> fresh z) ->
+  ap_exn_continuation ap <> ff -> ap_exn_continuation ap <> ffu ->
+  code_id_actually_called F sol ap = None ->
+  uc_result (K_of C) (free_continuations_of_expr (Apply ap))
+    (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
+Proof.
+  intros Hci Hok Hfresh Hff Hffu Hcalled.
+  assert (Hf : ∃ f : variable,
+             ap_callee ap = Var f
+             ∧ ind_call_ok F sol cannot_change code_deps unit_code_ids codes
+                 unboxed (env_kinds en) C ap f
+               = true).
+  { unfold call_ok in Hok. rewrite Hcalled in Hok. revert Hok.
+    destruct (ap_callee ap) as [f | sym | cst].
+    - destruct (ap_call_kind ap); intros Hok; exists f;
+        (split; [ reflexivity | exact Hok ]).
+    - destruct (ap_call_kind ap); intros Hok; discriminate Hok.
+    - destruct (ap_call_kind ap); intros Hok; discriminate Hok. }
+  destruct Hf as (f & Hcal & Hind).
+  unfold ind_call_ok in Hind.
+  apply andb_true_iff in Hind as [Hind Hret].
+  apply andb_true_iff in Hind as [Hind Hexn].
+  apply andb_true_iff in Hind as [Hind Hmask].
+  apply andb_true_iff in Hind as [Hind Halen].
+  apply andb_true_iff in Hind as [Hfplain Hfused].
+  apply Nat.eqb_eq in Halen.
+  unfold masked_args_ok in Hmask.
+  apply andb_true_iff in Hmask as [Hmeq Hmused].
+  apply forallb2_eqb_eq in Hmeq.
+  set (dv := ind_exn_decision sol code_deps codes unboxed) in *.
+  assert (Hdv : dv = Decided (Keep Value) ∨ dv = Keep_unused Value).
+  { unfold dv, ind_exn_decision.
+    match goal with
+    | |- context [forallb ?g codes] => destruct (forallb g codes)
+    end; [ left | right ]; reflexivity. }
+  destruct (exn_rebuilt en enu C ap dv Hci Hdv Hexn)
+    as (extra_u & Hxu & Hexrel).
+  { intros z Hz. apply Hfresh. unfold variables_in_apply.
+    apply in_or_app. right. apply in_or_app. right. exact Hz. }
+  assert (Hfargs : ∀ z, z ∈ variables_in_simples (ap_args ap) -> fresh z).
+  { intros z Hz. apply Hfresh. unfold variables_in_apply.
+    apply in_or_app. right. apply in_or_app. left. exact Hz. }
+  assert (Hfresh_f : fresh f)
+    by (apply Hfresh; unfold variables_in_apply; rewrite Hcal; left;
+        reflexivity).
+  assert (Hac : apply_change_u F sol cannot_change code_deps unit_code_ids
+                  codes unboxed ap
+                = Not_changing_u)
+    by (unfold apply_change_u; rewrite Hcalled; reflexivity).
+  destruct (lookup (ap_continuation ap) C) as [[kps [ | ]] | ] eqn:HCk;
+    try discriminate Hret.
+  apply andb_true_iff in Hret as [Hret Hcodes_ok].
+  apply andb_true_iff in Hret as [Hklen Hres].
+  apply Nat.eqb_eq in Hklen.
+  assert (Hfx : fields_of unboxed f = None).
+  { cbn in Hfplain. apply negb_true_iff in Hfplain.
+    unfold Keyed.is_bound in Hfplain. unfold fields_of.
+    destruct (Keyed.lookup _ _ _); [ discriminate Hfplain | reflexivity ]. }
+  assert (Hdead_eq :
+    simple_is_dead sol (ue_env enu) (ap_callee ap)
+    || existsb (simple_is_dead sol (ue_env enu)) (ap_args ap)
+    = simple_is_dead sol en (ap_callee ap)
+      || existsb (simple_is_dead sol en) (ap_args ap)).
+  { f_equal; [ apply simple_is_dead_kinds, (ci_kinds _ _ _ Hci) | ].
+    clear -Hci. induction (ap_args ap) as [ | a args IH]; [ reflexivity | ].
+    simpl. rewrite IH, (simple_is_dead_kinds _ _ a (ci_kinds _ _ _ Hci)).
+    reflexivity. }
+  unfold cc_rebuild, u_rebuild. cbn [rebuild_expr_cc rebuild_expr_u].
+  unfold rebuild_apply_cc, apply_calling_convention_change.
+  rewrite Hcalled.
+  unfold rebuild_apply, rebuild_apply_u. rewrite Hac.
+  rewrite (rebuild_arguments_mask sol en ap f Hcal),
+    (rebuild_arguments_mask sol_u (ue_env enu) ap f Hcal), <- Hmeq,
+    (mask_arguments_kinds (ue_env enu) en _ (ci_kinds _ _ _ Hci)).
+  rewrite Hdead_eq.
+  destruct (simple_is_dead sol en (ap_callee ap)
+            || existsb (simple_is_dead sol en) (ap_args ap))
+    eqn:Hdead; [ exact (uc_result_invalid _ _) | ].
+  rewrite Hxu. cbn beta iota zeta.
+  rewrite Hcal.
+  change (unboxed_of unboxed (Var f)) with (fields_of unboxed f).
+  rewrite Hfx.
+  set (m := call_mask F sol f ap) in *.
+  set (kinds := unarize (ap_args_arity ap)) in *.
+  set (kinds_r := unarize (ap_return_arity ap)) in *.
+  set (rds := ind_results kps kinds_r) in *.
+  set (cs := Code_shape (map (fun _ => Psh_plain) kinds)
+               (flat_map pshape_of rds) (flat_map kept_kind rds)
+               (ap_args_arity ap) (ap_return_arity ap)
+               (pshape1 (Pdesc dv true Value)) true).
+  match goal with
+  | |- uc_result _ _ (make_apply_wrapper _ _ ?X)
+         (make_apply_wrapper_u _ _ _ ?Y _) =>
+    set (ap1 := X); set (ap1u := Y)
+  end.
+  assert (Hcall : call_rel unboxed dead CSf ap1 ap1u cs).
+  { split.
+    { right. split; [ reflexivity | ].
+      split; [ exact (ind_shape_targets kps (ap_args_arity ap)
+                        (ap_return_arity ap) Hklen Hres Hcodes_ok) | ].
+      split; reflexivity. }
+    split; [ reflexivity | ].
+    split; [ exact (plain2_of f Value Hfx Hfresh_f eq_refl Hfused) | ].
+    split; [ exact (args_rel2_mask en (ap_args ap) m kinds Halen Hmused
+                      Hfargs) | ].
+    split; [ apply plain_shapes_no_dead | ].
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    split; [ reflexivity | ].
+    split; [ cbn [cs cs_params cs_params_arity ap1 ap_args_arity];
+             rewrite plain_shapes_kinds by reflexivity; reflexivity | ].
+    reflexivity. }
+  assert (Hexn_ok : exn_call_rel unboxed dead (K_of C) (cs_exn cs) ap1 ap1u)
+    by exact (Hexrel ap1 ap1u eq_refl eq_refl eq_refl).
+  assert (HKk : lookup (ap_continuation ap) (K_of C)
+                = Some (Kshape (flat_map pshape_of kps)
+                          (flat_map kept_kind kps) true))
+    by (rewrite lookup_K_of, HCk; reflexivity).
+  pose proof (ci_ok _ _ _ Hci _ kps true HCk) as Hkps_ok.
+  assert (Hlen_kr : length kps = length rds)
+    by exact (forallb2_length _ _ _ Hres).
+  destruct (apply_decisions_kps C en enu _ kps true Hci HCk)
+    as [Happ Hmaskk].
+  rewrite Hlen_kr in Happ.
+  destruct (ind_results_cc kps kinds_r Hklen) as [Hcomb Hfresh_eq].
+  fold rds in Hcomb, Hfresh_eq.
+  rewrite (make_apply_wrapper_as_cc en ap1).
+  2: { destruct Hmaskk as [Hm | [Hm _]];
+       [ left; exists (map pd_keep kps);
+         split; [ exact Hm | rewrite length_map; exact Hklen ]
+       | right; exact Hm ]. }
+  change (unarize (ap_return_arity ap1)) with kinds_r. rewrite <- Hcomb.
+  apply (uc_result_results (K_of C) ap ap1 ap1u cs (ap_continuation ap) kps
+           rds en enu);
+    try reflexivity; try assumption.
+  - intros H. exact (Hff (eq_sym H)).
+  - intros H. exact (Hffu (eq_sym H)).
+  - exact (ind_results_ok kps kinds_r Hkps_ok Hres).
+  - rewrite (ci_dec _ _ _ Hci _), HCk. reflexivity.
+  - apply Hfresh_eq.
+Qed.
+
 Lemma call_rebuilt (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) :
   cinv C en enu ->
@@ -4660,10 +5085,15 @@ Lemma call_rebuilt (en : rebuild_env) (enu : unbox_env)
     (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hok Hfresh Hff Hffu.
+  destruct (code_id_actually_called F sol ap) as [idc | ] eqn:Hsome.
+  2: exact (call_rebuilt_ind en enu C ap Hci Hok Hfresh Hff Hffu Hsome).
+  assert (Hsome' : code_id_actually_called F sol ap <> None)
+    by (rewrite Hsome; discriminate).
+  clear Hsome. rename Hsome' into Hsome.
   destruct (apply_change_u F sol cannot_change code_deps unit_code_ids codes
               unboxed ap)
     as [ | pd0 rd0] eqn:Hac;
-    [ exact (call_rebuilt_nc en enu C ap Hci Hok Hfresh Hff Hffu Hac)
+    [ exact (call_rebuilt_nc en enu C ap Hci Hok Hfresh Hff Hffu Hsome Hac)
     | ].
   destruct ap as [callee ckind args k exn extra AA RA].
   cbn [ap_callee ap_call_kind ap_args ap_continuation ap_exn_continuation
@@ -4675,10 +5105,10 @@ Proof.
   unfold call_ok in Hok. cbn [ap_call_kind ap_callee ap ap_args
     ap_continuation ap_exn_continuation ap_exn_extra_args ap_args_arity
     ap_return_arity] in Hok.
-  destruct ckind as [id | ]; [ | discriminate Hok ].
+  destruct ckind as [id | ]; [ | exfalso; apply Hsome; reflexivity ].
   destruct callee as [f | sym | cst]; try discriminate Hok.
   destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
-    [ | discriminate Hok ].
+    [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hfused].
   apply andb_true_iff in Hok as [Hid Hfplain].
@@ -4824,14 +5254,15 @@ Proof.
                      (group_by_parameter (cm_params_arity md) pd)))
                (arity_of_decisions_u
                   (decisions_u sol unboxed (cd_return cd) kinds_r))
-               (pshape1 (Pdesc de true Value))).
+               (pshape1 (Pdesc de true Value)) false).
   assert (HCS : CSf id = Some cs).
   { unfold CSf. rewrite Hcodes, Hde, Hchu', Hpd'. reflexivity. }
   assert (Hgpd : length (group_by_sizes sizes pd) = length sizes)
     by apply group_by_sizes_length.
   assert (Hcall : call_rel unboxed dead CSf ap_cc ap_u cs).
-  { exists id. split; [ reflexivity | split; [ reflexivity | ] ].
-    split; [ exact HCS | ].
+  { split;
+      [ left; exists id;
+        split; [ reflexivity | split; [ reflexivity | exact HCS ] ] | ].
     split; [ reflexivity | ].
     split; [ apply (plain2_of f Value Hfx); [ | reflexivity | exact Hfused ];
              apply Hfresh; left; reflexivity | ].
@@ -6222,6 +6653,127 @@ Proof.
   apply (rebuild_unbox_fixed_refines_observably Auto Examples.no_local
            Examples.interface ExnExample.unit_expr ExnExample.tables
            ExnExample.cannot_change [] [] true); try assumption.
+  - intros f Hf. discriminate Hf.
+  - left. intros f. reflexivity.
+Qed.
+
+Theorem poison_arg_example : poison_arg_example_statement.
+Proof.
+  assert (Hcalls : calls_unboxing PoisonArgExample.facts
+                     PoisonArgExample.tables PoisonArgExample.cannot_change
+                     PoisonArgExample.code_deps PoisonArgExample.dominated
+                     PoisonArgExample.to_unbox PoisonArgExample.unit_expr
+                   = true)
+    by (vm_compute; reflexivity).
+  assert (Hreads : check_unboxed_reads PoisonArgExample.facts
+                     PoisonArgExample.tables PoisonArgExample.dominated
+                     PoisonArgExample.to_unbox
+                   = true)
+    by (vm_compute; reflexivity).
+  assert (Hfixed :
+    rebuild_unit_unbox_fixed PoisonArgExample.facts PoisonArgExample.tables
+      PoisonArgExample.cannot_change PoisonArgExample.code_deps
+      PoisonArgExample.dominated PoisonArgExample.to_unbox true
+      PoisonArgExample.unit_expr
+    = PoisonArgExample.rebuilt)
+    by (vm_compute; reflexivity).
+  assert (Hprem :
+    in_flow_fragment PoisonArgExample.unit_expr = true
+    ∧ any_kind_arguments PoisonArgExample.unit_expr = true
+    ∧ results_kinded [] [] PoisonArgExample.unit_expr = true
+    ∧ well_formed_unit Examples.interface PoisonArgExample.unit_expr = true
+    ∧ exits_one_value Examples.interface PoisonArgExample.unit_expr = true
+    ∧ check_closed Examples.no_local PoisonArgExample.facts
+        PoisonArgExample.tables
+      = true
+    ∧ check_field_used_exact Examples.no_local PoisonArgExample.facts
+        PoisonArgExample.tables
+      = true
+    ∧ check_cc_closed PoisonArgExample.facts PoisonArgExample.tables
+        PoisonArgExample.cannot_change
+      = true
+    ∧ FlambdaReaperCallingConventionsSpec.check_apply_widgets
+        PoisonArgExample.facts PoisonArgExample.tables
+      = true)
+    by (vm_compute; repeat split).
+  destruct Hprem as (Hfrag & Hany & Hrk & Hwf & Hone & Hclosed & Hexact
+                     & Hccc & Hwid).
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exact Hcalls | split; [ exact Hreads | ] ].
+  split; [ exact Hfixed | ].
+  rewrite <- Hfixed.
+  apply (rebuild_unbox_fixed_refines_observably Auto Examples.no_local
+           Examples.interface PoisonArgExample.unit_expr
+           PoisonArgExample.tables PoisonArgExample.cannot_change
+           PoisonArgExample.dominated PoisonArgExample.to_unbox true);
+    try assumption.
+  - intros f Hf. discriminate Hf.
+  - left. intros f. reflexivity.
+Qed.
+
+Theorem escaping_argument_calls : escaping_argument_calls_statement.
+Proof.
+  unfold escaping_argument_calls_statement. cbv zeta.
+  assert (Hcalls :
+    calls_unboxing FlambdaReaperUnboxingSpec.escaping_argument_facts
+      FlambdaReaperUnboxingSpec.escaping_argument_tables
+      FlambdaReaperUnboxingSpec.escaping_argument_cannot_change
+      FlambdaReaperUnboxingSpec.escaping_argument_code_deps
+      FlambdaReaperUnboxingSpec.escaping_argument_dominated
+      (FlambdaReaperUnboxingSpec.escaping_argument_to_unbox true)
+      FlambdaReaperUnboxingSpec.escaping_argument_unit
+    = true)
+    by (vm_compute; reflexivity).
+  assert (Hreads :
+    check_unboxed_reads FlambdaReaperUnboxingSpec.escaping_argument_facts
+      FlambdaReaperUnboxingSpec.escaping_argument_tables
+      FlambdaReaperUnboxingSpec.escaping_argument_dominated
+      (FlambdaReaperUnboxingSpec.escaping_argument_to_unbox true)
+    = true)
+    by (vm_compute; reflexivity).
+  assert (Hprem :
+    in_flow_fragment FlambdaReaperUnboxingSpec.escaping_argument_unit = true
+    ∧ any_kind_arguments FlambdaReaperUnboxingSpec.escaping_argument_unit
+      = true
+    ∧ results_kinded [] [] FlambdaReaperUnboxingSpec.escaping_argument_unit
+      = true
+    ∧ well_formed_unit Examples.interface
+        FlambdaReaperUnboxingSpec.escaping_argument_unit
+      = true
+    ∧ exits_one_value Examples.interface
+        FlambdaReaperUnboxingSpec.escaping_argument_unit
+      = true
+    ∧ check_closed Examples.no_local
+        FlambdaReaperUnboxingSpec.escaping_argument_facts
+        FlambdaReaperUnboxingSpec.escaping_argument_tables
+      = true
+    ∧ check_field_used_exact Examples.no_local
+        FlambdaReaperUnboxingSpec.escaping_argument_facts
+        FlambdaReaperUnboxingSpec.escaping_argument_tables
+      = true
+    ∧ check_cc_closed FlambdaReaperUnboxingSpec.escaping_argument_facts
+        FlambdaReaperUnboxingSpec.escaping_argument_tables
+        FlambdaReaperUnboxingSpec.escaping_argument_cannot_change
+      = true
+    ∧ FlambdaReaperCallingConventionsSpec.check_apply_widgets
+        FlambdaReaperUnboxingSpec.escaping_argument_facts
+        FlambdaReaperUnboxingSpec.escaping_argument_tables
+      = true)
+    by (vm_compute; repeat split).
+  destruct Hprem as (Hfrag & Hany & Hrk & Hwf & Hone & Hclosed & Hexact
+                     & Hccc & Hwid).
+  split; [ exact Hcalls | split; [ exact Hreads | ] ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  apply (rebuild_unbox_fixed_refines_observably Auto Examples.no_local
+           Examples.interface FlambdaReaperUnboxingSpec.escaping_argument_unit
+           FlambdaReaperUnboxingSpec.escaping_argument_tables
+           FlambdaReaperUnboxingSpec.escaping_argument_cannot_change
+           FlambdaReaperUnboxingSpec.escaping_argument_dominated
+           (FlambdaReaperUnboxingSpec.escaping_argument_to_unbox true) true);
+    try assumption.
   - intros f Hf. discriminate Hf.
   - left. intros f. reflexivity.
 Qed.
