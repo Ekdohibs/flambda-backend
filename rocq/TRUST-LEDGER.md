@@ -2150,7 +2150,8 @@ it gave back.
     nothing is concluded from "not for the values tried".
   - the files `type_comparisons.ml` and `types_of_compilations.ml`
     beside those named;
-  - the provers and reification (`provers_difftest.ml`): that the two
+  - the provers and reification (`provers_difftest.ml`, with the
+    table of `prover_table.ml`): that the two
     environments of a case are made by the same definitions, in the
     same order with the same name modes, and the same equations, the
     model's by its `add_equation` with the compiler's choices and the
@@ -2161,7 +2162,8 @@ it gave back.
     bottom, and that a prover is asked in an environment of the
     compiler only where it finds no difference (what a prover reads
     of an environment is trusted to be among these); that each entry
-    of `provers` calls the prover of the compiler that it names and
+    of `provers`, in `prover_table.ml`, calls the prover of the
+    compiler that it names and
     its transcription with the same arguments, the kind that the
     compiler reads off a value slot being given to the model; that
     `reification` gives the two sides the same environment of the
@@ -2179,6 +2181,55 @@ it gave back.
     is a disagreement otherwise; that the table of answers and the
     controls are computed from the same inputs as the comparisons.
     The generators are trusted for nothing;
+  - the provers and reification in the environments that Simplify
+    computes (`provers_of_compilations.ml`, with the same table):
+    that the observer only keeps the environments that Simplify
+    reports, which are gone through when Simplify has returned; that
+    `names_of` gives the names that the levels and the symbols of an
+    environment define, with every name that their types mention and
+    every alias, each with the strongest name mode at which `mem`
+    has it, in the order of `stable_compare_simples` (the symbols,
+    then the variables in the order of their binding); that the two
+    replays (`replay_in_the_model`, `replay_in_the_compiler`) define
+    those names in that order with those modes, but that the
+    compiler's does not define a symbol of another unit, make each
+    name that is not canonical an alias of its canonical element, and
+    put for each
+    name the type that `find` gives, the model's taken there by the
+    converter above; that `seen_in_the_compiler` and
+    `seen_in_the_model` ask the same functions of an environment with
+    the same arguments (`find` with the kind and without, `mem` at no
+    mode and at the three, the canonical element at the three and
+    whatever the mode, that of what the type found is an alias of,
+    the expanded head of the alias of the name), that
+    `first_difference` compares all of them for every name, and
+    whether each environment is bottom, and that a prover is asked
+    in an environment only where Simplify's is seen the same as the
+    model's replay and as the compiler's; that these functions, with
+    the width of the machine, are all by which a prover or
+    reification reads an environment (trusted from a reading of
+    `provers.ml` and `reify.ml`; the gate asks of names, not of every
+    type); that `questions` gives the three sides the same question,
+    the type of the compiler being the compiler's own and the model's
+    made from it, and the other arguments by the rules of its
+    comment; that `verdict` is "the three agree" only where the
+    answers are the same by `Prover_answers.same`, and that each of
+    the other two verdicts is shown and makes the run fail; that a
+    loss (a type
+    that the model has not, a replay that is not seen the same, an
+    answer that is not in the model) is counted and never taken for
+    an agreement. What a reported environment is, and what an
+    agreement does not say, are in the README of the test. The
+    control on an environment made by hand is evidence that the tool
+    reads the three name modes; it is not a proof of the list above.
+    Trusted too: that an answer is replaced by another one
+    (`another_answer`) only where one of the two options of the
+    control of the statuses is given, which no rule gives but that
+    control, and that a run with either says so first. That control
+    is evidence of the status with which a check that returns ends,
+    of the counts of units and of
+    the names being shown with a case; the answers that it puts in
+    are known to differ, so it is not evidence of the comparison;
   - `same_text`: two printed answers are taken to be the same when
     they have the same words in the same order. Trusted: that the
     printer of `model_type.ml` brackets every part of a type and
