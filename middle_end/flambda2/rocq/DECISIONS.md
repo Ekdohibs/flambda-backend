@@ -902,6 +902,13 @@ says so. Only the labels that this tree cites are listed.
   their array kind only, so a load kind or a set kind that differs from
   it is lost. Mended on this branch: see `rocq/HACKING.md`, the changes
   to the compiler.
+  Before the mend, a repair for it was kept outside the tree, as a
+  candidate change with the team's record of P1-9, written by the
+  author of the mend; it changed
+  `middle_end/flambda2/parser/fexpr_prim.ml` alone, and its lines are
+  those that the commit whose subject begins "Flambda 2 Rocq: T6: the
+  text of a term has the kind of each read and write of an array"
+  applies to that file, unchanged.
 - **P1-10.** Simplify stops with a fatal error on two array primitives
   that the terms let anyone build.
 - **P1-11.** Simplify looks at the array kind of a load and of a store
