@@ -11,12 +11,22 @@ above, of `../ocaml` and of `../ocaml/library`; `dune` says how the
 answers are checked.
 A unit read from a text, the unit of the file and each unit read
 back, is first normalised as the check of a unit normalises it
-(`with_lost_kinds` in `../../tools/flsemantics.ml`): each
-`Opaque_identity`, whose kind the text does not write, is given the
-kind of its argument; and each direct call and call of unknown arity,
-the arity of whose arguments the text does not write, is given one, a
-direct call that of the parameters of its code and a call of unknown
-arity the kinds of its arguments.
+(`with_lost_kinds` in `../../tools/flsemantics.ml`). An
+`Opaque_identity` whose kind as read is not the kind of its argument is
+given the kind of its argument. A direct call or a call of unknown
+arity whose arity as read is one value for each argument is looked at
+again, and every other call is left as it is read. Such a call of
+unknown arity is given the kinds of its arguments. Such a direct call
+is given the arity of the parameters of its code where the unit binds
+that code and the code has as many parameters as the call has
+arguments; where it does not, the call is left as it is read if every
+argument is a value, and otherwise the normalisation refuses the unit.
+A call that already has the kinds so found is not changed. The printer
+of the model writes the kind of an `Opaque_identity` unless it is the
+kind of values, and the arity of the arguments of a direct call; of a
+call of unknown arity it writes the arities unless they are one value
+for each argument and one value returned. The reader takes each as it
+is written.
 
 The conversion is trusted (`rocq/TRUST-LEDGER.md`). What this adds is a
 second reading of each of its cases, in the other direction, and a
@@ -105,15 +115,16 @@ There was another, `kinds_direct_naked.fl` after Simplify, until a unit
 read from a text was given the arity of the arguments of its calls.
 Simplify makes the call of `$Add_naked` a direct call of its code, at
 the arity of two naked immediates. The printer writes that arity; the
-parser of fexpr gives a direct call the arity of as many values as it
-has arguments, whatever is written
+parser of fexpr gave a direct call the arity of as many values as it
+had arguments, whatever was written
 (`middle_end/flambda2/parser/fexpr_to_flambda.ml`, the case of
 `Function (Direct ...)`; discrepancies C2-5 and R2-12). So the unit
-read back was not the unit printed. It is a limit of fexpr and it is
-still there: the round trip no longer shows it, as the unit read back
-is given the arity of the parameters of the code before it is
-converted. What the round trip shows of such a call is that the
-conversion and the printer agree once that is done.
+read back was not the unit printed. The reader now takes the arities
+that are written for a direct call (`arities_or_values` in that file).
+The pass that gives a direct call of a unit read from a text the arity
+of the parameters of its code still runs; it leaves alone a call whose
+arity as read is not one value for each argument, so on a text that
+writes such an arity it changes nothing of the call.
 
 ## What cannot be printed
 

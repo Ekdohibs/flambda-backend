@@ -73,11 +73,12 @@
    arities where they are not one value for each argument and one value
    returned.
 
-   What fexpr can write and its parser reads differently is written all the
-   same, so that the check shows it: the arity of the arguments of a direct
-   call, the flag of [Is_int]. The kind of an [Opaque_identity] has no place in
-   the text; the round trip gives each one of a unit that it reads the kind of
-   its argument (flroundtrip.ml).
+   The arity of the arguments of a direct call is written, and the form of
+   [Is_int], with the word [generic] for the test that works on any value; the
+   parser reads both as they are written. The kind of an [Opaque_identity] is
+   written unless it is the kind of values, and the parser reads it. The model
+   does not say whether an [Opaque_identity] is one that only the middle end
+   does not see through: it is written as one that nothing sees through.
 
    A poison constant is written with a name of its own: the model keeps no name
    for it. A poison constant of kind naked [int8], naked [int16] or [mask] is
