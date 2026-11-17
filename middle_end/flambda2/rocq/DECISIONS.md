@@ -955,6 +955,15 @@ says so. Only the labels that this tree cites are listed.
   case for a primitive of four arguments, so it judges a term that has
   one different from itself. Mended on this branch: see
   `rocq/HACKING.md`, the changes to the compiler.
+- **N3-2.** A fault of a tool of the tests, not of the compiler. What
+  the test tool printed before Simplify had run, and every line where
+  it did not run Simplify (the option `-after`), had a name or a kind
+  of the compiler between the escape sequences of a terminal, whatever
+  the output was written to: the compiler colours what it prints
+  unless that has been decided otherwise before the first name is
+  printed, and in the tool only the entry point through which it runs
+  Simplify decided it (`Flambda2.flambda_to_flambda`). The tool now
+  decides it, against colours, before it prints anything.
 - **P1-1.** Simplify folds `Phys_equal` of a poison against another
   constant to 0, and the backend makes a poison of kind `Value` a tagged
   immediate.

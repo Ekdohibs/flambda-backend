@@ -9631,6 +9631,19 @@ let simplify_for_round_trip ~filename (text : Fexpr.flambda_unit)
    the text of a term after, and one [.fl] file. It exits 1 where the check has
    failed ([checked]). *)
 let main () =
+  (* No colours in what the tool prints. The compiler colours the names and
+     kinds that it prints unless that was decided otherwise before the first is
+     printed, and it is decided once: [Misc.Style.setup] acts at its first call
+     only. The tool runs Simplify through [Flambda2.flambda_to_flambda], which
+     makes that call, and decides against colours where the error output is not
+     a terminal. Before that run nothing had decided, and with [-after] there is
+     no run: a name in a line of the tool, and a kind in a fatal error raised as
+     the tool read a text, came out between escape sequences. So it is decided
+     here. The compiler's options are still read below, [-color] and the
+     variable OCAML_COLOR among them: after this call they change nothing of
+     what the tool prints. A program that links this file with its own main does
+     not come here. *)
+  Misc.Style.setup (Some Misc.Color.Never);
   let module Options =
     Oxcaml_args.Make_optcomp_options (Oxcaml_args.Default.Optmain)
   in
