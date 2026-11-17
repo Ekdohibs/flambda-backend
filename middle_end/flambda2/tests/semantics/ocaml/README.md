@@ -131,7 +131,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 109 of the 553 units of this directory, and it
+  tool prints the line of 109 of the 554 units of this directory, and it
   says "passes before, passes after" of each. Where that line says
   what the two runs came to, the tool prints one more, "the ends of
   regions ...": of each term, the answer of the model's `ends_check`
@@ -619,9 +619,8 @@ unit made from OCaml.
   with nothing lifted. A unit that has a primitive of the heap and is
   validated at another step has no such line (`array_literal.ml`,
   `ref_counter.ml`): the theorem is the same one as for any unit
-  validated at that step. Two units of this directory have the line in
-  their expected files, under "not validated":
-  `made_array_checked_store_in_loop.ml` and
+  validated at that step. One unit of this directory has the line in
+  its expected file, under "not validated":
   `pair_of_unknowns_after_inlined_pair.ml`.
 - **related once lifted**, a line under "not validated" (it awaits
   the human's choice, decision D43): the validator refused the
@@ -806,14 +805,14 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-553 sources: 476 validated; 2 validated when asked of the term before
+554 sources: 476 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
 when asked of the term before with copies of code for the sets of
-closures that a `Let` makes, which is another again; 59 validated with
+closures that a `Let` makes, which is another again; 61 validated with
 their imports; none validated with nothing imported and not with its
-imports; 6 compared on one run and not validated, 3 of them with the
+imports; 5 compared on one run and not validated, 3 of them with the
 line of the second check (1 of those with imports); 2 undefined in the
 model; 3 not checked.
 
@@ -1093,23 +1092,24 @@ model; 3 not checked.
 | `a_for_rethrow_direct_around.ml` | 420, 219 | `raise_notrace.ml` | 22, 10 |
 | `a_known_on_one_path.ml` | 188, 81 | `raise_unused_bucket.ml` | 23, 10 |
 | `a_while_body_direct_around.ml` | 324, 167 | `raise_unused_exn.ml` | 22, 10 |
-| `a_while_notrace_closure_two_around.ml` | 396, 215 | `string_get16_checked.ml` | 29, 18 |
-| `array_length_twice.ml` | 21, 18 | `string_get_checked.ml` | 21, 4 |
-| `collatz_local_refs.ml` | 3218, 1827 | `string_get_in_branch.ml` | 33, 25 |
-| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get_twice.ml` | 39, 26 |
-| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_two_indices.ml` | 47, 36 |
-| `div_const.ml` | 26, 5 | `string_get_unknown.ml` | 28, 16 |
-| `div_unknown.ml` | 16, 9 | `string_length_after_join.ml` | 40, 29 |
-| `divisor_tested_twice.ml` | 31, 17 | `try_catch_all.ml` | 22, 10 |
-| `empty_array_read_caught.ml` | 32, 13 | `try_div_zero.ml` | 23, 12 |
-| `exn_with_argument.ml` | 37, 10 | `try_exported.ml` | 8, 4 |
-| `exported_function_raises.ml` | 40, 23 | `try_in_each_turn.ml` | 179, 107 |
-| `handler_arm_never_taken.ml` | 38, 10 | `try_in_function.ml` | 25, 10 |
-| `imp_head_closure_uses_unit_function_only.ml` | 39, 30 | `try_nested.ml` | 30, 14 |
-| `imp_head_include_functor_result.ml` | 41, 23 | `try_not_found.ml` | 28, 10 |
-| `imp_head_inlined_at_one_call.ml` | 21, 14 | `try_reraise.ml` | 29, 14 |
-| `imp_knowing_local_mutual.ml` | 148, 100 | `try_result_matched.ml` | 81, 52 |
-| `made_array_checked_store.ml` | 23, 7 | `try_result_unused.ml` | 13, 3 |
+| `a_while_notrace_closure_two_around.ml` | 396, 215 | `string_count_to_length.ml` | 228, 152 |
+| `array_length_twice.ml` | 21, 18 | `string_get16_checked.ml` | 29, 18 |
+| `collatz_local_refs.ml` | 3218, 1827 | `string_get_checked.ml` | 21, 4 |
+| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get_in_branch.ml` | 33, 25 |
+| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_twice.ml` | 39, 26 |
+| `div_const.ml` | 26, 5 | `string_get_two_indices.ml` | 47, 36 |
+| `div_unknown.ml` | 16, 9 | `string_get_unknown.ml` | 28, 16 |
+| `divisor_tested_twice.ml` | 31, 17 | `string_length_after_join.ml` | 40, 29 |
+| `empty_array_read_caught.ml` | 32, 13 | `try_catch_all.ml` | 22, 10 |
+| `exn_with_argument.ml` | 37, 10 | `try_div_zero.ml` | 23, 12 |
+| `exported_function_raises.ml` | 40, 23 | `try_exported.ml` | 8, 4 |
+| `handler_arm_never_taken.ml` | 38, 10 | `try_in_each_turn.ml` | 179, 107 |
+| `imp_head_closure_uses_unit_function_only.ml` | 39, 30 | `try_in_function.ml` | 25, 10 |
+| `imp_head_include_functor_result.ml` | 41, 23 | `try_nested.ml` | 30, 14 |
+| `imp_head_inlined_at_one_call.ml` | 21, 14 | `try_not_found.ml` | 28, 10 |
+| `imp_knowing_local_mutual.ml` | 148, 100 | `try_reraise.ml` | 29, 14 |
+| `made_array_checked_store.ml` | 23, 7 | `try_result_matched.ml` | 81, 52 |
+| `made_array_checked_store_in_loop.ml` | 92, 53 | `try_result_unused.ml` | 13, 3 |
 | `mod_zero.ml` | 22, 6 | `try_test_outside.ml` | 22, 10 |
 | `name_then_wildcard.ml` | 26, 11 | `uncaught_raise.ml` | 10, 4 |
 | `never_returns_in_function.ml` | 44, 37 | `value_arm_constant.ml` | 54, 37 |
@@ -1191,7 +1191,6 @@ before. What each shows, and what its validation uses besides:
 
 | Source | Steps | What the validator lacks |
 |--------|-------|--------------------------|
-| `made_array_checked_store_in_loop.ml` | 92, 53 | the length of an array that a `Let` makes before a loop, taken at each turn of the loop for the check of an index: Simplify has the number from the allocation, and the two passes of the validation that know the length of an array made by a `Let` do not carry what they know into the handler of a recursive continuation, which the loop is (P1) |
 | `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has no subkinds (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
 | `pair_loop.ml` | 192, 85 | the same loads of the fields of a parameter of the function, which only its subkind justifies, at the entry of a loop, whose parameter Simplify unboxes from its subkind without looking at the uses (T6-7) |
 | `pair_of_unknowns_after_inlined_pair.ml` | 22, 10 | not validated; both terms have a primitive of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that has one (a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below), with the second search of the liftings |
@@ -2650,12 +2649,45 @@ removed it:
   at the default flags, which are those of the tests of this directory:
   it is here so that the rule stays in the rounds of both terms; with
   `-O3` the tool of 4ba710c501 does not validate it, and the tool of
-  this tree does. `made_array_checked_store_in_loop.ml` is not
-  validated: the array is made before a loop and the check of the index
-  is in the loop, and neither pass carries what it knows of the
-  allocation into the handler of a recursive continuation, so the term
-  before keeps the length in its loop where the term after has the
-  number.
+  this tree does. `made_array_checked_store_in_loop.ml` was not
+  validated when it entered: the array is made before a loop and the
+  check of the index is in the loop, and neither pass carried what it
+  knows of the allocation into the handler of a recursive continuation,
+  so the term before kept the length in its loop where the term after
+  has the number. The sharing of primitives now carries it there, and
+  the unit is validated: the next entry.
+- A primitive computed before a loop and again in the loop
+  (`string_count_to_length.ml`, T1's;
+  `made_array_checked_store_in_loop.ml`). In the first unit a `for`
+  loop counts the characters of a string that are a given one. Its
+  bound is the length of the string, and the read in the loop checks
+  its index, which takes the length again. Simplify has the length
+  once: when it simplifies the handler of a recursive continuation,
+  which a loop is, it does so under an environment made from the one
+  where the continuation is defined, with the parameters of the
+  handler unknown (`simplify_single_recursive_handler` in
+  `middle_end/flambda2/simplify/simplify_let_cont_expr.ml`), and that
+  environment has the applications that Simplify has seen of the
+  primitives that it may share, the length of a string among them (the
+  field `cse` of `middle_end/flambda2/simplify/env/downwards_env.ml`).
+  The sharing of primitives of the validation took what it knew into
+  the handler of a non-recursive continuation and not into those of
+  recursive ones: a round gives it each of those apart, with nothing
+  known (`FlambdaRecHandlersSpec.rewrite_rec_handlers`). It now goes
+  into each of them with what is known where the `Let_cont` is, less
+  what mentions the parameters of the handler
+  (`FlambdaCseSpec.share_primitives_knowing`): the handler can run
+  many times, each time under the variables in sight where it is
+  defined, which hold what they held, and what the pass knows of them
+  holds at any heap that the heap of the `Let` has evolved to. What it
+  knows of an array that a `Let` has made goes into the handler with
+  the rest, so the length taken in the loop of the second unit becomes
+  the number. Both units are validated with their imports by the tool
+  of this tree, at the default flags and with `-O3`, and neither is by
+  the tool of 7d82a601ae at either. What is known where a handler is
+  entered is what was known before the loop: nothing that one turn
+  computes is known in the next. The pass leaves the bodies of code as
+  they are, as before.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2729,14 +2761,19 @@ Where the search of an asking that asks something ends in a refusal
 after that, the search is made once more with two choices of the guess
 changed (the entry of `local_rec_below_a_let_and_in_an_arm.ml`, in the
 list above).
-The 553 units here were checked in 11.4 seconds of processor time
-together in one run (5.5 user, 5.9 system), and in 11.5 in a second run
-of the same tool (5.7 and 5.9): more than half of each is the system's
-part. Other builds ran on the machine during both. Between the two, the
+The 554 units here were checked in 11.4 seconds of processor time
+together in one run (5.7 user, 5.7 system), and in 11.7 in a second run
+of the same tool (5.9 and 5.8): about half of each is the system's
+part. Other runs were on the machine during both. Between the two, the
+tool of 7d82a601ae took 11.6 seconds on the 553 units that the directory
+had at that commit. On the 553 units that the directory had at
+07e7de4bae, in two such runs, the tool of that commit took 11.4 seconds
+(5.5 user, 5.9 system) and 11.5 (5.7 and 5.9), and between the two the
 tool of 6c3afd7c55 took 11.4 seconds on the 546 units that the directory
-had at that commit, with their texts as they were there: the texts of
-this tree say more, so the two tools were not given the same inputs. At
-the closing a4b5adff05, which counted 546 units, in two runs made one
+had at that commit, with their texts as they were there: the texts at
+07e7de4bae said more than those at 6c3afd7c55, so the two tools were
+not given the same inputs.
+At the closing a4b5adff05, which counted 546 units, in two runs made one
 after the other with the same inputs and flags, the tool of 4ba710c501
 took 11.9 seconds and the tool of a4b5adff05 11.8. That time, and those
 that `census/README.md` gives for the tool of a4b5adff05 where it says
@@ -2860,7 +2897,7 @@ directory sets the variable; one of `../regions/` does.
   statements of `FlambdaExitBoundSpec.v` no longer take it as a
   premise, and no unit is refused by the guard for it (the hoisting
   of static bindings of the validation still tests it). The tool
-  prints the line of 550 of the 553 units of this
+  prints the line of 551 of the 554 units of this
   directory (not of the 3 that are not checked), and it says "passes
   before, passes after" of each. The controls of the guard are in
   `../guard/` and among the texts of the directory above.
@@ -2904,7 +2941,7 @@ directory sets the variable; one of `../regions/` does.
   to Simplify, reads the text back and asks the comparison of the
   compiler (`middle_end/flambda2/compare/compare.ml`) whether the term
   in memory and the term read are the same up to the names that they
-  bind. Of each of the 553 units of this directory it answers "the text
+  bind. Of each of the 554 units of this directory it answers "the text
   is the term" (measured with the driver of this tree, at the default
   flags; the rules of that directory run it on its own controls and on
   one unit of this one, and no rule runs it on the others). That is the
@@ -2991,9 +3028,10 @@ directory sets the variable; one of `../regions/` does.
     `middle_end/flambda2/simplify/simplify_let_cont_expr.ml`). The text
     now writes `cold` after the name of such a continuation, and the
     reader takes it (`string_get_checked.ml`). 22 units of this
-    directory have one. With the mark, at the default flags, the run of
-    the term after of eight of them takes more steps, and their verdicts
-    are what they were: `divisor_tested_twice.ml` (17 steps where it
+    directory had one when the text came to write it, and 23 have one
+    now. With the mark, at the default flags, the run of the term after
+    of eight of the 22 took more steps, and their verdicts were what
+    they had been: `divisor_tested_twice.ml` (17 steps where it
     took 16), `made_array_checked_store_in_loop.ml` (53 for 50),
     `string_get_in_branch.ml` (25 for 24), `string_get_two_indices.ml`
     (36 for 34), `string_length_after_join.ml` (29 for 28),
@@ -3003,9 +3041,9 @@ directory sets the variable; one of `../regions/` does.
     that Simplify's own check of the place of a static binding would
     refuse, and that the rule of the model takes (discrepancy X5-9,
     decision D60; the measure of the distance below). Of the other 14
-    the tool prints what it printed. The mark is of a continuation: the
-    mark `[@cold]` of code is one of those that the text still has not
-    (above).
+    the tool printed what it had printed. The mark is of a
+    continuation: the mark `[@cold]` of code is one of those that the
+    text still has not (above).
 
   One more loss is of something that Simplify does not read: whether
   a value slot always holds an immediate, which the parser reads as
@@ -3061,7 +3099,7 @@ directory sets the variable; one of `../regions/` does.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 222 units that have entered since, 32 have:
+  Of the 223 units that have entered since, 32 have:
   `stack_argument_result_returned`, whose source says `local_` of a
   parameter, the first source of this directory that does, and 31 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
@@ -3082,7 +3120,7 @@ directory sets the variable; one of `../regions/` does.
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
   `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 64 of the 553 units of this directory has an
+  before Simplify of 64 of the 554 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
