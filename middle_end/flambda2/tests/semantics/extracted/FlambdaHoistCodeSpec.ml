@@ -107,19 +107,12 @@ and binding_closures_in_scope bound = function
 and code_closures_in_scope bound = function
   | Code (_, _, _, _, _, body) -> closures_in_scope bound body
 
-(** val statics_at_unit_toplevel_of_unit : expr -> bool **)
-
-let statics_at_unit_toplevel_of_unit e =
-  existsb
-    (fun unit_exn -> statics_at_unit_toplevel unit_exn true e)
-    (free_continuations e)
-
 (** val hoist_code : expr -> expr option **)
 
 let hoist_code e =
   let codes = code_bindings e in
   if
-    ((statics_at_unit_toplevel_of_unit e
+    ((statics_outside_loops_and_code true e
      && distinct (static_names code_ids_of_binding e))
     && distinct (flat_map code_ids_of_binding codes))
     && closures_in_scope (fun _ -> false) e

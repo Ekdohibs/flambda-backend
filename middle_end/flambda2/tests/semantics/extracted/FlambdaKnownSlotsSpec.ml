@@ -154,7 +154,7 @@ let rec read_slots known syms e =
     Let_cont_non_recursive
       ( k,
         read_slots_in_handler known
-          (app (static_names symbols_of_binding body) syms)
+          (app (handler_scope symbols_of_binding k body) syms)
           h,
         read_slots known syms body )
   | Let_cont_recursive (handlers, body) ->
@@ -164,7 +164,9 @@ let rec read_slots known syms e =
             let k, h = pat in
             ( k,
               read_slots_in_handler known
-                (app (static_names symbols_of_binding body) syms)
+                (app
+                   (recursive_scope symbols_of_binding (map fst handlers) body)
+                   syms)
                 h ))
           handlers,
         read_slots known syms body )

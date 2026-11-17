@@ -31,6 +31,4 @@ val binding_closures_in_scope : (code_id -> bool) -> static_binding -> bool
 
 val code_closures_in_scope : (code_id -> bool) -> code -> bool
 
-val statics_at_unit_toplevel_of_unit : expr -> bool
-
 val hoist_code : expr -> expr option

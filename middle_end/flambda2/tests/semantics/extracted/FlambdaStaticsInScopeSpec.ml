@@ -1,3 +1,5 @@
+open BinNums
+open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
@@ -113,6 +115,102 @@ let rec group_consts_in_scope before all ids = function
         && group_consts_in_scope (s :: before) all ids bindings0
     | _ -> group_consts_in_scope before all ids bindings0)
 
+type exit_names = positive list finite_map
+
+(** val with_bound : positive list -> exit_names -> exit_names **)
+
+let with_bound names l = map_values (fun entry -> app names entry) l
+
+(** val add_exit : continuation -> positive list -> exit_names -> exit_names **)
+
+let rec add_exit k names = function
+  | [] -> (k, names) :: []
+  | p :: l0 ->
+    let k', names' = p in
+    if Pos.eqb k k'
+    then (k', inter names names') :: l0
+    else (k', names') :: add_exit k names l0
+
+(** val meet_exits : exit_names -> exit_names -> exit_names **)
+
+let meet_exits l l' =
+  fold_right (fun exit l'0 -> add_exit (fst exit) (snd exit) l'0) l' l
+
+(** val remove_keys : continuation list -> exit_names -> exit_names **)
+
+let remove_keys bound l = filter (fun exit -> negb (among (fst exit) bound)) l
+
+(** val group_entry : continuation list -> exit_names -> positive list option **)
+
+let rec group_entry group l =
+  match group with
+  | [] -> None
+  | k :: group0 -> (
+    match lookup k l with
+    | Some names -> (
+      match group_entry group0 l with
+      | Some names' -> Some (inter names names')
+      | None -> Some names)
+    | None -> group_entry group0 l)
+
+(** val exits : (static_binding -> positive list) -> expr -> exit_names **)
+
+let rec exits names_of = function
+  | Let (_, _, _, body) -> exits names_of body
+  | Let_static (bindings, body) ->
+    with_bound (flat_map names_of bindings) (exits names_of body)
+  | Let_cont_non_recursive (k, h, body) -> (
+    let of_body = exits names_of body in
+    match lookup k of_body with
+    | Some entry ->
+      meet_exits
+        (remove_keys (k :: []) of_body)
+        (with_bound entry (handler_exits names_of h))
+    | None -> of_body)
+  | Let_cont_recursive (handlers, body) -> (
+    let of_body = exits names_of body in
+    let group = map fst handlers in
+    match group_entry group of_body with
+    | Some entry ->
+      meet_exits
+        (remove_keys group of_body)
+        (with_bound entry
+           (remove_keys group
+              (fold_right
+                 (fun pat l ->
+                   let _, h = pat in
+                   meet_exits (handler_exits names_of h) l)
+                 [] handlers)))
+    | None -> of_body)
+  | Apply ap ->
+    add_exit ap.ap_continuation [] ((ap.ap_exn_continuation, []) :: [])
+  | Apply_cont ac -> (ac.ac_continuation, []) :: []
+  | Switch (_, arms) ->
+    fold_right (fun arm l -> add_exit (snd arm).ac_continuation [] l) [] arms
+  | Invalid -> []
+
+(** val handler_exits : (static_binding -> positive list) ->
+    continuation_handler -> exit_names **)
+
+and handler_exits names_of = function
+  | Handler (_, _, handler) -> exits names_of handler
+
+(** val handler_scope : (static_binding -> positive list) -> continuation ->
+    expr -> positive list **)
+
+let handler_scope names_of k body =
+  match lookup k (exits names_of body) with
+  | Some names -> names
+  | None -> static_names names_of body
+
+(** val recursive_scope : (static_binding -> positive list) -> continuation list
+    -> expr -> positive list **)
+
+let recursive_scope names_of group body =
+  match group_entry group (exits names_of body) with
+  | Some names -> names
+  | None -> static_names names_of body
+
 (** val expr_statics_in_scope : symbol list -> code_id list -> expr -> bool **)
 
 let rec expr_statics_in_scope syms ids = function
@@ -127,10 +225,10 @@ let rec expr_statics_in_scope syms ids = function
        all ids' bindings
     && forallb (binding_statics_in_scope all ids') bindings)
     && expr_statics_in_scope all ids' body
-  | Let_cont_non_recursive (_, h, body) ->
+  | Let_cont_non_recursive (k, h, body) ->
     handler_statics_in_scope
-      (app (static_names symbols_of_binding body) syms)
-      (app (static_names declared_code_ids_of_binding body) ids)
+      (app (handler_scope symbols_of_binding k body) syms)
+      (app (handler_scope declared_code_ids_of_binding k body) ids)
       h
     && expr_statics_in_scope syms ids body
   | Let_cont_recursive (handlers, body) ->
@@ -138,8 +236,13 @@ let rec expr_statics_in_scope syms ids = function
       (fun pat ->
         let _, h = pat in
         handler_statics_in_scope
-          (app (static_names symbols_of_binding body) syms)
-          (app (static_names declared_code_ids_of_binding body) ids)
+          (app
+             (recursive_scope symbols_of_binding (map fst handlers) body)
+             syms)
+          (app
+             (recursive_scope declared_code_ids_of_binding (map fst handlers)
+                body)
+             ids)
           h)
       handlers
     && expr_statics_in_scope syms ids body

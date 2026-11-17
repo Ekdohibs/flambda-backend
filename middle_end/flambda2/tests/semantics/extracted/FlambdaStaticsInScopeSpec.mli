@@ -1,3 +1,5 @@
+open BinNums
+open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
@@ -29,6 +31,32 @@ val declared_code_ids_of_binding : static_binding -> code_id list
 
 val group_consts_in_scope :
   symbol list -> symbol list -> code_id list -> static_binding list -> bool
+
+type exit_names = positive list finite_map
+
+val with_bound : positive list -> exit_names -> exit_names
+
+val add_exit : continuation -> positive list -> exit_names -> exit_names
+
+val meet_exits : exit_names -> exit_names -> exit_names
+
+val remove_keys : continuation list -> exit_names -> exit_names
+
+val group_entry : continuation list -> exit_names -> positive list option
+
+val exits : (static_binding -> positive list) -> expr -> exit_names
+
+val handler_exits :
+  (static_binding -> positive list) -> continuation_handler -> exit_names
+
+val handler_scope :
+  (static_binding -> positive list) -> continuation -> expr -> positive list
+
+val recursive_scope :
+  (static_binding -> positive list) ->
+  continuation list ->
+  expr ->
+  positive list
 
 val expr_statics_in_scope : symbol list -> code_id list -> expr -> bool
 

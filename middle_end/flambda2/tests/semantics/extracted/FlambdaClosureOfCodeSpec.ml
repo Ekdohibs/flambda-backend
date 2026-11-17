@@ -186,7 +186,7 @@ let rec know_code_closures sets syms e =
     Let_cont_non_recursive
       ( k,
         know_code_in_handler sets
-          (app (static_names symbols_of_binding body) syms)
+          (app (handler_scope symbols_of_binding k body) syms)
           h,
         know_code_closures sets syms body )
   | Let_cont_recursive (handlers, body) ->
@@ -196,7 +196,9 @@ let rec know_code_closures sets syms e =
             let k, h = pat in
             ( k,
               know_code_in_handler sets
-                (app (static_names symbols_of_binding body) syms)
+                (app
+                   (recursive_scope symbols_of_binding (map fst handlers) body)
+                   syms)
                 h ))
           handlers,
         know_code_closures sets syms body )
