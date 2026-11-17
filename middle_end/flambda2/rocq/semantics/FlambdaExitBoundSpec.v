@@ -181,8 +181,8 @@ Definition validated_exits_bound_statement : Prop :=
    the second unit goes to the handler that returns it alone. That
    unit fails [well_formed_unit] as the handler that binds the symbol
    is not at toplevel: the body of its [Let_cont] can return without
-   applying it (FlambdaWellFormedSpec.handler_at_toplevel,
-   statics_at_toplevel). *)
+   applying it (FlambdaWellFormedSpec.handler_at_unit_toplevel,
+   statics_at_unit_toplevel). *)
 Definition refined_exit_unbound_statement : Prop :=
   ∃ (u : unit_interface) (source target : expr) (n : nat) (last : state)
     (k : continuation) (s : symbol),

@@ -99,7 +99,7 @@ Qed.
 (* A term with no static binding in it passes the test that every
    static binding is at toplevel, wherever it stands. *)
 Fixpoint no_static_nowhere (unit_exn : continuation) (e : expr) {struct e} :
-  binds_no_static e = true -> statics_at_toplevel unit_exn false e = true.
+  binds_no_static e = true -> statics_at_unit_toplevel unit_exn false e = true.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
@@ -234,7 +234,7 @@ Lemma inv_under (unit_exn : continuation)
     In n (static_names names_of e) -> is_bound statics n = false) ->
   static_code statics = [] ->
   observers slots conts ->
-  statics_at_toplevel unit_exn true e = true ->
+  statics_at_unit_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
   inv unit_exn names_of is_bound (State e [] conts statics hp rd).
 Proof.
@@ -256,7 +256,7 @@ Lemma inv_from (unit_exn : continuation)
   (∀ n : positive,
     In n (static_names names_of e) -> is_bound statics n = false) ->
   static_code statics = [] ->
-  statics_at_toplevel unit_exn true e = true ->
+  statics_at_unit_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
   inv unit_exn names_of is_bound (State e [] [] statics hp rd).
 Proof.
@@ -297,7 +297,7 @@ Lemma well_formed_never_faults_under (u : unit_interface)
   static_fault s = false.
 Proof.
   intros Hwf Hno_code Hfree Hobs Hrun.
-  pose proof (well_formed_unit_statics_at_toplevel u e Hwf) as P.
+  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as P.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Dcode.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Dsymbols.
   apply (inv_never_faults (unit_exn u)).
@@ -369,7 +369,7 @@ Lemma never_faults_after (u : unit_interface) (e : expr)
   static_fault s = false.
 Proof.
   intros Hwf Hno_code Hfree Hlast Hno Hrun.
-  pose proof (well_formed_unit_statics_at_toplevel u e Hwf) as P.
+  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as P.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Dcode.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Dsymbols.
   apply (inv_never_faults (unit_exn u)).

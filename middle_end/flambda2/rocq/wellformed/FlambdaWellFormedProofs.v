@@ -169,8 +169,8 @@ Hypothesis bound_after :
 
 (* An expression that is not at toplevel has no [Let_static]. *)
 Fixpoint statics_nowhere (e : expr) :
-  statics_at_toplevel unit_exn false e = true ->
-  statics_at_toplevel unit_exn true e = true
+  statics_at_unit_toplevel unit_exn false e = true ->
+  statics_at_unit_toplevel unit_exn true e = true
   ∧ binds_statics e = false
   ∧ static_names names_of e = [].
 Proof.
@@ -186,7 +186,7 @@ Proof.
     destruct (statics_nowhere body Hb) as (Pb & Bb & Nb).
     rewrite Pb, Bh, Bb, Nh, Nb.
     match goal with
-    | |- context [statics_at_toplevel unit_exn ?toplevel handler] =>
+    | |- context [statics_at_unit_toplevel unit_exn ?toplevel handler] =>
       destruct toplevel
     end;
       [ rewrite Ph | rewrite Hh ]; repeat split; reflexivity.
@@ -208,15 +208,15 @@ Proof.
 Qed.
 
 Lemma to_toplevel (toplevel : bool) (e : expr) :
-  statics_at_toplevel unit_exn toplevel e = true ->
-  statics_at_toplevel unit_exn true e = true.
+  statics_at_unit_toplevel unit_exn toplevel e = true ->
+  statics_at_unit_toplevel unit_exn true e = true.
 Proof.
   destruct toplevel; [ auto | ]. intros H. apply (statics_nowhere e H).
 Qed.
 
 Definition handlers_nowhere
     (handlers : list (continuation * continuation_handler)) : Prop :=
-  forallb (fun '(_, h) => handler_statics_at_toplevel unit_exn false h)
+  forallb (fun '(_, h) => handler_statics_at_unit_toplevel unit_exn false h)
     handlers
   = true.
 
@@ -254,7 +254,7 @@ Fixpoint cont_ok (c : cont_value) : Prop :=
   match c with
   | Outer _ => True
   | Closure h _ conts recursive =>
-    handler_statics_at_toplevel unit_exn true h = true
+    handler_statics_at_unit_toplevel unit_exn true h = true
     ∧ NoDup (handler_static_names names_of h)
     ∧ (∀ n : positive,
         In n (handler_static_names names_of h) ->
@@ -357,12 +357,12 @@ Qed.
 Definition code_ok (statics : static_env) : Prop :=
   ∀ (id : code_id) (c : code),
     lookup id (static_code statics) = Some c ->
-    code_statics_at_toplevel unit_exn c = true.
+    code_statics_at_unit_toplevel unit_exn c = true.
 
 Lemma eval_static_bindings_code_ok (vars : env)
     (bindings : list static_binding) :
   ∀ statics statics' : static_env,
-    forallb (binding_statics_at_toplevel unit_exn) bindings = true ->
+    forallb (binding_statics_at_unit_toplevel unit_exn) bindings = true ->
     code_ok statics ->
     eval_static_bindings vars bindings statics = Some statics' ->
     code_ok statics'.
@@ -382,7 +382,7 @@ Proof.
 Qed.
 
 Definition inv (s : state) : Prop :=
-  statics_at_toplevel unit_exn true (state_expr s) = true
+  statics_at_unit_toplevel unit_exn true (state_expr s) = true
   ∧ NoDup (static_names names_of (state_expr s))
   ∧ conts_ok (state_conts s)
   ∧ (∀ n : positive,
@@ -757,7 +757,7 @@ Lemma well_formed_inv (unit_exn : continuation)
     (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (e : expr) :
   (∀ n : positive, is_bound empty_static_env n = false) ->
-  statics_at_toplevel unit_exn true e = true ->
+  statics_at_unit_toplevel unit_exn true e = true ->
   distinct (static_names names_of e) = true ->
   inv unit_exn names_of is_bound
     (State e [] [] empty_static_env empty_heap no_reads).
@@ -782,9 +782,10 @@ Qed.
 Local Ltac condition :=
   unfold well_formed_unit; rewrite !andb_true_iff; tauto.
 
-Lemma well_formed_unit_statics_at_toplevel (u : unit_interface) (e : expr) :
+Lemma well_formed_unit_statics_at_unit_toplevel (u : unit_interface)
+    (e : expr) :
   well_formed_unit u e = true ->
-  statics_at_toplevel (unit_exn u) true e = true.
+  statics_at_unit_toplevel (unit_exn u) true e = true.
 Proof. condition. Qed.
 
 Lemma well_formed_unit_code_ids_distinct (u : unit_interface) (e : expr) :
@@ -829,7 +830,7 @@ Lemma well_formed_unit_traps_well_formed (u : unit_interface) (e : expr) :
 Proof. condition. Qed.
 
 Lemma well_formed_unit_intro (u : unit_interface) (e : expr) :
-  statics_at_toplevel (unit_exn u) true e = true ->
+  statics_at_unit_toplevel (unit_exn u) true e = true ->
   distinct (static_names code_ids_of_binding e) = true ->
   distinct (static_names symbols_of_binding e) = true ->
   names_in_scope (unit_return u) (unit_exn u) e = true ->
@@ -845,7 +846,7 @@ Proof. condition. Qed.
 Theorem well_formed_never_faults : well_formed_never_faults_statement.
 Proof.
   intros u e n s Hwf Hrun.
-  pose proof (well_formed_unit_statics_at_toplevel u e Hwf) as P.
+  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as P.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Dcode.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Dsymbols.
   pose proof (inv_run (unit_exn u) code_ids_of_binding code_id_bound

@@ -57,7 +57,7 @@
    is meant with those two. In such a unit a handler binds something
    static only if the body of its [Let_cont] can do nothing but apply
    its continuation or leave the unit by its exception continuation
-   (FlambdaWellFormedSpec.handler_at_toplevel). So the run of the body
+   (FlambdaWellFormedSpec.handler_at_unit_toplevel). So the run of the body
    of any [Let_cont] binds all that the body binds, down its spine and
    then in each such handler in turn, before it enters a handler of
    that [Let_cont], which it does by applying its continuation or by
@@ -352,7 +352,7 @@ with code_bound_continuations (c : code) : list continuation :=
    bindings of its body" off names, and row 4 relies on it: a handler
    is at toplevel when its body can only apply its continuation or use
    the exception continuation of the unit
-   (FlambdaWellFormedSpec.handler_at_toplevel). If a [Let_cont] of the
+   (FlambdaWellFormedSpec.handler_at_unit_toplevel). If a [Let_cont] of the
    unit binds that name again, a body that uses it does not leave the
    unit: it goes to a handler of the unit, which may go on to an outer
    handler that reads what the handler skipped was to bind. The unit of
@@ -687,7 +687,7 @@ Definition statics_bound_in_run_statement : Prop :=
    unit, which goes to [k_outer], and [s] was never bound. *)
 Definition rebound_unit_exn_reads_unbound_statement : Prop :=
   ∃ (u : unit_interface) (e : expr) (n : nat) (s : state),
-    statics_at_toplevel (unit_exn u) true e = true
+    statics_at_unit_toplevel (unit_exn u) true e = true
     ∧ distinct (static_names code_ids_of_binding e) = true
     ∧ distinct (static_names symbols_of_binding e) = true
     ∧ names_in_scope (unit_return u) (unit_exn u) e = true
@@ -721,7 +721,7 @@ Definition rebound_unit_exn_reads_unbound_statement : Prop :=
    [k_a]. *)
 Definition branch_round_binding_reads_unbound_statement : Prop :=
   ∃ (u : unit_interface) (e : expr) (n : nat) (s : state),
-    statics_at_toplevel (unit_exn u) true e = false
+    statics_at_unit_toplevel (unit_exn u) true e = false
     ∧ distinct (static_names code_ids_of_binding e) = true
     ∧ distinct (static_names symbols_of_binding e) = true
     ∧ names_in_scope (unit_return u) (unit_exn u) e = true

@@ -1285,15 +1285,15 @@ Proof. exact well_formed_free_continuations_renamed. Qed.
 #[local] Hint Rewrite well_formed_free_continuations_renamed
   handler_free_continuations_renamed : equivariance.
 
-Theorem handler_at_toplevel_equivariant :
-  handler_at_toplevel_equivariant_statement.
+Theorem handler_at_unit_toplevel_equivariant :
+  handler_at_unit_toplevel_equivariant_statement.
 Proof. equivariance. Qed.
-#[local] Hint Rewrite handler_at_toplevel_equivariant : equivariance.
+#[local] Hint Rewrite handler_at_unit_toplevel_equivariant : equivariance.
 
-Theorem statics_at_toplevel_equivariant :
-  statics_at_toplevel_equivariant_statement.
+Theorem statics_at_unit_toplevel_equivariant :
+  statics_at_unit_toplevel_equivariant_statement.
 Proof. equivariance. Qed.
-#[local] Hint Rewrite statics_at_toplevel_equivariant : equivariance.
+#[local] Hint Rewrite statics_at_unit_toplevel_equivariant : equivariance.
 
 (* From here the tactic rewrites with its database in one pass, which
    is faster. A proof that the one pass leaves open is between a line
@@ -4686,18 +4686,19 @@ Lemma hoist_code_renamed (r : renaming) (e : expr) :
 Proof.
   unfold hoist_code. cbv zeta.
   assert (Htoplevel :
-    statics_at_toplevel_of_unit (rename_expr r e)
-    = statics_at_toplevel_of_unit e).
-  { unfold statics_at_toplevel_of_unit.
+    statics_at_unit_toplevel_of_unit (rename_expr r e)
+    = statics_at_unit_toplevel_of_unit e).
+  { unfold statics_at_unit_toplevel_of_unit.
     rewrite well_formed_free_continuations_renamed.
     induction (free_continuations e) as [ | k ks IH]; [ reflexivity | ].
     cbn [map existsb].
-    rewrite (statics_at_toplevel_equivariant r k true e), IH. reflexivity. }
+    rewrite (statics_at_unit_toplevel_equivariant r k true e), IH.
+    reflexivity. }
   rewrite Htoplevel, (proj1 (bound_static_names_equivariant r e)),
     code_bindings_renamed, code_ids_of_bindings_renamed,
     closures_in_scope_renamed, <- without_code_renamed.
   destruct
-    (statics_at_toplevel_of_unit e
+    (statics_at_unit_toplevel_of_unit e
      && distinct (static_names code_ids_of_binding e)
      && distinct (flat_map code_ids_of_binding (code_bindings e))
      && closures_in_scope (fun _ => false) e);

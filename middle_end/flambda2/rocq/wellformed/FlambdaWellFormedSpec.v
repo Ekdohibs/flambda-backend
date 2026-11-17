@@ -27,7 +27,7 @@
 
 (* Where static bindings may be: the well-formedness of a compilation unit.
 
-   This file is to be reviewed: [statics_at_toplevel] against the
+   This file is to be reviewed: [statics_at_unit_toplevel] against the
    definition of toplevel in Simplify
    (simplify/simplify_let_cont_expr.ml, at_unit_toplevel, and
    Downwards_env.at_unit_toplevel), [sets_well_formed] against what the
@@ -62,7 +62,7 @@
    run many times, and never the body of code, which runs once for each
    call.
 
-   [statics_at_toplevel] is this as a check, carrying down the term
+   [statics_at_unit_toplevel] is this as a check, carrying down the term
    whether it is at toplevel, as Simplify does. [well_formed_unit] asks
    also that no code id or symbol is bound twice, that the sets of
    closures of the unit are whole ([sets_well_formed]), that its
@@ -257,7 +257,7 @@ with handler_raises_to (k : continuation) (h : continuation_handler) : bool :=
    exception continuation of the unit. In a well-formed unit a handler
    that is not an exception handler is not used as one
    ([exn_handlers_well_formed]). *)
-Definition handler_at_toplevel (unit_exn k : continuation)
+Definition handler_at_unit_toplevel (unit_exn k : continuation)
     (h : continuation_handler) (body : expr) : bool :=
   negb (handler_is_exn_handler h)
   && all_among (free_continuations body) [k; unit_exn].
@@ -272,38 +272,39 @@ Definition handler_at_toplevel (unit_exn k : continuation)
 (* Every [Let_static] of the expression is at toplevel, given whether the
    expression itself is ([toplevel]) and the exception continuation of the
    unit. *)
-Fixpoint statics_at_toplevel (unit_exn : continuation) (toplevel : bool)
+Fixpoint statics_at_unit_toplevel (unit_exn : continuation) (toplevel : bool)
     (e : expr) : bool :=
   match e with
-  | Let _ _ _ body => statics_at_toplevel unit_exn toplevel body
+  | Let _ _ _ body => statics_at_unit_toplevel unit_exn toplevel body
   | Let_static bindings body =>
     toplevel
-    && forallb (binding_statics_at_toplevel unit_exn) bindings
-    && statics_at_toplevel unit_exn toplevel body
+    && forallb (binding_statics_at_unit_toplevel unit_exn) bindings
+    && statics_at_unit_toplevel unit_exn toplevel body
   | Let_cont_non_recursive k h body =>
-    handler_statics_at_toplevel unit_exn
-      (toplevel && handler_at_toplevel unit_exn k h body) h
-    && statics_at_toplevel unit_exn toplevel body
+    handler_statics_at_unit_toplevel unit_exn
+      (toplevel && handler_at_unit_toplevel unit_exn k h body) h
+    && statics_at_unit_toplevel unit_exn toplevel body
   | Let_cont_recursive handlers body =>
-    forallb (fun '(_, h) => handler_statics_at_toplevel unit_exn false h)
+    forallb (fun '(_, h) => handler_statics_at_unit_toplevel unit_exn false h)
       handlers
-    && statics_at_toplevel unit_exn toplevel body
+    && statics_at_unit_toplevel unit_exn toplevel body
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => true
   end
-with handler_statics_at_toplevel (unit_exn : continuation) (toplevel : bool)
-    (h : continuation_handler) : bool :=
+with handler_statics_at_unit_toplevel (unit_exn : continuation)
+    (toplevel : bool) (h : continuation_handler) : bool :=
   match h with
-  | Handler _ _ handler => statics_at_toplevel unit_exn toplevel handler
+  | Handler _ _ handler => statics_at_unit_toplevel unit_exn toplevel handler
   end
-with binding_statics_at_toplevel (unit_exn : continuation)
+with binding_statics_at_unit_toplevel (unit_exn : continuation)
     (binding : static_binding) : bool :=
   match binding with
-  | Bind_code _ c => code_statics_at_toplevel unit_exn c
+  | Bind_code _ c => code_statics_at_unit_toplevel unit_exn c
   | Bind_deleted_code _ | Bind_symbol _ _ => true
   end
-with code_statics_at_toplevel (unit_exn : continuation) (c : code) : bool :=
+with code_statics_at_unit_toplevel (unit_exn : continuation) (c : code)
+    : bool :=
   match c with
-  | Code _ _ _ _ _ body => statics_at_toplevel unit_exn false body
+  | Code _ _ _ _ _ body => statics_at_unit_toplevel unit_exn false body
   end.
 
 (* ======================================================================== *)
@@ -1088,7 +1089,7 @@ Record unit_interface : Type := Unit_interface {
    table of requests/C0-well-formed.md (1, 2, 3, 5, 6, 7 and 8), then
    rows 11 and 12 of requests/C5-exceptions.md. *)
 Definition well_formed_unit (u : unit_interface) (e : expr) : bool :=
-  statics_at_toplevel (unit_exn u) true e
+  statics_at_unit_toplevel (unit_exn u) true e
   && distinct (static_names code_ids_of_binding e)
   && distinct (static_names symbols_of_binding e)
   && names_in_scope (unit_return u) (unit_exn u) e

@@ -418,7 +418,7 @@ Definition ids_of (statics : static_env) : list code_id :=
    unit. *)
 Definition handler_fine (top : bool) (syms : list symbol)
     (ids : list code_id) (h : continuation_handler) : Prop :=
-  handler_statics_at_toplevel unit_exn top h = true
+  handler_statics_at_unit_toplevel unit_exn top h = true
   ∧ handler_statics_in_scope syms ids h = true
   ∧ all_among (handler_static_names deleted_code_ids_of_binding h) deleted
     = true
@@ -439,7 +439,7 @@ Qed.
 (* A handler that is not at toplevel binds nothing static. *)
 Lemma handler_nowhere_names (names_of : static_binding -> list positive)
     (h : continuation_handler) :
-  handler_statics_at_toplevel unit_exn false h = true ->
+  handler_statics_at_unit_toplevel unit_exn false h = true ->
   handler_static_names names_of h = [].
 Proof.
   destruct h as [params metadata handler]. simpl. intros H.
@@ -482,7 +482,8 @@ Inductive cont_good : list symbol -> list code_id -> cont_value -> Prop :=
       (recursive : list (continuation * continuation_handler)) :
     handler_fine true syms ids h ->
     Forall (fun kh => handler_fine false syms ids (snd kh)) recursive ->
-    (recursive <> [] -> handler_statics_at_toplevel unit_exn false h = true) ->
+    (recursive <> [] ->
+     handler_statics_at_unit_toplevel unit_exn false h = true) ->
     lookup unit_exn conts = None ->
     among unit_exn (map fst recursive) = false ->
     (∀ k : continuation,
@@ -527,7 +528,7 @@ Qed.
 (* What is asked of the code that the static environment binds. *)
 Definition code_fine (syms : list symbol) (ids : list code_id) (c : code)
     : Prop :=
-  code_statics_at_toplevel unit_exn c = true
+  code_statics_at_unit_toplevel unit_exn c = true
   ∧ code_statics_in_scope syms ids c = true
   ∧ among unit_exn (code_bound_continuations c) = false.
 
@@ -555,7 +556,7 @@ Definition code_all_fine (statics : static_env) : Prop :=
    what the expression is still to bind; the exception continuation of
    the unit is bound by nothing; and the code bound is fine. *)
 Definition terms_inv (s : state) : Prop :=
-  statics_at_toplevel unit_exn true (state_expr s) = true
+  statics_at_unit_toplevel unit_exn true (state_expr s) = true
   ∧ expr_statics_in_scope (bound_symbols (state_statics s))
       (ids_of (state_statics s)) (state_expr s)
     = true
@@ -765,8 +766,8 @@ Qed.
 
 (* The unfoldings of the checks at one constructor, and nothing else. *)
 Local Ltac at_constructor H :=
-  cbn [statics_at_toplevel handler_statics_at_toplevel
-       binding_statics_at_toplevel code_statics_at_toplevel
+  cbn [statics_at_unit_toplevel handler_statics_at_unit_toplevel
+       binding_statics_at_unit_toplevel code_statics_at_unit_toplevel
        expr_statics_in_scope handler_statics_in_scope
        binding_statics_in_scope code_statics_in_scope
        static_names handler_static_names
@@ -855,7 +856,7 @@ Proof.
       * pose proof (proj1 (forallb_forall _ _) Pbindings _ Hnew) as Pc.
         pose proof (proj1 (forallb_forall _ _) Scode _ Hnew) as Sc.
         pose proof (among_flat_map_false _ _ _ _ Ugroup Hnew) as Uc.
-        cbn [binding_statics_at_toplevel binding_statics_in_scope
+        cbn [binding_statics_at_unit_toplevel binding_statics_in_scope
              binding_bound_continuations] in Pc, Sc, Uc.
         exact (code_fine_sub _ _ _ _ _ Hsyms Hids (conj Pc (conj Sc Uc))).
   - (* Let_cont_non_recursive *)
@@ -897,9 +898,9 @@ Proof.
           unfold among. cbn [existsb].
           rewrite (proj2 (Pos.eqb_neq k' k) Hne). reflexivity. }
         pose proof (K k' Hin) as Hgood.
-        destruct (handler_at_toplevel unit_exn k
+        destruct (handler_at_unit_toplevel unit_exn k
                     (Handler params metadata handler) body) eqn:Hat.
-        -- unfold handler_at_toplevel in Hat.
+        -- unfold handler_at_unit_toplevel in Hat.
            apply andb_true_iff in Hat as [_ Hat].
            pose proof
              (proj1 (all_among_spec _ _) Hat k' (proj2 (among_In _ _) Hk'))
@@ -1876,7 +1877,7 @@ Proof.
   split.
   - unfold terms_inv. simpl_state.
     refine (conj _ (conj _ (conj _ (conj Hexn (conj eq_refl (conj _ _)))))).
-    + exact (well_formed_unit_statics_at_toplevel u e Hwf).
+    + exact (well_formed_unit_statics_at_unit_toplevel u e Hwf).
     + exact (expr_scope_sub e _ _ _ _ Hsyms (sub_nil _) Hscope).
     + apply all_among_refl.
     + intros k _. apply Good_outer.

@@ -156,7 +156,7 @@ Qed.
 (* Where no static binding is allowed, the test does not look at the
    exception continuation of the unit. *)
 Fixpoint nowhere_any (x y : continuation) (e : expr) {struct e} :
-  statics_at_toplevel x false e = statics_at_toplevel y false e.
+  statics_at_unit_toplevel x false e = statics_at_unit_toplevel y false e.
 Proof.
   destruct e
     as [ z zkind d body | bindings body | k h body | handlers body | ap | ac
@@ -172,7 +172,7 @@ Proof.
 Qed.
 
 Lemma code_nowhere_any (x y : continuation) (c : code) :
-  code_statics_at_toplevel x c = code_statics_at_toplevel y c.
+  code_statics_at_unit_toplevel x c = code_statics_at_unit_toplevel y c.
 Proof.
   destruct c as [params my_closure ret exn metadata body]. simpl.
   apply nowhere_any.

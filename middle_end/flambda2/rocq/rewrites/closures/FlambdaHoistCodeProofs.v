@@ -1927,7 +1927,7 @@ Lemma hoist_code_equivalent_under (slots : list value_slot) (e e' : expr)
   equivalent (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   unfold hoist_code. cbv zeta.
-  destruct (statics_at_toplevel_of_unit e) eqn:Htoplevel; simpl;
+  destruct (statics_at_unit_toplevel_of_unit e) eqn:Htoplevel; simpl;
     [ | discriminate ].
   destruct (distinct (static_names code_ids_of_binding e)) eqn:Hnames; simpl;
     [ | discriminate ].
@@ -1936,7 +1936,7 @@ Proof.
   destruct (closures_in_scope (fun _ => false) e) eqn:Hscope;
     [ | discriminate ].
   intros [= <-] Hno_code Hallocated Hheap Hobservers.
-  unfold statics_at_toplevel_of_unit in Htoplevel.
+  unfold statics_at_unit_toplevel_of_unit in Htoplevel.
   apply existsb_exists in Htoplevel as [unit_exn [_ Htoplevel]].
   assert (Hfresh : ∀ id : code_id, lookup id (static_code statics) = None).
   { intros id. rewrite Hno_code. reflexivity. }

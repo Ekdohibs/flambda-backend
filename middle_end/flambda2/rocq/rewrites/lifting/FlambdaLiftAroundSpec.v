@@ -48,7 +48,7 @@
      let_cont k () = (let b = Make_block 0 (x) in cont k' (b)) in
      switch c | 0 -> cont k' (0) | 1 -> cont k ()
 
-   An arm is not at toplevel (FlambdaWellFormedSpec.handler_at_toplevel),
+   An arm is not at toplevel (FlambdaWellFormedSpec.handler_at_unit_toplevel),
    so no static binding may stand in it, and the block mentions a
    variable, so it cannot be bound at the head of the unit
    (FlambdaLiftFromArmsSpec.v). Simplify binds a symbol to the block

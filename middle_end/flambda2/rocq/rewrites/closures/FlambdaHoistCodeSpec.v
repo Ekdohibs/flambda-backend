@@ -60,7 +60,7 @@
    twice in the one group. So three things are checked of the unit,
    and no code is moved if one fails ([hoist_code] answers [None]).
    - Its static bindings are at toplevel
-     (FlambdaWellFormedSpec.statics_at_toplevel, for one of its free
+     (FlambdaWellFormedSpec.statics_at_unit_toplevel, for one of its free
      continuations as the exception continuation of the unit), and bind
      each code id once (FlambdaWellFormedSpec.static_names, of the code
      ids). These are the first condition of
@@ -249,15 +249,15 @@ with code_closures_in_scope (bound : code_id -> bool) (c : code) : bool :=
 
 (* The static bindings of the unit are at toplevel, for one of its free
    continuations as its exception continuation. *)
-Definition statics_at_toplevel_of_unit (e : expr) : bool :=
-  existsb (fun unit_exn => statics_at_toplevel unit_exn true e)
+Definition statics_at_unit_toplevel_of_unit (e : expr) : bool :=
+  existsb (fun unit_exn => statics_at_unit_toplevel unit_exn true e)
     (free_continuations e).
 
 (* The unit with its code bound first, if it passes the checks. *)
 Definition hoist_code (e : expr) : option expr :=
   let codes := code_bindings e in
   if
-    statics_at_toplevel_of_unit e
+    statics_at_unit_toplevel_of_unit e
     && distinct (static_names code_ids_of_binding e)
     && distinct (flat_map code_ids_of_binding codes)
     && closures_in_scope (fun _ => false) e

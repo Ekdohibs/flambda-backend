@@ -1644,7 +1644,7 @@ Lemma hoist_statics_related_from (u : unit_interface) (e : expr)
            hp rd).
 Proof.
   intros Hwf Hscope Hconts Hapart Hno_code Hfree Hamong Hheap.
-  pose proof (well_formed_unit_statics_at_toplevel u e Hwf) as Htoplevel.
+  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as Htoplevel.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Hcodes.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Hsymbols.
   (* The names of the bindings of the unit, and of those taken out, are

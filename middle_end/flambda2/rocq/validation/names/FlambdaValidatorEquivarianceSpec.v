@@ -140,8 +140,8 @@
    ([rename_naive_typing_env]).
 
    The checks of FlambdaWellFormedSpec.v, which say what a well-formed
-   unit is: where static bindings may be ([statics_at_toplevel], with
-   [raises_to], [handler_at_toplevel] and that file's
+   unit is: where static bindings may be ([statics_at_unit_toplevel], with
+   [raises_to], [handler_at_unit_toplevel] and that file's
    [free_continuations]), the static names bound ([static_names]), the
    sets of closures ([sets_well_formed]), the numbers
    ([numbers_in_range]), the exception handlers
@@ -690,18 +690,18 @@ Definition raises_to_equivariant_statement : Prop :=
 (* Where static bindings may be. The exception continuation of the unit
    is renamed with the term. Whether a handler says that it is an
    exception handler is in its metadata, which a renaming keeps. *)
-Definition handler_at_toplevel_equivariant_statement : Prop :=
+Definition handler_at_unit_toplevel_equivariant_statement : Prop :=
   ∀ (r : renaming) (unit_exn k : continuation) (h : continuation_handler)
     (body : expr),
-    handler_at_toplevel (rename_continuation r unit_exn)
+    handler_at_unit_toplevel (rename_continuation r unit_exn)
       (rename_continuation r k) (rename_handler r h) (rename_expr r body)
-    = handler_at_toplevel unit_exn k h body.
+    = handler_at_unit_toplevel unit_exn k h body.
 
-Definition statics_at_toplevel_equivariant_statement : Prop :=
+Definition statics_at_unit_toplevel_equivariant_statement : Prop :=
   ∀ (r : renaming) (unit_exn : continuation) (toplevel : bool) (e : expr),
-    statics_at_toplevel (rename_continuation r unit_exn) toplevel
+    statics_at_unit_toplevel (rename_continuation r unit_exn) toplevel
       (rename_expr r e)
-    = statics_at_toplevel unit_exn toplevel e.
+    = statics_at_unit_toplevel unit_exn toplevel e.
 
 (* The static names that a term binds are those of the renamed term,
    for a way of reading the names of a binding that does not look at
