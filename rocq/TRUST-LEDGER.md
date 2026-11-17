@@ -2264,8 +2264,20 @@ it gave back.
   an answer is left out but what the conversion of types drops; and
   that an array to lift is refused.
 - **The tests of types**, in the same directory (`model_type.ml`,
-  `type_generator.ml`, `types_difftest.ml`). No theorem rests on them;
-  what a reader of their output trusts:
+  `type_generator.ml`, `types_difftest.ml`). No theorem rests on them.
+  The functions of the model's meet and join are the transcription of
+  the compiler's n-way pair; no function of its binary pair is
+  transcribed and no theorem is proved of one (decisions D27 and
+  D61). These tests run both pairs of the compiler, each called by
+  its own module or under the flag that chooses it: the two are
+  compared with each other, the checks against the meaning of types
+  and of well-formedness are made of each, the examples of the meet
+  are run with each, and the provers are asked in an environment made
+  with each meet. So for the binary pair the tests use the model's
+  meaning of types and its predicates, which are not about one pair,
+  and compare the answers to the examples; that neither transcribes
+  the binary pair nor proves a theorem of it. What a reader of their
+  output trusts:
   - `Model_type.normalise` and `same`: that two types of the model are
     identified only up to how maps and sets are written;
   - the comparison of what two joins give (the binary and the n-way; one

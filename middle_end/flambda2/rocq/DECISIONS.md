@@ -90,7 +90,8 @@ a `CR` at the place in the `Spec` file.
   is never true of a scrutinee that is poison; `Is_null` relates
   poison to 0; aliases are exact, poison included. Decided.
 - **D27.** The meet and join transcribed first are those of
-  `types/meet_and_n_way_join.ml` (the n-way join). Ruled.
+  `types/meet_and_n_way_join.ml` (the n-way join). Ruled. The binary
+  pair is not transcribed after them: D61.
 - **D28.** The functions of a set of closures have distinct code ids,
   and so have the sets bound in one static binding group. Ruled.
 - **D29.** The renaming action reaches into code, and is defined on
@@ -633,6 +634,30 @@ a `CR` at the place in the `Spec` file.
   of its own run, differs from the definition, which reads the term,
   and asks whether that reading will do. Decided for the interim;
   open.
+- **D61.** The binary meet and join are not transcribed. The compiler
+  has two pairs: `types/meet_and_join.ml` with
+  `types/join_levels_old.ml` (the binary pair, which it runs unless
+  `-flambda2-join-algorithm` says otherwise), and
+  `types/meet_and_n_way_join.ml` with `types/env/join_env.ml` (the
+  n-way pair). The functions of the model's meet and join are the
+  transcription of the n-way pair (D27). No function of the binary
+  pair is transcribed and no theorem is proved of one: the theorems
+  that the transcribed functions have their contracts are not about
+  the pair that the compiler runs by default today. What is not
+  about one pair is as it was: the meaning of types, the predicates
+  on types, and the contracts, each a proposition about any function
+  of the type that the compiler's function has (the theorem of the
+  traversal of the meet is for every join that has its contract,
+  `FlambdaMeetClosuresSpec.meet_to_prove_sound_statement`). The tests
+  of types apply the meaning and the predicates to what each pair of
+  the compiler answers, which proves nothing of either
+  (`rocq/TRUST-LEDGER.md`, "The tests of types"). The human, on 17
+  November 2026: "I think we should not model the binary join at this
+  point, as we want to move to n-way everywhere". Not decided by it:
+  any change under `types/` (the four candidate repairs, for T1-1,
+  T4-1, T4-9 and T5-10, are not in the tree), the compiler's default,
+  and the default of the tests of this tree, whose Simplify runs the
+  binary pair where no flag says otherwise. Ruled.
 
 ## Discrepancies with the compiler
 
