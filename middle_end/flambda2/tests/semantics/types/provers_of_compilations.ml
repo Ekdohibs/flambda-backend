@@ -65,20 +65,35 @@
    E' and in M, and the three answers are compared ([questions], [ask] below): a
    name is asked about with up to three inputs, and one prover is asked about
    variables only ([provers_for]). Where the two answers of the compiler agree
-   and the model's is another, the case is shown in full and the run fails: it
-   is a candidate, to be looked into, and not yet a fault of a prover. Where the
-   two answers of the compiler differ, the replay has not given the compiler's
-   answer back, and the run fails otherwise.
+   and the model's is another, the case is shown and the run fails: it is a
+   candidate, to be looked into, and not yet a fault of a prover. Where the two
+   answers of the compiler differ, the replay has not given the compiler's
+   answer back, and the run fails otherwise. An answer of the compiler that the
+   model has no value for is counted as not compared, and is neither. A case of
+   either kind is shown with its file, the flags, the environment, the question,
+   the three answers and the names of the environment, each with what the
+   replays are made from ([print_names]). Nothing is written that could be run
+   without Simplify: to have a case again, the file is simplified again.
 
    What is printed for a file is a line: its environments, those that the
    model's replay is admitted for, those of them for which the compiler's replay
    is seen as E too, and the questions asked; and at the end, for all the files,
    the counts of the losses by reason and, for each prover, the answers on which
    the three agree and how the compiler answers. With [-why] a file is gone
-   through alone and each environment that is not admitted with both replays, or
-   in which the three answers to a question are compared and do not agree, is
-   shown. With [-control], an environment made by hand is gone through
-   ([control]).
+   through alone and each environment that is not admitted with both replays is
+   shown too. With [-control], an environment made by hand is gone through
+   ([control]); with [-control-of-the-statuses], the tool runs itself on a file
+   with answers spoiled, and says how each run ends ([control_of_the_statuses]).
+
+   The status with which a check that returns ends. Of one file, in each way of
+   going through one: 1 where a question is a candidate; else 4 where the
+   compiler answers otherwise in its replay; else 0. Of a run over files: 1
+   where a file has a candidate; else 4 where one has a failure of the replay;
+   else 3 where the run on a file stopped; else 0. A file, or a run over files,
+   that has more than one of these ends with the first of them, and the counts
+   have each. A run on one file that stops before its check returns, at an
+   exception that nothing catches, ends as the system makes it end; the run over
+   files counts it as a stop.
 
    With [-O3] before the files, Simplify runs with the settings of that flag.
    Nothing else is set: the environments are those of the default flags. *)
@@ -1177,6 +1192,34 @@ type not_an_agreement =
     is_a_candidate : bool
   }
 
+(* For the control of the statuses, and for nothing else: the prover, if any,
+   whose answer in the compiler's replay, or in the model, is replaced by
+   another answer, so that a run has failures of the replay, or candidates,
+   where it has none ([-spoil-the-replay], [-spoil-the-model]). A run in which
+   something is spoiled says so first. *)
+let spoiled_in_the_replay : string option ref = ref None
+
+let spoiled_in_the_model : string option ref = ref None
+
+let another_answer (answer : A.answer) : A.answer =
+  match answer with
+  | Invalid -> Unknown
+  | Stops _ | Proved _ | Unknown | Known_result _ | Need_meet | Lift _
+  | Simple _ | Cannot_reify ->
+    Invalid
+
+let say_what_is_spoiled () =
+  List.iter
+    (fun (spoiled, where) ->
+      match !spoiled with
+      | Some prover ->
+        Format.printf
+          "SPOILED, for the control of the statuses: the answers of %s %s@."
+          prover where
+      | None -> ())
+    [ spoiled_in_the_model, "in the model";
+      spoiled_in_the_replay, "of the compiler in its replay" ]
+
 let ask (counts : counts) (of_unit : of_unit) (replayed : replayed)
     (model_env : Model_env.t) (replayed_env : TE.t) :
     int * not_an_agreement list =
@@ -1189,12 +1232,21 @@ let ask (counts : counts) (of_unit : of_unit) (replayed : replayed)
       List.iter
         (fun (prover : PT.prover) ->
           let count what = count counts (key_of_prover prover.prover what) in
+          let unless_spoiled spoiled answer =
+            match !spoiled with
+            | Some spoiled when String.equal spoiled prover.prover ->
+              another_answer answer
+            | Some _ | None -> answer
+          in
           match
             { in_simplify =
                 PT.answer_of_compiler prover replayed.env asked.question;
               in_replay =
-                PT.answer_of_compiler prover replayed_env asked.question;
-              in_model = prover.of_model model_env asked.question
+                unless_spoiled spoiled_in_the_replay
+                  (PT.answer_of_compiler prover replayed_env asked.question);
+              in_model =
+                unless_spoiled spoiled_in_the_model
+                  (prover.of_model model_env asked.question)
             }
           with
           | exception Converter.Not_in_the_model what ->
@@ -1320,18 +1372,65 @@ let admitted = "admitted: the model's replay is seen as Simplify's environment"
 
 let questions_asked = "questions, asked of the table and of reification twice"
 
-(* The cases of a file, for the status of the run. *)
+(* The cases of a file, of each of the two kinds. A file may have both; each is
+   counted, in the counts of the file. *)
 type found =
-  | Nothing
-  | Candidates
-  | Failures_of_the_replay
+  { candidates : int;
+    failures_of_the_replay : int
+  }
+
+let units_with_a_disagreement = "units with a DISAGREEMENT"
+
+let units_with_a_failure_of_the_replay =
+  "units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY"
+
+(* The status with which the run on one file is to end where its check returns:
+   1 where a question is a candidate, else 4 where the compiler answers
+   otherwise in its replay, else 0. A file that has both ends with 1. *)
+let status_of (found : found) : int =
+  if found.candidates > 0
+  then 1
+  else if found.failures_of_the_replay > 0
+  then 4
+  else 0
+
+(* The names of an environment, in the order in which they are replayed
+   ([names_of]: the symbols, then the variables in the order of binding): each
+   with its number in the model, and what the two replays are made from, which
+   is its kind, the mode at which the environment has it, its canonical element
+   and its type, the last two as the model has them and as the compiler has
+   them. *)
+let print_names (numbering : Model_names.t) ppf (replayed : replayed) =
+  Format.fprintf ppf "@[<v 2>the names, in the order of the replay:";
+  List.iter
+    (fun { of_simplify = { name_of_env = { name; kind; mode }; t; canonical };
+           t_in_model;
+           canonical_in_model
+         } ->
+      Format.fprintf ppf
+        "@ @[<v 2>%a = %a, of kind %a, at the mode %s@ in the model, canonical \
+         %a, with the type@ %a@ in the compiler, canonical %a, with the type@ \
+         %a@]"
+        Model_type.print_name
+        (Converter.name_to_model numbering name)
+        Name.print name K.print kind (print_mode mode) Model_type.print_simple
+        canonical_in_model Model_type.print t_in_model Simple.print canonical
+        TG.print t)
+    replayed.read;
+  Format.fprintf ppf "@]"
 
 let with_the_replay =
   "admitted, and the compiler's replay is seen as Simplify's environment too"
 
-(* One file: its environments are replayed and counted. With [why], each
-   environment that is not admitted with both replays is shown. *)
-let check_file ~(why : bool) ~(names : bool) filename : counts * found =
+(* One file: its environments are replayed and counted, and the questions are
+   asked in those that are admitted with both replays. A case (a triple of
+   answers that is compared and on which the three do not agree) is shown,
+   whatever the options, and after the cases of an environment come the names of
+   that environment. With [why], each environment that is not admitted with both
+   replays is shown too, and with [names] its names. [flags] is what is said of
+   the flags where a case is shown. *)
+let check_file ~(why : bool) ~(names : bool) ~(flags : string) filename :
+    counts * found =
   let shown = Filename.basename filename in
   let counts = create_counts () in
   let count = count counts in
@@ -1372,19 +1471,7 @@ let check_file ~(why : bool) ~(names : bool) filename : counts * found =
                     replayed.replay_against_model ) ]);
             (match replayed with
             | Some replayed when names ->
-              Format.printf "@ @[<v 2>the names, in the order of the replay:";
-              List.iter
-                (fun { of_simplify = { name_of_env = { name; mode; _ }; _ };
-                       t_in_model;
-                       canonical_in_model
-                     } ->
-                  Format.printf "@ %a = %a, %s, canonical %a: %a"
-                    Model_type.print_name
-                    (Converter.name_to_model numbering name)
-                    Name.print name (print_mode mode) Model_type.print_simple
-                    canonical_in_model Model_type.print t_in_model)
-                replayed.read;
-              Format.printf "@]"
+              Format.printf "@ %a" (print_names numbering) replayed
             | Some _ | None -> ());
             Format.printf "@]@.")
         in
@@ -1424,12 +1511,18 @@ let check_file ~(why : bool) ~(names : bool) filename : counts * found =
                       (if not_an_agreement.is_a_candidate
                        then candidates
                        else failures_of_the_replay);
-                    Format.printf "@[<v 2>%s, environment %d, at %a:@ %a@]@."
-                      shown i Continuation.print continuation
+                    Format.printf
+                      "@[<v 2>%s, at %s, environment %d, at %a:@ %a@]@." shown
+                      flags i Continuation.print continuation
                       print_not_an_agreement not_an_agreement)
                   found;
                 if not (List.is_empty found)
-                then show (Some replayed) "what was asked in"
+                then
+                  Format.printf
+                    "@[<v 2>%s, at %s, environment %d, at %a, in which that \
+                     was asked:@ %a@]@."
+                    shown flags i Continuation.print continuation
+                    (print_names numbering) replayed
               | Error _, _ | _, Error _ ->
                 (* An environment that is seen the same was made. *)
                 assert false)
@@ -1463,18 +1556,26 @@ let check_file ~(why : bool) ~(names : bool) filename : counts * found =
       shown (List.length environments) (number counts admitted)
       (number counts with_the_replay)
       (number counts questions_asked));
+  if !candidates > 0 then count units_with_a_disagreement;
+  if !failures_of_the_replay > 0 then count units_with_a_failure_of_the_replay;
   ( counts,
-    if !candidates > 0
-    then Candidates
-    else if !failures_of_the_replay > 0
-    then Failures_of_the_replay
-    else Nothing )
+    { candidates = !candidates;
+      failures_of_the_replay = !failures_of_the_replay
+    } )
 
 (* The compiler keeps what it knows of a unit when it goes on to another one in
    the same run. So each file is gone through in a run of its own, from the
    directory of the file: this program runs itself on each, and adds up the
-   counts that each run writes. A run that stops is a line for its input, and is
-   counted: the tool then ends with status 3. *)
+   counts that each run writes. The run on a file counts itself whether the file
+   has a candidate, and whether it has a question on which the compiler answers
+   otherwise in its replay: a file may have both, and its status says only the
+   first. A run that stops is a line for its input, and is counted; so is a run
+   whose status is not the one of what it counted, or that counted no unit. The
+   tool ends with status 1 where a file has a candidate; else with 4 where one
+   has a failure of the replay; else with 3 where a run stopped; else with 0.
+   What is printed at the end says each of the three that there is. *)
+let units_stopped_on = "units on which this tool stopped"
+
 let each_in_a_run_of_its_own ~(flags : string list) (inputs : string list) =
   let totals = create_counts () in
   List.iter
@@ -1482,44 +1583,55 @@ let each_in_a_run_of_its_own ~(flags : string list) (inputs : string list) =
       let counts_file =
         Filename.temp_file "provers_of_compilations" ".counts"
       in
-      match
+      let status =
         Sys.command
           (Filename.quote_command Sys.executable_name
              (flags @ ["-one"; counts_file; input]))
-      with
-      | (0 | 1 | 4) as status ->
-        if status = 1
-        then count totals "units with a DISAGREEMENT"
-        else if status = 4
-        then
-          count totals
-            "units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY";
-        add_counts totals counts_file;
-        Sys.remove counts_file
-      | status ->
-        count totals "units on which this tool stopped";
+      in
+      let of_the_file = create_counts () in
+      add_counts of_the_file counts_file;
+      Sys.remove counts_file;
+      let number = number of_the_file in
+      let status_of_the_counts =
+        status_of
+          { candidates = number units_with_a_disagreement;
+            failures_of_the_replay = number units_with_a_failure_of_the_replay
+          }
+      in
+      if
+        status = status_of_the_counts
+        && number "units simplified" + number "units not simplified" = 1
+      then
+        List.iter
+          (fun what -> add totals what (number what))
+          (List.rev of_the_file.order)
+      else (
+        count totals units_stopped_on;
         Format.printf "%s: this tool stopped with status %d@."
-          (Filename.basename input) status)
+          (Filename.basename input) status))
     inputs;
   Format.printf "@.In all:@.";
   print_counts totals;
-  let disagreements = number totals "units with a DISAGREEMENT"
-  and failures =
-    number totals "units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY"
-  and stopped = number totals "units on which this tool stopped" in
-  Format.printf "@.%s@."
-    (if disagreements > 0
-     then Printf.sprintf "DISAGREEMENTS in %d files." disagreements
-     else if failures > 0
-     then
-       Printf.sprintf
-         "The compiler answers otherwise in its replay in %d files." failures
-     else if stopped > 0
-     then
-       Printf.sprintf
-         "No disagreement in the files gone through; this tool stopped on %d."
-         stopped
-     else "No disagreement.");
+  let disagreements = number totals units_with_a_disagreement
+  and failures = number totals units_with_a_failure_of_the_replay
+  and stopped = number totals units_stopped_on in
+  Format.printf "@.";
+  if disagreements > 0
+  then Format.printf "DISAGREEMENTS in %d files.@." disagreements;
+  if failures > 0
+  then
+    Format.printf "The compiler answers otherwise in its replay in %d files.@."
+      failures;
+  if disagreements = 0 && failures = 0
+  then
+    if stopped > 0
+    then
+      Format.printf
+        "No disagreement in the files gone through; this tool stopped on %d.@."
+        stopped
+    else Format.printf "No disagreement.@."
+  else if stopped > 0
+  then Format.printf "This tool stopped on %d files.@." stopped;
   if disagreements > 0 then exit 1;
   if failures > 0 then exit 4;
   if stopped > 0 then exit 3
@@ -1613,46 +1725,184 @@ let control () =
   Format.printf "@.";
   if !failed then exit 1
 
+(* A control of the statuses, on a file. This tool runs itself on the file, as
+   it is run by hand and by the alias: with nothing spoiled; with the answers of
+   a prover spoiled in the model, which makes candidates; with those of another
+   spoiled in the compiler's replay, which makes failures of the replay; and
+   with both, so that the one file has the two. Each time it is run on the file
+   alone, in the three ways ([-one], [-why], [-why-with-names]); over the file
+   as over a list; and over the file and one that is in no directory, on which
+   the tool stops. What is printed: the status of each run; of the run on the
+   file alone, the two counts of units, the counts of the cases of the two
+   provers, and how many times the names of an environment are shown, which is
+   to be once for each environment that has a case; and the last lines of the
+   runs over a list. The statuses and the counts of units are to be those
+   written here: the control fails if one is not. *)
+let control_of_the_statuses ~(flags : string list) filename =
+  let run ?stdout arguments =
+    Sys.command
+      (Filename.quote_command Sys.executable_name
+         ~stdout:(Option.value stdout ~default:Filename.null)
+         ~stderr:Filename.null arguments)
+  in
+  let lines path =
+    let channel = open_in path in
+    let rec read lines =
+      match input_line channel with
+      | line -> read (line :: lines)
+      | exception End_of_file ->
+        close_in channel;
+        List.rev lines
+    in
+    read []
+  in
+  (* The lines after the last empty one. *)
+  let last_lines path =
+    List.fold_left
+      (fun last line -> if String.equal line "" then [] else line :: last)
+      [] (lines path)
+    |> List.rev
+  in
+  let failed = ref false in
+  let checked ~expected n =
+    if n = expected
+    then string_of_int n
+    else (
+      failed := true;
+      Printf.sprintf "%d (NOT AS EXPECTED, which is %d)" n expected)
+  in
+  let in_the_model = "prove_equals_tagged_immediates"
+  and in_the_replay = "meet_naked_immediates" in
+  let the_model = ["-spoil-the-model"; in_the_model]
+  and the_replay = ["-spoil-the-replay"; in_the_replay] in
+  let in_no_directory = Filename.concat "no such directory" "unit.fl" in
+  Format.printf
+    "A control of the statuses: this tool, run by itself on %s with answers \
+     spoiled@."
+    (Filename.basename filename);
+  List.iter
+    (fun (title, spoiling, (candidates, failures), (expected, with_a_stop)) ->
+      let flags = flags @ spoiling in
+      let counts_file = Filename.temp_file "provers_of_compilations" ".counts"
+      and output = Filename.temp_file "provers_of_compilations" ".output" in
+      let one = run ~stdout:output (flags @ ["-one"; counts_file; filename]) in
+      let counts = create_counts () in
+      add_counts counts counts_file;
+      let names_shown =
+        let shown = "the names, in the order of the replay:" in
+        List.length
+          (List.filter
+             (fun line -> String.ends_with ~suffix:shown (String.trim line))
+             (lines output))
+      in
+      let why = run (flags @ ["-why"; filename]) in
+      let why_with_names = run (flags @ ["-why-with-names"; filename]) in
+      let disagree = key_of_prover in_the_model "DISAGREE"
+      and otherwise =
+        key_of_prover in_the_replay
+          "THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY"
+      in
+      Format.printf
+        "  %s:@.    the file alone: status %s; with -why, %s; with \
+         -why-with-names, %s@.    counted of it: %s %s; %s %s@.    of the \
+         questions: %d DISAGREE; %d THE COMPILER ANSWERS OTHERWISE IN ITS \
+         REPLAY@.    the names of an environment are shown %d times@."
+        title (checked ~expected one) (checked ~expected why)
+        (checked ~expected why_with_names)
+        (checked ~expected:candidates (number counts units_with_a_disagreement))
+        units_with_a_disagreement
+        (checked ~expected:failures
+           (number counts units_with_a_failure_of_the_replay))
+        units_with_a_failure_of_the_replay (number counts disagree)
+        (number counts otherwise) names_shown;
+      List.iter
+        (fun (what, files, expected) ->
+          let over = run ~stdout:output (flags @ files) in
+          Format.printf "    %s: status %s@." what (checked ~expected over);
+          List.iter
+            (fun line -> Format.printf "      %s@." line)
+            (last_lines output))
+        [ "over the file, as over a list", [filename], expected;
+          ( "over the file and one that is in no directory",
+            [filename; in_no_directory],
+            with_a_stop ) ];
+      Sys.remove counts_file;
+      Sys.remove output)
+    [ "nothing spoiled", [], (0, 0), (0, 3);
+      "the answers of a prover spoiled in the model", the_model, (1, 0), (1, 1);
+      ( "the answers of a prover spoiled in the compiler's replay",
+        the_replay,
+        (0, 1),
+        (4, 4) );
+      "both, of two provers", the_model @ the_replay, (1, 1), (1, 1) ];
+  Format.printf "@.";
+  if !failed then exit 1
+
 let usage () =
   prerr_endline
     "usage: provers_of_compilations [-O3] FILE.fl ..., or \
      provers_of_compilations [-O3] -why FILE.fl, or provers_of_compilations \
-     -control";
+     [-O3] -why-with-names FILE.fl, or provers_of_compilations -control, or \
+     provers_of_compilations -control-of-the-statuses FILE.fl";
   exit 2
 
 let () =
-  let o3, arguments =
-    match List.tl (Array.to_list Sys.argv) with
-    | "-O3" :: arguments -> true, arguments
-    | arguments -> false, arguments
+  (* The options that come first, which a run over files gives to the run on
+     each. *)
+  let rec options ~o3 flags arguments =
+    match arguments with
+    | ("-O3" as flag) :: arguments -> options ~o3:true (flag :: flags) arguments
+    | ("-spoil-the-model" as flag) :: prover :: arguments ->
+      spoiled_in_the_model := Some prover;
+      options ~o3 (prover :: flag :: flags) arguments
+    | ("-spoil-the-replay" as flag) :: prover :: arguments ->
+      spoiled_in_the_replay := Some prover;
+      options ~o3 (prover :: flag :: flags) arguments
+    | arguments -> o3, List.rev flags, arguments
+  in
+  let o3, flags, arguments =
+    options ~o3:false [] (List.tl (Array.to_list Sys.argv))
   in
   let one ~why ?(names = false) filename =
+    say_what_is_spoiled ();
     Clflags.set_target Clflags.Target.Native;
     if o3
     then (
       Clflags.Opt_flag_handler.set Oxcaml_flags.opt_flag_handler;
       Clflags.set_o3 ());
     Sys.chdir (Filename.dirname filename);
-    check_file ~why ~names (Filename.basename filename)
+    check_file ~why ~names
+      ~flags:(if o3 then "-O3" else "the default flags")
+      (Filename.basename filename)
+  in
+  let end_with (found : found) =
+    match status_of found with 0 -> () | status -> exit status
   in
   match arguments with
-  | ["-one"; counts_file; filename] -> (
+  | ["-one"; counts_file; filename] ->
     let counts, found = one ~why:false filename in
     write_counts counts counts_file;
-    match found with
-    | Nothing -> ()
-    | Candidates -> exit 1
-    | Failures_of_the_replay -> exit 4)
-  | ["-why"; filename] -> ignore (one ~why:true filename : counts * found)
+    end_with found
+  | ["-why"; filename] ->
+    let (_ : counts), found = one ~why:true filename in
+    end_with found
   | ["-why-with-names"; filename] ->
-    ignore (one ~why:true ~names:true filename : counts * found)
+    let (_ : counts), found = one ~why:true ~names:true filename in
+    end_with found
   | ["-control"] ->
     Clflags.set_target Clflags.Target.Native;
     control ()
-  | [] | ("-one" | "-why" | "-why-with-names" | "-control") :: _ -> usage ()
+  | ["-control-of-the-statuses"; filename] ->
+    control_of_the_statuses ~flags filename
+  | []
+  | ( "-one" | "-why" | "-why-with-names" | "-control"
+    | "-control-of-the-statuses" )
+    :: _ ->
+    usage ()
   | filenames ->
+    say_what_is_spoiled ();
     Format.printf
       "The environments that Simplify computes for the units of the semantics \
        tests%s, replayed into the Rocq model.@.@."
       (if o3 then ", at -O3" else "");
-    each_in_a_run_of_its_own ~flags:(if o3 then ["-O3"] else []) filenames
+    each_in_a_run_of_its_own ~flags filenames

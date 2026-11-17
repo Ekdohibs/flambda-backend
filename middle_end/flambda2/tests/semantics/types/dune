@@ -113,6 +113,7 @@
    provers_of_compilations.output
    (progn
     (run ./provers_of_compilations.exe -control)
+    (run ./provers_of_compilations.exe -control-of-the-statuses ../arith.fl)
     (system "u=provers_of_compilations.units; ./${u%.units}.exe $(cat $u)")
     (system
      "u=provers_of_compilations.units; ./${u%.units}.exe -O3 $(cat $u)")))))

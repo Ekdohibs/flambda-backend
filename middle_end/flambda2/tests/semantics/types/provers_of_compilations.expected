@@ -9,6 +9,49 @@ A control: an environment made by hand, with variables of the three name modes, 
   Simplify's against the compiler's replay: seen the same
   the compiler's replay against the model's: seen the same
 
+A control of the statuses: this tool, run by itself on arith.fl with answers spoiled
+  nothing spoiled:
+    the file alone: status 0; with -why, 0; with -why-with-names, 0
+    counted of it: 0 units with a DISAGREEMENT; 0 units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    of the questions: 0 DISAGREE; 0 THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    the names of an environment are shown 0 times
+    over the file, as over a list: status 0
+      No disagreement.
+    over the file and one that is in no directory: status 3
+      No disagreement in the files gone through; this tool stopped on 1.
+  the answers of a prover spoiled in the model:
+    the file alone: status 1; with -why, 1; with -why-with-names, 1
+    counted of it: 1 units with a DISAGREEMENT; 0 units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    of the questions: 9 DISAGREE; 0 THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    the names of an environment are shown 1 times
+    over the file, as over a list: status 1
+      DISAGREEMENTS in 1 files.
+    over the file and one that is in no directory: status 1
+      DISAGREEMENTS in 1 files.
+      This tool stopped on 1 files.
+  the answers of a prover spoiled in the compiler's replay:
+    the file alone: status 4; with -why, 4; with -why-with-names, 4
+    counted of it: 0 units with a DISAGREEMENT; 1 units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    of the questions: 0 DISAGREE; 9 THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    the names of an environment are shown 1 times
+    over the file, as over a list: status 4
+      The compiler answers otherwise in its replay in 1 files.
+    over the file and one that is in no directory: status 4
+      The compiler answers otherwise in its replay in 1 files.
+      This tool stopped on 1 files.
+  both, of two provers:
+    the file alone: status 1; with -why, 1; with -why-with-names, 1
+    counted of it: 1 units with a DISAGREEMENT; 1 units in which THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    of the questions: 9 DISAGREE; 9 THE COMPILER ANSWERS OTHERWISE IN ITS REPLAY
+    the names of an environment are shown 1 times
+    over the file, as over a list: status 1
+      DISAGREEMENTS in 1 files.
+      The compiler answers otherwise in its replay in 1 files.
+    over the file and one that is in no directory: status 1
+      DISAGREEMENTS in 1 files.
+      The compiler answers otherwise in its replay in 1 files.
+      This tool stopped on 1 files.
+
 The environments that Simplify computes for the units of the semantics tests, replayed into the Rocq model.
 
 apply_direct.fl: 2 environments, 2 admitted, 2 of them with the compiler's replay; 39 questions

@@ -115,7 +115,8 @@ outside it, and a name in scope that is an alias of one outside. It prints
 the mode at which the environment has each, which is to be the mode it was
 bound with in scope and the mode for types outside, and the three
 comparisons of the replays, which are to say "seen the same". Its output
-is the head of the expected file.
+is the head of the expected file. (A second control, of the statuses, is
+described below.)
 
 ## What is lost, and what is counted apart
 
@@ -199,15 +200,11 @@ by the model in M, and the answers are compared as values of one type
   the model count as the same answer, as in `provers_difftest.ml`.
 - The two answers of the compiler differ. The replay does not give the
   compiler's answer back, so there is nothing to compare the model with:
-  a failure of this test, shown, and the run ends with status 4.
+  a failure of this test.
 - The two answers of the compiler agree and the model's is another. This
   is a candidate, to be looked into: the replay of the model, the
   converter of types and the conversion of the answers are on the way
-  from E to the model's answer, as well as the prover. It is shown with
-  the name, the input, both forms of the two types, the arguments and the
-  three answers, and the run ends with status 1. `-why-with-names` on the
-  file shows the names of the environment too, each with its mode, its
-  canonical element and its type.
+  from E to the model's answer, as well as the prover.
 
 An answer of the compiler that the model has no value for is counted as
 not compared.
@@ -216,6 +213,72 @@ What agreement says: that on these questions the model's prover answers
 as the compiler's, in an environment that is seen as Simplify's. It does
 not say that the answer is right, and it does not say that the snapshots
 satisfy the premises of the theorems proved of the model's provers.
+
+## What is shown of a case, and how a run ends
+
+A case is a triple of answers that is compared and on which the three do
+not agree: one of the last two verdicts above. An answer of the compiler
+that the model has no value for is counted as not compared, and is no
+case. A case is shown, in every way of running the tool: the file, the
+flags, the number of the environment among those that Simplify reported
+and its continuation, the name, the input, both forms of the two types,
+the arguments and the three answers. After the cases of an environment
+come its names, in the order of the replay, each with what the
+two replays are made from: its kind, its name mode, and its canonical
+element and its type, as the model has them and as the compiler has them.
+
+That is a record to read. It is not an environment that can be loaded: no
+export of E, E' and M that runs without Simplify is written here. The
+numbers that the model has for the slots and for the pieces of code are
+not printed beside the compiler's (both forms of each type are). To have a
+case again, the same text is simplified again at the same flags: the line
+of a case names the file, without its directory (the list that the run
+was given has the path), and says whether the flags are the default ones
+or `-O3`, and the tool sets nothing else. This requires Simplify to
+report the same environments in the same order at each run, as the
+expected file of the alias has it for its units. Nothing makes a case
+smaller.
+
+That the tool does report a case where there is one is what the control
+of the statuses, below, shows.
+
+Where the check of a file returns, the run on that file ends with status
+1 where a question is a candidate; else with 4 where the compiler answers
+otherwise in its replay; else with 0. It is so with `-why` and with
+`-why-with-names` too. A run on one file that stops before its check
+returns, at an exception that nothing catches, ends as the system makes
+it end. A file that has both
+ends with 1, and is counted both among the units with a disagreement and
+among those in which the compiler answers otherwise in its replay. A run
+over files ends with 1 where a file has a candidate; else with 4 where a
+file has a failure of the replay; else with 3 where the tool stopped on a
+file; else with 0. Its last lines say each of the three that there is. A
+run on a file whose status is not the one of what it counted, or that
+counted no unit, is counted as a stop.
+
+## A control of the statuses
+
+No unit of the tests has a candidate or a failure of the replay, so the
+alias would never go the ways above. The tool has two options for this
+control and for nothing else: `-spoil-the-model PROVER` and
+`-spoil-the-replay PROVER` replace each answer of a prover, in the model
+or of the compiler in its replay, by another answer; a run with either
+says so first. With `-control-of-the-statuses FILE.fl` the tool runs
+itself on a file: with nothing spoiled, with a prover spoiled in the
+model, with another spoiled in the compiler's replay, and with both, so
+that the one file has a candidate and a failure of the replay. Each time
+it is run on the file alone in the three ways, over the file as over a
+list, and over the file and one that is in no directory, on which the
+tool stops. It prints the status of each run and the two counts of units
+of the run on the file alone, and fails if one is not the number written
+in it; the counts of the cases of the two provers; how many
+times the names of an environment are shown; and the last lines of the
+runs over a list. Its output is in the expected file, after the first
+control.
+
+It is a control of the statuses, of the counts of units and of the names
+being shown. It is not a control of the comparison of answers: the answer
+that it puts in is one that differs.
 
 ## Figures
 
@@ -281,11 +344,9 @@ variable at toplevel it lifts 148,351 times and cannot reify 482,114 times, of
     ./provers_of_compilations.exe [-O3] -why FILE.fl
     ./provers_of_compilations.exe [-O3] -why-with-names FILE.fl
     ./provers_of_compilations.exe -control
+    ./provers_of_compilations.exe -control-of-the-statuses FILE.fl
 
 `-why` shows each environment of a file that is not admitted with both
-replays (the first difference, with the name and the two answers) and
-each environment in which the three answers to a question are compared
-and do not agree.
-`-why-with-names` adds the names of the environment, each with its name
-mode, its canonical element and its type. `-control` runs the control
-alone.
+replays too (the first difference, with the name and the two answers).
+`-why-with-names` adds the names of such an environment. `-control` and
+`-control-of-the-statuses` run the controls alone.
