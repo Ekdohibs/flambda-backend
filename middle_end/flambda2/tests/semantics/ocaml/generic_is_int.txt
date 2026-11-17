@@ -1,11 +1,10 @@
 # Units of this directory whose term, as the compiler gives it to Simplify,
 # has the test of being an integer that is for any value, which the compiler
-# prints as Is_int_generic. The text of a term writes that test as it writes
-# the one that is for variants, and it is read as the one for variants (label
-# C2-26): what the tool checks of such a unit is the term as read, which is
-# not the compiler's. from_ocaml.sh fails on a unit that has the test and is
-# not named here. One name to a line, without .ml.
+# prints as Is_int_generic. The text of a term wrote that test as it wrote
+# the one that is for variants, and it was read as the one for variants (label
+# C2-26): what the tool checked of such a unit was the term as read, which
+# was not the compiler's. The text now writes the test apart, and the reader
+# takes it. from_ocaml.sh still fails on a unit that has the test and is not
+# named here. One name to a line, without .ml.
 #
-# A name is added only together with what makes the tool say of that unit
-# that it is validated for the term as read, and why. Until the tool has that
-# line, this list stays empty.
+# No name has been added: the list is empty.

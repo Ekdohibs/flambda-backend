@@ -22,9 +22,10 @@
 # type checker and the conversion from Lambda put in the term, primitives
 # above all.
 #
-# A unit is refused if the text loses of its term something that the tool
-# cannot give back (see below): the test of being an integer that is for any
-# value, unless generic_is_int.txt names the unit; a call that is a probe.
+# A unit is refused for two things in its term (see below): the test of being
+# an integer that is for any value, unless generic_is_int.txt names the unit;
+# a call that is a probe. The text of a term lost both when the refusals were
+# written, and writes both now; the refusals are kept.
 
 set -eu
 
@@ -67,13 +68,14 @@ fi
   "$ocamlopt" "$@" -stop-after middle_end -c \
     $interface "$name.ml" -drawfexpr-to "$name.fl")
 
-# The text writes the two tests of being an integer alike, and its reader
-# gives the one that is for variants (label C2-26). So the unit is compiled
+# The text wrote the two tests of being an integer alike, and its reader gave
+# the one that is for variants (label C2-26); the text now writes the one that
+# is for any value apart, and the reader takes it. The unit is still compiled
 # once more, for what -drawflambda prints of the term before Simplify, which
-# is kept in a file; and a unit whose term has the other test, printed as
-# Is_int_generic, is refused unless generic_is_int.txt, beside the source,
-# names it. Nothing is given back of a unit that is refused, or whose second
-# compilation fails or prints no term.
+# is kept in a file; and a unit whose term has the test that is for any value,
+# printed as Is_int_generic, is still refused unless generic_is_int.txt,
+# beside the source, names it. Nothing is given back of a unit that is
+# refused, or whose second compilation fails or prints no term.
 if ! (cd "$work" &&
   "$ocamlopt" "$@" -stop-after middle_end -c \
     $interface "$name.ml" -color never -drawflambda >"$name.raw" 2>&1); then
@@ -89,9 +91,9 @@ if grep -q 'Is_int_generic' "$work/$name.raw"; then
   if ! grep -qx "$name" "$dir/generic_is_int.txt"; then
     echo "$name.ml: the term that the compiler gives to Simplify has" >&2
     echo "Is_int_generic, the test of being an integer that is for any" >&2
-    echo "value. The text writes it as the test that is for variants, and" >&2
-    echo "it is read as that one: the unit read is not the compiler's." >&2
-    echo "generic_is_int.txt says how such a unit may be kept." >&2
+    echo "value. The text wrote it as the test that is for variants, and" >&2
+    echo "writes it apart now; this script still refuses a unit that has" >&2
+    echo "it. generic_is_int.txt says how such a unit may be kept." >&2
     exit 1
   fi
 fi
@@ -100,15 +102,17 @@ fi
 # prints into lines by their width.
 tr '\n' ' ' <"$work/$name.raw" | tr -s ' ' >"$work/$name.line"
 
-# The text does not say that a call is a probe, and the call is read as a
-# plain one (label C2-17); the program runs the handler of a probe only while
-# the probe is enabled. The compiler prints "(probe NAME)" in a call that is
-# one and "(probe ())" in any other. A unit whose term has one is refused.
+# The program runs the handler of a probe only while the probe is enabled,
+# and the model has nothing of that: the tool does not check a unit that has
+# a call which is a probe. (The text did not say that a call is one, and the
+# call was read as a plain one, label C2-17; it says so now, and the reader
+# takes it.) The compiler prints "(probe NAME)" in a call that is one and
+# "(probe ())" in any other. A unit whose term has one is refused.
 if grep -q '(probe [^(]' "$work/$name.line"; then
   echo "$name.ml: the term that the compiler gives to Simplify has a call" >&2
-  echo "that is a probe. The text does not say so, and the call is read" >&2
-  echo "as a plain call, which is always made: the unit read is not the" >&2
-  echo "compiler's." >&2
+  echo "that is a probe. The program runs the handler of a probe only" >&2
+  echo "while the probe is enabled, and the model has nothing of that:" >&2
+  echo "the tool does not check a unit that has one." >&2
   exit 1
 fi
 

@@ -63,12 +63,14 @@
    same of the unit read back, and is a mistake of the printer.
 
    A unit read from a text is first normalised as the check of a unit normalises
-   it (flsemantics.ml, [with_lost_kinds]): each [Opaque_identity], whose kind
-   the text does not write, is given the kind of its argument, and each direct
-   call and call of unknown arity, the arity of whose arguments the text does
-   not write, is given one. That is done to the unit of the file and to each
-   unit read back. So the round trip does not show those losses; it shows that
-   the conversion and the printer agree once both units are so normalised.
+   it (flsemantics.ml, [with_lost_kinds]): each [Opaque_identity] whose kind as
+   read is not the kind of its argument is given the kind of its argument, and a
+   direct call or a call of unknown arity whose arity as read is one value for
+   each argument may be given another ([with_lost_kinds] says which, and from
+   what). That is done to the unit of the file and to each unit read back. So
+   the round trip shows that the conversion and the printer agree once both
+   units are so normalised; where the text of the file left out a kind or an
+   arity that the term had, it does not show that.
 
    What this does not check: the kinds of the value slots, which are not in the
    term; the order of the value slots of a set of closures, which the text
@@ -101,13 +103,14 @@ type converted =
 (* The conversion, as flsemantics.ml gives it. [convert] answers the reason when
    the unit has something that the model has not got. [as_read] is what the
    check of a unit does to a unit read from a text before anything else (it
-   gives each [Opaque_identity], whose kind the text does not write, the kind of
-   its argument, and each direct call and call of unknown arity, the arity of
-   whose arguments the text does not write, an arity), or the reason why such a
-   unit is not checked; it is applied to the unit of the file and to each unit
-   read back, and not to the unit that Simplify makes, which is not read from a
-   text. [reset] forgets every name numbered so far. The four lists are the
-   global names numbered since the last [reset], each with its number. *)
+   gives each [Opaque_identity] whose kind as read is not the kind of its
+   argument the kind of its argument, and may give an arity to a direct call or
+   a call of unknown arity whose arity as read is one value for each argument),
+   or the reason why such a unit is not checked; it is applied to the unit of
+   the file and to each unit read back, and not to the unit that Simplify makes,
+   which is not read from a text. [reset] forgets every name numbered so far.
+   The four lists are the global names numbered since the last [reset], each
+   with its number. *)
 type conversion =
   { convert : Flambda_unit.t -> (converted, string) result;
     as_read : Flambda_unit.t -> (Flambda_unit.t, string) result;

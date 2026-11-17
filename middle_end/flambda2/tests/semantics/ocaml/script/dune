@@ -1,8 +1,8 @@
 ;; A test of ../from_ocaml.sh itself: of each X.ml here, X.says is what the
 ;; script says, "made" where it makes the text of the unit and otherwise the
 ;; reason that it prints, then "refused" (says.sh). The first two go together:
-;; a unit that the script refuses, for something that the text of a term
-;; loses and the tool cannot give back, and the same unit without it. The
+;; a unit that the script refuses, for a call that is a probe, which the model
+;; has not got, and the same unit without it. The
 ;; seven after them are of an unboxed product, which may be the product of
 ;; nothing, among the arguments of a call or the parameters of code (the one
 ;; named ..._not is another of them without the product): the script refused

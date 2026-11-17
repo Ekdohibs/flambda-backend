@@ -108,52 +108,66 @@
    called is bound in sight, its body does not mention its return continuation,
    and the other checks of that rewrite pass.
 
-   What the text loses of a call. The text of a term does not give the arity of
-   a call of unknown arity, which is read with one value for each argument and
-   one value for its result, nor the arity of the arguments of a direct call,
-   which is read with one value for each (label C2-5); and it does not say that
-   a call is a probe. A unit with a call of unknown arity that returns to a
-   continuation whose parameters are not one value is not checked
+   What a text may lose of a call. The printer of texts writes the arities of a
+   direct call and of a call of unknown arity, beside the callee or in its place
+   where a direct call has none, unless they are one value for each argument and
+   one value for the result; the reader takes them, and reads a call that is
+   written with none at those (label C2-5). A text made before the printer wrote
+   them, or written by hand, may leave them out of a call that had others. An
+   indirect call that is written without the word [unknown_arity] and without
+   the arity of its arguments is read as a call of unknown arity with one value
+   for its result; a unit with such a call that returns to a continuation in
+   sight whose parameters are not one value is not checked
    ([result_arity_lost]): the term read is not the compiler's, and Simplify may
-   stop on it. The arity of the arguments is given back to a unit read from a
-   text ([with_lost_kinds], which says from what and where it cannot be): a
-   direct call has that of the parameters of the code that it names, and a call
-   of unknown arity one kind for each argument. A method call is read with one
-   value for its result too; the conversion refuses a method call, and the
-   reader does not read one as the compiler prints it. A call that is a probe is
-   refused by the conversion ([convert_apply]), as the program runs its handler
-   only while the probe is enabled. The term read from a text never has the
-   mark, whatever the source had: such a unit is read as one with a plain call,
-   and it is for whatever makes the text to refuse it (the scripts of
-   tests/semantics/ocaml do). A body taken from the .cmx of another unit may
-   have the mark, and is then left out of the prefix, so that a call of it is
-   undefined.
+   stop on it. A call written with the word is outside that test: the reader
+   takes the arity of the result that it writes. In a unit read from a text, a
+   direct call or a call of unknown arity whose arity as read is one value for
+   each argument may be given another ([with_lost_kinds], which says from what
+   and where it cannot be): a direct call that of the parameters of the code
+   that it names, where the unit binds that code and the call has as many
+   arguments, and a call of unknown arity one kind for each argument. A method
+   call that is written with no arity is read with one value for its result too;
+   the conversion refuses a method call. A call that is a probe is refused by
+   the conversion ([convert_apply]), as the program runs its handler only while
+   the probe is enabled. The printer writes the mark and the reader takes it, so
+   a unit read from such a text has it and is not checked; the scripts of
+   tests/semantics/ocaml refuse a unit whose term has one. A text made before
+   the printer wrote the mark never has it, whatever the source had: such a unit
+   is read as one with a plain call, and nothing here finds that out. A body
+   taken from the .cmx of another unit may have the mark, and is then left out
+   of the prefix, so that a call of it is undefined.
 
-   What the text loses of a primitive. The text does not write the kind of an
-   [Opaque_identity], and its reader gives every one the kind of values. A unit
-   read from a text is normalised before anything else is done with it: each
-   [Opaque_identity] is given the kind of its argument ([with_lost_kinds], which
-   says what is done to the variables bound to one). The kind so given is the
-   one that the text lost where the kind obtained for the argument is its kind
-   in the compiler's term and the primitive there had that kind
-   ([with_lost_kinds] says where the first may fail). Those two conditions
-   suffice; where either fails no recovery of the compiler's kind is claimed,
-   the term read may not be the compiler's, and nothing here finds that out: the
-   step is not a check of the kinds of the compiler's terms. The text writes the
-   two forms of [Is_int] alike, and its reader gives the form that is for
-   variants; that is not put right here. The scripts of tests/semantics/ocaml
-   refuse a unit whose term had the other form; a text from elsewhere is checked
-   as it is read (label C2-26).
+   What a text may lose of a primitive. The printer writes the kind of an
+   [Opaque_identity] unless it is the kind of values, and whether it is for the
+   middle end only; the reader takes both, and gives one that is written with no
+   kind the kind of values. A text made before the printer wrote the kind has
+   none, whatever the kind was, and a text written by hand may leave it out. A
+   unit read from a text is normalised before anything else is done with it:
+   each [Opaque_identity] whose kind as read is not the kind of its argument is
+   given the kind of its argument ([with_lost_kinds], which says what is done to
+   the variables bound to one), whether the text wrote a kind for it or not.
+   Where the text wrote none, the kind so given is the one that the text lost
+   where the kind obtained for the argument is its kind in the compiler's term
+   and the primitive there had that kind ([with_lost_kinds] says where the first
+   may fail). Those two conditions suffice; where either fails no recovery of
+   the compiler's kind is claimed, the term read may not be the compiler's, and
+   nothing here finds that out: the step is not a check of the kinds of the
+   compiler's terms. The printer writes the form of [Is_int] that works on any
+   value apart from the one that is for variants, and the reader takes it. A
+   text made before it did writes the two alike, and its reader gives the form
+   that is for variants; that is not put right here. The scripts of
+   tests/semantics/ocaml refuse a unit whose term has the form that works on any
+   value; a text from elsewhere is checked as it is read (label C2-26).
 
    Phantom bindings. A binding whose variables are phantom is refused by the
    conversion ([convert_let]): the program runs nothing for it, and the model
    runs every [Let]. With [-g] and phantom lets on, Simplify may keep an unused
    binding as phantom instead of deleting it; the term that the compiler gives
    to Simplify has none. The text of a term does not say the mode of a binding,
-   so the refusal cannot detect a phantom binding whose mode a text has lost, as
-   for probes. A body taken from the .cmx of another unit may have one, and is
-   then left out of the prefix; the term that Simplify makes of a unit may,
-   where the tool is given those flags, and the unit is then not checked.
+   so the refusal cannot detect a phantom binding whose mode a text has lost. A
+   body taken from the .cmx of another unit may have one, and is then left out
+   of the prefix; the term that Simplify makes of a unit may, where the tool is
+   given those flags, and the unit is then not checked.
 
    Imports. The external symbols that the two units of a check mention, those of
    another compilation unit, the predefined exceptions among them, are listed
@@ -876,9 +890,11 @@ let convert_array_kind (kind : P.Array_kind.t) : Primitives.array_kind option =
    and on the collector that the model does not track: the model's store does
    for it what it does for an assignment. The compiler makes one into a block,
    through [Opaque_identity], for a recursion in the tail of a constructor
-   (lambda/tmc.ml). In the compiler's text of a term it has no set kind and is
-   read as an assignment: so in a term read from that text it is converted, and
-   a run that comes to it is undefined. *)
+   (lambda/tmc.ml). The printer of texts writes its set kind with the mark and
+   the reader takes it, so a unit read from such a text is not checked. In a
+   text made before the printer wrote it the write has no set kind and is read
+   as an assignment: in a term read from such a text it is converted, and a run
+   that comes to it is undefined. *)
 let convert_array_set_kind (kind : Primitives.array_kind)
     (set_kind : P.Array_set_kind.t) : Primitives.array_set_kind option =
   match kind, set_kind with
@@ -1904,9 +1920,11 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
 and convert_apply (apply : Apply_expr.t) : Model.expr =
   (* The program runs the handler of a probe only while the probe is enabled,
      and the model has nothing of that: a call that is a probe is refused. The
-     text of a term does not say that a call is a probe, so no unit read from
-     its text has one. A body taken from a .cmx may have one; it is then not
-     bound, as any body that the conversion refuses ([make_prefix]). *)
+     text of a term says that a call is a probe and the reader takes it, so a
+     unit read from its text may have one; a text made before the printer wrote
+     the mark has none, whatever the source had. A body taken from a .cmx may
+     have one; it is then not bound, as any body that the conversion refuses
+     ([make_prefix]). *)
   (match Apply_expr.probe apply with
   | None -> ()
   | Some _ -> unsupported "a call that is a probe");
@@ -5834,19 +5852,27 @@ let why_not_well_formed (unit : converted) =
 let interface (unit : converted) : Well_formed.unit_interface =
   { unit_return = unit.return_continuation; unit_exn = unit.exn_continuation }
 
-(* The text of a term does not give the arity of a call of unknown arity, and
-   such a call is read with one value for its result (the CRs of
-   parser/fexpr_to_flambda.ml; label C2-5). Where the result of the compiler's
-   call was something else, an unboxed pair or an unboxed number, the term read
-   is not the compiler's, and Simplify, which is entitled to, stops on it with a
-   fatal error. This says whether the text has such a call that can be told: a
-   call of unknown arity that returns to a continuation whose parameters are not
-   one value, where the continuation is bound in sight by a [Let_cont] or is the
-   return continuation of the code that the call is in. A call is of unknown
-   arity as the reader has it: one with no arity written, or with the arity of
-   its result written and not that of its arguments, which the reader drops. The
-   test goes by the identifiers of the text as it was parsed and makes no name
-   of the compiler. *)
+(* A text need not give the arity of a call of unknown arity, and a call that is
+   written with none is read with one value for its result (the CRs of
+   parser/fexpr_to_flambda.ml; label C2-5). The printer writes the arities of
+   such a call, after the word [unknown_arity], unless they are one value for
+   each argument and one for the result; a text made before it did, or written
+   by hand, may leave them out whatever they were. Where the result of the
+   compiler's call was something else, an unboxed pair or an unboxed number, the
+   term read from such a text is not the compiler's, and Simplify, which is
+   entitled to, stops on it with a fatal error. This says whether the text has
+   such a call that can be told: an indirect call written without the word
+   [unknown_arity] and without the arity of its arguments, that returns to a
+   continuation whose parameters are not one value, where the continuation is
+   bound in sight by a [Let_cont] or is the return continuation of the code that
+   the call is in. Such a call is one that the reader takes for a call of
+   unknown arity: it has no arity written, or the arity of its result written
+   and not that of its arguments, which the reader drops. An indirect call
+   written with the word [unknown_arity] is of unknown arity too, and this does
+   not look at it: the reader takes the arity of the result that it writes, and
+   gives it one value where it writes none
+   ([Fexpr_to_flambda.arities_or_values]). The test goes by the identifiers of
+   the text as it was parsed and makes no name of the compiler. *)
 let result_arity_lost (unit : Fexpr.flambda_unit) : bool =
   let one_value (kinds : Fexpr.kind_with_subkind option list) =
     match kinds with
@@ -8958,78 +8984,86 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
     (Flambda_unit.metadata unit)
     (with_unknown_param_modes_of_expr (Flambda_unit.body unit))
 
-(* The text of fexpr does not write the kind of an [Opaque_identity], and the
-   reader gives every one the kind of values ([Fexpr_prim]); the compiler makes
-   one of each component of an unboxed argument, at the kind of that component
-   ([Lambda_to_flambda_primitives]). The compiler takes the argument of the
-   primitive to have the kind that the primitive carries
+(* The text of fexpr writes the kind of an [Opaque_identity] unless it is the
+   kind of values, and the reader gives one that is written with no kind the
+   kind of values ([Fexpr_prim]). A text made before the printer wrote the kind
+   has none, whatever the kind was, and a text written by hand may leave it out;
+   the compiler makes one of each component of an unboxed argument, at the kind
+   of that component ([Lambda_to_flambda_primitives]). The compiler takes the
+   argument of the primitive to have the kind that the primitive carries
    ([Flambda_primitive.arg_kind_of_unary_primitive]), so in a unit read from a
-   text every [Opaque_identity] is given here the kind of its argument, as the
-   reader has it: the kind of a constant, that of values for a symbol, and for a
-   variable the kind that the reader made it with, which is the kind written at
-   a parameter or the kind of the defining expression of a [Let]
-   ([Fexpr_to_flambda]: [Flambda.Named.kind]).
+   text every [Opaque_identity] whose kind is not the kind of its argument is
+   given here the kind of its argument, as the reader has it: the kind of a
+   constant, that of values for a symbol, and for a variable the kind that the
+   reader made it with, which is the kind written at a parameter or the kind of
+   the defining expression of a [Let] ([Fexpr_to_flambda]:
+   [Flambda.Named.kind]). That is done whether the text wrote a kind for the
+   primitive or not: a kind that the text wrote and that is not the kind of the
+   argument is replaced.
 
-   The primitive is not all that the reader got wrong for want of that kind: the
-   variable that the [Let] of such a primitive binds was made with the kind of
-   values, and so was each variable bound after it to that variable, or to an
-   [Opaque_identity] of it. So the unit is gone through from the top, and each
-   [Let] is put right after its defining expression: where the kind of the
-   defining expression is no longer the kind of the variable that the reader
-   bound to it, the [Let] binds a new variable of that kind, with the same name,
-   and the body is renamed to it before it is gone into, so that every later
-   use, and every later defining expression, sees a variable of the right kind.
-   For an [Opaque_identity] nothing else is changed: the kinds of parameters and
-   of value slots are those that the text wrote, and so are the arities but for
-   the arity of the arguments of a direct call and of a call of unknown arity,
-   which the same pass gives (below). The handlers of continuations and the
-   bodies of code are gone into. A unit that has no such primitive and no such
-   call to put right is not gone through at all, and is the unit as it was read
+   Where the text had no kind for it, the primitive is not all that the reader
+   got wrong for want of that kind: the variable that the [Let] of such a
+   primitive binds was made with the kind of values, and so was each variable
+   bound after it to that variable, or to an [Opaque_identity] of it. So the
+   unit is gone through from the top, and each [Let] is put right after its
+   defining expression: where the kind of the defining expression is no longer
+   the kind of the variable that the reader bound to it, the [Let] binds a new
+   variable of that kind, with the same name, and the body is renamed to it
+   before it is gone into, so that every later use, and every later defining
+   expression, sees a variable of the right kind. For an [Opaque_identity]
+   nothing else is changed: the kinds of parameters and of value slots are those
+   that the text wrote, and so are the arities but for the arity of the
+   arguments of a direct call and of a call of unknown arity, which the same
+   pass gives (below). The handlers of continuations and the bodies of code are
+   gone into. A unit that has no such primitive and no such call to put right is
+   not gone through at all, and is the unit as it was read
    ([kind_lost_in_expr]).
 
    This is a normalisation of a unit read from a text. The kind that it gives an
-   [Opaque_identity] is the kind that the compiler's term had there, and that
-   the text lost, where the kind obtained for the argument is the kind of that
-   argument in the compiler's term and the primitive there had that kind. The
-   first need not hold: the compiler's term may bind a variable at another kind
-   than that of its defining expression, where the reader takes the kind of the
-   expression (the conversion does not test that either: [convert_bound_var]),
-   and an [Opaque_identity] above may have had another kind than its argument's.
-   Where both hold all the way down, the kinds are the compiler's from the top
-   down. The two conditions suffice and are not necessary. Where either fails,
-   no recovery of the compiler's kind is claimed: the primitive there, the
-   variable bound to it and what is bound below to them may be given kinds that
-   the compiler's term had not, even where the kind of values that the reader
-   gave was the compiler's, and nothing here finds that out. It is not a check
-   of kinds and refuses no term for its kinds; of the compiler's own terms
-   nothing is compared. It is applied to a unit read from a text only: not to
-   what Simplify makes, nor to a body taken from the .cmx of another unit, which
-   have the kinds that the compiler gave them. The text loses whether the
-   primitive is for the middle end only as well; that is left as the reader
-   gives it, as neither the model nor Simplify reads it.
+   [Opaque_identity] for which the text had none is the kind that the compiler's
+   term had there, and that the text lost, where the kind obtained for the
+   argument is the kind of that argument in the compiler's term and the
+   primitive there had that kind. The first need not hold: the compiler's term
+   may bind a variable at another kind than that of its defining expression,
+   where the reader takes the kind of the expression (the conversion does not
+   test that either: [convert_bound_var]), and an [Opaque_identity] above may
+   have had another kind than its argument's. Where both hold all the way down,
+   the kinds are the compiler's from the top down. The two conditions suffice
+   and are not necessary. Where either fails, no recovery of the compiler's kind
+   is claimed: the primitive there, the variable bound to it and what is bound
+   below to them may be given kinds that the compiler's term had not, even where
+   the kind of values that the reader gave was the compiler's, and nothing here
+   finds that out. It is not a check of kinds and refuses no term for its kinds;
+   of the compiler's own terms nothing is compared. It is applied to a unit read
+   from a text only: not to what Simplify makes, nor to a body taken from the
+   .cmx of another unit, which have the kinds that the compiler gave them.
+   Whether the primitive is for the middle end only is written by the printer
+   and taken by the reader; a text made before the printer wrote it has every
+   one as for all of the compiler. That is left as the reader gives it, as
+   neither the model nor Simplify reads it.
 
    The arity of the arguments of a call. A text need not write it for a direct
    call, nor for a call of unknown arity: where it writes none, the reader gives
    the call one value for each argument ([Fexpr_to_flambda.arities_or_values];
    label C2-5). The printer writes it beside the callee unless it is one value
-   for each argument, so the text that the printer makes of a call with a callee
-   loses nothing here. A direct call with no callee, which the step before
-   Simplify makes at -Oclassic, has no place in the text for its arity and loses
-   it; and a text made before the printer wrote the arity, or written by hand,
-   may leave it out of a call that has an argument which is not a value. The
-   machine has no step for a call whose arguments are not of the kinds of its
-   arity, or whose arity is not that of the code called, and Simplify makes such
-   a call [Invalid]: so a unit that gives a function an unboxed number is
-   undefined as read from such a text. In the same pass a direct call, or a call
-   of unknown arity, whose arity as read is one value for each argument is given
-   an arity ([arity_of_arguments]). An arity as read that is anything else must
-   have been written ([arity_of_arguments_was_written]), and the call is left
-   alone, whatever the code that it names: where a text states a call which does
-   not fit its code, this step does not mend the arity that it states. The
-   inference goes one way only: an arity that the text wrote and that is one
-   value for each argument reads as if the text had written none, and such a
-   call is given an arity as the others are. A call of known arity has its arity
-   in the text and is left alone too.
+   for each argument, and in the place of the callee of a direct call that has
+   none, which the step before Simplify makes at -Oclassic: so the text that the
+   printer makes of a call loses nothing here. A text made before the printer
+   wrote the arity, or written by hand, may leave it out of a call that has an
+   argument which is not a value. The machine has no step for a call whose
+   arguments are not of the kinds of its arity, or whose arity is not that of
+   the code called, and Simplify makes such a call [Invalid]: so a unit that
+   gives a function an unboxed number is undefined as read from such a text. In
+   the same pass a direct call, or a call of unknown arity, whose arity as read
+   is one value for each argument is given an arity ([arity_of_arguments]). An
+   arity as read that is anything else must have been written
+   ([arity_of_arguments_was_written]), and the call is left alone, whatever the
+   code that it names: where a text states a call which does not fit its code,
+   this step does not mend the arity that it states. The inference goes one way
+   only: an arity that the text wrote and that is one value for each argument
+   reads as if the text had written none, and such a call is given an arity as
+   the others are. A call of known arity has its arity in the text and is left
+   alone too.
 
    Such a direct call is given the arity of the parameters of the code that it
    names, each kind without a subkind, where the unit binds that code and the
@@ -9068,33 +9102,32 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    included, and writes the parameters of code that are the components of one
    product as a group; the reader takes both, and this pass leaves such a call
    as it was read, so its grouping is that of the text. In a text that the
-   printer made, a call that has a callee and no arity has one value for each
-   argument and no group, and nothing is lost. In a text that leaves the arity
-   out of a call which had a group, made before the printer wrote arities or
-   written by hand, the grouping of that call is not given back, and the third
-   condition is one that this pass cannot test: the call is read flat, and what
-   the pass gives it is flat. As far as the grouping goes, and that alone (the
-   kinds are as said above, and the text loses other things), such a call runs
-   in the term read as in the compiler's if neither the call nor the code that
-   it reaches has a group. If one of them has, it may not. Where the text writes
-   neither the group of the call nor a parameter of no kind, a partial
-   application that stops before that parameter is read as a full application,
-   and so is an over-application whose last argument has no kind (label C2-30).
-   And where the call and the code group the same kinds differently, which is
-   ill-kinded in the compiler's term, the term read may be defined where the
-   compiler's is not. All of that is so, without this step, of a call whose
-   arguments are all values, which the reader reads flat where the text writes
-   no arity; what the step adds is the same of a call with an argument that is
-   not a value, which is undefined as read.
+   printer made, a call that has no arity has one value for each argument and no
+   group, and nothing is lost. In a text that leaves the arity out of a call
+   which had a group, made before the printer wrote arities or written by hand,
+   the grouping of that call is not given back, and the third condition is one
+   that this pass cannot test: the call is read flat, and what the pass gives it
+   is flat. As far as the grouping goes, and that alone (the kinds are as said
+   above, and the text loses other things), such a call runs in the term read as
+   in the compiler's if neither the call nor the code that it reaches has a
+   group. If one of them has, it may not. Where the text writes neither the
+   group of the call nor a parameter of no kind, a partial application that
+   stops before that parameter is read as a full application, and so is an
+   over-application whose last argument has no kind (label C2-30). And where the
+   call and the code group the same kinds differently, which is ill-kinded in
+   the compiler's term, the term read may be defined where the compiler's is
+   not. All of that is so, without this step, of a call whose arguments are all
+   values, which the reader reads flat where the text writes no arity; what the
+   step adds is the same of a call with an argument that is not a value, which
+   is undefined as read.
 
    The texts of tests/semantics/ocaml are made by the printer, which writes the
-   arities and their groups beside the callee of a call: in them the grouping is
-   the compiler's wherever the call has a callee, and the scripts that make them
-   refuse no unit for a group. (Code of another unit is not read from a text: it
-   is taken from the .cmx of that unit, with the arity that the compiler gave
-   it.) This pass cannot tell that a text was made so: a text that is given to
-   the tool by hand is read as it is. A term in memory has the component of no
-   kind, and [convert_arity] keeps it.
+   arities and their groups of a call: in them the grouping is the compiler's,
+   and the scripts that make them refuse no unit for a group. (Code of another
+   unit is not read from a text: it is taken from the .cmx of that unit, with
+   the arity that the compiler gave it.) This pass cannot tell that a text was
+   made so: a text that is given to the tool by hand is read as it is. A term in
+   memory has the component of no kind, and [convert_arity] keeps it.
 
    Like the rest of the pass this is a normalisation of a unit read from a text
    and not a check of kinds: it refuses a unit only where it cannot tell what to

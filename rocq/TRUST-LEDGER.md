@@ -168,12 +168,13 @@ it gave back.
   trip of the conversion of the same unit, read from its term
   before, the text that the tool writes of its own term after has
   the closure, and the tool said in words that it is not read back.
-  Two more texts that the compiler prints are not read, and the
-  tool gives no verdict of the unit. The printer writes a variable
-  as its name, a `/` and its stamp; the reader cuts what it reads
-  at every `/` and stops with a fatal error where that gives more
-  than two pieces (`chop_stamp` in
-  `parser/fexpr_to_flambda_commons.ml`; X2-8). A variable has a `/`
+  Two more texts that the compiler prints were not read, and the
+  tool gave no verdict of the unit; the reader now reads both. The
+  printer writes a variable as its name, a `/` and its stamp; the
+  reader cut what it read at every `/` and stopped with a fatal
+  error where that gave more than two pieces (`chop_stamp` in
+  `parser/fexpr_to_flambda_commons.ml`; X2-8), and now takes the
+  stamp after the last `/`. A variable has a `/`
   in its own name where it is an operator with a `/` in its name
   that the unit binds, as a function or as a parameter; where it
   is of an anonymous function and the source was given with a
@@ -181,37 +182,44 @@ it gave back.
   others, which is of a term after. The scripts compile a copy of
   the source in a directory of its own, under its bare name, so
   the second does not arise through them. Of a unit that binds
-  such an operator they make the text, and the tool ended on the
+  such an operator they made the text, and the tool ended on the
   fatal error, which it does not catch, with status 2; `/` and
   `/.` were run.
   And the printer writes the kinds of unboxed 8-bit and 16-bit
   integers as `int8` and `int16`, which the grammar of the reader
-  has not got as the kind of a number
-  (`parser/flambda_parser.mly`, `naked_number_kind`; X2-10): of a
-  unit with a parameter of such a kind the scripts make the text,
-  and the tool printed a syntax error with the file and the line
-  and ended with status 1. That is also the status of a check that
-  fails: a status that is not 0 is not by itself a verdict. A rule
-  of the tests fails on either, and what the tool printed says
-  which it is. The three were observed of units not in this tree.
-  Each is a stop and not a wrong verdict: nothing is printed of the
-  two runs or of a validation. The loss is the reader's: the model
+  had not got as the kind of a number
+  (`parser/flambda_parser.mly`, `naked_number_kind`; X2-10) and has
+  now: of a unit with a parameter of such a kind the scripts made
+  the text, and the tool printed a syntax error with the file and
+  the line and ended with status 1. That is also the status of a
+  check that fails: a status that is not 0 is not by itself a
+  verdict. A rule of the tests fails on either, and what the tool
+  printed says which it is. The three were observed of units not in
+  this tree.
+  Each was a stop and not a wrong verdict: nothing was printed of the
+  two runs or of a validation. The loss was the reader's: the model
   has the two kinds (`FlambdaKindModel.Kind_naked_int8`,
   `Kind_naked_int16`) and its variables are numbers
   (`FlambdaModel.variable`), and the driver of the compiler's own
   run, which reads no text, validates the unit with the operator
   and the unit with the parameter. All of this was seen with the
   scripts and the tool of 2abcee6155, and was not run again on what
-  has come since.
-  A fourth text that the reader does not read is of a number
+  has come since. The reader has since been given the name with a `/`
+  of its own and the kinds `int8`, `int16` and `mask`
+  (`rocq/HACKING.md`, "Changes to the compiler made on this branch",
+  the entry "The text of a term again", which says how each is
+  tested); the units on which the two stops were seen were not run
+  again for this entry.
+  A fourth text that the reader did not read was of a number
   (C1-11), and units of this tree have it. The printer writes a
   naked integer of 64 bits, or of the width of the machine, with
   all its digits and the suffix `L` or `n` (`parser/print_fexpr.ml`).
-  The reader gives the digits of a constant that stands in an
-  expression to `int_of_string` before it looks at the suffix
-  (`parser/flambda_parser.mly`, `make_const_int`), and that fails
+  The reader gave the digits of a constant that stands in an
+  expression to `int_of_string` before it looked at the suffix
+  (`parser/flambda_parser.mly`, `make_const_int`), and that failed
   outside the 63 bits of its own integers, with an exception that
-  nothing catches. A number that is static data is read another way
+  nothing caught; it now reads the digits as the suffix says. A
+  number that is static data is read another way
   (`make_boxed_const_int`). Simplify can put such a number bare in
   an argument, as it does where two boxed numbers meet and it
   removes the box. Four units of `tests/semantics/ocaml/library`
@@ -220,47 +228,60 @@ it gave back.
   `nativeint_laws_more.ml`). The terms before of these four have
   the numbers as static data: their texts are read, and each is
   validated, the check making its term after in memory and reading
-  no text of it. The compiler's text of the term after of each is
+  no text of it. The compiler's text of the term after of each was
   not read. And the round trip of the conversion, which reads back
-  a text of the term after, says "round trip the same" of the unit
+  a text of the term after, said "round trip the same" of the unit
   of the file and "not read back" of the unit after Simplify, with
   the exception of the parser named: its rules run on that
-  directory and keep the four answers as expected files
-  (`tests/semantics/roundtrip`). Until the tool made that line of an
+  directory, and kept the four answers as expected files until the
+  reader read such a number (`tests/semantics/roundtrip`, whose
+  README tells it). Until the tool made that line of an
   exception of the parser, it ended on the exception there, with
   status 2, and no rule ran the round trip on that directory: that
   was seen with the tool of the tree that first had those units
-  together with all that came in with them. Nothing of what is said
-  of the round trip holds of the term after of those four units.
-  Two primitive annotations are also lost by the text; the tool
+  together with all that came in with them. While the reader stopped
+  there, nothing of what is said of the round trip held of the term
+  after of those four units.
+  Two primitive annotations were also lost by the text, which writes
+  both now; the tool
   reconstructs the second from the argument and leaves the first. The
-  printer writes both forms
-  of `Is_int` as `%is_int`, and the reader gives `variant_only = true`,
+  printer wrote both forms
+  of `Is_int` as `%is_int`, and the reader gave `variant_only = true`,
   even where the compiler had the generic form
   (`parser/fexpr_prim.ml`; C2-26). A generic test of a closure gives
   0; the form for variants has no value on that closure in the model.
-  The printer writes `Opaque_identity` as `%opaque` without its kind,
-  and the reader gives the kind of values, even where the compiler had
+  The printer wrote `Opaque_identity` as `%opaque` without its kind,
+  and the reader gave the kind of values, even where the compiler had
   a naked number (C2-27). The model's opaque identity has no value on
   an argument of another kind. The conversion from a term in memory
   keeps both the variant flag and the opaque identity's kind; the text
-  loses them first.
+  lost them first. The printer now writes the generic form as
+  `%is_int.generic`, and the kind of an `Opaque_identity` unless it is
+  the kind of values, with `middle_end_only` where the primitive is
+  for the middle end only; the reader takes each. A text made before
+  the printer wrote them, or written by hand, may have neither, and
+  what follows is of such a text too.
   A unit read from a text is normalised before Simplify and the
   conversion see it (`with_lost_kinds`, called in `check_file`; the
   round trip of the conversion applies it to the unit of the file and
-  to each unit that it reads back): every `Opaque_identity` is given
-  the kind of its argument as the reader has it, which is the kind of
+  to each unit that it reads back): every `Opaque_identity` whose
+  kind as read is not the kind of its argument is given the kind of
+  its argument as the reader has it, whether the text wrote a kind
+  for it or not, which is the kind of
   a constant, that of values for a symbol, and for a variable the
   kind that the reader made it with, from the kind written at a
   parameter or from the defining expression of its `Let`. A `Let`
   whose variable the reader made at the kind of values for want of
   that kind binds a new variable of the kind given; the bodies of
-  code are gone into; a unit that has no `Opaque_identity` at another
-  kind than its argument's is not gone through and is the unit as
-  read. The compiler takes the argument of the primitive to have the
+  code are gone into; a unit that has neither an `Opaque_identity` at
+  another kind than its argument's, nor a call that the same pass
+  gives an arity or refuses the unit for (below), is not gone through
+  and is the unit as read. The compiler takes the argument of the
+  primitive to have the
   kind that the primitive carries
   (`Flambda_primitive.arg_kind_of_unary_primitive`). So the kind
-  given to an `Opaque_identity` is the compiler's kind where the kind
+  given to an `Opaque_identity` for which the text had none is the
+  compiler's kind where the kind
   now obtained for its argument is the kind of that argument in the
   compiler's term and the annotation of the primitive there agrees
   with it. The first need not hold: the compiler's term may bind a
@@ -273,9 +294,9 @@ it gave back.
   recovery of the compiler's kind is claimed: the primitive there,
   the variable bound to it and what is bound below to them may be
   given kinds that the compiler's term had not, even where the kind
-  of values that the reader gave was the compiler's. The text does
-  not record the lost annotation, so nothing in it shows which is the
-  case. The step is not
+  of values that the reader gave was the compiler's. A text that has
+  no kind for the primitive does not record the lost annotation, so
+  nothing in it shows which is the case. The step is not
   a check of the compiler's term. What the compiler prints with
   `-drawflambda` has the kind, and no rule of the tests reads it.
   Trusted of this step, as of the one that sets the modes of
@@ -286,17 +307,19 @@ it gave back.
   the primitive to a naked number was undefined in the model as read,
   the tool's Simplify made it `Invalid`, and the tool printed a
   validation that said nothing.
-  The flag of `Is_int` is not restored. Two examples not in this tree
-  show that loss: the compiler's own term is defined, but the term
-  read before Simplify is undefined in the model. In one of them the
-  tool's Simplify makes the unit `Invalid`. In both the tool prints a
-  validation and the warning that it says nothing of the unit because
-  the term before is undefined. That verdict is of the pair
-  obtained through the text, not the compiler's own pair. Where this
-  loss makes the source undefined in the model, every target refines
-  it there; this does not say that the validator accepts every such
-  pair. Neither comparing the two model runs nor proving refinement of
-  that pair recovers the meaning lost from the program's term.
+  The flag of `Is_int` is not restored in a text that has not got
+  it. Two examples not in this tree showed that loss, with the texts
+  of the printer of before: the compiler's own term is defined, but
+  the term read before Simplify was undefined in the model. In one of
+  them the tool's Simplify made the unit `Invalid`. In both the tool
+  printed a validation and the warning that it says nothing of the
+  unit because the term before is undefined. That verdict was of the
+  pair obtained through the text, not the compiler's own pair. Where
+  this loss makes the source undefined in the model, every target
+  refines it there; this does not say that the validator accepts
+  every such pair. Neither comparing the two model runs nor proving
+  refinement of that pair recovers the meaning lost from the
+  program's term.
   A text need not write the arity of the arguments of a direct call
   or of a call of unknown arity. Where a text leaves it out the
   reader gives such a call its default, one value of any sort for
@@ -306,9 +329,9 @@ it gave back.
   of the lists in code that a unit imports, or in a term that is
   given in memory and not as a text. The printer writes the arity
   beside the callee unless it is
-  that default; a direct call with no callee, which the step before
-  Simplify makes at `-Oclassic`, has no place in the text for its
-  arity. Before the printer wrote it, a unit that gives a function an
+  that default, and in the place of the callee of a direct call that
+  has none, which the step before Simplify makes at `-Oclassic`.
+  Before the printer wrote it, a unit that gives a function an
   unboxed number was therefore undefined in the model as read, and
   the tool's Simplify made a direct call of it `Invalid`. The same
   pass over a unit read gives such a call an arity where the arity as
@@ -961,10 +984,12 @@ it gave back.
   is a probe is refused (`convert_apply`). The program runs the handler
   of a probe only while the probe is enabled, and the model has no
   notion of a probe being enabled. The refusal goes by the mark that a
-  term in memory has on such a call. The text of a term has no such
-  mark and its reader gives none, so the refusal does not detect a
+  term in memory has on such a call. The text of a term now writes
+  the mark and its reader takes it, so a unit read from such a text
+  is refused as a term in memory is. A text made before the printer
+  wrote the mark has none, and the refusal does not detect a
   probe whose mark the text has lost: a unit that has a probe of its
-  own is read, from its text, as a unit with a plain call, and is
+  own is read, from such a text, as a unit with a plain call, and is
   checked as one. The scripts that make the texts of
   `tests/semantics/ocaml` refuse a unit whose term has a call that is
   a probe, by the mark that `-drawflambda` prints of such a call,
@@ -992,7 +1017,7 @@ it gave back.
   the mode that a term in memory has on its bound variables. The text
   of a term does not say the mode and its reader gives the normal
   one, so the refusal cannot detect a phantom binding whose mode a
-  text has lost, as for probes. The texts of the tests are of terms
+  text has lost. The texts of the tests are of terms
   before Simplify as the compiler prints them, which have none; the
   tool reads any text that it is given. The mode is met in a body
   taken from the `.cmx` of a unit compiled with those flags, which is

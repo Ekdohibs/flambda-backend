@@ -1,5 +1,5 @@
 probe.ml: the term that the compiler gives to Simplify has a call
-that is a probe. The text does not say so, and the call is read
-as a plain call, which is always made: the unit read is not the
-compiler's.
+that is a probe. The program runs the handler of a probe only
+while the probe is enabled, and the model has nothing of that:
+the tool does not check a unit that has one.
 refused

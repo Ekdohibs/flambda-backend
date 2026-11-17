@@ -386,9 +386,12 @@ with no region, where the parser asks for one after `ccall`
 text writes the region now, `apply ccall &toplevel`.) The `.cmx` of that
 unit says nothing of its two fields, which hold what the calls returned.
 
-`probed.ml` has no expected file: the text of its term does not say
-that a call is a probe, so a verdict of the tool on it would be of a
-term that is not the compiler's. `from_ocaml.sh` here refuses what
+`probed.ml` has no expected file: its term has a call that is a
+probe, which the conversion refuses, so the tool would say of it
+that it is not checked. (When the unit came in, the text of a term
+did not say that a call is a probe, and a verdict of the tool on it
+would have been of a term that is not the compiler's; the text says
+so now, and `probed.fl` has the mark.) `from_ocaml.sh` here refuses what
 that of the directory above refuses, and what it refuses for a probe
 only where the unit has an expected file: so `probed.ml` is
 compiled for its second units, and would be refused if it were given

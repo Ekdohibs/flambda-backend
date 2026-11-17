@@ -67,15 +67,19 @@ and its two exceptions).
   that.
 - A function whose inlining an example is about has `[@inline]`: with
   the default flags Simplify inlines only the smallest functions.
-- `from_ocaml.sh` refuses a unit of whose term the text loses
-  something that the tool cannot give back. It compiles the unit once
-  more, for what `-drawflambda` prints of the term before Simplify,
-  and fails on two things. The test of being an integer that is for
-  any value (`Is_int_generic`), which the text writes as the test for
-  variants (label C2-26), unless `generic_is_int.txt` names the unit.
-  A call that is a probe: the text does not say that it is one, and
-  the program runs the handler of a probe only while the probe is
-  enabled (label C2-17). `script/` has a unit that is refused for a
+- `from_ocaml.sh` refuses a unit for two things, each of which the
+  text of a term lost when the refusal was written and writes now. It
+  compiles the unit once more, for what `-drawflambda` prints of the
+  term before Simplify, and fails on them. The test of being an
+  integer that is for any value (`Is_int_generic`), which the text
+  wrote as the test for variants (label C2-26), unless
+  `generic_is_int.txt` names the unit: the text now writes it apart
+  and the reader takes it, and the script still refuses. A call that
+  is a probe: the program runs the handler of a probe only while the
+  probe is enabled, the model has nothing of that, and the tool does
+  not check a unit that has one; the text did not say that a call is
+  one (label C2-17), and says so now.
+  `script/` has a unit that is refused for a
   probe and the same unit without the probe, with what the script
   says of each, and two more for the refusal that is of `library/`
   only. It has seven more: six of an unboxed product among the arguments
@@ -2995,8 +2999,8 @@ directory sets the variable; one of `../regions/` does.
     writes the arities of a call where they are not those that the
     reader gives a call of which none is written (`identity.ml`, whose
     call of unknown arity has its arities written). It writes them
-    beside the callee: a call that has no callee written has no place
-    for them (`func_name_with_optional_arities` in
+    beside the callee, and with a blank in the place of the callee of a
+    call that has none (`func_name_with_optional_arities` in
     `middle_end/flambda2/parser/print_fexpr.ml`). That the arities are
     kept is said here of the texts of this directory, which are made at
     the default flags, by the driver's answer above, and of no other
@@ -3147,13 +3151,18 @@ directory sets the variable; one of `../regions/` does.
   discrepancy V2-3): equal outcomes of the two runs, or a
   validation, whether plain or counted apart, do not establish that
   a block which is returned is still alive.
-- Of a primitive the text loses two more things. It does not write
-  the kind of an `Opaque_identity`, and the reader gives every one
-  the kind of values. The tool gives each the kind of its argument,
-  as the reader has it, before anything else is done with a unit
-  read from a text (`with_lost_kinds` in
-  `middle_end/flambda2/tests/tools/flsemantics.ml`; discrepancy
-  C2-27). That is the kind which the compiler's term had on two
+- Of a primitive the text lost two more things, and writes both now.
+  It did not write the kind of an `Opaque_identity`, and the reader
+  gave every one the kind of values (discrepancy C2-27). The text now
+  writes the kind unless it is the kind of values, and whether the
+  primitive is for the middle end only, and the reader takes both.
+  The step that the tool has for it stays: before anything else is
+  done with a unit read from a text, the tool gives each
+  `Opaque_identity` whose kind as read is not the kind of its
+  argument the kind of its argument, as the reader has it, whether
+  the text wrote a kind for it or not (`with_lost_kinds` in
+  `middle_end/flambda2/tests/tools/flsemantics.ml`). Where the text
+  wrote none, that is the kind which the compiler's term had on two
   conditions: the kind that the reader has for the argument is the
   kind of that argument in the compiler's term, and the primitive
   there had the kind of its argument. Nothing checks either;
@@ -3162,15 +3171,17 @@ directory sets the variable; one of `../regions/` does.
   `-drawflambda` prints, which nothing in the tree makes, every
   `Opaque_identity` of the 347 units that the directory had at
   87cdbf3e01 is of a value; the tool with this step prints of each
-  of them what it printed without it. And the text writes the two
+  of them what it printed without it. And the text wrote the two
   tests of being an integer
   alike, the one that is for variants and the one that is for any
   value (`Is_int_generic` in what `-drawflambda` prints); the reader
-  gives the one for variants. On a value that is not a variant, a
-  closure for one, the term read is then undefined in the model
-  where the program answers 0 (discrepancy C2-26). The tool does
-  not put that right. No unit of this directory has the test that
-  is for any value, and `from_ocaml.sh` fails on a unit that has it
+  gave the one for variants. On a value that is not a variant, a
+  closure for one, the term read was then undefined in the model
+  where the program answers 0 (discrepancy C2-26). The tool did
+  not put that right, and has no step for it. The text now writes
+  the test that is for any value apart (`%is_int.generic`), and the
+  reader takes it. No unit of this directory has that test, and
+  `from_ocaml.sh` still fails on a unit that has it
   and that `generic_is_int.txt` does not name; that list is empty.
 - Of a call the text lost the arity of its arguments, where the
   call is direct or of unknown arity, and the reader gave such a
@@ -3221,9 +3232,10 @@ directory sets the variable; one of `../regions/` does.
   `script/`, and in this directory under other names). A group that is
   read is kept: an arity with a
   group is not one value for each argument, and the step of the tool
-  leaves such a call alone. The text does not say that a call is a
-  probe (discrepancy C2-17), and `from_ocaml.sh` fails on a unit
-  that has one.
+  leaves such a call alone. The text did not say that a call is a
+  probe (discrepancy C2-17); it says so now, and the reader takes
+  it. The conversion refuses such a call, and `from_ocaml.sh` still
+  fails on a unit that has one.
 - Two things that the tool refuses, to stay clear of two ways in
   which the term of the model may not be the program. Neither
   refusal shows that it is not: each refuses more than it need. A
