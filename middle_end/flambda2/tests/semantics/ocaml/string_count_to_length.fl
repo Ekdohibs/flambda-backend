@@ -1,0 +1,118 @@
+(let $camlString_count_to_length__string_0 = "index out of bounds" in
+ let $camlString_count_to_length__block_1 =
+   Block 0 ($`*predef*`.caml_exn_Invalid_argument,
+            $camlString_count_to_length__string_0)
+ in
+ let code size(96)
+       count_0 (c/103 : imm tagged, s/104 : val)
+         my_closure/105 &my_alloc_region/106 my_depth/107
+         -> k/36 * k/37
+         : imm tagged =
+   let next_depth/108 = rec_info (succ my_depth/107) in
+   cont k/38 (0)
+     where k/38 (let_mutable/109 : imm tagged) =
+       let prim/110 = %string_length (s/104) in
+       let Pstringlength/111 = %tag_imm (prim/110) in
+       let for_stop/112 = %int_barith.sub (Pstringlength/111, 1) in
+       ((let prim/142 = %int_comp.le (0, for_stop/112) in
+         let int_lessequal/143 = %tag_imm (prim/142) in
+         (let untagged/144 = %untag_imm (int_lessequal/143) in
+          switch untagged/144
+            | 0 -> k/39 (0, let_mutable/109)
+            | 1 -> k/49)
+           where k/49 =
+             cont k/40 (let_mutable/109))
+          where k/40 (n_19_unboxed0/115 : imm tagged) =
+            let prim/116 = %untag_imm (0) in
+            let for_start_naked/117 = %num_conv.[`imm`].[`int64`] (prim/116)
+            in
+            let prim/118 = %untag_imm (for_stop/112) in
+            let for_stop_naked/119 = %num_conv.[`imm`].[`int64`] (prim/118)
+            in
+            (cont k/41 (for_start_naked/117, n_19_unboxed0/115)
+               where rec k/41
+                           (for_counter_naked/120 : int64,
+                            n_19_unboxed0/121 : imm tagged) =
+                 let prim/122 =
+                   %num_conv.[`int64`].[`imm`] (for_counter_naked/120)
+                 in
+                 let i/123 = %tag_imm (prim/122) in
+                 ((let prim/138 = %string_length (s/104) in
+                   let prim/139 = %num_conv.[`imm`].[`nativeint`] (prim/138)
+                   in
+                   let prim/140 =
+                     %num_conv.[tagged_imm].[`nativeint`] (i/123)
+                   in
+                   let prim/141 =
+                     %int_comp.`nativeint`.unsigned.lt (prim/140, prim/139)
+                   in
+                   switch prim/141
+                     | 0 -> k/47
+                     | 1 -> k/48)
+                    where k/48 =
+                      cont k/45
+                    where k/47 cold =
+                      cont k/37
+                             pop(regular k/37)
+                             ($camlString_count_to_length__block_1)
+                    where k/45 =
+                      let prim/132 =
+                        %num_conv.[tagged_imm].[`nativeint`] (i/123)
+                      in
+                      let prim/133 = %string_load.[`8`] (s/104, prim/132) in
+                      let Pstringrefs/134 = %tag_imm (prim/133) in
+                      let prim/135 = %phys_eq (Pstringrefs/134, c/103) in
+                      let eq/136 = %tag_imm (prim/135) in
+                      ((let untagged/137 = %untag_imm (eq/136) in
+                        switch untagged/137
+                          | 0 -> k/42 (0, n_19_unboxed0/121)
+                          | 1 -> k/46)
+                         where k/46 =
+                           cont k/44 (n_19_unboxed0/121))
+                    where k/44 (n_19_unboxed0/130 : imm tagged) =
+                      let int_add/131 =
+                        %int_barith.add (n_19_unboxed0/130, 1)
+                      in
+                      cont k/42 (0, int_add/131)
+                    where k/42
+                            (staticcatch_result/124 : imm tagged,
+                             n_19_unboxed0/125 : imm tagged) =
+                      let for_next_naked/126 =
+                        %int_barith.`int64`.add (for_counter_naked/120, 1L)
+                      in
+                      let prim/127 =
+                        %int_comp.`int64`.le
+                          (for_next_naked/126, for_stop_naked/119)
+                      in
+                      let `int64#_lessequal/128` = %tag_imm (prim/127) in
+                      ((let untagged/129 =
+                          %untag_imm (`int64#_lessequal/128`)
+                        in
+                        switch untagged/129
+                          | 0 -> k/39 (0, n_19_unboxed0/125)
+                          | 1 -> k/43)
+                         where k/43 =
+                           cont k/41 (for_next_naked/126, n_19_unboxed0/125))))
+          where k/39
+                  (staticcatch_result/113 : imm tagged,
+                   n_19_unboxed0/114 : imm tagged) =
+            cont k/36 (n_19_unboxed0/114))
+ in
+ let $camlString_count_to_length__immstring_2 = "banana" in
+ let count/145 = closure count_0 @count &toplevel in
+ apply direct(count_0 &toplevel)
+   (count/145 : imm tagged * val -> imm tagged)
+     (97, $camlString_count_to_length__immstring_2)
+     -> k/50 * error
+   where k/50 (result/146 : imm tagged) =
+     let Pmakeblock/147 = %block.[`0`].`toplevel` (count/145, result/146) in
+     cont k/35 (Pmakeblock/147))
+  where k/35 define_root_symbol (module_block/100) =
+    let field_0/101 =
+      %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/100)
+    in
+    let field_1/102 =
+      %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/100)
+    in
+    let $camlString_count_to_length = Block 0 (field_0/101, field_1/102) in
+    cont done ($camlString_count_to_length)

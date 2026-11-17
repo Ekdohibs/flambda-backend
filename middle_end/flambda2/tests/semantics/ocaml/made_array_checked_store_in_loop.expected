@@ -6,5 +6,4 @@ made_array_checked_store_in_loop.fl:
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0
-  not validated
-  (the term before and the term after have a primitive of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that has one)
+  validated with its imports: the same once normalised
