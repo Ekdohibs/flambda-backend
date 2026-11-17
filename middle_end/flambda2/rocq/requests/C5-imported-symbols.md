@@ -71,7 +71,7 @@ a handler that names an exception can be run to its end.
   predefined exceptions are two objects.
 - For a symbol of another unit that is immutable data, Simplify may
   know the contents from the other unit's `.cmx`, and the compiler
-  shares equal immutable values (D30). Nothing here establishes that
+  shares equal immutable values (R2-21). Nothing here establishes that
   a block of this unit is never made the same object as such a
   symbol.
 
@@ -104,7 +104,7 @@ of either class, so it is not allocated in the sense of
   closure, a boxed number, a string, or a symbol bound to one), and
   against an import that is data: false. An identity is generative
   and unique, so nothing that the unit allocates, and nothing that
-  Simplify shares or lifts, can be it; D30 is about immutable
+  Simplify shares or lifts, can be it; R2-21 is about immutable
   structure, which an identity is not;
 - an import that is data against an allocated value, another import
   that is data, or itself: no value. It is as an immutable allocated
@@ -123,7 +123,7 @@ only convenient. The handler `with Not_found -> ...` first tests
 a block of tag 0. Without the case, most programs that catch a
 constant exception would be undefined.
 
-Two immutable allocated values stay without a value (D19, D30):
+Two immutable allocated values stay without a value (D19):
 nothing of that changes.
 
 **Which symbols are identities** is said by whoever makes the static

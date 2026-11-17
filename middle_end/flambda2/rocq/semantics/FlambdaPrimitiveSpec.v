@@ -998,7 +998,7 @@ Definition eval_string_load (statics : static_env)
    declares an exception otherwise) and is never copied or shared, so
    nothing that a unit allocates, and nothing that Simplify shares or
    lifts, can be it. That the compiler shares equal immutable values
-   (decision D30) is about immutable structure, which an identity is
+   (discrepancy R2-21) is about immutable structure, which an identity is
    not. It rests on two things that are not checked here. One is that
    the class is given to nothing but an exception: the conversion from
    the compiler's terms decides it, from the symbol alone, and is to
