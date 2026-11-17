@@ -38,6 +38,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaClosuresSpec FlambdaClosuresProofs FlambdaContextWhereSpec
   FlambdaContextWhereProofs FlambdaImportsSpec FlambdaObserversSpec
   FlambdaUnitFromProofs FlambdaEquivarianceTactic FlambdaKnownSlotsSpec.
+From OxCamlFlambda2 Require FlambdaStaticsInScopeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -233,7 +234,9 @@ Proof.
     cbn [binds_no_static handler_binds_no_static] in Hno.
     apply andb_true_iff in Hno as [Hh Hb].
     cbn [expr_statics_in_scope handler_statics_in_scope] in Hscope.
-    rewrite !(no_static_names _ body Hb) in Hscope. cbn [app] in Hscope.
+    rewrite ?(no_static_handler_scope _ _ body Hb),
+      ?(no_static_recursive_scope _ _ body Hb)
+      in Hscope. cbn [app] in Hscope.
     apply andb_true_iff in Hscope as [Sh Sb].
     cbn [handler_slots_checked].
     rewrite (no_static_slots_checked known handler syms Hh Sh),
@@ -241,7 +244,9 @@ Proof.
     reflexivity.
   - cbn [binds_no_static] in Hno. apply andb_true_iff in Hno as [Hhs Hb].
     cbn [expr_statics_in_scope] in Hscope.
-    rewrite !(no_static_names _ body Hb) in Hscope. cbn [app] in Hscope.
+    rewrite ?(no_static_handler_scope _ _ body Hb),
+      ?(no_static_recursive_scope _ _ body Hb)
+      in Hscope. cbn [app] in Hscope.
     apply andb_true_iff in Hscope as [Shs Sb].
     rewrite (no_static_slots_checked known body syms Hb Sb), andb_true_r.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
@@ -950,7 +955,8 @@ Proof.
         (read_slots_slots_as_expr known known' body).
       reflexivity.
     + rewrite (read_slots_slots_as_expr known known' body). f_equal.
-      generalize (static_names symbols_of_binding body ++ syms).
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
       intros all.
       induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
         [ reflexivity | ].
@@ -1032,7 +1038,8 @@ Proof.
         (read_slots_slots_checked_expr known known' body).
       reflexivity.
     + rewrite (read_slots_slots_checked_expr known known' body). f_equal.
-      generalize (static_names symbols_of_binding body ++ syms).
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
       intros all.
       induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
         [ reflexivity | ].
@@ -1081,7 +1088,9 @@ Proof.
     cbn [read_slots_in_handler handler_binds_statics].
     rewrite !read_slots_binds_statics. reflexivity.
   - rewrite (read_slots_binds_statics known body). f_equal.
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize
+      (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
+    intros all.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
       cbn [map existsb read_slots_in_handler handler_binds_statics];
       [ reflexivity | ].
@@ -1286,7 +1295,7 @@ Proof.
       rewrite step_let_static, Heval. reflexivity.
   - (* Let_cont_non_recursive *)
     destruct h as [params metadata handler]. cbn [read_slots_in_handler].
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize (handler_scope symbols_of_binding k body ++ syms). intros all.
     assert (Hinv' :
       inv
         (State
@@ -1311,7 +1320,9 @@ Proof.
       apply read_slots_refines_aux. apply (Hkept _ _ Hinv').
       apply step_let_cont_non_recursive.
   - (* Let_cont_recursive *)
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize
+      (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
+    intros all.
     set (read :=
            fun kh : continuation * continuation_handler =>
              let '(k, h) := kh in (k, read_slots_in_handler known all h)).
@@ -1585,7 +1596,8 @@ Proof.
         (read_slots_static_names known body).
       reflexivity.
     + rewrite (read_slots_static_names known body). f_equal.
-      generalize (static_names symbols_of_binding body ++ syms).
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
       intros all.
       induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
         [ reflexivity | ].
@@ -1593,6 +1605,61 @@ Proof.
   - destruct h as [params metadata handler]. intros syms.
     cbn [read_slots_in_handler handler_static_names].
     apply read_slots_static_names.
+Qed.
+
+(* The ways out of an expression are those that it had, and so is the
+   scope that a handler is given. *)
+Fixpoint read_slots_exits (known : known_slots) (e : expr) {struct e} :
+  ∀ syms : list symbol,
+    exits names_of (read_slots known syms e) = exits names_of e
+with read_slots_handler_exits (known : known_slots)
+    (h : continuation_handler) {struct h} :
+  ∀ syms : list symbol,
+    handler_exits names_of (read_slots_in_handler known syms h)
+    = handler_exits names_of h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros syms; cbn [read_slots]; try reflexivity.
+    + cbn [exits]. apply read_slots_exits.
+    + cbn [exits].
+      rewrite read_slots_bindings_names, (read_slots_exits known body).
+      reflexivity.
+    + apply FlambdaStaticsInScopeProofs.exits_let_cont_ext;
+        [ apply read_slots_handler_exits | apply read_slots_exits ].
+    + apply FlambdaStaticsInScopeProofs.exits_let_cont_rec_ext;
+        [ apply FlambdaStaticsInScopeProofs.map_fst_map_handlers |
+        | apply read_slots_exits ].
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
+      intros all.
+      induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
+      cbn [map].
+      rewrite !FlambdaStaticsInScopeProofs.handlers_exits_cons,
+        (read_slots_handler_exits known h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler]. intros syms.
+    cbn [read_slots_in_handler handler_exits].
+    apply read_slots_exits.
+Qed.
+
+Lemma read_slots_handler_scope (known : known_slots) (syms : list symbol)
+    (k : continuation) (body : expr) :
+  handler_scope names_of k (read_slots known syms body)
+  = handler_scope names_of k body.
+Proof.
+  apply FlambdaStaticsInScopeProofs.handler_scope_ext;
+    [ apply read_slots_exits | apply read_slots_static_names ].
+Qed.
+
+Lemma read_slots_recursive_scope (known : known_slots) (syms : list symbol)
+    (group : list continuation) (body : expr) :
+  recursive_scope names_of group (read_slots known syms body)
+  = recursive_scope names_of group body.
+Proof.
+  apply FlambdaStaticsInScopeProofs.recursive_scope_ext;
+    [ apply read_slots_exits | apply read_slots_static_names ].
 Qed.
 
 End Names_kept.
@@ -1682,8 +1749,8 @@ Proof.
       cbn [expr_statics_in_scope] in He |- *.
       apply andb_true_iff in He as [Hh Hbody].
       rewrite
-        (read_slots_static_names symbols_of_binding (fun _ _ _ => eq_refl)),
-        (read_slots_static_names declared_code_ids_of_binding
+        (read_slots_handler_scope symbols_of_binding (fun _ _ _ => eq_refl)),
+        (read_slots_handler_scope declared_code_ids_of_binding
            (fun _ _ _ => eq_refl)).
       apply andb_true_iff. split.
       * exact (read_slots_in_scope_handler known h _ _ _
@@ -1709,9 +1776,9 @@ Proof.
         exact (read_slots_in_scope_handler known h all all' ids' Hall Hh). }
       cbn [expr_statics_in_scope] in He |- *.
       apply andb_true_iff in He as [Hhandlers Hbody].
-      rewrite
-        (read_slots_static_names symbols_of_binding (fun _ _ _ => eq_refl)),
-        (read_slots_static_names declared_code_ids_of_binding
+      rewrite FlambdaStaticsInScopeProofs.map_fst_map_handlers,
+        (read_slots_recursive_scope symbols_of_binding (fun _ _ _ => eq_refl)),
+        (read_slots_recursive_scope declared_code_ids_of_binding
            (fun _ _ _ => eq_refl)).
       apply andb_true_iff. split.
       * exact (Hrec _ _ _ (incl_app_app (incl_refl _) Hincl) Hhandlers).
@@ -1916,8 +1983,44 @@ Lemma symbol_names_renamed (r : renaming) (e : expr) :
   = static_names symbols_of_binding e.
 Proof. equivariance. Qed.
 
+(* The scope that a handler is given, in the forms that computation
+   gives. *)
+Lemma symbol_handler_scope_renamed (r : renaming) (k : continuation)
+    (e : expr) :
+  handler_scope symbols_of_binding (rename_continuation r k)
+    (rename_expr r e)
+  = handler_scope symbols_of_binding k e.
+Proof.
+  apply FlambdaStaticsInScopeProofs.handler_scope_renamed,
+    symbols_of_binding_renamed.
+Qed.
+
+Lemma symbol_recursive_scope_renamed (r : renaming) (group : list continuation)
+    (e : expr) :
+  recursive_scope symbols_of_binding (map (rename_continuation r) group)
+    (rename_expr r e)
+  = recursive_scope symbols_of_binding group e.
+Proof.
+  apply FlambdaStaticsInScopeProofs.recursive_scope_renamed,
+    symbols_of_binding_renamed.
+Qed.
+
+Lemma symbol_handlers_scope_renamed (r : renaming)
+    (handlers : list (continuation * continuation_handler)) (e : expr) :
+  recursive_scope symbols_of_binding
+    (map fst
+       (map (fun '(k, h) => (rename_continuation r k, rename_handler r h))
+          handlers))
+    (rename_expr r e)
+  = recursive_scope symbols_of_binding (map fst handlers) e.
+Proof.
+  fold (rename_handlers r handlers).
+  rewrite map_fst_rename_handlers. apply symbol_recursive_scope_renamed.
+Qed.
+
 #[local] Hint Rewrite lookup_slots_renamed symbols_of_bindings_renamed
-  symbol_names_renamed : equivariance.
+  symbol_names_renamed symbol_handler_scope_renamed
+  symbol_recursive_scope_renamed symbol_handlers_scope_renamed : equivariance.
 
 Lemma read_slots_all_renamed (r : renaming) (known : known_slots)
     (syms : list symbol) (e : expr) :

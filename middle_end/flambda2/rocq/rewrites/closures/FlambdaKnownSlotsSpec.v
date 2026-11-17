@@ -339,7 +339,9 @@ Definition read_slot (known : known_slots) (syms : list symbol) (d : named)
    the code of a stub, which is left as it is. The symbols in scope
    are those of FlambdaStaticsInScopeSpec.expr_statics_in_scope: in
    the code and in the body of a group, all that the group binds; in a
-   handler of a [Let_cont], what the body of the [Let_cont] binds. *)
+   handler of a [Let_cont], what the body of the [Let_cont] binds on
+   every way to the handler (FlambdaStaticsInScopeSpec.handler_scope
+   and recursive_scope). *)
 Fixpoint read_slots (known : known_slots) (syms : list symbol) (e : expr)
     {struct e} : expr :=
   match e with
@@ -352,7 +354,7 @@ Fixpoint read_slots (known : known_slots) (syms : list symbol) (e : expr)
   | Let_cont_non_recursive k h body =>
     Let_cont_non_recursive k
       (read_slots_in_handler known
-         (static_names symbols_of_binding body ++ syms) h)
+         (handler_scope symbols_of_binding k body ++ syms) h)
       (read_slots known syms body)
   | Let_cont_recursive handlers body =>
     Let_cont_recursive
@@ -360,7 +362,9 @@ Fixpoint read_slots (known : known_slots) (syms : list symbol) (e : expr)
          (fun '(k, h) =>
             (k,
              read_slots_in_handler known
-               (static_names symbols_of_binding body ++ syms) h))
+               (recursive_scope symbols_of_binding (map fst handlers) body
+                ++ syms)
+               h))
          handlers)
       (read_slots known syms body)
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e

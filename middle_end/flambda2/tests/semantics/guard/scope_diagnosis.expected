@@ -1,0 +1,3 @@
+a symbol with no name, given as in scope: nothing out of scope
+that symbol, and a named symbol that is not in scope: a symbol out of scope
+a named symbol that is not in scope: a symbol out of scope

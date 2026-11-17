@@ -552,10 +552,9 @@ Qed.
 
 Section Hoisted.
 
-(* The exception continuation of the unit, the code ids that it declares
-   deleted, and what the unit with its closed bindings first has bound
-   once its first group is evaluated. *)
-Variable unit_exn : continuation.
+(* The code ids that the unit declares deleted, and what the unit with
+   its closed bindings first has bound once its first group is
+   evaluated. *)
 Variable deleted : list code_id.
 Variable src_code : list (code_id * code).
 Variable src_values : list (symbol * statically_allocated_value).
@@ -802,7 +801,7 @@ Definition known_inv (s : state) : Prop :=
   ∧ statics_known (state_statics s).
 
 Definition wf_inv : state -> Prop :=
-  inv unit_exn code_ids_of_binding code_id_bound.
+  inv code_ids_of_binding code_id_bound.
 
 (* The code that is bound binds nothing static. *)
 Lemma wf_inv_code (s : state) (id : code_id) (c : code) :
@@ -812,7 +811,7 @@ Lemma wf_inv_code (s : state) (id : code_id) (c : code) :
 Proof.
   intros (_ & _ & _ & _ & _ & S) Hlookup. pose proof (S id c Hlookup) as Hc.
   destruct c as [params my_closure ret exn metadata body]. simpl in Hc |- *.
-  exact (proj1 (proj2 (statics_nowhere unit_exn code_ids_of_binding body Hc))).
+  exact (proj1 (proj2 (statics_nowhere code_ids_of_binding body Hc))).
 Qed.
 
 Lemma known_inv_over (remaining : list value)
@@ -958,8 +957,8 @@ Qed.
    and what it still binds, the second run has bound. *)
 Definition hoist_inv (s : state) : Prop :=
   wf_inv s
-  ∧ inv unit_exn symbols_of_binding symbol_bound s
-  ∧ terms_inv unit_exn deleted s
+  ∧ inv symbols_of_binding symbol_bound s
+  ∧ terms_inv deleted s
   ∧ state_statics_bound deleted s
   ∧ known_inv s.
 
@@ -967,13 +966,13 @@ Lemma hoist_inv_step (s s' : state) :
   hoist_inv s -> step s = Step s' -> hoist_inv s'.
 Proof.
   intros (W & Ws & T & V & K) Hstep.
-  pose proof (values_step unit_exn deleted s T V) as V'.
+  pose proof (values_step deleted s T V) as V'.
   rewrite Hstep in V'.
-  exact (conj (inv_step unit_exn code_ids_of_binding code_id_bound
+  exact (conj (inv_step code_ids_of_binding code_id_bound
                  code_bound_after s s' W Hstep)
-           (conj (inv_step unit_exn symbols_of_binding symbol_bound
+           (conj (inv_step symbols_of_binding symbol_bound
                     symbol_bound_after s s' Ws Hstep)
-              (conj (terms_inv_step unit_exn deleted s s' T Hstep)
+              (conj (terms_inv_step deleted s s' T Hstep)
                  (conj V' (known_inv_step s s' W K Hstep))))).
 Qed.
 
@@ -1510,9 +1509,9 @@ Proof.
     destruct (kind_eqb (kind_of_value v) kind); reflexivity.
   - (* Let_static *)
     rewrite (eval_static_bindings_hoist vars bindings statics (proj1 K)
-               (inv_no_rebinding unit_exn code_ids_of_binding code_id_bound
+               (inv_no_rebinding code_ids_of_binding code_id_bound
                   bindings body vars conts statics hp rd_ W)
-               (inv_no_rebinding unit_exn symbols_of_binding symbol_bound
+               (inv_no_rebinding symbols_of_binding symbol_bound
                   bindings body vars conts statics hp rd_ Ws)).
     destruct (eval_static_bindings vars bindings statics); reflexivity.
   - (* Let_cont_non_recursive *)
@@ -1638,13 +1637,14 @@ Lemma hoist_statics_related_from (u : unit_interface) (e : expr)
       among id (deleted_code_ids e) = true -> lookup id src_code = None)
     ∧ eval_static_bindings [] (hoisted_bindings e) statics
       = Some (Static_env src_code src_values)
-    ∧ hoisted_related (unit_exn u) (deleted_code_ids e) src_code src_values
+    ∧ hoisted_related (deleted_code_ids e) src_code src_values
         (State e [] [] statics hp rd)
         (State (without_hoisted e) [] [] (Static_env src_code src_values)
            hp rd).
 Proof.
   intros Hwf Hscope Hconts Hapart Hno_code Hfree Hamong Hheap.
-  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as Htoplevel.
+  pose proof (well_formed_unit_statics_outside_loops_and_code u e Hwf)
+    as Htoplevel.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Hcodes.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Hsymbols.
   (* The names of the bindings of the unit, and of those taken out, are
@@ -1744,14 +1744,14 @@ Proof.
   { exact (expr_scope_sub e [] _ [] [] (sub_nil _) (sub_nil _) Hscope). }
   destruct
     (initial_state_inv (map fst (static_values statics)) u e statics hp rd Hwf
-       Hscope' Hconts Hbound Hheap)
+       Hscope' Hbound Hheap)
     as [Hterms Hvalues].
   refine
     (conj
-       (inv_from (unit_exn u) code_ids_of_binding code_id_bound e statics hp rd
+       (inv_from code_ids_of_binding code_id_bound e statics hp rd
           (free_in_code_ids statics e Hfree) Hno_code Htoplevel Hcodes)
        (conj
-          (inv_from (unit_exn u) symbols_of_binding symbol_bound e statics
+          (inv_from symbols_of_binding symbol_bound e statics
              hp rd (free_in_symbols statics e Hfree) Hno_code Htoplevel
              Hsymbols)
           (conj Hterms (conj Hvalues _)))).
@@ -1796,9 +1796,9 @@ Proof.
            (State (without_hoisted e) [] [] (Static_env src_code src_values)
               hp rd)).
   - exact (bisimulation_equivalent
-             (hoisted_related (unit_exn u) (deleted_code_ids e) src_code
+             (hoisted_related (deleted_code_ids e) src_code
                 src_values)
-             (hoisted_related_step (unit_exn u) (deleted_code_ids e) src_code
+             (hoisted_related_step (deleted_code_ids e) src_code
                 src_values Hdeleted)
              _ _ Hrel).
   - apply equivalent_sym, step_equivalent.

@@ -34,7 +34,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaPrimitiveProofs FlambdaValueSpec
   FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaBindersSpec
   FlambdaNominalSpec FlambdaNominalProofs FlambdaWellFormedSpec
-  FlambdaWellFormedProofs FlambdaStaticsInScopeSpec FlambdaUnusedStaticsSpec
+  FlambdaWellFormedProofs FlambdaStaticsInScopeSpec
+  FlambdaStaticsInScopeProofs FlambdaUnusedStaticsSpec
   FlambdaHeapSpec FlambdaClosuresProofs FlambdaContextWhereSpec
   FlambdaContextWhereProofs FlambdaImportsSpec FlambdaObserversSpec
   FlambdaScopedProofs FlambdaEquivarianceTactic FlambdaSharedReadsSpec.
@@ -1322,6 +1323,58 @@ Proof.
     apply share_reads_static_names.
 Qed.
 
+(* The ways out of an expression are those that it had, and so is the
+   scope that a handler is given. *)
+Fixpoint share_reads_exits (held : held_places) (e : expr) {struct e} :
+  ∀ made : reads_made,
+    exits names_of (share_reads held made e) = exits names_of e
+with share_reads_handler_exits (held : held_places)
+    (h : continuation_handler) {struct h} :
+  ∀ made : reads_made,
+    handler_exits names_of (share_reads_in_handler held made h)
+    = handler_exits names_of h.
+Proof.
+  - destruct e
+      as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros made; cbn [share_reads]; try reflexivity.
+    + destruct (read_class held d) as [c | ];
+        [ destruct (read_before made c) | ];
+        cbn [exits]; apply share_reads_exits.
+    + cbn [exits].
+      rewrite share_reads_bindings_names, (share_reads_exits held body).
+      reflexivity.
+    + apply exits_let_cont_ext;
+        [ apply share_reads_handler_exits | apply share_reads_exits ].
+    + apply exits_let_cont_rec_ext;
+        [ apply map_fst_map_handlers | | apply share_reads_exits ].
+      induction handlers as [ | [k h] handlers IH]; [ reflexivity | ].
+      cbn [map].
+      rewrite !handlers_exits_cons, (share_reads_handler_exits held h), IH.
+      reflexivity.
+  - destruct h as [params metadata handler]. intros made.
+    cbn [share_reads_in_handler handler_exits].
+    apply share_reads_exits.
+Qed.
+
+Lemma share_reads_handler_scope (held : held_places) (made : reads_made)
+    (k : continuation) (body : expr) :
+  handler_scope names_of k (share_reads held made body)
+  = handler_scope names_of k body.
+Proof.
+  apply handler_scope_ext;
+    [ apply share_reads_exits | apply share_reads_static_names ].
+Qed.
+
+Lemma share_reads_recursive_scope (held : held_places) (made : reads_made)
+    (group : list continuation) (body : expr) :
+  recursive_scope names_of group (share_reads held made body)
+  = recursive_scope names_of group body.
+Proof.
+  apply recursive_scope_ext;
+    [ apply share_reads_exits | apply share_reads_static_names ].
+Qed.
+
 End Names_kept.
 
 Lemma share_reads_group_consts (held : held_places) (all : list symbol)
@@ -1404,8 +1457,8 @@ Proof.
       cbn [expr_statics_in_scope] in He |- *.
       apply andb_true_iff in He as [Hh Hbody].
       rewrite
-        (share_reads_static_names symbols_of_binding (fun _ _ _ => eq_refl)),
-        (share_reads_static_names declared_code_ids_of_binding
+        (share_reads_handler_scope symbols_of_binding (fun _ _ _ => eq_refl)),
+        (share_reads_handler_scope declared_code_ids_of_binding
            (fun _ _ _ => eq_refl)).
       apply andb_true_iff. split.
       * exact (share_reads_in_scope_handler held h made _ _ Hh).
@@ -1428,9 +1481,9 @@ Proof.
         exact (share_reads_in_scope_handler held h made all ids' Hh). }
       cbn [expr_statics_in_scope] in He |- *.
       apply andb_true_iff in He as [Hhandlers Hbody].
-      rewrite
-        (share_reads_static_names symbols_of_binding (fun _ _ _ => eq_refl)),
-        (share_reads_static_names declared_code_ids_of_binding
+      rewrite (map_fst_map_handlers (share_reads_in_handler held made)),
+        (share_reads_recursive_scope symbols_of_binding (fun _ _ _ => eq_refl)),
+        (share_reads_recursive_scope declared_code_ids_of_binding
            (fun _ _ _ => eq_refl)).
       apply andb_true_iff. split.
       * exact (Hrec _ _ Hhandlers).

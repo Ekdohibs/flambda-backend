@@ -301,6 +301,7 @@ Separate Extraction
   forward_jumps
   forward_kinded
   forward_kinded_in_code
+  handler_at_unit_toplevel
   imports_statics
   initial_region_state
   inline_calls

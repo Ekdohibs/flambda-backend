@@ -64,7 +64,7 @@ Qed.
 
 Theorem unit_refines_exits_bound : unit_refines_exits_bound_statement.
 Proof.
-  intros imports u source target Hwf Hscope Hconts Href.
+  intros imports u source target Hwf Hscope Href.
   apply (proj2 (refines_world_same _ _)) in Href.
   destruct Href as [Hexits Hends].
   split; [|exact Hends].
@@ -77,8 +77,7 @@ Proof.
   destruct
     (statics_bound_in_run (map fst imports) u target
        (imports_statics imports) empty_heap no_reads n last Hwf Hscope
-       Hconts (imports_statics_bound imports) (heap_values_all_empty _)
-       Hrun)
+       (imports_statics_bound imports) (heap_values_all_empty _) Hrun)
     as [Hbound [_ Hexit]].
   rewrite Hstep in Hexit.
   unfold exit_statics_bound.
@@ -90,9 +89,8 @@ Qed.
 
 Theorem validated_exits_bound : validated_exits_bound_statement.
 Proof.
-  intros u rounds unused slots G Ls kept before after Hverdict Hwf Hscope
-    Hconts.
-  apply (unit_refines_exits_bound [] u before after Hwf Hscope Hconts).
+  intros u rounds unused slots G Ls kept before after Hverdict Hwf Hscope.
+  apply (unit_refines_exits_bound [] u before after Hwf Hscope).
   exact (validate_unit_sound rounds unused slots G Ls kept before after
            Hverdict).
 Qed.
@@ -173,7 +171,6 @@ Proof.
   { exists 6%nat, no_reads. vm_compute. reflexivity. }
   exists exit_interface, bound_exit_unit, unbound_exit_unit, 5%nat,
     unbound_exit_state, 1%positive, 1%positive.
-  split; [vm_compute; reflexivity|].
   split; [vm_compute; reflexivity|].
   split; [vm_compute; reflexivity|].
   split; [exact Hsource|].

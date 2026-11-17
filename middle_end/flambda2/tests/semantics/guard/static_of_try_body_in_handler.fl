@@ -1,0 +1,101 @@
+let $camlStatic_of_try_body_in_handler__first_const_0 = Block 0 () in
+(let code inline(never) size(19)
+       f_0 (x/92 : imm tagged)
+         my_closure/93 &my_alloc_region/94 my_depth/95
+         -> k/38 * k/39
+         : imm tagged =
+   let next_depth/96 = rec_info (succ my_depth/95) in
+   (let prim/97 = %int_comp.gt (x/92, 5) in
+    let int_greaterthan/98 = %tag_imm (prim/97) in
+    (let untagged/99 = %untag_imm (int_greaterthan/98) in
+     switch untagged/99
+       | 0 -> k/38 (x/92)
+       | 1 -> k/41)
+      where k/41 =
+        cont k/40)
+     where k/40 =
+       cont k/39 pop(regular k/39) ($`*predef*`.caml_exn_Not_found)
+ in
+ let code inline(never) size(3)
+       g_1 (x/100 : imm tagged)
+         my_closure/101 &my_alloc_region/102 my_depth/103
+         -> k/42 * k/43
+         : imm tagged =
+   let next_depth/104 = rec_info (succ my_depth/103) in
+   let int_add/105 = %int_barith.add (x/100, 1) in
+   cont k/42 (int_add/105)
+ in
+ let f/106 = closure f_0 @f &toplevel in
+ let g/107 = closure g_1 @g &toplevel in
+ (let try_region/111 = %begin_try_region () in
+  let try_ghost_region/112 = %begin_try_ghost_region () in
+  cont k/51 push(k/45)
+    where k/51 =
+      ((let Popaque/128 = %opaque (1) in
+        apply direct(f_0 &toplevel)
+          (f/106 : _ -> imm tagged) (Popaque/128) -> k/52 * k/45)
+         where k/52 (a/122 : imm tagged) =
+           let p/123 = %block.[`0`].`toplevel` (g/107 : val, 1 : imm tagged)
+           in
+           ((let Popaque/127 = %opaque (2) in
+             apply direct(f_0 &toplevel)
+               (f/106 : _ -> imm tagged) (Popaque/127) -> k/53 * k/45)
+              where k/53 (b/124 : imm tagged) =
+                let int_add/125 = %int_barith.add (a/122, b/124) in
+                let Pmakeblock/126 =
+                  %block.[`0`].`toplevel`
+                    (p/123 : [ 0 of val * imm tagged ],
+                     int_add/125 : imm tagged)
+                in
+                cont k/50 (Pmakeblock/126)))
+    where k/50
+            (body_result/121 :
+               [ 0 of [ 0 of val * imm tagged ] * imm tagged ]) =
+      cont k/44 pop(k/45) (body_result/121)
+    where k/45 exn (exn/113 : val) =
+      let unit/114 = %end_try_region (try_region/111) in
+      let unit/115 = %end_try_ghost_region (try_ghost_region/112) in
+      ((let prim/118 = %phys_eq (exn/113, $`*predef*`.caml_exn_Not_found) in
+        let eq/119 = %tag_imm (prim/118) in
+        (let untagged/120 = %untag_imm (eq/119) in
+         switch untagged/120
+           | 0 -> k/48
+           | 1 -> k/49)
+          where k/49 =
+            cont k/46
+          where k/48 =
+            cont k/47)
+         where k/47 =
+           cont error pop(reraise error) (exn/113)
+         where k/46 =
+           let Pmakeblock/116 =
+             %block.[`0`].`toplevel` (g/107 : val, 1 : imm tagged)
+           in
+           let Pmakeblock/117 =
+             %block.[`0`].`toplevel`
+               (Pmakeblock/116 : [ 0 of val * imm tagged ], 0 : imm tagged)
+           in
+           cont k/44 (Pmakeblock/117)))
+   where k/44 (r/108 : [ 0 of [ 0 of val * imm tagged ] * imm tagged ]) =
+     let pair/109 =
+       %block.[`0`].`toplevel`
+         (r/108 : [ 0 of [ 0 of val * imm tagged ] * imm tagged ],
+          r/108 : [ 0 of [ 0 of val * imm tagged ] * imm tagged ])
+     in
+     let Pmakeblock/110 =
+       %block.[`0`].`toplevel` (f/106, g/107, r/108, pair/109)
+     in
+     cont k/37 (Pmakeblock/110))
+  where k/37 define_root_symbol (module_block/87) =
+    let field_0/88 = %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/87)
+    in
+    let field_1/89 = %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/87)
+    in
+    let field_2/90 = %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/87)
+    in
+    let field_3/91 = %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/87)
+    in
+    let $camlStatic_of_try_body_in_handler =
+      Block 0 (field_0/88, field_1/89, field_2/90, field_3/91)
+    in
+    cont done ($camlStatic_of_try_body_in_handler)

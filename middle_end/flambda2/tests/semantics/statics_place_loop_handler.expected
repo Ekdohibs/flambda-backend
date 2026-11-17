@@ -1,0 +1,1 @@
+statics_place_loop_handler.fl: not checked: the term is not well-formed (a static binding in the handler of a recursive continuation or in the body of code)

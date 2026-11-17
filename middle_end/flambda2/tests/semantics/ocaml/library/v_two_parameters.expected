@@ -1,2 +1,9 @@
-v_two_parameters.fl: the term after Simplify is NOT WELL-FORMED (a static binding that is not at toplevel, or a name bound twice)
+v_two_parameters.fl:
+  before Simplify, with its import (33 steps): returns [0: 3; 4]
+  after Simplify, with its import (25 steps): returns [0: 3; 4]
+  the check of kinds: passes before, passes after
   the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised

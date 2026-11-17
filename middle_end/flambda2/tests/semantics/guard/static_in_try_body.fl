@@ -1,0 +1,85 @@
+let $camlStatic_in_try_body__first_const_0 = Block 0 () in
+(let code inline(never) size(6)
+       apply_0 (f/88 : val, x/89)
+         my_closure/90 &my_alloc_region/91 my_depth/92
+         -> k/36 * k/37 =
+   let next_depth/93 = rec_info (succ my_depth/92) in
+   apply &my_alloc_region/91 f/88 (x/89) -> k/36 * k/37
+ in
+ let code size(1)
+       `fn[static_in_try_body.ml:14,10--22]_1` (v/94 : imm tagged)
+         my_closure/95 &my_alloc_region/96 my_depth/97
+         -> k/38 * k/39
+         : imm tagged =
+   let next_depth/98 = rec_info (succ my_depth/97) in
+   cont k/38 (v/94)
+ in
+ let code size(3)
+       `fn[static_in_try_body.ml:13,13--29]_2` (v/99 : imm tagged)
+         my_closure/100 &my_alloc_region/101 my_depth/102
+         -> k/40 * k/41
+         : imm tagged =
+   let next_depth/103 = rec_info (succ my_depth/102) in
+   let int_add/104 = %int_barith.add (v/99, 1) in
+   cont k/40 (int_add/104)
+ in
+ let apply/105 = closure apply_0 @`apply` &toplevel in
+ (let region/108 = %begin_region () in
+  let ghost_region/109 = %begin_ghost_region () in
+  (let `fn[static_in_try_body.ml:14,10--22]/127` =
+     closure `fn[static_in_try_body.ml:14,10--22]_1`
+       @`fn[static_in_try_body.ml:14,10--22]` &toplevel &region/108
+   in
+   apply direct(apply_0 &toplevel)
+     (apply/105 : val? * imm tagged -> imm tagged)
+       (`fn[static_in_try_body.ml:14,10--22]/127`, 2)
+       -> k/44 * error)
+    where k/44 (apply_result/113 : imm tagged) =
+      let try_region/114 = %begin_try_region (region/108) in
+      let try_ghost_region/115 = %begin_try_ghost_region (ghost_region/109)
+      in
+      (cont k/50 push(k/46)
+         where k/50 =
+           let Popaque/125 = %opaque (1) in
+           let `fn[static_in_try_body.ml:13,13--29]/126` =
+             closure `fn[static_in_try_body.ml:13,13--29]_2`
+               @`fn[static_in_try_body.ml:13,13--29]` &toplevel &region/108
+           in
+           apply direct(apply_0 &toplevel)
+             (apply/105 : _ -> imm tagged)
+               (`fn[static_in_try_body.ml:13,13--29]/126`, Popaque/125)
+               -> k/49 * k/46
+         where k/49 (body_result/124 : imm tagged) =
+           cont k/45 pop(k/46) (body_result/124)
+         where k/46 exn (exn/118 : val) =
+           let unit/119 = %end_try_region (try_region/114) in
+           let unit/120 = %end_try_ghost_region (try_ghost_region/115) in
+           ((let prim/121 =
+               %phys_eq (exn/118, $`*predef*`.caml_exn_Not_found)
+             in
+             let eq/122 = %tag_imm (prim/121) in
+             (let untagged/123 = %untag_imm (eq/122) in
+              switch untagged/123
+                | 0 -> k/48
+                | 1 -> k/45 (0))
+               where k/48 =
+                 cont k/47)
+              where k/47 =
+                cont error pop(reraise error) (exn/118))
+         where k/45 (try_with_result/116 : imm tagged) =
+           let int_add/117 =
+             %int_barith.add (try_with_result/116, apply_result/113)
+           in
+           cont k/43 (int_add/117))
+    where k/43 (region_return/110 : imm tagged) =
+      let unit/111 = %end_region (region/108) in
+      let unit/112 = %end_ghost_region (ghost_region/109) in
+      cont k/42 (region_return/110))
+   where k/42 (result/106 : imm tagged) =
+     let Pmakeblock/107 = %block.[`0`].`toplevel` (result/106) in
+     cont k/35 (Pmakeblock/107))
+  where k/35 define_root_symbol (module_block/86) =
+    let field_0/87 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/86)
+    in
+    let $camlStatic_in_try_body = Block 0 (field_0/87) in
+    cont done ($camlStatic_in_try_body)

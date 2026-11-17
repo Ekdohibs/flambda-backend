@@ -1,0 +1,29 @@
+(* A recursive continuation with two entries from outside. The way in from the
+   first arm binds the symbol; the way in from the second arm, the one that
+   runs, binds nothing. The handler of the recursive continuation reads the
+   symbol. The binding is not under the recursive handler; its use is, and the
+   handler has in scope only what both ways in have bound: refused by the
+   check of static names. *)
+let a/1 = %opaque (3) in
+let c/2 = %int_comp.lt (a/1, 5) in
+(((switch c/2
+     | 0 -> k/10
+     | 1 -> k/11
+     where k/10 = (
+       let $Cell = Block 0 (a/1) in
+       cont k/20 (0, 0))
+     where k/11 = (
+       cont k/20 (0, 0)))
+    where rec k/20 (i/3 : imm tagged, acc/4 : imm tagged) = (
+      let x/5 = %block_load.[`0`] ($Cell) in
+      let sum/6 = %int_barith.add (acc/4, x/5) in
+      let more/7 = %int_comp.lt (i/3, 1) in
+      (switch more/7
+         | 0 -> k/30 (sum/6)
+         | 1 -> k/21
+         where k/21 = (
+           let next/8 = %int_barith.add (i/3, 1) in
+           cont k/20 (next/8, sum/6)))))
+   where k/30 (result/9 : imm tagged) = (
+     let $camlStatics_scope_loop_one_entry_binds = Block 0 (result/9) in
+     cont done ($camlStatics_scope_loop_one_entry_binds)))

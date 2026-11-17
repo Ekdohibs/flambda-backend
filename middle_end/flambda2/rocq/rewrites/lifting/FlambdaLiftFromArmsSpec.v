@@ -35,9 +35,10 @@
    validation of middle_end/flambda2/tests/semantics/; and the
    statements.
 
-   What Simplify does. A static binding stands only at the toplevel of
-   a unit: in the unit itself, and in a handler that all of its body
-   goes to (FlambdaWellFormedSpec.handler_at_unit_toplevel). The arms of a
+   What Simplify does. It places a static binding only at the toplevel
+   of a unit as it has it: in the unit itself, and in a handler that
+   all of its body goes to
+   (FlambdaWellFormedSpec.handler_at_unit_toplevel). The arms of a
    test that is not resolved are handlers that are not at toplevel:
 
      let f = if c then (fun x -> x + 1) else (fun x -> x + 2)

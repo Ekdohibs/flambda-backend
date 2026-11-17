@@ -1,0 +1,77 @@
+(let code inline(always) size(60)
+       f_0 (c0/64 : val)
+         my_closure/65 &my_alloc_region/66 my_depth/67
+         -> k/32 * k/33
+         : [ 0 | 0 of [ 0 | 0 of imm tagged |1 of val ] ] =
+   let next_depth/68 = rec_info (succ my_depth/67) in
+   let z/69 = %block_load.mut.[`0`] (c0/64) in
+   (let prim/80 = %is_int (z/69) in
+    let is_scrutinee_int/81 = %tag_imm (prim/80) in
+    let untagged/82 = %untag_imm (is_scrutinee_int/81) in
+    switch untagged/82
+      | 0 -> k/41
+      | 1 -> k/42)
+     where k/42 =
+       let untagged/79 = %untag_imm (z/69) in
+       cont k/39
+     where k/41 =
+       let prim/76 = %get_tag (z/69) in
+       let scrutinee_tag/77 = %tag_imm (prim/76) in
+       let untagged/78 = %untag_imm (scrutinee_tag/77) in
+       switch untagged/78
+         | 0 -> k/32 (0)
+         | 1 -> k/40
+     where k/40 =
+       cont k/34
+     where k/39 =
+       cont k/34
+     where k/34 =
+       ((let Psetfield/74 = %block_set.lassign.[`0`] (c0/64, 0) in
+         (let untagged/75 = %untag_imm (0) in
+          cont k/38)
+           where k/38 =
+             cont k/35)
+          where k/35 =
+            ((let prim/71 = %is_int (z/69) in
+              let Pisint/72 = %tag_imm (prim/71) in
+              (let untagged/73 = %untag_imm (Pisint/72) in
+               switch untagged/73
+                 | 0 -> k/37
+                 | 1 -> k/32 (0))
+                where k/37 =
+                  cont k/36)
+               where k/36 =
+                 let Pmakeblock/70 =
+                   %block.[`0`].my_alloc_region/66
+                     (z/69 : [ 0 | 0 of imm tagged |1 of val ])
+                 in
+                 cont k/32 (Pmakeblock/70)))
+ in
+ let $camlT1_14_unit__immstring_0 = "ccc" in
+ let $camlT1_14_unit__const_block_1 = Block 1 ($camlT1_14_unit__immstring_0)
+ in
+ let f/83 = closure f_0 @f &toplevel in
+ (let region/86 = %begin_region () in
+  let ghost_region/87 = %begin_ghost_region () in
+  (let Pmakeblock/91 =
+     %block.mut.[`0`].`toplevel`.local[region/86]
+       ($camlT1_14_unit__const_block_1 : [ 0 | 0 of imm tagged |1 of val ])
+   in
+   apply direct(f_0 &toplevel)
+     (f/83 : val -> [ 0 | 0 of [ 0 | 0 of imm tagged |1 of val ] ])
+       (Pmakeblock/91)
+       -> k/44 * error)
+    where k/44
+            (region_return/88 :
+               [ 0 | 0 of [ 0 | 0 of imm tagged |1 of val ] ]) =
+      let unit/89 = %end_region (region/86) in
+      let unit/90 = %end_ghost_region (ghost_region/87) in
+      cont k/43 (region_return/88))
+   where k/43 (r/84 : [ 0 | 0 of [ 0 | 0 of imm tagged |1 of val ] ]) =
+     let Pmakeblock/85 = %block.[`0`].`toplevel` (r/84) in
+     cont k/31 (Pmakeblock/85))
+  where k/31 define_root_symbol (module_block/62) =
+    let field_0/63 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/62)
+    in
+    let $camlT1_14_unit = Block 0 (field_0/63) in
+    cont done ($camlT1_14_unit)

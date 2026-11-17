@@ -1,0 +1,40 @@
+let $camlStatic_in_raising_body__first_const_0 = Block 0 () in
+(let code inline(never) size(15)
+       f_0 (x/43 : imm tagged)
+         my_closure/44 &my_alloc_region/45 my_depth/46
+         -> k/25 * k/26
+         : imm tagged =
+   let next_depth/47 = rec_info (succ my_depth/46) in
+   (let untagged/48 = %untag_imm (x/43) in
+    switch untagged/48
+      | 0 -> k/25 (1)
+      | 1 -> k/28)
+     where k/28 =
+       cont k/27
+     where k/27 =
+       cont k/26 pop(regular k/26) ($`*predef*`.caml_exn_Not_found)
+ in
+ let f/49 = closure f_0 @f &toplevel in
+ (let try_region/52 = %begin_try_region () in
+  let try_ghost_region/53 = %begin_try_ghost_region () in
+  cont k/31 push(k/30)
+    where k/31 =
+      ((let Popaque/60 = %opaque (1) in
+        apply direct(f_0 &toplevel)
+          (f/49 : _ -> imm tagged) (Popaque/60) -> k/32 * k/30)
+         where k/32 (apply_result/57 : imm tagged) =
+           ((let Popaque/59 = %opaque (0) in
+             apply direct(f_0 &toplevel)
+               (f/49 : _ -> imm tagged) (Popaque/59) -> k/33 * k/30)
+              where k/33 (apply_result/58 : imm tagged) =
+                cont k/30 pop(regular k/30) ($`*predef*`.caml_exn_Not_found)))
+    where k/30 exn (exn/54 : val) =
+      let unit/55 = %end_try_region (try_region/52) in
+      let unit/56 = %end_try_ghost_region (try_ghost_region/53) in
+      cont k/29 (2))
+   where k/29 (result/50 : imm tagged) =
+     let Pmakeblock/51 = %block.[`0`].`toplevel` (result/50) in
+     cont k/24 (Pmakeblock/51))
+  where k/24 define_root_symbol (module_block/42) =
+    let $camlStatic_in_raising_body = Block 0 (2) in
+    cont done ($camlStatic_in_raising_body)

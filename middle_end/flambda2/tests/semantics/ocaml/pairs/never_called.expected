@@ -1,15 +1,1 @@
-never_called.fl:
-  given the .cmx of Never, a prefix of 2 static bindings:
-    camlNever__add_one_0_1 = closure Never.add_one_0 of
-      {Never.add_one_0 = camlNever__add_one_0_1_code}
-      at {Never.add_one_0 = camlNever__add_one_0_1} {}
-    camlNever = Block 0 (camlNever__add_one_0_1)
-  before Simplify, after the prefix (7 steps): undefined
-  after Simplify, after the prefix (5 steps): undefined
-  the check of kinds: passes before, passes after
-  the check of static names: fails (statics_in_scope: a symbol or a code id is not in scope) before, fails (statics_in_scope: a symbol or a code id is not in scope) after, each with the prefix in front of it
-  calls outside code: 1 before, 1 after
-  anything goes, as the run before is undefined
-  calls outside code once those of known code are inlined: 1
-  validated with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
-  the term before is undefined in the model, so the validation says nothing of this unit
+never_called.fl: not checked: with the prefix made from the .cmx files in front of it, the term before Simplify mentions a code id where it is not in scope

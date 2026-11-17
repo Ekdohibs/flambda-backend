@@ -1,0 +1,18 @@
+(* A static binding in the handler of one arm (a >= 5; a is 3, so it does not
+   run), read after the join. Well-formed by the rule of place; refused by the
+   check of static names (FlambdaStaticsInScopeSpec.statics_in_scope): the way
+   through the other arm to the join binds nothing. *)
+let a/1 = %opaque (3) in
+let c/2 = %int_comp.lt (a/1, 5) in
+(switch c/2
+   | 0 -> k/10
+   | 1 -> k/11)
+  where k/11 =
+    cont k/12
+  where k/10 =
+    let $Cell = Block 0 (a/1) in
+    cont k/12
+  where k/12 =
+    let result/5 = %block_load.[`0`] ($Cell) in
+    let $camlStatics_scope_used_on_the_other_path = Block 0 (result/5) in
+    cont done ($camlStatics_scope_used_on_the_other_path)

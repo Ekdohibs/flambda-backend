@@ -1,0 +1,10 @@
+(* At the toplevel of the unit, in a straight line: a field of the symbol is
+   read, then the symbol is bound, then the field is read again. Refused by
+   the check of static names. *)
+let a/1 = %opaque (3) in
+let early/2 = %block_load.[`0`] ($Cell) in
+let $Cell = Block 0 (a/1) in
+let late/3 = %block_load.[`0`] ($Cell) in
+let result/4 = %int_barith.add (early/2, late/3) in
+let $camlStatics_scope_used_before_bound = Block 0 (result/4) in
+cont done ($camlStatics_scope_used_before_bound)

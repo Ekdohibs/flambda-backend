@@ -54,8 +54,9 @@
    from. So a group of bindings may be recursive, and static data cyclic.
    A [Let_static] is executed where it stands; nothing lifts it.
 
-   Flambda permits a [Let_static] at the toplevel of a compilation unit
-   only: FlambdaWellFormedSpec.v has the condition. The machine keeps
+   Simplify takes a [Let_static] at the toplevel of a compilation unit
+   only; a well-formed unit has its [Let_static]s outside loops and
+   code. FlambdaWellFormedSpec.v has both conditions. The machine keeps
    static bindings out of the two places where one could be executed more
    than once: calling code whose body binds something static is
    undefined, and so is a [Let_cont_recursive] one of whose handlers does

@@ -1,0 +1,19 @@
+(* The same symbol bound in the handlers of the two arms of a Switch; one of
+   them runs. Each binding is outside loops and code; the unit is refused
+   because the symbol is bound twice in its text. *)
+let a/1 = %opaque (3) in
+let c/2 = %int_comp.lt (a/1, 5) in
+(switch c/2
+   | 0 -> k/10
+   | 1 -> k/11)
+  where k/11 =
+    let $Cell = Block 0 (a/1) in
+    cont k/12 ($Cell)
+  where k/10 =
+    let b/3 = %int_barith.add (a/1, 100) in
+    let $Cell = Block 0 (b/3) in
+    cont k/12 ($Cell)
+  where k/12 (cell/4 : val) =
+    let result/5 = %block_load.[`0`] (cell/4) in
+    let $camlStatics_bound_on_two_paths = Block 0 (result/5) in
+    cont done ($camlStatics_bound_on_two_paths)

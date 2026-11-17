@@ -1,0 +1,19 @@
+static_of_try_body_in_handler.fl:
+  before Simplify, with its import (44 steps): returns
+                                                 [0: <fun>; <fun>;
+                                                  [0: [0: <fun>; 1]; 3];
+                                                  [0: [0: [0: <fun>; 1]; 3];
+                                                   [0: [0: <fun>; 1]; 3]]]
+  after Simplify, with its import (29 steps): returns
+                                                [0: <fun>; <fun>;
+                                                 [0: [0: <fun>; 1]; 3];
+                                                 [0: [0: [0: <fun>; 1]; 3];
+                                                  [0: [0: <fun>; 1]; 3]]]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 2 before, 2 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

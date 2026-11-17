@@ -140,9 +140,11 @@
    ([rename_naive_typing_env]).
 
    The checks of FlambdaWellFormedSpec.v, which say what a well-formed
-   unit is: where static bindings may be ([statics_at_unit_toplevel], with
-   [raises_to], [handler_at_unit_toplevel] and that file's
-   [free_continuations]), the static names bound ([static_names]), the
+   unit is: where static bindings may be
+   ([statics_outside_loops_and_code]; and Simplify's rule for its
+   input, [statics_at_unit_toplevel], with [raises_to],
+   [handler_at_unit_toplevel] and that file's [free_continuations]),
+   the static names bound ([static_names]), the
    sets of closures ([sets_well_formed]), the numbers
    ([numbers_in_range]), the exception handlers
    ([unit_exn_handlers_well_formed], with [exn_handlers_well_formed],
@@ -702,6 +704,12 @@ Definition statics_at_unit_toplevel_equivariant_statement : Prop :=
     statics_at_unit_toplevel (rename_continuation r unit_exn) toplevel
       (rename_expr r e)
     = statics_at_unit_toplevel unit_exn toplevel e.
+
+(* The rule of place that a unit keeps reads no name. *)
+Definition statics_outside_loops_and_code_equivariant_statement : Prop :=
+  ∀ (r : renaming) (outside : bool) (e : expr),
+    statics_outside_loops_and_code outside (rename_expr r e)
+    = statics_outside_loops_and_code outside e.
 
 (* The static names that a term binds are those of the renamed term,
    for a way of reading the names of a binding that does not look at

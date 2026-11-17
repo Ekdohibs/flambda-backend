@@ -1297,13 +1297,17 @@ Proof.
   - discriminate.
   - destruct h as [params metadata handler]. simpl. intros Hno Hscope.
     apply andb_true_iff in Hno as [Hh Hb].
-    rewrite !(no_static_names _ body Hb) in Hscope. cbn [app] in Hscope.
+    rewrite ?(no_static_handler_scope _ _ body Hb),
+      ?(no_static_recursive_scope _ _ body Hb)
+      in Hscope. cbn [app] in Hscope.
     apply andb_true_iff in Hscope as [Hsh Hsb].
     rewrite (copy_expr_nothing handler Hh Hsh),
       (copy_expr_nothing body Hb Hsb).
     reflexivity.
   - intros Hno Hscope. apply andb_true_iff in Hno as [Hhs Hb].
-    rewrite !(no_static_names _ body Hb) in Hscope. cbn [app] in Hscope.
+    rewrite ?(no_static_handler_scope _ _ body Hb),
+      ?(no_static_recursive_scope _ _ body Hb)
+      in Hscope. cbn [app] in Hscope.
     apply andb_true_iff in Hscope as [Hshs Hsb].
     rewrite (copy_expr_nothing body Hb Hsb). f_equal.
     induction handlers as [ | [k [params metadata handler]] handlers IH];

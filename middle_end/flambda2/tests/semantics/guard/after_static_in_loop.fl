@@ -1,0 +1,23 @@
+(* The term before of a control of the guard on a term after that is not
+   well-formed (see dune). The cell is bound before the loop, which runs three
+   times (i = 0, 1, 2) and keeps the cell from its first turn; its field is
+   read after the loop. *)
+let $Cell = Block 0 (0) in
+cont k/10 (0, 0)
+  where rec k/10 (i/2 : imm tagged, first/3 : val) =
+    let is_first/4 = %int_comp.lt (i/2, 1) in
+    ((switch is_first/4
+        | 0 -> k/12 (first/3)
+        | 1 -> k/12 ($Cell))
+       where k/12 (kept/5 : val) =
+         let more/6 = %int_comp.lt (i/2, 2) in
+         (switch more/6
+            | 0 -> k/11 (kept/5)
+            | 1 -> k/13
+            where k/13 =
+              let next/7 = %int_barith.add (i/2, 1) in
+              cont k/10 (next/7, kept/5)))
+  where k/11 (kept/8 : val) =
+    let result/9 = %block_load.[`0`] (kept/8) in
+    let $camlAfter_static_in_loop = Block 0 (result/9) in
+    cont done ($camlAfter_static_in_loop)

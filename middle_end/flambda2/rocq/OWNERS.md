@@ -119,6 +119,15 @@ design out; that is the request, not the change.
     of a run; the conjunct of `well_formed_unit` is C0's to wire)
   - `middle_end/flambda2/tests/semantics/kinds_*.fl` and their
     `.expected` files
+  - `middle_end/flambda2/tests/semantics/statics_place_*.fl`,
+    `statics_scope_*.fl`, `statics_bound_on_two_paths.fl`, their
+    `.expected` files, and `middle_end/flambda2/tests/semantics/guard/`
+    (the controls of the two tests that the tool asks of each term
+    before a verdict: where a static binding stands, and that a static
+    name is in scope where it is mentioned; decision D60)
+  - `middle_end/flambda2/tests/tools/scope_diagnosis_control.ml` (a
+    control of the words that the tool has for what is out of scope,
+    on terms made by hand)
   - `middle_end/flambda2/rocq/regions/**/FlambdaRegions*` (a machine with
     regions beside that of `FlambdaSemanticsSpec.v`, which says where
     a value allocated in a region is used after the region is gone,
@@ -517,7 +526,7 @@ pass into the validator.
     for a run from a static environment that holds no code and binds
     no name that the unit binds; same stream)
   - `middle_end/flambda2/rocq/semantics/FlambdaExitBound*` (where the target of
-    a refinement of two units passes three tests, the symbols at its
+    a refinement of two units passes two tests, the symbols at its
     exit are bound in its static environment, which a refinement
     alone does not say; same stream)
   - `middle_end/flambda2/rocq/status/V3.md`

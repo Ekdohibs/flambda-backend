@@ -295,8 +295,8 @@ Proof.
   - destruct h as [params metadata handler]. simpl. intros Hno H.
     apply andb_true_iff in Hno as [Hno_h Hno_b].
     apply andb_true_iff in H as [Hh Hb].
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hh.
     simpl in Hh.
     rewrite (observer_avoids handler Hno_h Hh),
@@ -305,8 +305,8 @@ Proof.
   - intros Hno H. apply andb_true_iff in Hno as [Hno_hs Hno_b].
     apply andb_true_iff in H as [Hhs Hb].
     rewrite (observer_avoids body Hno_b Hb), andb_true_r.
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hhs.
     simpl in Hhs.
     induction handlers as [ | [k [params metadata handler]] handlers IH];

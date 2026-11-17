@@ -12,6 +12,15 @@ set_shared_code: not simplified
 set_static_group_one_function: not simplified
 set_static_group_shared_code: not simplified
 static_in_loop: not simplified
+statics_bound_on_two_paths: not simplified
+statics_place_code_body: not simplified
+statics_place_handler_in_loop_run_once: not simplified
+statics_place_loop_handler: not simplified
+statics_scope_bound_after_call: not simplified
+statics_scope_bound_in_other_arm: not simplified
+statics_scope_loop_one_entry_binds: not simplified
+statics_scope_used_before_bound: not simplified
+statics_scope_used_on_the_other_path: not simplified
 unknown_arity_result_int64: not simplified
 unknown_arity_result_pair: not simplified
-summary: differ 0; not compared 3; not simplified 11; others 0; each other unit given was run and says the same
+summary: differ 0; not compared 3; not simplified 20; others 0; each other unit given was run and says the same

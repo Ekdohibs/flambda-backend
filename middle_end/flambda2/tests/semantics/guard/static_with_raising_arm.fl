@@ -1,0 +1,46 @@
+(let $camlStatic_with_raising_arm__immstring_1 = "low" in
+ let $camlStatic_with_raising_arm__immstring_0 = "neg" in
+ let n/40 = %opaque (3) in
+ (let prim/50 = %int_comp.gt (n/40, 0) in
+  let int_greaterthan/51 = %tag_imm (prim/50) in
+  (let untagged/52 = %untag_imm (int_greaterthan/51) in
+   switch untagged/52
+     | 0 -> k/22
+     | 1 -> k/23)
+    where k/23 =
+      cont k/19
+    where k/22 =
+      cont k/20)
+   where k/20 =
+     ((let prim/47 = %int_comp.lt (n/40, -5) in
+       let int_lessthan/48 = %tag_imm (prim/47) in
+       let untagged/49 = %untag_imm (int_lessthan/48) in
+       switch untagged/49
+         | 0 -> k/21 ($camlStatic_with_raising_arm__immstring_0)
+         | 1 -> k/21 ($camlStatic_with_raising_arm__immstring_1))
+        where k/21 (switch_result/45 : val) =
+          let Pmakeblock/46 =
+            %block.[`0`].`toplevel`
+              ($`*predef*`.caml_exn_Failure, switch_result/45 : val)
+          in
+          cont error pop(regular error) (Pmakeblock/46))
+   where k/19 =
+     let int_add/44 = %int_barith.add (n/40, 1) in
+     cont k/18 (int_add/44)
+   where k/18 (x/41 : imm tagged) =
+     let y/42 =
+       %block.[`0`].`toplevel` (x/41 : imm tagged, x/41 : imm tagged)
+     in
+     let Pmakeblock/43 = %block.[`0`].`toplevel` (n/40, x/41, y/42) in
+     cont k/17 (Pmakeblock/43))
+  where k/17 define_root_symbol (module_block/36) =
+    let field_0/37 = %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/36)
+    in
+    let field_1/38 = %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/36)
+    in
+    let field_2/39 = %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/36)
+    in
+    let $camlStatic_with_raising_arm =
+      Block 0 (field_0/37, field_1/38, field_2/39)
+    in
+    cont done ($camlStatic_with_raising_arm)

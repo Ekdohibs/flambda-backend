@@ -1,0 +1,45 @@
+(let code inline(always) size(27)
+       add_0 (w/47 : imm tagged, x/48 : val, y/49 : val)
+         my_closure/50 &my_alloc_region/51 my_depth/52
+         -> k/20 * k/21
+         : val =
+   let next_depth/53 = rec_info (succ my_depth/52) in
+   (let untagged/59 = %untag_imm (w/47) in
+    switch untagged/59
+      | 0 -> k/24
+      | 1 -> k/25)
+     where k/25 =
+       cont k/22
+     where k/24 =
+       cont k/23
+     where k/23 =
+       let int_add/58 = %int_barith.add (x/48, y/49) in
+       cont k/20 (int_add/58)
+     where k/22 =
+       let prim/54 = %unbox_num.`int64` (y/49) in
+       let prim/55 = %unbox_num.`int64` (x/48) in
+       let prim/56 = %int_barith.`int64`.add (prim/55, prim/54) in
+       let int64_add/57 = %box_num.`int64`.my_alloc_region/51 (prim/56) in
+       cont k/20 (int64_add/57)
+ in
+ let $camlStatic_in_live_arm__int64_1 = 2L in
+ let $camlStatic_in_live_arm__int64_0 = 40L in
+ let add/60 = closure add_0 @add &toplevel in
+ (let Popaque/66 = %opaque (1) in
+  apply direct(add_0 &toplevel)
+    (add/60 : val? * int64 boxed * int64 boxed -> int64 boxed)
+      (Popaque/66,
+       $camlStatic_in_live_arm__int64_0,
+       $camlStatic_in_live_arm__int64_1)
+      -> k/26 * error)
+   where k/26 (apply_result/61 : int64 boxed) =
+     let prim/62 = %unbox_num.`int64` (apply_result/61) in
+     let prim/63 = %num_conv.[`int64`].[`imm`] (prim/62) in
+     let l/64 = %tag_imm (prim/63) in
+     let Pmakeblock/65 = %block.[`0`].`toplevel` (l/64) in
+     cont k/19 (Pmakeblock/65))
+  where k/19 define_root_symbol (module_block/45) =
+    let field_0/46 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/45)
+    in
+    let $camlStatic_in_live_arm = Block 0 (field_0/46) in
+    cont done ($camlStatic_in_live_arm)

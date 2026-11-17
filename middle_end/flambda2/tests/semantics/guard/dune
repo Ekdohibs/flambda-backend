@@ -1,0 +1,345 @@
+;; Controls of the guard of the test tool (see ../../tools/flsemantics.ml,
+;; "The check of static names") on which the tool does not exit with the
+;; status 0, so that the rules of the directory above, which take the
+;; status 0 and no other, cannot hold them. run.sh prints, after what the
+;; tool printed, the first line of its standard error and its status.
+;; `dune promote` updates an X.expected. The rules are written out below.
+;;
+;; And controls of the rule that the guard asks, from OCaml sources: the
+;; five static_*.ml. Of the term that the tool's Simplify makes of each, a
+;; static binding stands in a handler that is not at toplevel by Simplify's
+;; own rule for the term it is given (each source says which form it is,
+;; with the label of the discrepancy). Under the rule of before decision D60
+;; the tool said of each that the term after Simplify is not well-formed,
+;; and exited with the status 1. Now the two tests pass on both terms of
+;; each, and the tool goes on to the two runs and to the validation. X.fl
+;; is the term that the compiler gives Simplify, as ../ocaml/from_ocaml.sh
+;; makes it of X.ml, and a rule checks that it still makes it; X.expected
+;; is what the tool prints of X.fl, with the status 0. These units are in
+;; none of the tables and counts of ../ocaml/README.md.
+;;
+;; static_in_arm: a static binding in the handler of one arm of a test,
+;; mentioned in that handler only. The term passes the two tests of the
+;; guard (the binding is outside loops and code, and the symbol is in
+;; scope where it is mentioned), so the tool gives it to Simplify. Simplify
+;; takes a static binding at the toplevel of a unit only, and stops with a
+;; fatal error. The tool catches nothing: the error is the compiler's, with
+;; the compiler's status, and the tool prints no line of its own, neither
+;; "not checked" nor a verdict.
+;;
+;; t1_14_unit: the term after is read from a text (the option -after), and
+;; Simplify is not run. t1_14_unit_after.fl is the term that the compiler's
+;; Simplify makes of t1_14_unit.ml with -flambda2-match-in-match, at -O2 and
+;; at -O3 (label T1-14), kept as the compiler prints it (-dfexpr-to): the
+;; symbol of a block is mentioned in the handler of one arm of a test, and
+;; the block is bound in the handler of the other arm, so the field of the
+;; block that holds it is read before anything is written there. No rule
+;; makes that text again. t1_14_unit.fl is the term that the compiler gives
+;; Simplify of the same source, as ../ocaml/from_ocaml.sh makes it, and a
+;; rule checks that it still makes it. The term after is well-formed, and
+;; the check of static names refuses it: the tool says so and exits with
+;; the status 1, with no verdict. The tool's own Simplify does not make that
+;; term of this text, with those flags or without them, which is why the
+;; term after is given.
+;;
+;; after_static_in_loop: the term after is read from a text here too
+;; (after_static_in_loop_after.fl, written by hand: Simplify did not make
+;; it). It binds a block in the handler of a loop, where the term before
+;; binds it before the loop. The term after is not well-formed: the tool
+;; says so, with the part of the test that refused it, and exits with the
+;; status 1, with no verdict. No other unit of the tests has that line.
+;;
+;; after_with_round_trip: the two texts of after_static_in_loop given with
+;; -round-trip and -after together. The round trip runs Simplify itself and
+;; reads no term after, so the tool refuses the two options together, with
+;; a fatal error, and checks nothing.
+;;
+;; scope_diagnosis: not a run of the tool. The program of
+;; ../../tools/scope_diagnosis_control.ml asks the function that finds the
+;; tool's words for what is out of scope ("a symbol", "a code id") of three
+;; terms made by hand, one of which mentions a symbol with a number and no
+;; name, as a prefix makes for a field of which a .cmx says nothing. With
+;; -after, which the texts above use to give a term after that is out of
+;; scope, no .cmx is read and there is no prefix, so none of them reaches
+;; that case.
+;;
+;; And one control of what the option -after cannot show, on which the tool
+;; exits with the status 0.
+;;
+;; after_same_text: one text is given as the term before and as the term
+;; after, of a unit that binds the code of a function that it exports, and
+;; the tool says "not validated". The two texts are read independently: the
+;; reader of texts makes its own code ids, function slots and value slots
+;; for each, and gives no correspondence between those of the two texts
+;; merely because their printed names match; only a symbol is the same in
+;; both, by its name. So the validation can say "not validated" even where
+;; the same text is given twice, as here. The option is for controls of the
+;; guard, as the two above: under it "not validated" is no evidence that
+;; two terms differ in meaning. after_same_text.fl is the term that the
+;; compiler gives Simplify of after_same_text.ml, as ../ocaml/from_ocaml.sh
+;; makes it, and a rule checks that it still makes it. Given that text
+;; alone, the tool runs Simplify and validates the unit:
+;; after_same_text_alone.expected.
+
+(rule
+ (with-stdout-to
+  static_in_arm.output
+  (run
+   sh
+   %{dep:run.sh}
+   %{dep:../../tools/flsemantics.exe}
+   %{dep:static_in_arm.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_arm.expected static_in_arm.output)))
+
+(rule
+ (targets t1_14_unit.fl.made)
+ (deps %{ocamlopt} %{dep:t1_14_unit.mli})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:t1_14_unit.ml}
+   t1_14_unit.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff t1_14_unit.fl t1_14_unit.fl.made)))
+
+(rule
+ (with-stdout-to
+  t1_14_unit.output
+  (run
+   sh
+   %{dep:run.sh}
+   %{dep:../../tools/flsemantics.exe}
+   -after
+   %{dep:t1_14_unit_after.fl}
+   %{dep:t1_14_unit.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff t1_14_unit.expected t1_14_unit.output)))
+
+(rule
+ (with-stdout-to
+  after_static_in_loop.output
+  (run
+   sh
+   %{dep:run.sh}
+   %{dep:../../tools/flsemantics.exe}
+   -after
+   %{dep:after_static_in_loop_after.fl}
+   %{dep:after_static_in_loop.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff after_static_in_loop.expected after_static_in_loop.output)))
+
+(rule
+ (with-stdout-to
+  after_with_round_trip.output
+  (run
+   sh
+   %{dep:run.sh}
+   %{dep:../../tools/flsemantics.exe}
+   -round-trip
+   -after
+   %{dep:after_static_in_loop_after.fl}
+   %{dep:after_static_in_loop.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff after_with_round_trip.expected after_with_round_trip.output)))
+
+(rule
+ (with-stdout-to
+  scope_diagnosis.output
+  (run %{dep:../../tools/scope_diagnosis_control.exe})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff scope_diagnosis.expected scope_diagnosis.output)))
+
+(rule
+ (targets after_same_text.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:after_same_text.ml}
+   after_same_text.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff after_same_text.fl after_same_text.fl.made)))
+
+(rule
+ (with-stdout-to
+  after_same_text.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:after_same_text.fl}
+   %{dep:after_same_text.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff after_same_text.expected after_same_text.output)))
+
+(rule
+ (with-stdout-to
+  after_same_text_alone.output
+  (run ../../tools/flsemantics.exe %{dep:after_same_text.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff after_same_text_alone.expected after_same_text_alone.output)))
+
+(rule
+ (targets static_in_live_arm.fl.made)
+ (deps %{ocamlopt} %{dep:static_in_live_arm.mli})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:static_in_live_arm.ml}
+   static_in_live_arm.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_live_arm.fl static_in_live_arm.fl.made)))
+
+(rule
+ (with-stdout-to
+  static_in_live_arm.output
+  (run ../../tools/flsemantics.exe %{dep:static_in_live_arm.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_live_arm.expected static_in_live_arm.output)))
+
+(rule
+ (targets static_in_raising_body.fl.made)
+ (deps %{ocamlopt} %{dep:static_in_raising_body.mli})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:static_in_raising_body.ml}
+   static_in_raising_body.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_raising_body.fl static_in_raising_body.fl.made)))
+
+(rule
+ (with-stdout-to
+  static_in_raising_body.output
+  (run ../../tools/flsemantics.exe %{dep:static_in_raising_body.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_raising_body.expected static_in_raising_body.output)))
+
+(rule
+ (targets static_in_try_body.fl.made)
+ (deps %{ocamlopt} %{dep:static_in_try_body.mli})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:static_in_try_body.ml}
+   static_in_try_body.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_try_body.fl static_in_try_body.fl.made)))
+
+(rule
+ (with-stdout-to
+  static_in_try_body.output
+  (run ../../tools/flsemantics.exe %{dep:static_in_try_body.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_in_try_body.expected static_in_try_body.output)))
+
+(rule
+ (targets static_of_try_body_in_handler.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:static_of_try_body_in_handler.ml}
+   static_of_try_body_in_handler.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   static_of_try_body_in_handler.fl
+   static_of_try_body_in_handler.fl.made)))
+
+(rule
+ (with-stdout-to
+  static_of_try_body_in_handler.output
+  (run ../../tools/flsemantics.exe %{dep:static_of_try_body_in_handler.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   static_of_try_body_in_handler.expected
+   static_of_try_body_in_handler.output)))
+
+(rule
+ (targets static_with_raising_arm.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:static_with_raising_arm.ml}
+   static_with_raising_arm.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_with_raising_arm.fl static_with_raising_arm.fl.made)))
+
+(rule
+ (with-stdout-to
+  static_with_raising_arm.output
+  (run ../../tools/flsemantics.exe %{dep:static_with_raising_arm.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff static_with_raising_arm.expected static_with_raising_arm.output)))

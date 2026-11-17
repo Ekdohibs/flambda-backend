@@ -1208,8 +1208,8 @@ Proof.
     destruct recursive; [ | contradiction ].
     intros (Hno & _ & _).
     destruct
-      (statics_nowhere 1%positive symbols_of_binding body
-         (no_static_nowhere 1%positive body Hno))
+      (statics_nowhere symbols_of_binding body
+         (no_static_nowhere body Hno))
       as (_ & Hbinds & _).
     assert (H :
       cont_lifted_out statics' (Closure (Handler params metadata body) [] [] [])

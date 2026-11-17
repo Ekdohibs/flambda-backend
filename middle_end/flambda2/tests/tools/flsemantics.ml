@@ -3160,14 +3160,17 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    immutable array of which the term after has a twin (see [twins], where the
    guesses are made).
 
-   In a handler that is not at toplevel
+   In a handler that is not at toplevel by the model's reading of Simplify's
+   rule for the term it is given
    (FlambdaWellFormedSpec.handler_at_unit_toplevel: the arm of a test, say) and
-   in the handler of a recursive continuation, where no static binding may
-   stand, a symbol goes to the first [Let] that makes just what the symbol is
-   bound to and mentions no variable: FlambdaLiftFromArmsSpec.lift_to_head binds
-   it at the head of the unit. That puts the unit under a group of static
-   bindings, and the validation makes it first, so the paths of the other [Let]s
-   outside code are then given as they are under that group.
+   in the handler of a recursive continuation, a symbol goes to the first [Let]
+   that makes just what the symbol is bound to and mentions no variable:
+   FlambdaLiftFromArmsSpec.lift_to_head binds it at the head of the unit. That
+   puts the unit under a group of static bindings, and the validation makes it
+   first, so the paths of the other [Let]s outside code are then given as they
+   are under that group. Which handlers are treated so is a choice of the guess:
+   a well-formed unit may have a static binding in the first of the two places
+   and not in the second (FlambdaWellFormedSpec.statics_outside_loops_and_code).
 
    A symbol that no [Let] outside code takes goes to the first [Let] in the body
    of code that makes just what the symbol is bound to and mentions no variable,
@@ -5302,11 +5305,19 @@ let close_known_arity_lists (prefix : prefix) (before : converted)
     in
     List.sort_uniq compare (listed @ added)
   in
-  (* The code ids in scope in the handlers of a [Let_cont], given those in scope
-     around it and its body: those, and what the body binds. This is the one
-     place that says it. *)
-  let scope_in_handlers ids body =
-    Well_formed.static_names Statics_in_scope.declared_code_ids_of_binding body
+  (* The code ids in scope in the handler of a [Let_cont], given those in scope
+     around it: those, and what the check of static names gives the handler of
+     what the body binds ([FlambdaStaticsInScopeSpec.handler_scope] and
+     [recursive_scope]: a lower bound of what the body has bound on every way to
+     the handler). These are the two places that say it. *)
+  let scope_in_handler ids k body =
+    Statics_in_scope.handler_scope Statics_in_scope.declared_code_ids_of_binding
+      k body
+    @ ids
+  in
+  let scope_in_recursive_handlers ids handlers body =
+    Statics_in_scope.recursive_scope
+      Statics_in_scope.declared_code_ids_of_binding (List.map fst handlers) body
     @ ids
   in
   let rec in_expr ~bound ids (e : Model.expr) : Model.expr =
@@ -5325,10 +5336,10 @@ let close_known_arity_lists (prefix : prefix) (before : converted)
     | Let_cont_non_recursive (k, handler, body) ->
       Let_cont_non_recursive
         ( k,
-          in_handler (scope_in_handlers ids body) handler,
+          in_handler (scope_in_handler ids k body) handler,
           in_expr ~bound ids body )
     | Let_cont_recursive (handlers, body) ->
-      let in_handlers = scope_in_handlers ids body in
+      let in_handlers = scope_in_recursive_handlers ids handlers body in
       Let_cont_recursive
         ( List.map
             (fun (k, handler) -> k, in_handler in_handlers handler)
@@ -5502,47 +5513,127 @@ let well_kinded (unit : converted) =
     (List.map (fun (slot, kind) -> slot, convert_kind kind) !slot_kinds)
     unit.return_continuation unit.exn_continuation unit.body
 
-(* Static bindings at toplevel only, each name bound once, the sets of closures
-   whole, the numbers in range, exception handlers apart from the other
-   continuations, and the discipline of trap actions
-   (FlambdaWellFormedSpec.v). *)
+(* Static bindings outside the handlers of recursive continuations and outside
+   the body of code, each name bound once, the sets of closures whole, the
+   numbers in range, exception handlers apart from the other continuations, and
+   the discipline of trap actions (FlambdaWellFormedSpec.v). *)
 let well_formed (unit : converted) =
   Well_formed.well_formed_unit
     { unit_return = unit.return_continuation; unit_exn = unit.exn_continuation }
     unit.body
 
-(* The two tests that FlambdaStaticsInScopeSpec.statics_bound_in_run_statement
-   asks of a unit beside [well_formed_unit]: every symbol and every code id that
-   the unit mentions is in scope where it is mentioned, given the symbols that
-   it imports ([statics_in_scope]), and no continuation of the interface of the
-   unit is bound again ([interface_conts_not_rebound]). Of a unit that passes
-   the three, run from its imports and the empty heap, that statement says that
-   it exits only with values whose symbols are bound in the static environment
-   of the state that exits, where an import is bound from the start, and whose
-   closures are of code that is bound there or that the unit declares deleted.
+(* The check of static names (FlambdaStaticsInScopeSpec.statics_in_scope): every
+   symbol and every code id that a unit mentions is in scope where it is
+   mentioned, given the symbols that it imports. In the handler of a
+   continuation, what is in scope is a lower bound of what the body of its
+   [Let_cont] has bound on every way to the handler: the names that the check
+   finds bound on each way that it follows. Of a unit that passes it and
+   [well_formed_unit], run from its imports and the empty heap,
+   FlambdaStaticsInScopeSpec.statics_bound_in_run_statement says that no state
+   of the run holds or looks up a symbol that is not bound or a closure of code
+   that is neither bound nor declared deleted, and that it exits only with
+   values of which the same is true.
 
    The statements of the validation conclude a refinement, which compares two
    exits by their continuation, their values and their heap, and a symbol is a
    value whether it is bound or not. So the refinement that a verdict concludes
    does not by itself exclude a term after that exits with a symbol which it
-   never binds (decision D57; FlambdaExitBoundSpec.v joins a refinement to the
-   three tests of its target). The line "the check of static names" says what
-   the two tests answer of each term, and which of them a term fails. It is a
-   check beside the verdict: nothing is refused for it, and [well_formed_unit]
-   is what it was. It is printed with the verdict, and where the term after is
-   refused as not well-formed. There the term before is converted, and the two
-   terms are given to the tests with the prefix in front of them where there is
-   one, as they would have been run; in that branch the prefix is not tested for
-   a fault.
+   never binds, or that reads one before it is bound (decision D57;
+   FlambdaExitBoundSpec.v joins a refinement to the two tests of its target).
+   And a well-formed unit may bind a symbol in one handler and mention it in
+   another that the run reaches without it (decision D60).
 
-   Where the two terms have a prefix made from [.cmx] files in front of them,
-   the tests are asked of the terms with it, as they are run, and the line says
-   that and no more. A prefix binds the closures of another unit that it reaches
-   and the code of some of them only, and [statics_in_scope] asks that the code
-   of a closure, and of a direct call, be bound or declared deleted. In a
-   measure of units that have a prefix (status/V3.md) every "fails" was of both
-   terms, and for code of another unit that the prefix does not bind: not for
-   something of the unit. *)
+   So the two tests, [well_formed_unit] and [statics_in_scope], are a guard of
+   the tool: each is asked of each of the two terms, and no verdict of the
+   validation is printed of a pair one of whose terms fails one of them. They
+   are no premise of the statements of the validation and the guard is no
+   theorem: it is the tool that asks them.
+
+   Where they are asked. Of the term before alone ([well_formed_before]). No
+   prefix is made for this test: a symbol of another unit is taken as imported,
+   and a code id that the term neither binds nor declares deleted as in scope
+   everywhere ([not_in_scope_alone]); the line of a term that fails there says
+   "not checked". [check_file] asks it before Simplify is given the term, and
+   gives Simplify no term that fails; the driver of the compiler's own run asks
+   it when the compiler's Simplify has returned. Then of both terms as they are
+   run, with the prefix made from the [.cmx] files in front of them where there
+   is one and with the imports that the validation is given ([check_or_raise]):
+   there a term before that fails is "not checked", and a term after that fails
+   is a failure of the check, as a term after that is not well-formed is.
+
+   The rule of these two tests is asked of the terms that are given to Simplify
+   and of those that it returns. It is not a rule of every term that the
+   compiler makes: in classic mode Simplify is not run, and the term of closure
+   conversion may mention a symbol before it binds it.
+
+   A prefix binds the closures of another unit that it reaches and the code of
+   some of them only, and [statics_in_scope] asks that the code of a closure,
+   and of a direct call, be bound or declared deleted. So a unit whose term
+   before, with the prefix in front of it, mentions code of another unit that
+   the prefix neither binds nor declares is "not checked", for a name that is
+   not its own; where the term before passes and the term after does not, that
+   is a failure of the check as any other. *)
+
+(* Which static names a unit mentions where they are not in scope, given the
+   symbols and the code ids in scope around it: [None] where the check passes.
+   What is said is found with the check itself, asked again with every symbol in
+   scope, and with every code id: those given, and all that the conversion has
+   numbered by a name. The symbols given are kept in that list, as a symbol that
+   a prefix makes for a field of which a [.cmx] says nothing has a number and no
+   name (scope_diagnosis_control.ml is a control of that, on terms made by
+   hand). *)
+let not_in_scope ~(symbols : Model.symbol list) ~(code_ids : Model.code_id list)
+    (unit : converted) : string option =
+  if Statics_in_scope.expr_statics_in_scope symbols code_ids unit.body
+  then None
+  else
+    let all_symbols = symbols @ List.map snd (Symbols.bindings ()) in
+    let all_code_ids = code_ids @ List.map snd (Code_ids.bindings ()) in
+    let symbols_pass =
+      Statics_in_scope.expr_statics_in_scope symbols all_code_ids unit.body
+    in
+    let code_ids_pass =
+      Statics_in_scope.expr_statics_in_scope all_symbols code_ids unit.body
+    in
+    Some
+      (match symbols_pass, code_ids_pass with
+      | false, true -> "a symbol"
+      | true, false -> "a code id"
+      | false, false -> "a symbol and a code id"
+      | true, true -> "a static name")
+
+(* The same of a term alone, before there is a prefix: the symbols of other
+   units are imported, and the code ids that the term neither binds nor declares
+   deleted are in scope everywhere. A term that fails this fails the check with
+   any prefix in front of it, as a prefix binds nothing of the unit. *)
+let not_in_scope_alone (unit : converted) : string option =
+  let symbols = List.map fst (imports ~bound:[] ~unmentioned:[] ~hidden:[]) in
+  let own : (int, unit) Hashtbl.t = Hashtbl.create 64 in
+  List.iter
+    (fun id -> Hashtbl.replace own (int_of_positive id) ())
+    (Well_formed.static_names Well_formed.code_ids_of_binding unit.body
+    @ Well_formed.static_names Statics_in_scope.declared_code_ids_of_binding
+        unit.body);
+  let code_ids =
+    List.filter
+      (fun id -> not (Hashtbl.mem own (int_of_positive id)))
+      (List.map snd (Code_ids.bindings ()))
+  in
+  not_in_scope ~symbols ~code_ids unit
+
+(* The line "the check of static names": what [statics_in_scope] answers of each
+   term, with one test more: no continuation of the interface of the unit is
+   bound again ([interface_conts_not_rebound]). That test is not part of the
+   guard, and no unit is refused by the guard for it:
+   FlambdaStaticsInScopeSpec.statics_bound_in_run_statement and the two
+   statements of FlambdaExitBoundSpec.v no longer take it as a premise. The
+   hoisting of static bindings of the validation still asks it
+   (FlambdaHoistStaticsSpec.hoist_statics), and
+   FlambdaStaticsInScopeSpec.whole_bodies_in_scope_statement has it as a
+   premise. The line is printed with the verdict, where the guard has passed, so
+   there it says "fails" only for that test; and where the term after is refused
+   as not well-formed, with the two terms given with the prefix in front of them
+   where there is one, as they would have been run. *)
 let static_names_in_scope ~(imports : Model.symbol list) (unit : converted) =
   let in_scope = Statics_in_scope.statics_in_scope imports unit.body in
   let not_rebound =
@@ -5606,7 +5697,11 @@ let why_not_well_formed (unit : converted) =
   then
     "a trap action, a raise or a call that names a handler other than the one \
      installed last, or a continuation entered with two stacks of handlers"
-  else "a static binding that is not at toplevel, or a name bound twice"
+  else if not (Well_formed.statics_outside_loops_and_code true unit.body)
+  then
+    "a static binding in the handler of a recursive continuation or in the \
+     body of code"
+  else "a code id or a symbol bound twice"
 
 (* What a unit is given by where it is run: the continuation that it returns to
    and its exception continuation. *)
@@ -5710,19 +5805,33 @@ let result_arity_lost_message =
    one value; the text does not give the arity of such a call, which is read \
    with one value for its result"
 
-(* The term before is checked before Simplify sees it, which is entitled to fail
-   on one that is not well-formed. *)
+(* The two tests of the guard, of the term before alone. [check_file] asks them
+   before Simplify sees the term, which is entitled to fail on one that is not
+   well-formed, and gives a term that passes them to Simplify whatever
+   Simplify's own rule for the place of a static binding would say of it
+   (FlambdaWellFormedSpec.statics_at_unit_toplevel is the model's reading of
+   that rule and is not asked here); where Simplify stops on such a term, its
+   error is the compiler's and nothing here catches it. The driver of the
+   compiler's own run asks the two tests when the compiler's Simplify has
+   returned. *)
 let well_formed_before ~filename (before : Flambda_unit.t) =
   match convert_unit before with
   | exception Unsupported _ -> true
-  | before ->
-    let ok = well_formed before in
-    if not ok
-    then
+  | before -> (
+    if not (well_formed before)
+    then (
       Format.printf "%s: not checked: the term is not well-formed (%s)@."
         filename
         (why_not_well_formed before);
-    ok
+      false)
+    else
+      match not_in_scope_alone before with
+      | Some what ->
+        Format.printf
+          "%s: not checked: the term mentions %s where it is not in scope@."
+          filename what;
+        false
+      | None -> true)
 
 (* The comparison of the two runs is a test of those runs; this is a verdict
    that has a theorem. The theorem is of the two units run from the empty static
@@ -7685,13 +7794,16 @@ type checked =
           or one of the two terms fails the test that each use of its return
           continuation gives it the symbol of the unit, a test of the syntax
           that refuses a call that returns there and another name for the symbol
-          too. From [check_file] also: the text has lost something of the unit,
-          or the term before Simplify is not well-formed ([well_formed_before]).
+          too; or the term before Simplify, as it is run, is not well-formed or
+          mentions a static name where it is not in scope. From [check_file]
+          also: the text has lost something of the unit, or the term before
+          Simplify, alone, fails one of those two tests ([well_formed_before]).
       *)
   | Failed
-      (** The text could not be read, the term after Simplify is not
-          well-formed, the prefix made from the .cmx files has a fault, or the
-          two runs differ. The command line exits 1. *)
+      (** The text could not be read, the term after Simplify is not well-formed
+          or mentions a static name where it is not in scope, the prefix made
+          from the .cmx files has a fault, or the two runs differ. The command
+          line exits 1. *)
   | Compared of Validate.validation
       (** The two runs were made and no difference between them was found: they
           gave the same, or the run before is undefined, or one of them was not
@@ -7749,7 +7861,7 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
       (with_prefix prefix before)
       (with_prefix prefix after);
     raise Check_failed
-  | before, after, prefix ->
+  | before, after, prefix -> (
     let imports =
       imports ~bound:prefix.prefix_symbols
         ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden
@@ -7766,108 +7878,143 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     | None -> ());
     let before = with_prefix prefix before in
     let after = with_prefix prefix after in
-    terms_compared := Some (before, after);
-    (match prefix.prefix_groups with
-    | [] -> ()
-    | _ :: _ ->
-      if not (well_formed after)
-      then (
-        Format.printf
-          "%s: not checked: with the prefix made from the .cmx files in front \
-           of it the term after Simplify is not well-formed (%s)@."
-          filename
-          (why_not_well_formed after);
-        raise Check_failed));
-    let statics = Imports.imports_statics imports in
-    let outcome_before, steps_before, stopped_before =
-      run_to_end ~statics before
+    let has_prefix =
+      match prefix.prefix_groups with [] -> false | _ :: _ -> true
     in
-    let outcome_after, steps_after, stopped_after = run_to_end ~statics after in
-    (* A run that is undefined by the list of a call of known arity alone, with
-       code that the compiler's reading of the list may allow
-       ([undefined_by_an_open_list]): the model's reading of the list and the
-       compiler's are not known to agree there, and the unit is not checked. *)
-    (match
-       List.find_map
-         (fun stopped -> Option.bind stopped undefined_by_an_open_list)
-         [stopped_before; stopped_after]
-     with
-    | Some (code, why) ->
+    if has_prefix && not (well_formed after)
+    then (
       Format.printf
-        "%s: not checked: a run is undefined at a call of known arity that \
-         lists code ids and not the code of its callee, and %s %s@."
-        filename (shown_code_id code) why;
-      raise List_left_open
-    | None -> ());
-    let with_imports =
-      (match prefix.prefix_groups with
-        | [] -> ""
-        | _ :: _ -> ", after the prefix")
-      ^
-      match imports with
-      | [] -> ""
-      | [_] -> ", with its import"
-      | _ :: _ :: _ ->
-        Printf.sprintf ", with its %d imports" (List.length imports)
+        "%s: not checked: with the prefix made from the .cmx files in front of \
+         it the term after Simplify is not well-formed (%s)@."
+        filename
+        (why_not_well_formed after);
+      raise Check_failed);
+    (* The guard, of the two terms as they are run. *)
+    let in_front =
+      if has_prefix
+      then "with the prefix made from the .cmx files in front of it, "
+      else ""
     in
-    Format.printf "%s:@." filename;
-    (* The units read are named on a line of their own, unless the line of the
-       prefix names them all. *)
-    (match units with
-    | [] -> ()
-    | _ :: _ ->
-      if unit_names units <> unit_names prefix.prefix_units
-      then
-        Format.printf "  the tool's Simplify read the .cmx of: %s@."
-          (String.concat ", " (unit_names units)));
-    print_prefix prefix;
-    Format.printf "  before Simplify%s (%d steps): %a@." with_imports
-      steps_before print_outcome outcome_before;
-    Format.printf "  after Simplify%s (%d steps): %a@." with_imports steps_after
-      print_outcome outcome_after;
-    let passes ok = if ok then "passes" else "fails" in
-    Format.printf "  the check of kinds: %s before, %s after@."
-      (passes (well_kinded before))
-      (passes (well_kinded after));
-    print_static_names ~imports
-      ~with_prefix:
-        (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
-      before after;
-    Format.printf "  calls outside code: %d before, %d after@."
-      (calls_outside_code before.body)
-      (calls_outside_code after.body);
-    let verdict, ok =
-      match outcome_before, outcome_after with
-      | Undefined, _ -> "anything goes, as the run before is undefined", true
-      | Still_running, _ | _, Still_running -> "not decided", true
-      | _, _ ->
-        if outcome_before = outcome_after
-        then "the same", true
-        else "DIFFERENT", false
+    let not_in_scope unit =
+      not_in_scope ~symbols:(List.map fst imports) ~code_ids:[] unit
     in
-    Format.printf "  %s@." verdict;
-    (* Where the environment asks for the check of regions alone
-       ([FLSEMANTICS_REGIONS_ONLY]) the validation is not asked, and a line says
-       so in the place of its lines: it is for measures that need the check of
-       regions without the cost of the validation and of its second check. The
-       runs, the check of kinds and the comparison of the runs above are made as
-       ever, and [check_regions] reads nothing of what the validation would have
-       said. The answer given here, [Not_validated], is then no verdict. No rule
-       of the tree sets the variable but that of a control of
-       tests/semantics/regions/, so it is in no other expected file. *)
-    let validation =
-      if Sys.getenv_opt "FLSEMANTICS_REGIONS_ONLY" <> None
-      then (
+    if not (well_formed before)
+    then (
+      Format.printf
+        "%s: not checked: %sthe term before Simplify is not well-formed (%s)@."
+        filename in_front
+        (why_not_well_formed before);
+      None)
+    else
+      match not_in_scope before, not_in_scope after with
+      | Some what, _ ->
         Format.printf
-          "  the validation: not asked (FLSEMANTICS_REGIONS_ONLY is set)@.";
-        Validate.Not_validated)
-      else
-        validate ~imports
-          ~prefix_units:(List.length prefix.prefix_units)
-          ~outcome_before before after
-    in
-    if not ok then raise Check_failed;
-    Some validation
+          "%s: not checked: %sthe term before Simplify mentions %s where it is \
+           not in scope@."
+          filename in_front what;
+        None
+      | None, Some what ->
+        Format.printf
+          "%s: %sthe term after Simplify mentions %s that is NOT IN SCOPE@."
+          filename in_front what;
+        raise Check_failed
+      | None, None ->
+        terms_compared := Some (before, after);
+        let statics = Imports.imports_statics imports in
+        let outcome_before, steps_before, stopped_before =
+          run_to_end ~statics before
+        in
+        let outcome_after, steps_after, stopped_after =
+          run_to_end ~statics after
+        in
+        (* A run that is undefined by the list of a call of known arity alone,
+           with code that the compiler's reading of the list may allow
+           ([undefined_by_an_open_list]): the model's reading of the list and
+           the compiler's are not known to agree there, and the unit is not
+           checked. *)
+        (match
+           List.find_map
+             (fun stopped -> Option.bind stopped undefined_by_an_open_list)
+             [stopped_before; stopped_after]
+         with
+        | Some (code, why) ->
+          Format.printf
+            "%s: not checked: a run is undefined at a call of known arity that \
+             lists code ids and not the code of its callee, and %s %s@."
+            filename (shown_code_id code) why;
+          raise List_left_open
+        | None -> ());
+        let with_imports =
+          (match prefix.prefix_groups with
+            | [] -> ""
+            | _ :: _ -> ", after the prefix")
+          ^
+          match imports with
+          | [] -> ""
+          | [_] -> ", with its import"
+          | _ :: _ :: _ ->
+            Printf.sprintf ", with its %d imports" (List.length imports)
+        in
+        Format.printf "%s:@." filename;
+        (* The units read are named on a line of their own, unless the line of
+           the prefix names them all. *)
+        (match units with
+        | [] -> ()
+        | _ :: _ ->
+          if unit_names units <> unit_names prefix.prefix_units
+          then
+            Format.printf "  the tool's Simplify read the .cmx of: %s@."
+              (String.concat ", " (unit_names units)));
+        print_prefix prefix;
+        Format.printf "  before Simplify%s (%d steps): %a@." with_imports
+          steps_before print_outcome outcome_before;
+        Format.printf "  after Simplify%s (%d steps): %a@." with_imports
+          steps_after print_outcome outcome_after;
+        let passes ok = if ok then "passes" else "fails" in
+        Format.printf "  the check of kinds: %s before, %s after@."
+          (passes (well_kinded before))
+          (passes (well_kinded after));
+        print_static_names ~imports
+          ~with_prefix:
+            (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
+          before after;
+        Format.printf "  calls outside code: %d before, %d after@."
+          (calls_outside_code before.body)
+          (calls_outside_code after.body);
+        let verdict, ok =
+          match outcome_before, outcome_after with
+          | Undefined, _ ->
+            "anything goes, as the run before is undefined", true
+          | Still_running, _ | _, Still_running -> "not decided", true
+          | _, _ ->
+            if outcome_before = outcome_after
+            then "the same", true
+            else "DIFFERENT", false
+        in
+        Format.printf "  %s@." verdict;
+        (* Where the environment asks for the check of regions alone
+           ([FLSEMANTICS_REGIONS_ONLY]) the validation is not asked, and a line
+           says so in the place of its lines: it is for measures that need the
+           check of regions without the cost of the validation and of its second
+           check. The runs, the check of kinds and the comparison of the runs
+           above are made as ever, and [check_regions] reads nothing of what the
+           validation would have said. The answer given here, [Not_validated],
+           is then no verdict. No rule of the tree sets the variable but that of
+           a control of tests/semantics/regions/, so it is in no other expected
+           file. *)
+        let validation =
+          if Sys.getenv_opt "FLSEMANTICS_REGIONS_ONLY" <> None
+          then (
+            Format.printf
+              "  the validation: not asked (FLSEMANTICS_REGIONS_ONLY is set)@.";
+            Validate.Not_validated)
+          else
+            validate ~imports
+              ~prefix_units:(List.length prefix.prefix_units)
+              ~outcome_before before after
+        in
+        if not ok then raise Check_failed;
+        Some validation)
 
 (* ---- The check of regions --------------------------------------------- *)
 
@@ -8580,12 +8727,19 @@ let check_regions ~(units : (Compilation_unit.t * Digest.t) list)
    the second as Simplify returned it. It prints, under the name given, what the
    command line prints of a unit, and exits nowhere.
 
-   It does not test that the first term is well-formed. That is for the caller,
-   before Simplify is run, which is entitled to fail on a term that is not:
+   A caller that runs Simplify itself is to test the first term before it does,
+   as Simplify is entitled to fail on a term that is not well-formed:
    [well_formed_before], which prints the line "not checked" where it says no,
-   and after which the caller is to make no check. [check_file] does so. A first
-   term that is not well-formed and is given here all the same is run and
-   compared as it is: nothing here refuses it. *)
+   and after which the caller is to make no check. [check_file] does so. The
+   driver of the compiler's own run is given the two terms when the compiler's
+   Simplify has returned: it asks [well_formed_before] of the first then, in the
+   child process where it makes its check, before it calls this function. That
+   test is of the term alone. Here the two tests of the guard are asked again,
+   of both terms as they are run, with the prefix in front of them where there
+   is one ([check_or_raise]). A first term that fails one of them is neither run
+   nor compared, whoever the caller is. It is "not checked" where its test is
+   reached: what is looked for before that, a term after that is not well-formed
+   and a fault of the prefix, is what is reported where it is found. *)
 let check ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) : checked =
   match check_or_raise ~filename ~units before after with
@@ -9212,7 +9366,23 @@ let as_read_from_text (unit : Flambda_unit.t) : (Flambda_unit.t, string) result
     =
   Result.map with_unknown_param_modes (with_lost_kinds unit)
 
-let check_file filename : checked =
+(* The check of a unit read from a text. Where [after] names a second text, the
+   term after is read from it and Simplify is not run: the two terms are given
+   to [check] as they are read, so that the guard can be tried on a term after
+   that the tool's Simplify does not make. It is Simplify that reads the [.cmx]
+   files of other units, so with [after] none is read and the two terms have no
+   prefix, whatever the load path.
+
+   What [after] cannot show. The two texts are read independently: the reader of
+   texts makes its own code ids, function slots and value slots for each, and
+   gives no correspondence between those of the two texts merely because their
+   printed names match. Only a symbol is the same in both, by its name. The
+   validation is asked all the same, and can say "not validated" even where the
+   same text is given twice: the control [guard/after_same_text] shows it, on a
+   unit that binds the code of a function that it exports. The option is for
+   controls of the guard: with it "not validated" is no evidence that the two
+   terms differ in meaning. *)
+let check_file ?after filename : checked =
   match Parse_flambda.parse_fexpr filename with
   | Error e ->
     Test_utils.dump_error e;
@@ -9235,33 +9405,60 @@ let check_file filename : checked =
       | Error why ->
         Format.printf "%s: not checked: %s@." filename_shown why;
         Not_checked
-      | Ok before ->
+      | Ok before -> (
         if not (well_formed_before ~filename:filename_shown before)
         then Not_checked
         else
-          let null_formatter =
-            Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
-          in
-          let result =
-            Flambda2.flambda_to_flambda ~ppf_dump:null_formatter
-              ~prefixname:(Filename.chop_extension filename)
-              ~machine_width:Sixty_four ~code_slot_offsets:fl2.code_slot_offsets
-              before
-          in
-          (* The table of code that the pipeline gives back, for the lists of
-             code ids of calls of known arity ([close_known_arity_lists]). *)
-          (older_version_in_run
-             := fun code_id ->
-                  Option.map
-                    (fun code ->
-                      Code_metadata.newer_version_of
-                        (Code_or_metadata.code_metadata code))
-                    (Exported_code.find result.all_code code_id));
-          Fun.protect
-            ~finally:(fun () -> older_version_in_run := fun _ -> None)
-            (fun () ->
-              check ~filename:filename_shown ~units:(units_read ()) before
-                result.flambda))
+          match after with
+          | Some after_filename -> (
+            match Parse_flambda.parse_fexpr after_filename with
+            | Error e ->
+              Test_utils.dump_error e;
+              Failed
+            | Ok after_text -> (
+              let after_fl2 = Fexpr_to_flambda.conv comp_unit after_text in
+              if result_arity_lost after_text
+              then (
+                Format.printf "%s: not checked: in the term after, %s@."
+                  filename_shown result_arity_lost_message;
+                Not_checked)
+              else
+                match as_read_from_text after_fl2.unit with
+                | Error why ->
+                  Format.printf "%s: not checked: in the term after, %s@."
+                    filename_shown why;
+                  Not_checked
+                | Ok after ->
+                  Format.printf
+                    "%s: the term after is read from %s; Simplify is not run@."
+                    filename_shown
+                    (Filename.basename after_filename);
+                  check ~filename:filename_shown ~units:(units_read ()) before
+                    after))
+          | None ->
+            let null_formatter =
+              Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
+            in
+            let result =
+              Flambda2.flambda_to_flambda ~ppf_dump:null_formatter
+                ~prefixname:(Filename.chop_extension filename)
+                ~machine_width:Sixty_four
+                ~code_slot_offsets:fl2.code_slot_offsets before
+            in
+            (* The table of code that the pipeline gives back, for the lists of
+               code ids of calls of known arity ([close_known_arity_lists]). *)
+            (older_version_in_run
+               := fun code_id ->
+                    Option.map
+                      (fun code ->
+                        Code_metadata.newer_version_of
+                          (Code_or_metadata.code_metadata code))
+                      (Exported_code.find result.all_code code_id));
+            Fun.protect
+              ~finally:(fun () -> older_version_in_run := fun _ -> None)
+              (fun () ->
+                check ~filename:filename_shown ~units:(units_read ()) before
+                  result.flambda)))
 
 (* The conversion, for the check that takes a term of the model through fexpr
    and back (flroundtrip.ml). *)
@@ -9298,15 +9495,24 @@ let simplify_for_round_trip ~filename (text : Fexpr.flambda_unit)
   else
     match as_read_from_text parsed.unit with
     | Error why -> Error why
-    | Ok before ->
-      let well_formed_or_not_converted =
+    | Ok before -> (
+      (* The two tests of the guard, of the term alone, as [well_formed_before]
+         asks them. *)
+      let refused =
         match convert_unit before with
-        | exception Unsupported _ -> true
-        | before -> well_formed before
+        | exception Unsupported _ -> None
+        | before ->
+          if not (well_formed before)
+          then Some "the unit is not well-formed"
+          else
+            Option.map
+              (fun what ->
+                "the unit mentions " ^ what ^ " where it is not in scope")
+              (not_in_scope_alone before)
       in
-      if not well_formed_or_not_converted
-      then Error "the unit is not well-formed"
-      else
+      match refused with
+      | Some why -> Error why
+      | None ->
         let null_formatter =
           Format.make_formatter (fun _ _ _ -> ()) (fun () -> ())
         in
@@ -9316,16 +9522,18 @@ let simplify_for_round_trip ~filename (text : Fexpr.flambda_unit)
             ~machine_width:Sixty_four
             ~code_slot_offsets:parsed.code_slot_offsets before
         in
-        Ok result.flambda
+        Ok result.flambda)
 
-(* The command line: the options of the compiler, [-round-trip], and one [.fl]
-   file. It exits 1 where the check has failed ([checked]). *)
+(* The command line: the options of the compiler, [-round-trip], [-after] with
+   the text of a term after, and one [.fl] file. It exits 1 where the check has
+   failed ([checked]). *)
 let main () =
   let module Options =
     Oxcaml_args.Make_optcomp_options (Oxcaml_args.Default.Optmain)
   in
   Clflags.set_target Clflags.Target.Native;
   let round_trip = ref false in
+  let after = ref None in
   let files = ref [] in
   let defer_file file =
     match Filename.extension file with
@@ -9340,11 +9548,26 @@ let main () =
        Arg.Set round_trip,
        " Check that the conversion to the Rocq model survives a round trip \
         through fexpr, for the unit and for what Simplify makes of it" )
+    :: ( "-after",
+         Arg.String (fun file -> after := Some file),
+         "<file.fl> Take the term after from this text; Simplify is not run. \
+          For controls of the guard: the texts are read independently, code \
+          and slots of one printed name are not the same in the two, and \"not \
+          validated\" is then no evidence of a difference" )
     :: (Arch.command_line_options @ Options.list));
   Clflags.Opt_flag_handler.set Oxcaml_flags.opt_flag_handler;
   Compenv.parse_arguments (ref Sys.argv) defer_file "flsemantics";
   Location.read_clflags_from_env ();
   init_load_path ();
+  (* [-after] is for the check of a unit. The round trip runs Simplify itself
+     and reads no term after, so the two together are refused: a round trip is
+     not to be taken for a check of the term given. *)
+  (match !round_trip, !after with
+  | true, Some _ ->
+    Misc.fatal_error
+      "flsemantics: -after cannot be given with -round-trip, which runs \
+       Simplify and reads no term after"
+  | true, None | false, _ -> ());
   (* One unit to a process: the symbols of a unit stay in the tables of the
      compiler, so a second unit that used the name of one would be refused for a
      reason that is not its own. *)
@@ -9358,7 +9581,7 @@ let main () =
         ~simplify:(simplify_for_round_trip ~filename:file)
         file)
     else
-      match check_file file with
+      match check_file ?after:!after file with
       | Failed -> exit 1
       | Not_checked | Compared _ -> ())
   | _ :: _ :: _ ->

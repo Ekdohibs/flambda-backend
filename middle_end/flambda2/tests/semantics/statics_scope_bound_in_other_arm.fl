@@ -1,0 +1,17 @@
+(* A static binding in the handler of one arm of a Switch, mentioned in the
+   handler of the other arm. Refused by the check of static names. *)
+let a/1 = %opaque (3) in
+let d/2 = %int_barith.add (a/1, 1) in
+let c/3 = %int_comp.lt (a/1, 5) in
+(switch c/3
+   | 0 -> k/171
+   | 1 -> k/172)
+  where k/172 =
+    cont k/141 ($Cell)
+  where k/171 =
+    let $Cell = Block 0 (d/2) in
+    cont k/141 ($Cell)
+  where k/141 (policy/4 : val) =
+    let result/5 = %block_load.[`0`] (policy/4) in
+    let $camlStatics_scope_bound_in_other_arm = Block 0 (result/5) in
+    cont done ($camlStatics_scope_bound_in_other_arm)

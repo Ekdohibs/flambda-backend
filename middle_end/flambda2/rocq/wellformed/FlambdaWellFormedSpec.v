@@ -27,9 +27,14 @@
 
 (* Where static bindings may be: the well-formedness of a compilation unit.
 
-   This file is to be reviewed: [statics_at_unit_toplevel] against the
-   definition of toplevel in Simplify
-   (simplify/simplify_let_cont_expr.ml, at_unit_toplevel, and
+   This file is to be reviewed: [statics_outside_loops_and_code]
+   against where Simplify puts the static bindings of the term it makes
+   (simplify/simplify_let_expr.ml and simplify_let_cont_expr.ml, where
+   the lifted constants are placed; simplify_apply_cont_expr.ml, a
+   handler put at its one use) and against what To_cmm needs of a
+   static binding (to_cmm/to_cmm_shared.ml, make_update),
+   [statics_at_unit_toplevel] against the definition of toplevel in
+   Simplify (simplify/simplify_let_cont_expr.ml, at_unit_toplevel, and
    Downwards_env.at_unit_toplevel), [sets_well_formed] against what the
    compiler checks of a set of closures (terms/static_const.ml,
    match_against_bound_static_pattern) and what it assumes
@@ -48,9 +53,11 @@
    compiler's binders: [names_in_scope], [binders_distinct] and
    [code_closed].
 
-   Flambda permits a [Let_static] at the toplevel of a compilation unit
-   only, so that it is executed once, before anything that follows it.
-   Toplevel is:
+   A [Let_static] is executed once at most. Two rules say where one
+   may stand, and a unit is asked the second.
+
+   Simplify accepts a [Let_static] at the toplevel of the compilation
+   unit that it is given, and nowhere else. Toplevel is:
    - the unit itself;
    - the body of a [Let], of a [Let_static] or of a [Let_cont] that is at
      toplevel;
@@ -62,8 +69,27 @@
    run many times, and never the body of code, which runs once for each
    call.
 
-   [statics_at_unit_toplevel] is this as a check, carrying down the term
-   whether it is at toplevel, as Simplify does. [well_formed_unit] asks
+   [statics_at_unit_toplevel] is the model's reading of this, as a check
+   of the text: it carries down the term
+   whether it is at toplevel, as Simplify does.
+
+   The term that Simplify returns need not keep that rule: it can have
+   static bindings in handlers that are not at toplevel. The rule that
+   a unit is asked is that no [Let_static] is in the handler of a
+   recursive continuation or in the body of code, at any depth:
+   [statics_outside_loops_and_code], which is row 1 of the table of
+   requests/C0-well-formed.md as a unit is asked it (decision D60; the
+   CR at the definition says what Simplify and To_cmm do). It is asked
+   of the terms that are given to Simplify and of those that it
+   returns; that every term the compiler makes keeps it is not proved,
+   and is not said. A term that passes [statics_at_unit_toplevel]
+   passes this one
+   ([at_unit_toplevel_outside_loops_and_code_statement]).
+   Whether a static name is bound where it is mentioned is not part of
+   either rule: FlambdaStaticsInScopeSpec.v has that check, and a
+   verdict on a unit needs both.
+
+   [well_formed_unit] asks [statics_outside_loops_and_code], and
    also that no code id or symbol is bound twice, that the sets of
    closures of the unit are whole ([sets_well_formed]), that its
    numbers are in range ([numbers_in_range]), and that its exception
@@ -306,6 +332,110 @@ with code_statics_at_unit_toplevel (unit_exn : continuation) (c : code)
   match c with
   | Code _ _ _ _ _ body => statics_at_unit_toplevel unit_exn false body
   end.
+
+(* ======================================================================== *)
+(* Static bindings are outside loops and code                               *)
+(* ======================================================================== *)
+
+(* CR mshinwell: which rule of place is a unit to keep? Simplify keeps
+   its own account of what is at the toplevel of the unit that it is
+   given, and stops on a [Let] of static constants that binds a symbol
+   and is not there (simplify/simplify_named.ml, the case
+   [Static_consts]; a group that binds only code passes).
+   [statics_at_unit_toplevel] is the model's reading of that rule and
+   is not the same test: the CR at its definition has one way in which
+   the two differ. Simplify's own output does not keep its rule: a
+   handler that has one inlinable use, which is an [Apply_cont] without
+   a trap action, can be put in the place of the use with the static
+   bindings at its head, and nothing asks where it lands
+   (simplify/simplify_let_cont_expr.ml, [is_single_inlinable_use];
+   simplify/simplify_apply_cont_expr.ml). The uses that are left when
+   the handler of a recursive continuation has been simplified, which
+   are of continuations bound outside it, are marked as not inlinable
+   (simplify/simplify_let_cont_expr.ml, [simplify_handler], with
+   [CUE.mark_non_inlinable]), so a handler bound outside a recursive
+   handler is not put in the place of a use inside it; a continuation
+   bound inside a loop may still be inlined there. So a static binding
+   at the toplevel of the unit can end, in the output, in the handler
+   of a non-recursive continuation that is not under a recursive
+   handler and not in code, and Simplify does not take such a term
+   back. The rule below is a restriction of the text that is enough
+   for the model, with the other conditions of a well-formed unit:
+   the run of a well-formed unit from the empty static environment
+   reaches none of the states that the machine makes undefined to keep
+   static bindings from being executed twice
+   ([well_formed_never_faults_statement]). It is not said to be the
+   set of the terms that Simplify returns, nor of those that To_cmm
+   compiles rightly.
+   To_cmm does not check it whole. After its own substitution, an
+   update of a static whose value is a Cmm variable is emitted where
+   that variable is bound, and any other update is sequenced at the
+   binding of the static (to_cmm/to_cmm_shared.ml, [make_update]).
+   Symbol initialisations that are left over at the end of the body
+   of code are a fatal error (to_cmm/to_cmm_set_of_closures.ml); those
+   left over in the handler of a loop are reported and dropped
+   (to_cmm/to_cmm_expr.ml). The other course is to keep Simplify's
+   rule and except the handlers that can only leave the unit. This one
+   is taken provisionally. Decision D60. *)
+
+(* Every [Let_static] of the expression is outside the handlers of
+   recursive continuations and outside the body of code, given whether
+   the expression itself is ([outside]). The handler of a non-recursive
+   continuation is where its [Let_cont] is; the handlers of a recursive
+   one are in a loop, and so is all that is in them, the handler of a
+   non-recursive continuation too; the body of code is in code, and so
+   is all that is in it.
+
+   This is a test of the text. It does not say that a handler runs once
+   at most: a handler in a loop that the run enters once is refused.
+   What it gives, with the other conditions of a well-formed unit, is
+   that the run of such a unit from the empty static environment
+   reaches none of the states that the machine makes undefined to keep
+   static bindings from being executed twice
+   ([well_formed_never_faults_statement]). It says nothing of whether a
+   static name is bound where it is mentioned: that is the check of
+   FlambdaStaticsInScopeSpec.v.
+
+   A group that binds only code is refused in a loop and in code as a
+   group that binds a symbol is. *)
+Fixpoint statics_outside_loops_and_code (outside : bool) (e : expr) : bool :=
+  match e with
+  | Let _ _ _ body => statics_outside_loops_and_code outside body
+  | Let_static bindings body =>
+    outside
+    && forallb binding_statics_outside_loops_and_code bindings
+    && statics_outside_loops_and_code outside body
+  | Let_cont_non_recursive _ h body =>
+    handler_statics_outside_loops_and_code outside h
+    && statics_outside_loops_and_code outside body
+  | Let_cont_recursive handlers body =>
+    forallb (fun '(_, h) => handler_statics_outside_loops_and_code false h)
+      handlers
+    && statics_outside_loops_and_code outside body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => true
+  end
+with handler_statics_outside_loops_and_code (outside : bool)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler _ _ handler => statics_outside_loops_and_code outside handler
+  end
+with binding_statics_outside_loops_and_code (binding : static_binding)
+    : bool :=
+  match binding with
+  | Bind_code _ c => code_statics_outside_loops_and_code c
+  | Bind_deleted_code _ | Bind_symbol _ _ => true
+  end
+with code_statics_outside_loops_and_code (c : code) : bool :=
+  match c with
+  | Code _ _ _ _ _ body => statics_outside_loops_and_code false body
+  end.
+
+(* A term that passes the model's reading of Simplify's rule passes this
+   one. *)
+Definition at_unit_toplevel_outside_loops_and_code_statement : Prop :=
+  ∀ (unit_exn : continuation) (toplevel : bool) (e : expr),
+    statics_at_unit_toplevel unit_exn toplevel e = true ->
+    statics_outside_loops_and_code toplevel e = true.
 
 (* ======================================================================== *)
 (* Static names are bound once                                              *)
@@ -1079,17 +1209,17 @@ Record unit_interface : Type := Unit_interface {
   unit_exn : continuation
 }.
 
-(* A unit, with its interface: its static bindings are at toplevel, and
-   bind each code id and each symbol once; its variables and its
-   continuations are in scope, the names of each binder are distinct and
-   its code has no free name but its own binders; its sets of closures
-   are whole; its numbers are in range; its exception handlers are
-   apart from its other continuations; and it follows the discipline of
-   trap actions. The conditions are in the order of the rows of the
-   table of requests/C0-well-formed.md (1, 2, 3, 5, 6, 7 and 8), then
-   rows 11 and 12 of requests/C5-exceptions.md. *)
+(* A unit, with its interface: its static bindings are outside loops
+   and code, and bind each code id and each symbol once; its variables
+   and its continuations are in scope, the names of each binder are
+   distinct and its code has no free name but its own binders; its sets
+   of closures are whole; its numbers are in range; its exception
+   handlers are apart from its other continuations; and it follows the
+   discipline of trap actions. The conditions are in the order of the
+   rows of the table of requests/C0-well-formed.md (1, 2, 3, 5, 6, 7 and
+   8), then rows 11 and 12 of requests/C5-exceptions.md. *)
 Definition well_formed_unit (u : unit_interface) (e : expr) : bool :=
-  statics_at_unit_toplevel (unit_exn u) true e
+  statics_outside_loops_and_code true e
   && distinct (static_names code_ids_of_binding e)
   && distinct (static_names symbols_of_binding e)
   && names_in_scope (unit_return u) (unit_exn u) e

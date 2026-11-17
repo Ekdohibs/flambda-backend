@@ -30,17 +30,13 @@
    here needs review.
 
    The simulation of FlambdaHoistStaticsProofs.v is of a unit run on
-   its own: its invariant asks that nothing bind the exception
-   continuation of the unit, which what follows a unit does. So the
-   two units are run on their own to their exits
+   its own. So the two units are run on their own to their exits
    (FlambdaRunUnderSpec.behaves_under_statement), where the second
    static environment is the first with the bindings taken to the head
    bound beside it, and what follows is run from there by the same
-   simulation, with nothing left to take out and with, for the
-   exception continuation, a name that neither what follows nor the
-   code that is bound binds ([hoist_inv_after]). The invariant of the
-   first run gives that the values of the exit hold only names that
-   are bound. *)
+   simulation, with nothing left to take out ([hoist_inv_after]). The
+   invariant of the first run gives that the values of the exit hold
+   only names that are bound. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -150,65 +146,11 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
-(* The exception continuation of the unit, for what binds nothing static    *)
-(* ======================================================================== *)
-
-(* Where no static binding is allowed, the test does not look at the
-   exception continuation of the unit. *)
-Fixpoint nowhere_any (x y : continuation) (e : expr) {struct e} :
-  statics_at_unit_toplevel x false e = statics_at_unit_toplevel y false e.
-Proof.
-  destruct e
-    as [ z zkind d body | bindings body | k h body | handlers body | ap | ac
-       | scrutinee arms | ];
-    simpl; try reflexivity.
-  - apply nowhere_any.
-  - destruct h as [params metadata handler]. simpl.
-    rewrite (nowhere_any x y handler), (nowhere_any x y body). reflexivity.
-  - rewrite (nowhere_any x y body). f_equal.
-    induction handlers as [ | [k [params metadata handler]] handlers IH];
-      simpl; [ reflexivity | ].
-    rewrite (nowhere_any x y handler), IH. reflexivity.
-Qed.
-
-Lemma code_nowhere_any (x y : continuation) (c : code) :
-  code_statics_at_unit_toplevel x c = code_statics_at_unit_toplevel y c.
-Proof.
-  destruct c as [params my_closure ret exn metadata body]. simpl.
-  apply nowhere_any.
-Qed.
-
-(* The invariant of FlambdaWellFormedProofs.v, of what follows a unit
-   run from the static environment that the unit has left, for any
-   exception continuation. *)
-Lemma inv_after_any (unit_exn x : continuation)
-    (names_of : static_binding -> list positive)
-    (is_bound : static_env -> positive -> bool) (last : state) (body : expr)
-    (vars : env) (hp : heap) (rd : read_record) :
-  inv unit_exn names_of is_bound last ->
-  binds_no_static body = true ->
-  inv x names_of is_bound (State body vars [] (state_statics last) hp rd).
-Proof.
-  intros (_ & _ & _ & _ & _ & Hcode) Hno.
-  destruct
-    (statics_nowhere x names_of body (no_static_nowhere x body Hno))
-    as (P & _ & N).
-  split; [ exact P | ].
-  split; [ simpl; rewrite N; constructor | ].
-  split; [ exact I | ].
-  split; [ intros n; simpl; rewrite N; intros [] | ].
-  split; [ intros n; simpl; rewrite N; intros [[] | []] | ].
-  intros id c Hlookup. rewrite (code_nowhere_any x unit_exn c).
-  exact (Hcode id c Hlookup).
-Qed.
-
-(* ======================================================================== *)
 (* What follows, from what the two units left                               *)
 (* ======================================================================== *)
 
 Section After.
 
-Variable unit_exn : continuation.
 Variable deleted : list code_id.
 Variable src_code : list (code_id * code).
 Variable src_values : list (symbol * statically_allocated_value).
@@ -218,64 +160,32 @@ Hypothesis deleted_not_src :
 
 (* What follows a unit, run on values that hold only names that are
    bound from the static environment of a state of the first run,
-   satisfies the invariant of the first run, for an exception
-   continuation that nothing binds. *)
+   satisfies the invariant of the first run. *)
 Lemma hoist_inv_after (last : state) (body : expr) (vars : env) (hp : heap)
     (rd : read_record) :
-  hoist_inv unit_exn deleted src_code src_values last ->
+  hoist_inv deleted src_code src_values last ->
   env_values_all (value_statics_bound deleted (state_statics last)) vars ->
   heap_values_all (value_statics_bound deleted (state_statics last)) hp ->
   binds_no_static body = true ->
   expr_statics_in_scope [] [] body = true ->
-  ∃ x : continuation,
-    hoist_inv x deleted src_code src_values
-      (State body vars [] (state_statics last) hp rd).
+  hoist_inv deleted src_code src_values
+    (State body vars [] (state_statics last) hp rd).
 Proof.
   intros (Hcodes & Hsymbols & Hterms & Hbound & Hknown) Hvars Hheap Hno
     Hscope.
-  set (taken :=
-    bound_continuations body
-    ++ flat_map (fun binding => code_bound_continuations (snd binding))
-         (static_code (state_statics last))).
-  pose proof (fresh_name_fresh taken) as Hfresh.
-  set (x := fresh_name taken) in Hfresh.
-  assert (Hx_body : among x (bound_continuations body) = false).
-  { destruct (among x (bound_continuations body)) eqn:H; [ | reflexivity ].
-    unfold taken in Hfresh. rewrite among_app, H in Hfresh.
-    discriminate Hfresh. }
-  assert (Hx_code :
-    ∀ binding : code_id * code,
-      In binding (static_code (state_statics last)) ->
-      among x (code_bound_continuations (snd binding)) = false).
-  { intros binding Hin.
-    destruct (among x (code_bound_continuations (snd binding))) eqn:H;
-      [ | reflexivity ].
-    assert (Htaken : among x taken = true).
-    { apply among_In. unfold taken. apply in_or_app. right.
-      apply in_flat_map. exists binding.
-      split; [ exact Hin | apply among_In; exact H ]. }
-    rewrite Htaken in Hfresh. discriminate Hfresh. }
-  exists x.
   destruct
-    (statics_nowhere x code_ids_of_binding body (no_static_nowhere x body Hno))
+    (statics_nowhere code_ids_of_binding body (no_static_nowhere body Hno))
     as (P & B & _).
-  split;
-    [ exact (inv_after_any unit_exn x _ _ last body vars hp rd Hcodes Hno) | ].
-  split;
-    [ exact (inv_after_any unit_exn x _ _ last body vars hp rd Hsymbols Hno)
-     | ].
+  split; [ exact (inv_after _ _ last body vars hp rd Hcodes Hno) | ].
+  split; [ exact (inv_after _ _ last body vars hp rd Hsymbols Hno) | ].
   split; [ | split ].
-  - destruct Hterms as (_ & _ & _ & _ & _ & _ & Hfine).
+  - destruct Hterms as (_ & _ & _ & _ & Hfine).
     unfold terms_inv. simpl_state.
-    refine (conj P (conj _ (conj _ (conj Hx_body (conj eq_refl (conj _ _)))))).
+    refine (conj P (conj _ (conj _ (conj _ Hfine)))).
     + exact (expr_scope_sub body [] _ [] _ (sub_nil _) (sub_nil _) Hscope).
     + rewrite (no_static_names deleted_code_ids_of_binding body Hno).
       reflexivity.
-    + intros k _. apply Good_outer.
-    + unfold code_all_fine in Hfine |- *. rewrite Forall_forall in Hfine |- *.
-      intros binding Hin. destruct (Hfine binding Hin) as (Pc & Sc & _).
-      refine (conj _ (conj Sc (Hx_code binding Hin))).
-      rewrite (code_nowhere_any x unit_exn (snd binding)). exact Pc.
+    + intros k syms ids _ _. apply Good_outer.
   - destruct Hbound as (_ & _ & Hstatics & _).
     exact (conj Hvars (conj I (conj Hstatics Hheap))).
   - destruct Hknown as (_ & _ & Hstatics).
@@ -288,7 +198,7 @@ Qed.
    the second run. *)
 Lemma after_equivalent (last : state) (k : continuation) (vs : list value)
     (hp : heap) (rd : read_record) (slots : list value_slot) (c : cont_value) :
-  hoist_inv unit_exn deleted src_code src_values last ->
+  hoist_inv deleted src_code src_values last ->
   step last = Exit k vs hp rd ->
   observer slots c ->
   ∀ b : behaviour,
@@ -313,7 +223,7 @@ Proof.
   destruct (bind_params params vs []) as [bound | ] eqn:Hbind;
     [ | reflexivity ].
   pose proof Hinv as (_ & _ & Hterms & Hbound & _).
-  pose proof (values_step unit_exn deleted last Hterms Hbound) as Hvs.
+  pose proof (values_step deleted last Hterms Hbound) as Hvs.
   rewrite Hexit in Hvs.
   assert (Hvars :
     env_values_all (value_statics_bound deleted (state_statics last)) bound).
@@ -323,14 +233,15 @@ Proof.
     heap_values_all (value_statics_bound deleted (state_statics last)) hp).
   { rewrite (step_exit_heap last k vs hp rd Hexit).
     exact (proj2 (proj2 (proj2 Hbound))). }
-  destruct (hoist_inv_after last body bound hp rd Hinv Hvars Hheap Hno Hscope)
-    as [x Hafter].
+  pose proof
+    (hoist_inv_after last body bound hp rd Hinv Hvars Hheap Hno Hscope)
+    as Hafter.
   destruct
-    (statics_nowhere x code_ids_of_binding body (no_static_nowhere x body Hno))
+    (statics_nowhere code_ids_of_binding body (no_static_nowhere body Hno))
     as (_ & B & _).
   refine
-    (bisimulation_equivalent (hoisted_related x deleted src_code src_values)
-       (hoisted_related_step x deleted src_code src_values deleted_not_src)
+    (bisimulation_equivalent (hoisted_related deleted src_code src_values)
+       (hoisted_related_step deleted src_code src_values deleted_not_src)
        _ _ _ b).
   split; [ | exact Hafter ].
   unfold hoist_state. simpl_state.
@@ -394,9 +305,9 @@ Proof.
   intros w w' b (n & last & Hrun & Hexit & Hw_statics) Hw'.
   pose proof
     (bisimulation_run
-       (hoisted_related (unit_exn u) (deleted_code_ids e) src_code src_values)
-       (hoisted_related_step (unit_exn u) (deleted_code_ids e) src_code
-          src_values Hdeleted)
+       (hoisted_related (deleted_code_ids e) src_code src_values)
+       (hoisted_related_step (deleted_code_ids e) src_code src_values
+          Hdeleted)
        n _ _ Hrel)
     as Hn.
   rewrite Hrun in Hn.
@@ -406,8 +317,8 @@ Proof.
     as [last' | | ] eqn:Hrun'; simpl in Hn; try contradiction.
   destruct Hn as [-> Hinv].
   pose proof
-    (hoisted_related_step (unit_exn u) (deleted_code_ids e) src_code
-       src_values Hdeleted last _ (conj eq_refl Hinv))
+    (hoisted_related_step (deleted_code_ids e) src_code src_values Hdeleted
+       last _ (conj eq_refl Hinv))
     as Hstep.
   rewrite Hexit in Hstep.
   destruct (step (hoist_state src_code src_values last))
@@ -426,7 +337,7 @@ Proof.
   rewrite (exits_world_unique _ _ _ Hw' Hw0).
   cbn [exit_cont exit_values exit_statics exit_heap].
   rewrite <- Hw_statics.
-  exact (after_equivalent (unit_exn u) (deleted_code_ids e) src_code
+  exact (after_equivalent (deleted_code_ids e) src_code
            src_values Hdeleted last (exit_cont w) (exit_values w)
            (exit_heap w) rd_ slots _ Hinv Hexit
            (observers_resolve slots conts (exit_cont w) Hobservers) b).

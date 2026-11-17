@@ -1,14 +1,1 @@
-phantom_called.fl:
-  given the .cmx of Phantom, a prefix of 2 static bindings:
-    camlPhantom__f_0_1 = closure Phantom.f_0 of
-      {Phantom.f_0 = camlPhantom__f_0_1_code}
-      at {Phantom.f_0 = camlPhantom__f_0_1} {}
-    camlPhantom = Block 0 (camlPhantom__f_0_1)
-  before Simplify, after the prefix (6 steps): undefined
-  after Simplify, after the prefix (3 steps): returns [0: 0]
-  the check of kinds: passes before, passes after
-  the check of static names: fails (statics_in_scope: a symbol or a code id is not in scope) before, fails (statics_in_scope: a symbol or a code id is not in scope) after, each with the prefix in front of it
-  calls outside code: 1 before, 0 after
-  anything goes, as the run before is undefined
-  calls outside code once those of known code are inlined: 1
-  nothing to validate, as the term before is undefined
+phantom_called.fl: not checked: with the prefix made from the .cmx files in front of it, the term before Simplify mentions a code id where it is not in scope

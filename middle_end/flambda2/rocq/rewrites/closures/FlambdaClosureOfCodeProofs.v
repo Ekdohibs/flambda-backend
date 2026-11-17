@@ -193,7 +193,8 @@ Proof.
         (know_code_closures_sets_made sets body).
       reflexivity.
     + rewrite (know_code_closures_sets_made sets body). f_equal.
-      generalize (static_names symbols_of_binding body ++ syms).
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
       intros all.
       induction handlers as [ | [k h] handlers IH]; cbn [map flat_map];
         [ reflexivity | ].
@@ -296,7 +297,8 @@ Proof.
         (know_code_closures_groups_whole sets body).
       reflexivity.
     + rewrite (know_code_closures_groups_whole sets body). f_equal.
-      generalize (static_names symbols_of_binding body ++ syms).
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
       intros all.
       induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
         [ reflexivity | ].
@@ -323,7 +325,9 @@ Proof.
     cbn [know_code_in_handler handler_binds_statics].
     rewrite !know_code_closures_binds_statics. reflexivity.
   - rewrite (know_code_closures_binds_statics sets body). f_equal.
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize
+      (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
+    intros all.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
       cbn [map existsb know_code_in_handler handler_binds_statics];
       [ reflexivity | ].
@@ -1110,7 +1114,7 @@ Proof.
       rewrite step_let_static, Heval. reflexivity.
   - (* Let_cont_non_recursive *)
     destruct h as [params metadata handler]. cbn [know_code_in_handler].
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize (handler_scope symbols_of_binding k body ++ syms). intros all.
     assert (Hinv' :
       code_inv
         (State
@@ -1141,7 +1145,9 @@ Proof.
       apply know_code_closures_refines_aux. apply (code_inv_kept _ _ Hinv').
       apply step_let_cont_non_recursive.
   - (* Let_cont_recursive *)
-    generalize (static_names symbols_of_binding body ++ syms). intros all.
+    generalize
+      (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
+    intros all.
     set (know :=
            fun kh : continuation * continuation_handler =>
              let '(k, h) := kh in (k, know_code_in_handler sets all h)).
@@ -1323,8 +1329,8 @@ Proof.
     intros Hno H. simpl in Hno, H.
     apply andb_true_iff in Hno as [Hno_h Hno_b].
     apply andb_true_iff in H as [Hh Hb].
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hh.
     simpl in Hh.
     rewrite sets_made_have_app,
@@ -1336,8 +1342,8 @@ Proof.
     apply andb_true_iff in H as [Hhs Hb].
     rewrite sets_made_have_app, (observer_sets_have c f fact body Hno_b Hb),
       andb_true_r.
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hhs.
     simpl in Hhs.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
@@ -2516,8 +2522,8 @@ Proof.
     intros Hno H. simpl in Hno, H.
     apply andb_true_iff in Hno as [Hno_h Hno_b].
     apply andb_true_iff in H as [Hh Hb].
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hh.
     simpl in Hh.
     rewrite sets_seen_give_app,
@@ -2529,8 +2535,8 @@ Proof.
     apply andb_true_iff in H as [Hhs Hb].
     rewrite sets_seen_give_app,
       (observer_sets_seen c f slot d body _ Hno_b Hb), andb_true_r.
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hhs.
     simpl in Hhs.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
@@ -2774,7 +2780,8 @@ Proof.
     + apply scoped_let_cont_recursive;
         [ | | apply know_code_closures_scoped ].
       * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
-      * generalize (static_names symbols_of_binding body ++ syms).
+      * generalize
+          (recursive_scope symbols_of_binding (map fst handlers) body ++ syms).
         intros all.
         induction handlers as [ | [k h] handlers IH]; cbn [map];
           [ apply scoped_handlers_nil | ].
@@ -3000,7 +3007,8 @@ Qed.
 
 #[local] Hint Rewrite lookup_codes_renamed unbind_codes_renamed
   read_code_slot_renamed symbols_of_bindings_renamed symbol_names_renamed
-  : equivariance.
+  symbol_handler_scope_renamed symbol_recursive_scope_renamed
+  symbol_handlers_scope_renamed : equivariance.
 
 Lemma know_code_closures_renamed (r : renaming) (sets : list set_made)
     (e : expr) :

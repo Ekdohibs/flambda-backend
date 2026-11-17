@@ -1,0 +1,26 @@
+(* The control of statics_scope_loop_one_entry_binds.fl: the same recursive
+   continuation and the same two entries, and the symbol is bound before the
+   Switch, so on both ways in. Both checks pass. *)
+let a/1 = %opaque (3) in
+let c/2 = %int_comp.lt (a/1, 5) in
+let $Cell = Block 0 (a/1) in
+(((switch c/2
+     | 0 -> k/10
+     | 1 -> k/11
+     where k/10 = (
+       cont k/20 (0, 0))
+     where k/11 = (
+       cont k/20 (0, 0)))
+    where rec k/20 (i/3 : imm tagged, acc/4 : imm tagged) = (
+      let x/5 = %block_load.[`0`] ($Cell) in
+      let sum/6 = %int_barith.add (acc/4, x/5) in
+      let more/7 = %int_comp.lt (i/3, 1) in
+      (switch more/7
+         | 0 -> k/30 (sum/6)
+         | 1 -> k/21
+         where k/21 = (
+           let next/8 = %int_barith.add (i/3, 1) in
+           cont k/20 (next/8, sum/6)))))
+   where k/30 (result/9 : imm tagged) = (
+     let $camlStatics_scope_loop_bound_before = Block 0 (result/9) in
+     cont done ($camlStatics_scope_loop_bound_before)))

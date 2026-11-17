@@ -119,6 +119,120 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* Simplify's rule of place gives the wider one                             *)
+(* ======================================================================== *)
+
+(* What is outside loops and code when it is taken to be inside is so
+   when it is taken to be outside. *)
+Fixpoint outside_weaken (e : expr) {struct e} :
+  statics_outside_loops_and_code false e = true ->
+  statics_outside_loops_and_code true e = true.
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    cbn [statics_outside_loops_and_code]; try reflexivity.
+  - apply outside_weaken.
+  - discriminate.
+  - destruct h as [params metadata handler].
+    cbn [handler_statics_outside_loops_and_code].
+    rewrite !andb_true_iff. intros [Hh Hb].
+    split;
+      [ exact (outside_weaken handler Hh) | exact (outside_weaken body Hb) ].
+  - rewrite !andb_true_iff. intros [Hhs Hb].
+    split; [ exact Hhs | exact (outside_weaken body Hb) ].
+Qed.
+
+Lemma outside_to_true (outside : bool) (e : expr) :
+  statics_outside_loops_and_code outside e = true ->
+  statics_outside_loops_and_code true e = true.
+Proof. destruct outside; [ auto | apply outside_weaken ]. Qed.
+
+(* What is outside loops and code when it is taken to be inside binds
+   nothing static. *)
+Fixpoint outside_nowhere (names_of : static_binding -> list positive)
+    (e : expr) {struct e} :
+  statics_outside_loops_and_code false e = true ->
+  static_names names_of e = [].
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    cbn [statics_outside_loops_and_code static_names]; try reflexivity.
+  - apply outside_nowhere.
+  - discriminate.
+  - destruct h as [params metadata handler].
+    cbn [handler_statics_outside_loops_and_code handler_static_names].
+    rewrite andb_true_iff. intros [Hh Hb].
+    rewrite (outside_nowhere names_of handler Hh),
+      (outside_nowhere names_of body Hb).
+    reflexivity.
+  - rewrite andb_true_iff. intros [Hhs Hb].
+    rewrite (outside_nowhere names_of body Hb), app_nil_r.
+    induction handlers as [ | [k' [params metadata handler]] handlers IH];
+      cbn [forallb flat_map handler_statics_outside_loops_and_code
+           handler_static_names] in Hhs |- *;
+      [ reflexivity | ].
+    apply andb_true_iff in Hhs as [Hh Hrest].
+    rewrite (outside_nowhere names_of handler Hh), (IH Hrest). reflexivity.
+Qed.
+
+Fixpoint at_unit_toplevel_outside (unit_exn : continuation) (e : expr)
+    {struct e} :
+  ∀ toplevel : bool,
+    statics_at_unit_toplevel unit_exn toplevel e = true ->
+    statics_outside_loops_and_code toplevel e = true.
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    intros toplevel;
+    cbn [statics_at_unit_toplevel statics_outside_loops_and_code];
+    try reflexivity.
+  - apply at_unit_toplevel_outside.
+  - rewrite !andb_true_iff. intros [[Htop Hbindings] Hbody].
+    split;
+      [ split; [ exact Htop | ]
+      | exact (at_unit_toplevel_outside unit_exn body _ Hbody) ].
+    clear Hbody.
+    induction bindings as [ | binding bindings IH];
+      cbn [forallb] in Hbindings |- *; [ reflexivity | ].
+    apply andb_true_iff in Hbindings as [Hb Hrest].
+    apply andb_true_iff. split; [ | exact (IH Hrest) ].
+    destruct binding
+      as [id [params my_closure ret exn metadata cbody] | id | s const];
+      cbn [binding_statics_at_unit_toplevel code_statics_at_unit_toplevel
+           binding_statics_outside_loops_and_code
+           code_statics_outside_loops_and_code] in Hb |- *;
+      [ | reflexivity | reflexivity ].
+    exact (at_unit_toplevel_outside unit_exn cbody _ Hb).
+  - destruct h as [params metadata handler].
+    cbn [handler_statics_at_unit_toplevel
+         handler_statics_outside_loops_and_code].
+    rewrite !andb_true_iff. intros [Hh Hbody].
+    split; [ | exact (at_unit_toplevel_outside unit_exn body _ Hbody) ].
+    pose proof (at_unit_toplevel_outside unit_exn handler _ Hh) as Hout.
+    destruct toplevel; [ | exact Hout ].
+    exact (outside_to_true _ handler Hout).
+  - rewrite !andb_true_iff. intros [Hhs Hbody].
+    split; [ | exact (at_unit_toplevel_outside unit_exn body _ Hbody) ].
+    clear Hbody.
+    induction handlers as [ | [k' [params metadata handler]] handlers IH];
+      cbn [forallb handler_statics_at_unit_toplevel
+           handler_statics_outside_loops_and_code] in Hhs |- *;
+      [ reflexivity | ].
+    apply andb_true_iff in Hhs as [Hh Hrest].
+    apply andb_true_iff.
+    split;
+      [ exact (at_unit_toplevel_outside unit_exn handler _ Hh)
+      | exact (IH Hrest) ].
+Qed.
+
+Theorem at_unit_toplevel_outside_loops_and_code :
+  at_unit_toplevel_outside_loops_and_code_statement.
+Proof. intros unit_exn toplevel e. apply at_unit_toplevel_outside. Qed.
+
+(* ======================================================================== *)
 (* A well-formed unit does nothing that is forbidden                        *)
 (* ======================================================================== *)
 
@@ -154,8 +268,6 @@ Qed.
 
 Section Names.
 
-Variable unit_exn : continuation.
-
 (* One sort of static name: code ids, or symbols. *)
 Variable names_of : static_binding -> list positive.
 Variable is_bound : static_env -> positive -> bool.
@@ -169,8 +281,8 @@ Hypothesis bound_after :
 
 (* An expression that is not at toplevel has no [Let_static]. *)
 Fixpoint statics_nowhere (e : expr) :
-  statics_at_unit_toplevel unit_exn false e = true ->
-  statics_at_unit_toplevel unit_exn true e = true
+  statics_outside_loops_and_code false e = true ->
+  statics_outside_loops_and_code true e = true
   ∧ binds_statics e = false
   ∧ static_names names_of e = [].
 Proof.
@@ -184,12 +296,7 @@ Proof.
     apply andb_true_iff in H as [Hh Hb].
     destruct (statics_nowhere handler Hh) as (Ph & Bh & Nh).
     destruct (statics_nowhere body Hb) as (Pb & Bb & Nb).
-    rewrite Pb, Bh, Bb, Nh, Nb.
-    match goal with
-    | |- context [statics_at_unit_toplevel unit_exn ?toplevel handler] =>
-      destruct toplevel
-    end;
-      [ rewrite Ph | rewrite Hh ]; repeat split; reflexivity.
+    rewrite Ph, Pb, Bh, Bb, Nh, Nb. repeat split; reflexivity.
   - intros H. apply andb_true_iff in H as [Hhs Hb].
     destruct (statics_nowhere body Hb) as (Pb & Bb & Nb).
     rewrite Hhs, Pb, Bb, Nb.
@@ -208,15 +315,15 @@ Proof.
 Qed.
 
 Lemma to_toplevel (toplevel : bool) (e : expr) :
-  statics_at_unit_toplevel unit_exn toplevel e = true ->
-  statics_at_unit_toplevel unit_exn true e = true.
+  statics_outside_loops_and_code toplevel e = true ->
+  statics_outside_loops_and_code true e = true.
 Proof.
   destruct toplevel; [ auto | ]. intros H. apply (statics_nowhere e H).
 Qed.
 
 Definition handlers_nowhere
     (handlers : list (continuation * continuation_handler)) : Prop :=
-  forallb (fun '(_, h) => handler_statics_at_unit_toplevel unit_exn false h)
+  forallb (fun '(_, h) => handler_statics_outside_loops_and_code false h)
     handlers
   = true.
 
@@ -254,7 +361,7 @@ Fixpoint cont_ok (c : cont_value) : Prop :=
   match c with
   | Outer _ => True
   | Closure h _ conts recursive =>
-    handler_statics_at_unit_toplevel unit_exn true h = true
+    handler_statics_outside_loops_and_code true h = true
     ∧ NoDup (handler_static_names names_of h)
     ∧ (∀ n : positive,
         In n (handler_static_names names_of h) ->
@@ -357,12 +464,12 @@ Qed.
 Definition code_ok (statics : static_env) : Prop :=
   ∀ (id : code_id) (c : code),
     lookup id (static_code statics) = Some c ->
-    code_statics_at_unit_toplevel unit_exn c = true.
+    code_statics_outside_loops_and_code c = true.
 
 Lemma eval_static_bindings_code_ok (vars : env)
     (bindings : list static_binding) :
   ∀ statics statics' : static_env,
-    forallb (binding_statics_at_unit_toplevel unit_exn) bindings = true ->
+    forallb binding_statics_outside_loops_and_code bindings = true ->
     code_ok statics ->
     eval_static_bindings vars bindings statics = Some statics' ->
     code_ok statics'.
@@ -382,7 +489,7 @@ Proof.
 Qed.
 
 Definition inv (s : state) : Prop :=
-  statics_at_unit_toplevel unit_exn true (state_expr s) = true
+  statics_outside_loops_and_code true (state_expr s) = true
   ∧ NoDup (static_names names_of (state_expr s))
   ∧ conts_ok (state_conts s)
   ∧ (∀ n : positive,
@@ -753,13 +860,12 @@ Qed.
 
 (* A well-formed unit, from empty environments, satisfies the invariant
    for either sort of name. *)
-Lemma well_formed_inv (unit_exn : continuation)
-    (names_of : static_binding -> list positive)
+Lemma well_formed_inv (names_of : static_binding -> list positive)
     (is_bound : static_env -> positive -> bool) (e : expr) :
   (∀ n : positive, is_bound empty_static_env n = false) ->
-  statics_at_unit_toplevel unit_exn true e = true ->
+  statics_outside_loops_and_code true e = true ->
   distinct (static_names names_of e) = true ->
-  inv unit_exn names_of is_bound
+  inv names_of is_bound
     (State e [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hempty P D.
@@ -782,10 +888,10 @@ Qed.
 Local Ltac condition :=
   unfold well_formed_unit; rewrite !andb_true_iff; tauto.
 
-Lemma well_formed_unit_statics_at_unit_toplevel (u : unit_interface)
+Lemma well_formed_unit_statics_outside_loops_and_code (u : unit_interface)
     (e : expr) :
   well_formed_unit u e = true ->
-  statics_at_unit_toplevel (unit_exn u) true e = true.
+  statics_outside_loops_and_code true e = true.
 Proof. condition. Qed.
 
 Lemma well_formed_unit_code_ids_distinct (u : unit_interface) (e : expr) :
@@ -830,7 +936,7 @@ Lemma well_formed_unit_traps_well_formed (u : unit_interface) (e : expr) :
 Proof. condition. Qed.
 
 Lemma well_formed_unit_intro (u : unit_interface) (e : expr) :
-  statics_at_unit_toplevel (unit_exn u) true e = true ->
+  statics_outside_loops_and_code true e = true ->
   distinct (static_names code_ids_of_binding e) = true ->
   distinct (static_names symbols_of_binding e) = true ->
   names_in_scope (unit_return u) (unit_exn u) e = true ->
@@ -846,17 +952,17 @@ Proof. condition. Qed.
 Theorem well_formed_never_faults : well_formed_never_faults_statement.
 Proof.
   intros u e n s Hwf Hrun.
-  pose proof (well_formed_unit_statics_at_unit_toplevel u e Hwf) as P.
+  pose proof (well_formed_unit_statics_outside_loops_and_code u e Hwf) as P.
   pose proof (well_formed_unit_code_ids_distinct u e Hwf) as Dcode.
   pose proof (well_formed_unit_symbols_distinct u e Hwf) as Dsymbols.
-  pose proof (inv_run (unit_exn u) code_ids_of_binding code_id_bound
+  pose proof (inv_run code_ids_of_binding code_id_bound
     code_bound_after n _ s
-    (well_formed_inv (unit_exn u) code_ids_of_binding code_id_bound e
+    (well_formed_inv code_ids_of_binding code_id_bound e
        (fun _ => eq_refl) P Dcode)
     Hrun) as Hcode.
-  pose proof (inv_run (unit_exn u) symbols_of_binding symbol_bound
+  pose proof (inv_run symbols_of_binding symbol_bound
     symbol_bound_after n _ s
-    (well_formed_inv (unit_exn u) symbols_of_binding symbol_bound e
+    (well_formed_inv symbols_of_binding symbol_bound e
        (fun _ => eq_refl) P Dsymbols)
     Hrun) as Hsymbols.
   rewrite (state_eta s) in Hcode, Hsymbols. unfold static_fault.
@@ -864,11 +970,11 @@ Proof.
     as [ x kind d body | bindings body | k h body | handlers body | ap | ac
        | scrutinee arms | ];
     try reflexivity.
-  - rewrite (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hcode),
-      (inv_no_rebinding (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hsymbols).
+  - rewrite (inv_no_rebinding _ _ _ _ _ _ _ _ rd_ Hcode),
+      (inv_no_rebinding _ _ _ _ _ _ _ _ rd_ Hsymbols).
     reflexivity.
-  - exact (inv_no_recursive_statics (unit_exn u) _ _ _ _ _ _ _ _ rd_ Hcode).
-  - exact (inv_no_call_binding_statics (unit_exn u) _ _ _ _ _ _ _ rd_ Hcode).
+  - exact (inv_no_recursive_statics _ _ _ _ _ _ _ _ rd_ Hcode).
+  - exact (inv_no_call_binding_statics _ _ _ _ _ _ _ rd_ Hcode).
 Qed.
 
 Theorem well_formed_names_bound : well_formed_names_bound_statement.

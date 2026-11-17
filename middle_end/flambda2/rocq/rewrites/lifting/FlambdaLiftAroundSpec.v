@@ -48,9 +48,10 @@
      let_cont k () = (let b = Make_block 0 (x) in cont k' (b)) in
      switch c | 0 -> cont k' (0) | 1 -> cont k ()
 
-   An arm is not at toplevel (FlambdaWellFormedSpec.handler_at_unit_toplevel),
-   so no static binding may stand in it, and the block mentions a
-   variable, so it cannot be bound at the head of the unit
+   An arm is not at toplevel as Simplify has it
+   (FlambdaWellFormedSpec.handler_at_unit_toplevel), so Simplify puts
+   no static binding in it, and the block mentions a variable, so it
+   cannot be bound at the head of the unit
    (FlambdaLiftFromArmsSpec.v). Simplify binds a symbol to the block
    before the test, where the variable is in scope, and the arm gives
    the symbol.
@@ -142,9 +143,10 @@
    FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
    the heap, so that the heaps of two exits are empty (a limit: the CR
    at FlambdaLiftSpec.lift_unit). It also checks that the result is a
-   well-formed unit: a group put is then at toplevel, executed once,
-   and binds symbols that are new; and its variables are in scope
-   where it stands, so they have values there (FlambdaScopeSpec.v).
+   well-formed unit: a group put is then outside loops and code,
+   executed once at most, and binds symbols that are new; and its
+   variables are in scope where it stands, so they have values there
+   (FlambdaScopeSpec.v).
    With these the unit lifted refines the unit, run on its own
    ([lift_around_unit_program_refines_statement]).
 

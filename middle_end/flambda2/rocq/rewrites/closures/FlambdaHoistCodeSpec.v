@@ -59,9 +59,8 @@
    is bound a second time in a handler that is never entered is bound
    twice in the one group. So three things are checked of the unit,
    and no code is moved if one fails ([hoist_code] answers [None]).
-   - Its static bindings are at toplevel
-     (FlambdaWellFormedSpec.statics_at_unit_toplevel, for one of its free
-     continuations as the exception continuation of the unit), and bind
+   - Its static bindings are outside loops and code
+     (FlambdaWellFormedSpec.statics_outside_loops_and_code), and bind
      each code id once (FlambdaWellFormedSpec.static_names, of the code
      ids). These are the first condition of
      FlambdaWellFormedSpec.well_formed_unit and, of the second, the part
@@ -169,8 +168,8 @@ with handler_without_code (h : continuation_handler)
    machine has no step for a direct call unless its callee is a closure
    of the code named, so closures are enough here). And it asks more in
    two places: a handler is given only the code that is bound where its
-   [Let_cont] is, where that condition also gives a toplevel handler
-   the code that the body of its [Let_cont] binds at toplevel; and the
+   [Let_cont] is, where that condition also gives a handler the code
+   that the body of its [Let_cont] binds on every way to it; and the
    code of a closure is to be bound, where that condition accepts code
    that is declared deleted. For a unit that fails the check in either
    place no code is moved; if it needed that to be validated, it stays
@@ -247,17 +246,11 @@ with code_closures_in_scope (bound : code_id -> bool) (c : code) : bool :=
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
-(* The static bindings of the unit are at toplevel, for one of its free
-   continuations as its exception continuation. *)
-Definition statics_at_unit_toplevel_of_unit (e : expr) : bool :=
-  existsb (fun unit_exn => statics_at_unit_toplevel unit_exn true e)
-    (free_continuations e).
-
 (* The unit with its code bound first, if it passes the checks. *)
 Definition hoist_code (e : expr) : option expr :=
   let codes := code_bindings e in
   if
-    statics_at_unit_toplevel_of_unit e
+    statics_outside_loops_and_code true e
     && distinct (static_names code_ids_of_binding e)
     && distinct (flat_map code_ids_of_binding codes)
     && closures_in_scope (fun _ => false) e

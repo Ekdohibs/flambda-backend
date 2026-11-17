@@ -1,0 +1,22 @@
+let $camlT1_14_unit__immstring_0 = "ccc" in
+let $camlT1_14_unit__const_block_1 = Block 1 ($camlT1_14_unit__immstring_0)
+in
+let region/111 = %begin_region () in
+(let z/114 = $camlT1_14_unit__const_block_1 in
+ (let prim/116 = %is_int (z/114) in
+  switch prim/116
+    | 0 -> k/50
+    | 1 -> k/49)
+   where k/50 =
+     let prim/115 = %get_tag (z/114) in
+     switch prim/115
+       | 0 -> k/48 (0)
+       | 1 -> k/48 ($camlT1_14_unit__Pmakeblock87_3)
+   where k/49 =
+     let $camlT1_14_unit__Pmakeblock87_3 = Block 0 (z/114) in
+     cont k/48 (0))
+  where k/48
+          (region_return/112 : [ 0 | 0 of [ 0 | 0 of imm tagged |1 of val ] ]) =
+    let unit/113 = %end_region (region/111) in
+    let $camlT1_14_unit = Block 0 (region_return/112) in
+    cont done ($camlT1_14_unit)

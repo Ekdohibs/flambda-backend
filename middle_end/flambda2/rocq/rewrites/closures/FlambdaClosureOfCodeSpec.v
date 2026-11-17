@@ -335,7 +335,7 @@ Fixpoint know_code_closures (sets : list set_made) (syms : list symbol)
   | Let_cont_non_recursive k h body =>
     Let_cont_non_recursive k
       (know_code_in_handler sets
-         (static_names symbols_of_binding body ++ syms) h)
+         (handler_scope symbols_of_binding k body ++ syms) h)
       (know_code_closures sets syms body)
   | Let_cont_recursive handlers body =>
     Let_cont_recursive
@@ -343,7 +343,9 @@ Fixpoint know_code_closures (sets : list set_made) (syms : list symbol)
          (fun '(k, h) =>
             (k,
              know_code_in_handler sets
-               (static_names symbols_of_binding body ++ syms) h))
+               (recursive_scope symbols_of_binding (map fst handlers) body
+                ++ syms)
+               h))
          handlers)
       (know_code_closures sets syms body)
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e

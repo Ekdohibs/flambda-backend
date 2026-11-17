@@ -1,0 +1,26 @@
+(* A static binding in the body of code that is called twice (3, then 10); the
+   first result is kept and its field read. Refused by the rule of place. *)
+let code inline(never) loopify(never) size(10)
+      f_0 (x/67 : imm tagged)
+        my_closure/68 &my_alloc_region/69 my_depth/70
+        -> k/22 * k/23
+        : val =
+  let $Cell = Block 0 (x/67) in
+  cont k/22 ($Cell)
+in
+let $F = closure f_0 @f &toplevel in
+(let Popaque/79 = %opaque (3) in
+ apply direct(f_0 &toplevel)
+   ($F : _ -> val)
+     (Popaque/79)
+     -> k/24 * error)
+  where k/24 (first/73 : val) =
+    ((let Popaque/78 = %opaque (10) in
+      apply direct(f_0 &toplevel)
+        ($F : _ -> val)
+          (Popaque/78)
+          -> k/25 * error)
+       where k/25 (second/74 : val) =
+         let result/77 = %block_load.[`0`] (first/73) in
+         let $camlStatics_place_code_body = Block 0 (result/77) in
+         cont done ($camlStatics_place_code_body))

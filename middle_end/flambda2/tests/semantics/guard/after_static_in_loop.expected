@@ -1,0 +1,5 @@
+after_static_in_loop.fl: the term after is read from after_static_in_loop_after.fl; Simplify is not run
+after_static_in_loop.fl: the term after Simplify is NOT WELL-FORMED (a static binding in the handler of a recursive continuation or in the body of code)
+  the check of static names: passes before, passes after
+the standard error: nothing
+exit status: 1

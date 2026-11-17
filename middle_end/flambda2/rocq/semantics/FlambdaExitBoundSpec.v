@@ -26,7 +26,7 @@
  ******************************************************************************)
 
 
-(* What a refinement says of the symbols at an exit, with three tests
+(* What a refinement says of the symbols at an exit, with two tests
    of its target.
 
    This file is to be reviewed: [exit_statics_bound],
@@ -43,20 +43,19 @@
    that a verdict concludes does not by itself say that what the term
    after exits with is bound. Decision D57.
 
-   What says it is three tests of the term after, which no statement
+   What says it is two tests of the term after, which no statement
    of the validation concludes of it.
    FlambdaStaticsInScopeSpec.statics_bound_in_run_statement is of a
-   unit that passes [well_formed_unit], [statics_in_scope] and
-   [interface_conts_not_rebound], and of a run of it that starts with
-   no variable and no continuation bound, in a static environment
-   that has no code and binds the imports and nothing else, each to
-   something that mentions no symbol but an import and no code, and
-   with a heap whose cells hold only such values. Of every value that
-   a state of that run holds, those in the cells of its heap
-   included, and of every value that it exits with: a symbol that the
-   value is or holds is bound in the static environment of that
-   state, and the code of a closure that it is or holds is bound
-   there or is declared deleted by the unit.
+   unit that passes [well_formed_unit] and [statics_in_scope], and of
+   a run of it that starts with no variable and no continuation
+   bound, in a static environment that has no code and binds the
+   imports and nothing else, each to something that mentions no
+   symbol but an import and no code, and with a heap whose cells hold
+   only such values. Of every value that a state of that run holds,
+   those in the cells of its heap included, and of every value that
+   it exits with: a symbol that the value is or holds is bound in the
+   static environment of that state, and the code of a closure that
+   it is or holds is bound there or is declared deleted by the unit.
 
    This file joins that to a refinement of two units run from the
    same imports (FlambdaImportsSpec.unit_refines). Each of the two
@@ -68,7 +67,7 @@
    statements are in the form of FlambdaExitWorldSpec.refines_world,
    which relates what the two runs leave at their exits:
    - [unit_refines_exits_bound_statement]: where the target of such a
-     refinement passes the three tests, an exit of the source is
+     refinement passes the two tests, an exit of the source is
      answered by an exit of the target through the same continuation,
      with the same values and the same heap; every symbol that those
      values, or the values in the cells of that heap, are or hold is
@@ -78,11 +77,11 @@
      deleted by the target;
    - [validated_exits_bound_statement]: so of a verdict of
      [validate_unit], of the two terms run on their own, where the
-     term after passes the three tests.
+     term after passes the two tests.
 
    The relation is asked at the exits of the target that answer exits
    of the source. The second half of [refines_world] allows a source
-   that goes wrong, and asks no related exit in that case. The three
+   that goes wrong, and asks no related exit in that case. The two
    tests of the target separately give, of every exit of the target
    run so, that it is as [exit_statics_bound] has it
    (FlambdaStaticsInScopeSpec.statics_bound_in_run_statement, and
@@ -94,8 +93,8 @@
    not that it is bound to what the source bound it to: the two
    static environments are not compared ([same_exit] compares
    neither, and [exit_statics_bound] looks at the second alone). The
-   three tests are not asked of the source, and nothing is said of
-   what it binds. The three tests of the target are premises: nothing
+   two tests are not asked of the source, and nothing is said of
+   what it binds. The two tests of the target are premises: nothing
    here concludes them from a verdict.
 
    That a refinement alone does not say it is shown by two units
@@ -134,7 +133,7 @@ Definition same_exit_bound (deleted : list code_id) (w w' : exit_world)
   same_exit w w' ∧ exit_statics_bound deleted w'.
 
 (* A refinement of two units run from the same imports
-   (FlambdaImportsSpec.unit_refines) whose target passes the three
+   (FlambdaImportsSpec.unit_refines) whose target passes the two
    tests of FlambdaStaticsInScopeSpec.statics_bound_in_run_statement,
    given the symbols that are imported: the exits are related by
    [same_exit_bound], with the code that the target declares
@@ -144,7 +143,6 @@ Definition unit_refines_exits_bound_statement : Prop :=
     (source target : expr),
     well_formed_unit u target = true ->
     statics_in_scope (map fst imports) target = true ->
-    interface_conts_not_rebound u target = true ->
     unit_refines imports source target ->
     refines_world (same_exit_bound (deleted_code_ids target))
       (State source [] [] (imports_statics imports) empty_heap no_reads)
@@ -160,18 +158,17 @@ Definition validated_exits_bound_statement : Prop :=
     <> Not_validated ->
     well_formed_unit u after = true ->
     statics_in_scope [] after = true ->
-    interface_conts_not_rebound u after = true ->
     refines_world (same_exit_bound (deleted_code_ids after))
       (State before [] [] empty_static_env empty_heap no_reads)
       (State after [] [] empty_static_env empty_heap no_reads).
 
 (* That a refinement does not say it, and that the tests do. There are
    two units of which the second refines the first, each run on its
-   own, such that: the first passes the three tests, and exits with a
+   own, such that: the first passes the two tests, and exits with a
    symbol and the empty heap; the second exits through the same
    continuation with the same symbol and the same heap, and the
    static environment of its state that exits does not bind the
-   symbol; and the second fails [well_formed_unit] and
+   symbol; and the second passes [well_formed_unit] and fails
    [statics_in_scope]. Nothing here says that the validation accepts
    the two.
 
@@ -179,16 +176,17 @@ Definition validated_exits_bound_statement : Prop :=
    symbol and returns it. One handler of the second binds the symbol
    and returns it, another returns the symbol alone, and the test of
    the second unit goes to the handler that returns it alone. That
-   unit fails [well_formed_unit] as the handler that binds the symbol
-   is not at toplevel: the body of its [Let_cont] can return without
-   applying it (FlambdaWellFormedSpec.handler_at_unit_toplevel,
-   statics_at_unit_toplevel). *)
+   unit passes [well_formed_unit]: the handler that binds the symbol
+   is outside loops and code
+   (FlambdaWellFormedSpec.statics_outside_loops_and_code). It fails
+   [statics_in_scope]: the handler that returns the symbol alone
+   mentions it, and the way of the test to that handler binds
+   nothing (FlambdaStaticsInScopeSpec.handler_scope). *)
 Definition refined_exit_unbound_statement : Prop :=
   ∃ (u : unit_interface) (source target : expr) (n : nat) (last : state)
     (k : continuation) (s : symbol),
     well_formed_unit u source = true
     ∧ statics_in_scope [] source = true
-    ∧ interface_conts_not_rebound u source = true
     ∧ behaves (State source [] [] empty_static_env empty_heap no_reads)
         (Exits k [Value_symbol s] empty_heap)
     ∧ program_refines source target
@@ -196,5 +194,5 @@ Definition refined_exit_unbound_statement : Prop :=
       = Step last
     ∧ step last = Exit k [Value_symbol s] empty_heap no_reads
     ∧ symbol_bound (state_statics last) s = false
-    ∧ well_formed_unit u target = false
+    ∧ well_formed_unit u target = true
     ∧ statics_in_scope [] target = false.

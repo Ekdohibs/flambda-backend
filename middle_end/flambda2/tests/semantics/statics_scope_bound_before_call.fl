@@ -1,0 +1,30 @@
+(* The control of statics_scope_bound_after_call.fl, and the form that the
+   compiler gives the body of a try: the symbol is bound at the head of the
+   body of the try, before the call that raises, and mentioned in the
+   exception handler of the call. Both checks pass and Simplify takes the
+   term. *)
+let $Bucket = Block 0 (1) in
+let code inline(never) loopify(never) size(10)
+      f_0 (x/67 : imm tagged)
+        my_closure/68 &my_alloc_region/69 my_depth/70
+        -> k/22 * k/23
+        : val =
+  cont k/23 pop(regular k/23) ($Bucket)
+in
+let $F = closure f_0 @f &toplevel in
+let a/1 = %opaque (3) in
+(((cont k/30 push(k/31)
+     where k/30 =
+       let $Cell = Block 0 (a/1) in
+       (apply direct(f_0 &toplevel)
+          ($F : _ -> val)
+            (a/1)
+            -> k/32 * k/31
+          where k/32 (r/2 : val) =
+            cont k/33 pop(k/31) ($Cell)))
+    where k/31 exn (e/3 : val) =
+      cont k/33 ($Cell))
+   where k/33 (p/4 : val) =
+     let result/5 = %block_load.[`0`] (p/4) in
+     let $camlStatics_scope_bound_before_call = Block 0 (result/5) in
+     cont done ($camlStatics_scope_bound_before_call))

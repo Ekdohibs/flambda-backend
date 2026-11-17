@@ -1,0 +1,2 @@
+the standard error, its first line: >> Fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
+exit status: 2

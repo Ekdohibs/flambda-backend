@@ -1,0 +1,13 @@
+(* The control: a static binding in a handler that every way through its body
+   ends in. Simplify's own rule holds, both checks pass and the unit is
+   validated. *)
+let a/1 = %opaque (3) in
+let c/2 = %int_comp.lt (a/1, 5) in
+(switch c/2
+   | 0 -> k/12 (0)
+   | 1 -> k/12 (a/1))
+  where k/12 (x/4 : imm tagged) =
+    let $Cell = Block 0 (x/4) in
+    let result/5 = %block_load.[`0`] ($Cell) in
+    let $camlStatics_scope_handler_after_both_arms = Block 0 (result/5) in
+    cont done ($camlStatics_scope_handler_after_both_arms)

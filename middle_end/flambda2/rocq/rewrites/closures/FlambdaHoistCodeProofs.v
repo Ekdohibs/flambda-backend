@@ -804,8 +804,8 @@ Proof.
   - destruct h as [params metadata handler]. simpl. intros Hno H.
     apply andb_true_iff in Hno as [Hno_h Hno_b].
     apply andb_true_iff in H as [Hh Hb].
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hh.
     simpl in Hh.
     rewrite (observer_closures_in_scope bound handler Hno_h Hh),
@@ -814,8 +814,8 @@ Proof.
   - intros Hno H. apply andb_true_iff in Hno as [Hno_hs Hno_b].
     apply andb_true_iff in H as [Hhs Hb].
     rewrite (observer_closures_in_scope bound body Hno_b Hb), andb_true_r.
-    rewrite (no_static_names symbols_of_binding body Hno_b),
-      (no_static_names declared_code_ids_of_binding body Hno_b)
+    rewrite ?(no_static_handler_scope _ _ body Hno_b),
+      ?(no_static_recursive_scope _ _ body Hno_b)
       in Hhs.
     simpl in Hhs.
     induction handlers as [ | [k [params metadata handler]] handlers IH];
@@ -1236,9 +1236,7 @@ Qed.
 
 Section Hoisted.
 
-(* The continuation for which the static bindings of the unit are at
-   toplevel, and the code that the unit with its code first has bound. *)
-Variable unit_exn : continuation.
+(* The code that the unit with its code first has bound. *)
 Variable src : list (code_id * code).
 
 (* The second state: the first with the bindings of code taken out of
@@ -1395,8 +1393,8 @@ Proof.
     destruct recursive; [ | contradiction ].
     intros (Hno & _ & _).
     destruct
-      (statics_nowhere 1%positive symbols_of_binding body
-         (no_static_nowhere 1%positive body Hno))
+      (statics_nowhere symbols_of_binding body
+         (no_static_nowhere body Hno))
       as (_ & Hbinds & _).
     destruct (without_code_nothing body Hbinds) as [Hsame Hnone].
     simpl. rewrite Hsame, Hnone.
@@ -1414,7 +1412,7 @@ Definition known_inv (s : state) : Prop :=
       lookup id src = Some c.
 
 Definition wf_inv : state -> Prop :=
-  inv unit_exn code_ids_of_binding code_id_bound.
+  inv code_ids_of_binding code_id_bound.
 
 (* The code that is bound binds nothing static. *)
 Lemma wf_inv_code (s : state) (id : code_id) (c : code) :
@@ -1424,7 +1422,7 @@ Lemma wf_inv_code (s : state) (id : code_id) (c : code) :
 Proof.
   intros (_ & _ & _ & _ & _ & S) Hlookup. pose proof (S id c Hlookup) as Hc.
   destruct c as [params my_closure ret exn metadata body]. simpl in Hc |- *.
-  exact (proj1 (proj2 (statics_nowhere unit_exn code_ids_of_binding body Hc))).
+  exact (proj1 (proj2 (statics_nowhere code_ids_of_binding body Hc))).
 Qed.
 
 Lemma known_inv_over (remaining : list value)
@@ -1565,7 +1563,7 @@ Lemma hoist_inv_step (s s' : state) :
   hoist_inv s -> step s = Step s' -> hoist_inv s'.
 Proof.
   intros (W & P & K) Hstep.
-  exact (conj (inv_step unit_exn code_ids_of_binding code_id_bound
+  exact (conj (inv_step code_ids_of_binding code_id_bound
                  code_bound_after s s' W Hstep)
            (conj (scope_inv_step s s' P Hstep)
               (known_inv_step s s' W K Hstep))).
@@ -1848,7 +1846,7 @@ Proof.
     destruct (kind_eqb (kind_of_value v) kind); reflexivity.
   - (* Let_static *)
     rewrite (eval_static_bindings_hoist vars bindings statics
-               (inv_no_rebinding unit_exn code_ids_of_binding code_id_bound
+               (inv_no_rebinding code_ids_of_binding code_id_bound
                   bindings body vars conts statics hp rd_ W)).
     destruct (eval_static_bindings vars bindings statics); reflexivity.
   - (* Let_cont_non_recursive *)
@@ -1927,7 +1925,7 @@ Lemma hoist_code_equivalent_under (slots : list value_slot) (e e' : expr)
   equivalent (State e [] conts statics hp rd) (State e' [] conts statics hp rd).
 Proof.
   unfold hoist_code. cbv zeta.
-  destruct (statics_at_unit_toplevel_of_unit e) eqn:Htoplevel; simpl;
+  destruct (statics_outside_loops_and_code true e) eqn:Htoplevel; simpl;
     [ | discriminate ].
   destruct (distinct (static_names code_ids_of_binding e)) eqn:Hnames; simpl;
     [ | discriminate ].
@@ -1936,8 +1934,6 @@ Proof.
   destruct (closures_in_scope (fun _ => false) e) eqn:Hscope;
     [ | discriminate ].
   intros [= <-] Hno_code Hallocated Hheap Hobservers.
-  unfold statics_at_unit_toplevel_of_unit in Htoplevel.
-  apply existsb_exists in Htoplevel as [unit_exn [_ Htoplevel]].
   assert (Hfresh : ∀ id : code_id, lookup id (static_code statics) = None).
   { intros id. rewrite Hno_code. reflexivity. }
   destruct (bind_codes_from (code_bindings e) statics
@@ -1949,13 +1945,13 @@ Proof.
     (equivalent_trans _
        (State (without_code e) [] conts
           (Static_env src (static_values statics)) hp rd)).
-  - apply (bisimulation_equivalent (hoisted_related unit_exn src)
-             (hoisted_related_step unit_exn src)).
+  - apply (bisimulation_equivalent (hoisted_related src)
+             (hoisted_related_step src)).
     split.
     { unfold hoist_state, code_first_env. simpl_state. rewrite Hhoist.
       reflexivity. }
     split.
-    { apply (inv_under _ _ _ slots);
+    { apply (inv_under _ _ slots);
         [ | exact Hno_code | exact Hobservers | exact Htoplevel
         | exact Hnames ].
       intros n _. unfold code_id_bound. rewrite Hfresh. reflexivity. }

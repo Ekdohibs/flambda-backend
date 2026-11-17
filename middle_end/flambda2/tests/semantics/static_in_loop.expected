@@ -1,1 +1,1 @@
-static_in_loop.fl: not checked: the term is not well-formed (a static binding that is not at toplevel, or a name bound twice)
+static_in_loop.fl: not checked: the term is not well-formed (a static binding in the handler of a recursive continuation or in the body of code)

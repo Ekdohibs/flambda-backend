@@ -93,6 +93,7 @@ From OxCamlFlambda2 Require FlambdaKeepsScopeProofs FlambdaValidateScopeProofs
   FlambdaTwinParamsNamesProofs FlambdaBindConstParamsNamesProofs
   FlambdaAliasLetsProofs.
 From OxCamlFlambda2 Require FlambdaLiftContsNamesProofs.
+From OxCamlFlambda2 Require FlambdaStaticsInScopeProofs.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
@@ -1294,6 +1295,12 @@ Theorem statics_at_unit_toplevel_equivariant :
   statics_at_unit_toplevel_equivariant_statement.
 Proof. equivariance. Qed.
 #[local] Hint Rewrite statics_at_unit_toplevel_equivariant : equivariance.
+
+Theorem statics_outside_loops_and_code_equivariant :
+  statics_outside_loops_and_code_equivariant_statement.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite statics_outside_loops_and_code_equivariant
+  : equivariance.
 
 (* From here the tactic rewrites with its database in one pass, which
    is faster. A proof that the one pass leaves open is between a line
@@ -4685,20 +4692,12 @@ Lemma hoist_code_renamed (r : renaming) (e : expr) :
   hoist_code (rename_expr r e) = option_map (rename_expr r) (hoist_code e).
 Proof.
   unfold hoist_code. cbv zeta.
-  assert (Htoplevel :
-    statics_at_unit_toplevel_of_unit (rename_expr r e)
-    = statics_at_unit_toplevel_of_unit e).
-  { unfold statics_at_unit_toplevel_of_unit.
-    rewrite well_formed_free_continuations_renamed.
-    induction (free_continuations e) as [ | k ks IH]; [ reflexivity | ].
-    cbn [map existsb].
-    rewrite (statics_at_unit_toplevel_equivariant r k true e), IH.
-    reflexivity. }
-  rewrite Htoplevel, (proj1 (bound_static_names_equivariant r e)),
+  rewrite (statics_outside_loops_and_code_equivariant r true e),
+    (proj1 (bound_static_names_equivariant r e)),
     code_bindings_renamed, code_ids_of_bindings_renamed,
     closures_in_scope_renamed, <- without_code_renamed.
   destruct
-    (statics_at_unit_toplevel_of_unit e
+    (statics_outside_loops_and_code true e
      && distinct (static_names code_ids_of_binding e)
      && distinct (flat_map code_ids_of_binding (code_bindings e))
      && closures_in_scope (fun _ => false) e);
@@ -4840,18 +4839,37 @@ Proof.
       rewrite (binding_statics_in_scope_renamed r binding), IH.
       reflexivity.
     + rewrite
-        (static_names_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (static_names_renamed r declared_code_ids_of_binding
+        (FlambdaStaticsInScopeProofs.handler_scope_renamed r
+           symbols_of_binding (symbols_of_binding_renamed r)),
+        (FlambdaStaticsInScopeProofs.handler_scope_renamed r
+           declared_code_ids_of_binding
            (declared_code_ids_of_binding_renamed r)),
         handler_statics_in_scope_renamed, expr_statics_in_scope_renamed.
       reflexivity.
-    + rewrite expr_statics_in_scope_renamed,
-        (static_names_renamed r symbols_of_binding
-           (symbols_of_binding_renamed r)),
-        (static_names_renamed r declared_code_ids_of_binding
-           (declared_code_ids_of_binding_renamed r)).
-      f_equal.
+    + assert (Hgroup :
+        ∀ names_of : static_binding -> list positive,
+          (∀ binding : static_binding,
+            names_of (rename_static_binding r binding) = names_of binding) ->
+          recursive_scope names_of
+            (map fst
+               (map
+                  (fun '(k, h) =>
+                     (rename_continuation r k, rename_handler r h))
+                  handlers))
+            (rename_expr r body)
+          = recursive_scope names_of (map fst handlers) body).
+      { intros names_of Hnames. fold (rename_handlers r handlers).
+        rewrite map_fst_rename_handlers.
+        apply FlambdaStaticsInScopeProofs.recursive_scope_renamed, Hnames. }
+      rewrite expr_statics_in_scope_renamed,
+        (Hgroup _ (symbols_of_binding_renamed r)),
+        (Hgroup _ (declared_code_ids_of_binding_renamed r)).
+      f_equal. clear Hgroup.
+      generalize
+        (recursive_scope symbols_of_binding (map fst handlers) body),
+        (recursive_scope declared_code_ids_of_binding (map fst handlers)
+           body).
+      intros group_syms group_ids.
       induction handlers as [ | [k h] handlers IH]; cbn [map forallb];
         [ reflexivity | ].
       rewrite (handler_statics_in_scope_renamed r h), IH.
