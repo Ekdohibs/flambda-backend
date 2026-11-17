@@ -509,16 +509,15 @@ a `CR` at the place in the `Spec` file.
   accepts). The statements of the validation conclude `refines`: so
   the refinement that a verdict concludes does not by itself say
   that a symbol at an exit of the term after is bound. What says it,
-  of a unit run from its imports and the empty heap, is three tests
-  of the unit, `well_formed_unit`, `statics_in_scope` and
-  `interface_conts_not_rebound`
+  of a unit run from its imports and the empty heap, is two tests of
+  the unit, `well_formed_unit` and `statics_in_scope`
   (`FlambdaStaticsInScopeSpec.statics_bound_in_run_statement`,
   joined to a refinement in
-  `FlambdaExitBoundSpec.unit_refines_exits_bound_statement`). No
-  statement of the validation concludes them; the tool asks the
-  first of every term after, and prints what the two others answer
-  of each of the two terms on the line "the check of static names",
-  for which it refuses nothing. They say that a symbol is bound, and
+  `FlambdaExitBoundSpec.unit_refines_exits_bound_statement`; a third,
+  `interface_conts_not_rebound`, was a premise until decision D60).
+  No statement of the validation concludes them; the tool asks both
+  of each of the two terms, and prints no verdict of a pair one of
+  whose terms fails one (D60). They say that a symbol is bound, and
   not that it is bound to what the term before bound it to: the two
   static environments are not compared. The comparison intended is
   of exits that carry their static environments, related as the
@@ -588,6 +587,52 @@ a `CR` at the place in the `Spec` file.
   whether the relation of code to its newer versions is to be in the
   model, so that its machine reads the compiler's list as the
   compiler does.
+- **D60.** Where a static binding may stand in a unit, and where a
+  static name may be mentioned. Simplify takes a `Let` of static
+  constants that binds a symbol only at the toplevel of the unit as it
+  has it, where a handler is at toplevel when the body of its
+  `Let_cont` uses no continuation but that one and the exception
+  continuation of the unit. Its own output does not keep that rule: a
+  handler that has one inlinable use can be put in the place of the
+  use, with the static bindings at its head, and nothing asks where it
+  lands (C5-11, T5b-4, X5-9). Decided, provisionally, in two halves. A
+  well-formed unit has its static bindings outside the handlers of
+  recursive continuations and outside the body of code
+  (`FlambdaWellFormedSpec.statics_outside_loops_and_code`): a
+  restriction of the text that is enough, with the other conditions of
+  a well-formed unit, for the model's theorem that no static binding
+  is executed twice. It is not necessary for it: a handler in a loop
+  that a run enters once is refused. And the check of static names
+  gives a handler a lower bound of what the body of its `Let_cont` has
+  bound on every way to the handler
+  (`FlambdaStaticsInScopeSpec.exits`, `handler_scope`,
+  `recursive_scope`), in the place of all that the body binds; with
+  that, `statics_bound_in_run_statement` needs neither Simplify's rule
+  nor `interface_conts_not_rebound`. That scope is also "the scope of
+  the call" of D59: the test tool adds code to the list of a call of
+  known arity only where this check has it in scope at the call. The
+  model's reading of Simplify's rule stays as
+  `statics_at_unit_toplevel`. It is no longer a condition of a
+  well-formed unit, and the tool does not use it as an admission
+  check; it counts a use as the compiler does on a term
+  (`continuations_used`: a trap action is not a use). A term that
+  passes it passes the first half
+  (`at_unit_toplevel_outside_loops_and_code_statement`). A unit that
+  passes it, `interface_conts_not_rebound` and the check of static
+  names as it was passes the second
+  (`FlambdaStaticsInScopeSpec.whole_bodies_in_scope_statement`). The
+  test tool asks the two tests of each of the two terms, as a guard
+  that is no theorem, and prints no verdict of a pair one of whose
+  terms fails one. The rule is asked of the terms that are given to
+  Simplify and of those that it returns; it is not a rule of every
+  term that the compiler makes (X5-34). To_cmm does not check the
+  first half whole: the `CR` at `statics_outside_loops_and_code` says
+  what it does. The other course is to keep Simplify's rule and to
+  except the handlers that can only leave the unit. A second `CR`, at
+  `continuations_used`, says where Simplify's count of uses, which is
+  of its own run, differs from the definition, which reads the term,
+  and asks whether that reading will do. Decided for the interim;
+  open.
 
 ## Discrepancies with the compiler
 
@@ -791,7 +836,8 @@ says so. Only the labels that this tree cites are listed.
   kept an arm of a `Switch` that does not come back to that handler
   (an arm that it made invalid, or one that raises or is invalid): by
   the rule read in its source that handler is not at toplevel;
-  Simplify was not run on it.
+  Simplify was not run on it. Since decision D60 a well-formed unit
+  of the model may have such a binding.
 - **N1-1.** `Compare` writes the reverse maps of function slots and
   value slots into the forward maps.
 - **N1-2.** `pattern_match_pair` on code and on recursive handlers stops
@@ -939,6 +985,15 @@ says so. Only the labels that this tree cites are listed.
 - **T1-10.** The type that a projection of a value slot gives its
   closure has an index with no function slot, so the fast path of the
   next projection never answers on it.
+- **T1-14.** With `-flambda2-match-in-match`, at `-O2` and `-O3`, a
+  block that Simplify lifts to a symbol can be bound in one copy of a
+  handler that it has specialised and mentioned through the other. In
+  the recorded example that is in the tree
+  (`tests/semantics/guard/t1_14_unit.ml`) the field that holds the
+  symbol is never written, and the program reads the integer 0 there;
+  the model's check of static names refuses that term after, kept as
+  the compiler prints it (D60). Other recorded forms of it end
+  otherwise.
 - **T2-1.** `Typing_env.replace_equation` on a name that is not bound
   records an equation that the environment cannot see.
 - **T2-2.** The invariants of the typing environment are checked only
@@ -1089,7 +1144,10 @@ says so. Only the labels that this tree cites are listed.
 - **T5b-3.** The n-way join of types takes what `Expand_head` answers to
   be of the kind of the types joined, and nothing gives it that.
 - **T5b-4.** The body of a `try` at the top of a unit is at toplevel
-  for Simplify and not for the model.
+  for Simplify and not for the model. Since decision D60 it is for
+  the model's reading of Simplify's rule too
+  (`FlambdaWellFormedSpec.continuations_used`), and a well-formed
+  unit is not asked that rule.
 - **T6-1.** A prover answers what the environment says of a name, which
   is not true of a name that holds poison (one case reaches a number
   that is not poison).
@@ -1298,7 +1356,8 @@ says so. Only the labels that this tree cites are listed.
   a write to the bytes.
 - **X5-9.** Simplify leaves the module block bound in a handler that
   its own rule does not hold to be at toplevel, where a cold handler
-  stays out of line.
+  stays out of line. Since decision D60 a well-formed unit of the
+  model may have such a binding.
 - **X5-10.** Simplify shares a lifted block with an equal static
   constant only when the debugging information of their fields is
   equal too; the text of terms has none.
@@ -1312,3 +1371,10 @@ says so. Only the labels that this tree cites are listed.
   error on the term read.
 - **X5-13.** Simplify turns a switch whose arms are all one action into
   that action only when the arms have the same debugging information.
+- **X5-34.** In classic mode, where Simplify is not run, closure
+  conversion can bind at the head of the unit a block all of whose
+  fields are symbols before it binds one of those symbols, a block
+  with a variable field that is bound where it is built. In the
+  recorded example the program runs right, and its term fails the
+  model's check of static names, which is asked of the terms given to
+  Simplify and returned by it (D60).

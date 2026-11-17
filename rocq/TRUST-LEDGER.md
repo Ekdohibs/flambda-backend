@@ -1099,8 +1099,12 @@ it gave back.
   after is undefined, and the tool says "DIFFERENT" and "not
   validated", with status 1; against the unedited text it says
   "validated".
-  The tool reads one text and makes the term after itself, so that
-  pair is not among the tests of this tree.
+  In a check of a unit the tool reads one text and makes the term
+  after itself. Its option `-after` reads a term after from a second
+  text, and is for controls of the guard only: the two texts are
+  read independently, and "not validated" with it is no evidence
+  that two terms differ in meaning (the entry of the tool's guard,
+  below). So that pair is not among the tests of this tree.
   What the change moved in `tests/semantics`: no verdict. Of the
   units from sources, seven are validated by another route (by the
   lifting of closures where it was by the removal of unused static
@@ -1989,14 +1993,110 @@ it gave back.
   first), which compares two exits without the static environments
   of the states that exit (decision D57).
   `FlambdaStaticsInScopeSpec.statics_bound_in_run_statement` says
-  it of a unit that passes three tests, run from its imports and
-  the empty heap: the tool refuses a term after that fails the
-  first, `well_formed_unit`, and the line "the check of static
-  names" says what the two others answer of each of the two terms
-  as it is run (`statics_in_scope`, with the symbols of the imports
-  that the two runs are from, and `interface_conts_not_rebound`, as
-  they are extracted); nothing is refused for that line, and no
-  verdict depends on it.
+  it of a unit that passes two tests, run from its imports and the
+  empty heap: `well_formed_unit` and `statics_in_scope`, with the
+  symbols of the imports that the two runs are from.
+- **The tool's guard: the two tests, of both terms, before any
+  verdict.** In the same file (`well_formed_before`,
+  `check_or_raise`, `not_in_scope`). Since decision D60 a
+  well-formed unit may bind a symbol in one handler and mention it
+  in another that a run reaches without the binding; what excludes
+  that is `statics_in_scope`, and no statement of the validation
+  has either test as a premise or concludes it. So the tool asks
+  both, as they are extracted, of each of the two terms, and prints
+  no verdict of the validation of a pair one of whose terms fails
+  one. This is a guard and no theorem: it is the tool, which is not
+  verified, that asks it, and "validated" is to be read as
+  "validated, of two terms that pass the two tests".
+  Where it is asked. Of the term before, alone. No prefix is made
+  for this test: a symbol of another unit is taken as imported and a
+  code id that the term neither binds nor declares deleted as in
+  scope; the line of a term that fails says "not checked", with
+  which of the two it fails. The tool that is given a file asks it
+  before Simplify is given the term (`check_file`), and gives
+  Simplify no term that fails. The driver of the compiler's own run
+  asks it when the compiler's Simplify has returned, in the child
+  process where it makes its check. Then of both terms as they are
+  run, with the prefix made from the `.cmx` files in front of them
+  where there is one, and with the imports that the validation is
+  given: a term before that fails is "not checked", and a term
+  after that fails is a failure of the check, with the status 1, as
+  a term after that is not well-formed is.
+  What the guard does not do. It does not ask Simplify's own rule
+  for the place of a static binding
+  (`FlambdaWellFormedSpec.statics_at_unit_toplevel`, the model's
+  reading of it): a term before that passes the two tests is given
+  to Simplify whatever that rule says, and where Simplify stops on
+  it the error is the compiler's, with its status, and the tool
+  prints nothing of its own. And it is asked of terms that are
+  given to Simplify and of those that it returns: a term that the
+  compiler makes in classic mode, where Simplify is not run, may
+  fail `statics_in_scope` (discrepancy X5-34), and such a term
+  given to the tool is "not checked".
+  With a prefix, `statics_in_scope` asks that the code of a closure
+  and of a direct call be bound or declared deleted, and a prefix
+  binds the code of some of the closures of another unit only: a
+  unit whose term before, with the prefix in front of it, mentions
+  code of another unit that the prefix neither binds nor declares is
+  "not checked" for it. Eight units of
+  `tests/semantics/ocaml/pairs/` are so. Where the term before
+  passes and only the term after mentions such code, that is the
+  failure of the check, with the status 1.
+  The scope of this check is the scope that the conversion follows
+  where it adds code to the list of a call of known arity (the
+  entry "The code ids that a call of known arity lists", decision
+  D59): in a handler, of what the body of its `Let_cont` binds,
+  what `FlambdaStaticsInScopeSpec.handler_scope` or
+  `recursive_scope` gives, a lower bound of what is bound on every
+  way to the handler.
+  The line "the check of static names" is still printed with a
+  verdict. There it says what `statics_in_scope` answers, which is
+  "passes" of both terms where the guard has passed, and what
+  `interface_conts_not_rebound` answers. That third test is not part
+  of the guard, and no unit is refused by the guard for it:
+  `statics_bound_in_run_statement` and the two statements of
+  `FlambdaExitBoundSpec.v` no longer take it as a premise. The
+  hoisting of static bindings of the validation still tests it
+  (`FlambdaHoistStaticsSpec.hoist_statics`), and
+  `FlambdaStaticsInScopeSpec.whole_bodies_in_scope_statement` has it
+  as a premise.
+  The controls: twelve texts of `tests/semantics/`
+  (`statics_place_*`, `statics_bound_on_two_paths`,
+  `statics_scope_*`), each refused by one of the two tests or
+  taken by both; and in `tests/semantics/guard/`, five OCaml
+  sources (`static_*.ml`), of each of which the tool's Simplify
+  makes a term that the rule of before D60 refused, and four controls
+  on which the tool does not exit with the status 0: a term on which
+  Simplify stops, two terms after given as texts (the option
+  `-after`, with which Simplify is not run and no `.cmx` is read),
+  one that the check of static names refuses and one that is not
+  well-formed, and the options `-after` and `-round-trip` given
+  together, which the tool refuses. The scope of the handlers of a
+  recursive group of several continuations is exercised by no text:
+  the reader of texts does not read such a group; a computed example
+  of `FlambdaStaticsInScopeSpec.v` has one. The word that the tool
+  chooses for what is out of scope ("a symbol", "a code id") where a
+  prefix has a symbol for a field of which a `.cmx` says nothing is
+  exercised by no text of the tests either: they give the tool a
+  term after that is out of scope by `-after`, and then there is no
+  prefix. That Simplify makes such a term of a unit that has a
+  prefix is not ruled out; no test has one. A program of the tests
+  asks the function itself, of terms made by hand
+  (`tests/tools/scope_diagnosis_control.ml`).
+  What `-after` cannot show. The two texts are read independently:
+  the reader of texts makes its own code ids, function slots and
+  value slots for each, and gives no correspondence between those of
+  the two texts merely because their printed names match; only a
+  symbol is the same in both, by its name. So the validation can
+  say "not validated" even where the same text is given twice. The
+  control `guard/after_same_text` gives the tool one text as both
+  terms, of a unit that binds the code of a function that it
+  exports: its line is "not validated", where the same text given
+  alone is validated. The option is for controls of the guard:
+  under it "not validated" is no evidence that the two terms differ
+  in meaning, and the tool as it stands is not a check of the
+  compiler's own text of a term after against the text of the term
+  before.
 - **A check that does not establish `refines` is in the model, and
   what it accepts the tool prints on a line of its own, never as
   validated.** This entry awaits the human's confirmation (decision

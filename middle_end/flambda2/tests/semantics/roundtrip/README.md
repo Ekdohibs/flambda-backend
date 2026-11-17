@@ -70,9 +70,10 @@ It is a limit of fexpr and not a fault of the conversion or of the
 printer of the model, which writes the number that the term has; the
 compiler's own text of the term after of each of the four stops the
 parser at the same place. The round trip says nothing of the term
-after of those four units. The check of a unit reads no text of its
-term after, so their verdicts are not touched. The other sixteen
-units of that directory are the same before and after Simplify.
+after of those four units. The check of a unit, as the rules of the
+tests run it, reads no text of its term after, so their verdicts are
+not touched. The other sixteen units of that directory are the same
+before and after Simplify.
 
 Until `read_back` made that line, the tool ended on the exception at
 the term after of those four, with status 2 and no second line, and
@@ -105,9 +106,10 @@ It is a limit of what fexpr writes, and not a fault of the conversion
 or of the printer of the model, which gives fexpr the array kind and
 the set kind that the term has: the parser reads a set kind that is
 written, for an array of any kind, so the text could carry it. The
-check of a unit reads no text of its term after, so the verdicts
-of the two units are not touched; the term before of each, which is
-read from a text, has the two kinds that go together.
+check of a unit, as the rules of the tests run it, reads no text of
+its term after, so the verdicts of the two units are not touched; the
+term before of each, which is read from a text, has the two kinds
+that go together.
 
 There was another, `kinds_direct_naked.fl` after Simplify, until a unit
 read from a text was given the arity of the arguments of its calls.

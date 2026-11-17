@@ -135,19 +135,27 @@ then "after the prefix".
 
   in its place, as it does where the prefix is made from fewer units
   than were read.
-- The line "the check of static names" (`../README.md`, "What a
-  validation does not say") is, where the two terms have a prefix,
-  of the two terms with the prefix in front of them, and then ends
-  ", each with the prefix in front of it". Of 8 of the 10 units here
-  that have a prefix it says "fails" of both terms
+- The guard of the tool (`../README.md`, "What a validation does not
+  say") asks its two tests, where the two terms have a prefix, of
+  the two terms with the prefix in front of them, as they are run.
+  Of 8 of the 10 units here that have a prefix
   (`lengths_called_at_toplevel`, `lengths_called_in_function`,
   `lengths_included`, `lengths_kept_with_exception`, `never_called`,
-  `parity_called`, `phantom_called` and `probed_called`): the prefix
-  binds a closure of the first unit and not its code, which
-  `statics_in_scope` refuses whatever follows the prefix. So the
-  line says nothing of those 8 units themselves. Of the 2 others
+  `parity_called`, `phantom_called` and `probed_called`) the check of
+  static names then fails of both terms: the prefix binds a closure
+  of the first unit, or code of it that calls other code of it, and
+  not all of that code, which `statics_in_scope` refuses whatever
+  follows the prefix. The tool prints of each the one line
+
+      X.fl: not checked: with the prefix made from the .cmx files in front of it, the term before Simplify mentions a code id where it is not in scope
+
+  and neither runs the two terms nor asks the validation. The line
+  is for a name of the first unit that the prefix leaves out, and
+  says nothing of those 8 units themselves. Of the 2 others
   (`hidden_known_read` and `partly_tested`), whose prefix binds no
-  closure, it says "passes" of both terms.
+  closure, the guard passes, and the line "the check of static
+  names" says "passes" of both terms and ends ", each with the
+  prefix in front of it".
 - Nothing is said of the first unit itself: its initialisation is
   not run, and what its `.cmx` says of it is taken as it is.
 
@@ -160,19 +168,19 @@ from the others.
 
 | Second unit | First unit | What the second unit does | What the tool says of it |
 |-------------|------------|---------------------------|--------------------------|
-| `lengths_called_in_function.ml` | `lengths.ml` | a function calls a function of the first unit | a prefix of four bindings; both runs return the module block; the same; validated with its imports, given the `.cmx` |
-| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; undefined before and after; validated, with the line that says the validation says nothing of a unit whose term before is undefined |
-| `lengths_included.ml` | `lengths.ml` | a toplevel reads the fields of the first unit and keeps them (`include`) | the same prefix; both runs return a block of the two closures; the same; validated with its imports, given the `.cmx` |
-| `lengths_kept_with_exception.ml` | `lengths.ml` | the same, and exports a predefined exception too | the same prefix, and one import left; both runs return a block of the two closures and the imported exception; the same; validated with its imports, given the `.cmx` |
-| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of two bindings; undefined before and after; validated, with the line that says the validation says nothing |
+| `lengths_called_in_function.ml` | `lengths.ml` | a function calls a function of the first unit | a prefix of four bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `lengths_included.ml` | `lengths.ml` | a toplevel reads the fields of the first unit and keeps them (`include`) | the same prefix; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `lengths_kept_with_exception.ml` | `lengths.ml` | the same, and exports a predefined exception too | the same prefix, and one import left; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
+| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of two bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
 | `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows | no prefix; undefined before and after; nothing to validate |
 | `hidden_known_read.ml` | `hidden.ml` | a toplevel reads the field that the `.cmx` knows, and not the one of which it says nothing | a prefix of one binding, the module block with a symbol of which nothing is known in the other field, which is the one import left; both runs return the module block; the same; validated with its imports, given the `.cmx` |
 | `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of three bindings; undefined before and after; validated, with the line that says the validation says nothing |
+| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of three bindings; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
 | `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime | no prefix; undefined before and after; validated with its imports, with the line that says the validation says nothing |
-| `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of three bindings without the body, which the conversion refuses; the run is undefined before and after, and the validation says nothing of it |
+| `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of three bindings without the body, which the conversion refuses; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
-| `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of two bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
+| `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of two bindings without the body, which the conversion refuses; not checked: with the prefix in front of it the term before mentions a code id of the first unit where it is not in scope (the guard, above) |
 
 Twenty-three sources. Ten are first units; eight of them have an
 expected file: five are validated, as a unit of the directory above
@@ -180,11 +188,13 @@ is, `phantom.ml` is not checked, and two that no unit uses are here
 for the lists of calls of known arity:
 `known_arity_lists_older_code.ml` has the same two runs and is not
 validated, and `known_arity_lists_undefined_elsewhere.ml` is
-undefined before and after. Of the thirteen second units,
-four are validated given a `.cmx`, two of them with an import left;
-eight are undefined in the model, six of them with a prefix, and
-one of the six, `phantom_called.ml`, before Simplify only; one is
-not checked.
+undefined before and after. Of the thirteen second units, one is
+validated given a `.cmx`, with an import left; three are undefined
+in the model, one of them with a prefix; and nine are not checked:
+the eight that the guard stops, and `probed_inlined.ml`, which the
+conversion refuses. What follows says, of the eight, what their runs
+and the validation came to before the guard stopped them; the tool
+does not print it of them now.
 
 The prefix of the four units that use `lengths.ml` is the same: the
 module block, the closures of `length_from` and of `length`, and the

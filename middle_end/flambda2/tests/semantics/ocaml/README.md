@@ -782,13 +782,22 @@ unit made from OCaml.
   the line of the check of static names, and stops. Neither term is run,
   nothing is compared and the validation is not asked. The line is of
   the form of the term after, and says nothing of what either term
-  computes. Three units of this directory have it, `div_unknown.ml`,
-  `string_get16_checked.ml` and `string_get_twice.ml`, and
-  `tool_fails.txt` names them. Each has a continuation that the front
-  end marks cold, the handler of a failed check, and the text says so
-  since it writes that mark; what Simplify makes of such a handler is
-  discrepancy X5-9 ("What a validation does not say"). While the text
-  had not the mark, each of the three was validated with its imports.
+  computes. The guard also refuses a term after that is well-formed
+  and whose check of static names fails, and the tool fails in the
+  same way: the line is then, for one, "the term after Simplify
+  mentions a symbol that is NOT IN SCOPE" (it names a code id, or
+  both, where that is what is out of scope; "What a validation does
+  not say" has the two tests). No unit of this directory has either
+  line, and `tool_fails.txt` names none. Three had the first,
+  `div_unknown.ml`, `string_get16_checked.ml` and
+  `string_get_twice.ml`, while the tool asked of the place of a static
+  binding the model's reading of what Simplify asks of the term that it
+  is given: each has a continuation that
+  the front end marks cold, the handler of a failed check, and Simplify
+  leaves the binding of the module block under a handler that its own
+  check would refuse (discrepancy X5-9, "What a validation does not
+  say"). The rule that the model asks takes such a term (decision D60),
+  and each of the three is validated with its imports.
 
 ## The examples
 
@@ -802,12 +811,11 @@ with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
 when asked of the term before with copies of code for the sets of
-closures that a `Let` makes, which is another again; 56 validated with
+closures that a `Let` makes, which is another again; 59 validated with
 their imports; none validated with nothing imported and not with its
 imports; 6 compared on one run and not validated, 3 of them with the
 line of the second check (1 of those with imports); 2 undefined in the
-model; 3 not checked; 3 on which the tool fails, as the term after
-Simplify is not well-formed, and that have no verdict.
+model; 3 not checked.
 
 ### Validated
 
@@ -1078,19 +1086,20 @@ Simplify is not well-formed, and that have no verdict.
 
 | Source | Steps | Source | Steps |
 |--------|-------|--------|-------|
-| `a_captured_after_the_loop.ml` | 350, 177 | `partial_uncaught.ml` | 20, 17 |
-| `a_for_body_direct_around.ml` | 338, 167 | `raise_division_inlined.ml` | 83, 29 |
-| `a_for_notrace_direct_value.ml` | 332, 169 | `raise_handler_raises_again_inlined.ml` | 90, 31 |
-| `a_for_prim_direct_around.ml` | 346, 193 | `raise_in_function.ml` | 24, 11 |
-| `a_for_rethrow_direct_around.ml` | 420, 219 | `raise_inlined.ml` | 27, 11 |
-| `a_known_on_one_path.ml` | 188, 81 | `raise_notrace.ml` | 22, 10 |
-| `a_while_body_direct_around.ml` | 324, 167 | `raise_unused_bucket.ml` | 23, 10 |
-| `a_while_notrace_closure_two_around.ml` | 396, 215 | `raise_unused_exn.ml` | 22, 10 |
+| `a_captured_after_the_loop.ml` | 350, 177 | `raise_division_inlined.ml` | 83, 29 |
+| `a_for_body_direct_around.ml` | 338, 167 | `raise_handler_raises_again_inlined.ml` | 90, 31 |
+| `a_for_notrace_direct_value.ml` | 332, 169 | `raise_in_function.ml` | 24, 11 |
+| `a_for_prim_direct_around.ml` | 346, 193 | `raise_inlined.ml` | 27, 11 |
+| `a_for_rethrow_direct_around.ml` | 420, 219 | `raise_notrace.ml` | 22, 10 |
+| `a_known_on_one_path.ml` | 188, 81 | `raise_unused_bucket.ml` | 23, 10 |
+| `a_while_body_direct_around.ml` | 324, 167 | `raise_unused_exn.ml` | 22, 10 |
+| `a_while_notrace_closure_two_around.ml` | 396, 215 | `string_get16_checked.ml` | 29, 18 |
 | `array_length_twice.ml` | 21, 18 | `string_get_checked.ml` | 21, 4 |
 | `collatz_local_refs.ml` | 3218, 1827 | `string_get_in_branch.ml` | 33, 25 |
-| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get_two_indices.ml` | 47, 36 |
-| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_unknown.ml` | 28, 16 |
-| `div_const.ml` | 26, 5 | `string_length_after_join.ml` | 40, 29 |
+| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get_twice.ml` | 39, 26 |
+| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_two_indices.ml` | 47, 36 |
+| `div_const.ml` | 26, 5 | `string_get_unknown.ml` | 28, 16 |
+| `div_unknown.ml` | 16, 9 | `string_length_after_join.ml` | 40, 29 |
 | `divisor_tested_twice.ml` | 31, 17 | `try_catch_all.ml` | 22, 10 |
 | `empty_array_read_caught.ml` | 32, 13 | `try_div_zero.ml` | 23, 12 |
 | `exn_with_argument.ml` | 37, 10 | `try_exported.ml` | 8, 4 |
@@ -1106,6 +1115,7 @@ Simplify is not well-formed, and that have no verdict.
 | `never_returns_in_function.ml` | 44, 37 | `value_arm_constant.ml` | 54, 37 |
 | `never_returns_twice.ml` | 23, 16 | `while_for_with_raise.ml` | 203, 106 |
 | `none_raises_after_inlining.ml` | 13, 10 | `wrong_name_uncaught.ml` | 25, 8 |
+| `partial_uncaught.ml` | 20, 17 |  |  |
 
 ### Validated with nothing imported, and not with its imports
 
@@ -1251,14 +1261,6 @@ here.
 | `tupled_recursive.ml` | after Simplify the unit calls tupled code directly, giving it the components; the model has not got that call (C3) |
 | `tupled_unknown_pair.ml` | as `tupled_recursive.ml` |
 
-### The tool fails: the term after Simplify is not well-formed
-
-| Source | Why the term after is not well-formed |
-|--------|----------------------------------------|
-| `div_unknown.ml` | the term has a continuation that the front end marks cold, the handler of a failed check, and the text says so; of the term after Simplify the tool says "a static binding that is not at toplevel, or a name bound twice" (X5-9) |
-| `string_get16_checked.ml` | the term has a continuation that the front end marks cold, the handler of a failed check, and the text says so; of the term after Simplify the tool says "a static binding that is not at toplevel, or a name bound twice" (X5-9) |
-| `string_get_twice.ml` | the term has a continuation that the front end marks cold, the handler of a failed check, and the text says so; of the term after Simplify the tool says "a static binding that is not at toplevel, or a name bound twice" (X5-9) |
-
 ## What stops a unit from validating, most common first
 
 1. Code that raises a variable that is not known to hold a symbol
@@ -1379,10 +1381,7 @@ removed it:
 - An application of a continuation whose handler only applies
   another, a trap action included (`div_unknown.ml`,
   `string_get16_checked.ml`): it goes there directly
-  (`FlambdaForwardSpec.v`). The two units were validated with it until
-  the text said that their handler of a failed check is cold; the tool
-  now fails on both ("What the verdicts mean", the term after that is
-  not well-formed).
+  (`FlambdaForwardSpec.v`).
 - A parameter of a loop that every application gives the same thing
   (`while_const_after.ml`, `while_nested.ml`): it is bound at the head
   of the handler (`FlambdaParamAliasesSpec.v`), and the parameters of
@@ -1433,11 +1432,10 @@ removed it:
   variable.
 - A primitive computed before a `Switch` or a call and again in the
   handler that follows (`string_get_unknown.ml`,
-  `string_get_in_branch.ml`, `string_get_two_indices.ml`,
-  `string_length_after_join.ml`, and `string_get_twice.ml` until the
-  text said that its handler of a failed check is cold, since when the
-  tool fails on it: the index of an access to a string converted for the
-  bounds test and again for the load, the length read for each test;
+  `string_get_in_branch.ml`, `string_get_twice.ml`,
+  `string_get_two_indices.ml`, `string_length_after_join.ml`: the
+  index of an access to a string converted for the bounds test and
+  again for the load, the length read for each test;
   `field_twice_inlined.ml`: a field loaded before a call and again
   when it returns). Simplify computes it once and, where a
   continuation is reached from several places, gives it to the
@@ -2835,22 +2833,37 @@ directory sets the variable; one of `../regions/` does.
   for two terms run from the same imports and the empty heap (the
   header of that file has the two states), where the run of the
   term after refines that of the term before and the term after
-  passes three tests: if the term before exits, the values that the
-  term after exits with, and those in the cells of its heap, mention
-  only symbols that its static environment binds when it exits.
-  That a symbol is bound is not that it is bound to what the term
-  before bound it to: the two static environments are not compared.
-  The tool asks the first of the tests, `well_formed_unit`, of the
-  term after before it validates anything. What the two others
-  answer of each of the two terms (`statics_in_scope`, given the
-  imports of the unit, and `interface_conts_not_rebound`, both of
-  `FlambdaStaticsInScopeSpec.v`) it prints on the line "the check of
-  static names", after the line of the check of kinds. Nothing is
-  refused for that line and no verdict depends on it. The tool
-  prints it of 550 of the 553 units of this directory (not of the 3 that
-  are not checked; of the 3 whose term after is not well-formed it
-  prints it under the line that says so), and it says "passes before,
-  passes after" of each.
+  passes two tests, `well_formed_unit` and `statics_in_scope` (of
+  `FlambdaStaticsInScopeSpec.v`, given the imports of the unit): if
+  the term before exits, the values that the term after exits with,
+  and those in the cells of its heap, mention only symbols that its
+  static environment binds when it exits. That a symbol is bound is
+  not that it is bound to what the term before bound it to: the two
+  static environments are not compared. No statement of the
+  validation has the two tests as premises, and a well-formed unit
+  may mention a symbol where a run has not bound it (decision D60).
+  So the tool asks both of each of the two terms, as a guard of its
+  own that is no theorem, and prints no verdict of a pair one of
+  whose terms fails one: of the term before, alone, before Simplify
+  is given it ("not checked: the term is not well-formed", or "not
+  checked: the term mentions a symbol where it is not in scope";
+  the program of "The compiler's own run" asks that when the
+  compiler's Simplify has returned);
+  then of both terms as they are run, with the prefix in front of
+  them where there is one, where a term after that fails is a
+  failure of the check ("the term after Simplify mentions a symbol
+  that is NOT IN SCOPE", with the status 1). The line "the check of
+  static names", after the line of the check of kinds, says what
+  `statics_in_scope` answers of each term, and what
+  `interface_conts_not_rebound` answers, a third test that is not
+  part of the guard: `statics_bound_in_run_statement` and the two
+  statements of `FlambdaExitBoundSpec.v` no longer take it as a
+  premise, and no unit is refused by the guard for it (the hoisting
+  of static bindings of the validation still tests it). The tool
+  prints the line of 550 of the 553 units of this
+  directory (not of the 3 that are not checked), and it says "passes
+  before, passes after" of each. The controls of the guard are in
+  `../guard/` and among the texts of the directory above.
 - What is validated is the term the parser reads back from what
   `-drawfexpr` prints (see "validated" above), as the tool's Simplify
   simplifies it. The printed term has no mark for `[@cold]` on code, for
@@ -2979,17 +2992,18 @@ directory sets the variable; one of `../regions/` does.
     now writes `cold` after the name of such a continuation, and the
     reader takes it (`string_get_checked.ml`). 22 units of this
     directory have one. With the mark, at the default flags, the run of
-    the term after of five of them takes more steps, and their verdicts
+    the term after of eight of them takes more steps, and their verdicts
     are what they were: `divisor_tested_twice.ml` (17 steps where it
     took 16), `made_array_checked_store_in_loop.ml` (53 for 50),
     `string_get_in_branch.ml` (25 for 24), `string_get_two_indices.ml`
-    (36 for 34) and `string_length_after_join.ml` (29 for 28). On three
-    more the tool now fails: of `div_unknown.ml`,
-    `string_get16_checked.ml` and `string_get_twice.ml`, each validated
-    with its imports while the text had not the mark, it says that the
-    term after Simplify is not well-formed (discrepancy X5-9; "What the
-    verdicts mean", and the measure of the distance below). Of the other
-    14 it prints what it printed. The mark is of a continuation: the
+    (36 for 34), `string_length_after_join.ml` (29 for 28),
+    `div_unknown.ml` (9 for 8), `string_get16_checked.ml` (18 for 17)
+    and `string_get_twice.ml` (26 for 24). In the term after of each of
+    the last three the binding of the module block is under a handler
+    that Simplify's own check of the place of a static binding would
+    refuse, and that the rule of the model takes (discrepancy X5-9,
+    decision D60; the measure of the distance below). Of the other 14
+    the tool prints what it printed. The mark is of a continuation: the
     mark `[@cold]` of code is one of those that the text still has not
     (above).
 
@@ -3219,19 +3233,21 @@ directory sets the variable; one of `../regions/` does.
     handler of a cold continuation unknown to its uses). The binding
     of the module block is then in a handler whose body can leave
     through another continuation, which
-    `FlambdaWellFormedSpec.statics_at_toplevel` refuses, and which
-    Simplify refuses too when it is given its own output
-    (discrepancy X5-9, a second shape of C5-11). The tool's Simplify, to
-    which the handler was not cold while the text had not the mark, put
-    the raise in the arm of the `Switch`, and the tool validated that
-    term. The text has the mark now (above). Of each of the two, and of
-    `string_get_twice.ml`, the tool of this tree says, at the default
-    flags and with `-O3`, that the term after Simplify of its own pair
-    is not well-formed, and fails ("What the verdicts mean"). So both
-    ways have refused a term after of these two units as not
-    well-formed: the measure of the compiler's pair at ba85db2822, and
-    the tool of this tree run on the text. That is said of what each
-    printed; the two terms after have not been compared.
+    `FlambdaWellFormedSpec.statics_at_unit_toplevel` refuses, and
+    which Simplify refuses too when it is given its own output
+    (discrepancy X5-9, a second shape of C5-11); `well_formed_unit`
+    asked that rule then. The tool's Simplify, to which the handler was
+    not cold while the text had not the mark, put the raise in the arm
+    of the `Switch`, and the tool validated that term. The text has the
+    mark now (above), and `well_formed_unit` asks another rule, which
+    takes a static binding under such a handler (decision D60). Of each
+    of the two, and of `string_get_twice.ml`, the tool of this tree
+    validates its own pair with its imports, at the default flags and
+    with `-O3`; and the program of "The compiler's own run", built from
+    this tree and run by hand at the default flags, prints of the
+    compiler's pair of each of the three what the tool prints of its
+    own, byte for byte. That is said of what each printed; the two
+    terms after have not been compared.
 
   With `-O3`: 228 validated, 22 not, 2 undefined before, the same 5
   and the same 2, and again the same lines for all 252.
@@ -3478,18 +3494,20 @@ the program the `.cmx` file of a first unit.
   arm of the `Switch`. Of `div_unknown.ml`, `string_get16_checked.ml`
   and `string_get_twice.ml` the compiler's term after then bound the
   module block in a handler whose body can leave through another
-  continuation, and was not well-formed (discrepancy X5-9, above): the
-  program exited 1, as the tool does of such a term, so these three can
-  have no `X.own_expected` as long as that stands. Of
-  `string_get_in_branch.ml`, `string_get_two_indices.ml` and
-  `string_length_after_join.ml` the two runs agreed, and the validator
-  of that commit did not accept the pair in which the handler is kept:
-  "not validated". The text carries the mark now. In the first way, at
-  the default flags, the tool of this tree fails on the first three with
-  the line that says that the term after Simplify is not well-formed,
-  and validates each of the other three with its imports. This way was
-  not run again, and nothing is said here of whether the two ways now
-  have the same term after of any of the six.
+  continuation, and was not well-formed by the rule that the model
+  asked then (discrepancy X5-9, above): the program exited 1, as the
+  tool does of such a term. Of `string_get_in_branch.ml`,
+  `string_get_two_indices.ml` and `string_length_after_join.ml` the
+  two runs agreed, and the validator of that commit did not accept the
+  pair in which the handler is kept: "not validated". The text carries
+  the mark now, and the model asks another rule of the place of a
+  static binding (decision D60). In the first way, at the default
+  flags, the tool of this tree validates each of the six with its
+  imports. Of these six alone this way was run again, by hand, with
+  the program as it is now, built from this tree, at the default
+  flags: of each it prints what the first way prints, byte for byte.
+  Nothing is said here of whether the two ways have the same term
+  after of any of the six.
 
 A unit that has `X.own_expected` beside it is checked in this way by
 the rules of this directory, which compare what the program prints

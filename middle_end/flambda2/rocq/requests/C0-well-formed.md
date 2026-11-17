@@ -65,7 +65,7 @@ compiler").
 
 | | Condition | Owner | Where the compiler establishes it |
 |-|-----------|-------|-----------------------------------|
-| 1 | Static bindings are at toplevel | C0; there today | When visited: `simplify_named.ml`, the case `Static_consts`, for a group that binds a symbol. A group of code only may be anywhere; the model refuses it (C0-3). What toplevel is has no one statement (`Downwards_env.at_unit_toplevel`, set and cleared in `simplify_let_cont_expr.ml`) |
+| 1 | Static bindings are at toplevel. Since decision D60: outside the handlers of recursive continuations and outside the body of code (`statics_outside_loops_and_code`), which is what `well_formed_unit` asks; Simplify's rule of toplevel stays as `statics_at_unit_toplevel` and is asked of no unit | C0; there today | When visited: `simplify_named.ml`, the case `Static_consts`, for a group that binds a symbol. A group of code only may be anywhere; the model refuses it (C0-3). What toplevel is has no one statement (`Downwards_env.at_unit_toplevel`, set and cleared in `simplify_let_cont_expr.ml`) |
 | 2 | A symbol or code id is bound once in the unit | C0; there today | No check of the whole unit found (C0-4). Within one group: invariant check (`Bound_static.create`). Within the handler being traversed, when visited: `Flow_acc.record_symbol_binding` and `record_code_id_binding` (`flow_acc.ml`, 179 to 208). `Typing_env.add_symbol_definition` has a note that redefinition is not checked |
 | 3 | Every variable and continuation used is in scope; the body of code under its own binders alone (row 6) | C0, by N1's free names; in C2's checker today | When visited: `Typing_env` ("Variable ... not bound"), `Upwards_env.find_continuation`; and the end of `simplify.ml` for the unit. No creation function |
 | 4 | Every symbol mentioned is bound (the human, D8), and every code id mentioned is bound or declared deleted, by the rule of scope in section 3 | C0 | When visited: `Typing_env` ("Symbol ... not bound"), for a symbol of the current unit; one of another unit comes from its `.cmx`. Code ids: `To_cmm_env` |
@@ -172,7 +172,10 @@ plain lexical rule. Its scope, which the header will state:
   the definition): the handler runs after the body. Simplify makes
   such terms: a constant lifted while the body is simplified is known
   in the handler and placed in the body (`simplify_let_cont_expr.ml`,
-  `consts_lifted_after_fork`);
+  `consts_lifted_after_fork`). Since decision D60 the clause is: what
+  the body binds on every way to the handler is in scope in it
+  (`FlambdaStaticsInScopeSpec.handler_scope`, `recursive_scope`),
+  whether or not the handler is at toplevel;
 - the body of code sees what is in scope where the code is bound. If
   closure conversion turns out to bind code before a symbol its body
   mentions, this is too strict, and the rule for code becomes "bound

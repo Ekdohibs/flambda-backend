@@ -76,6 +76,22 @@ reason of its own: it counts a name as a jump.
 
 ## 3. What I propose
 
+Done, with decision D60: the function is
+`FlambdaWellFormedSpec.continuations_used`, and
+`handler_at_unit_toplevel` (the name since of `handler_at_toplevel`)
+asks its condition of it. `continuations_used_free_statement` says
+that the new list is within the old one, and
+`try_body_at_unit_toplevel_statement` is the unit of section 1 as a
+computed example. The same stage answers section 8 otherwise than
+this note proposed: `well_formed_unit` no longer asks this rule, but
+`statics_outside_loops_and_code`. So, of what the last paragraph of
+this section lists as not changed, a static binding in an exception
+handler is now taken by `well_formed_unit`, and is still not at
+toplevel by Simplify's rule; and the sentence of the header that
+this section says stays word for word now speaks of the
+continuations that the body uses. The rest of the section is as it
+was written.
+
 One function more in FlambdaWellFormedSpec.v, beside
 `free_continuations` and by the same recursion: the continuations
 that an expression applies or gives to a call, and does not bind
