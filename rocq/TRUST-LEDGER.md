@@ -1958,6 +1958,45 @@ it gave back.
   them. The line says which asking validated the unit, and not
   that a copy was made: a copy whose tests fail is not made, and
   the function then answers of the term without it.
+  Where none of the functions above validates them, and
+  `FlambdaValidateDemotedSpec.after_demoted` changes the term after
+  (it makes ordinary continuations of the exception handlers of
+  that term that no call can raise to, by
+  `FlambdaDemoteSpec.demote_handlers` with no name in scope, as the
+  validation does to the term before), the tool makes every asking
+  above again, in the same order, of the term before converted and
+  of the term that `after_demoted` gives, with guesses made again
+  from those two terms. Where the function asked above was
+  `validate_unit`, `validate_unit_knowing` or one of the two of
+  `FlambdaValidateReadingSpec.v`, it calls the function of
+  `FlambdaValidateDemotedSpec.v` that asks it of that term
+  (`validate_unit_demoted`, `validate_unit_knowing_demoted`,
+  `validate_unit_reading_demoted`,
+  `validate_unit_knowing_reading_demoted`) on the two terms
+  converted; what is proved of each is of the two terms that it is
+  given (`validate_unit_demoted_sound_statement` and the three
+  beside it). Where it was a function of
+  `FlambdaValidateInliningSpec.v` or of
+  `FlambdaValidateCopyingSpec.v`, it calls that function on the
+  term before converted and on the term that `after_demoted`
+  gives; what is proved of that function is of those two terms,
+  and `demoted_program_refines_statement` says that a refinement
+  of the term before by the term that `after_demoted` gives is one
+  by the term after as it is given. Where one of them validates
+  them, the tool prints that answer as it is, with the lines of
+  that asking under it and one line more: "(asked of the term
+  after with the exception handlers that no call can raise to made
+  ordinary continuations)". What is proved is of the term after as
+  converted, with its handlers in place, on the machine that goes
+  by names, which executes no trap action; it says nothing of
+  backtraces. Trusted of those calls: that the term which the tool
+  gives a function of the last two files for the term after is
+  `after_demoted`, as it is extracted, of the term after
+  converted. The guesses are the tool's, and nothing that is
+  proved rests on them. Where these askings refuse them too, the
+  tool prints nothing of them, and what it prints is what it
+  prints of the askings above. The second check, below, is never
+  asked of the term that `after_demoted` gives.
   The comparison of the
   two runs that it also prints is a test of one run, and no theorem is
   about it.
@@ -2119,6 +2158,25 @@ it gave back.
   that the tool computes by `before_copied` with nothing lifted,
   for the search of the liftings of the asking, are not trusted:
   the theorem holds whatever is guessed.
+  For a verdict of one of the four functions of
+  `FlambdaValidateDemotedSpec.v` the theorem from the imports
+  (`validate_unit_demoted_imports_statement` and the three beside
+  it) has the applicable test, `verdict_holds_from` or
+  `verdict_knowing_holds_from`, asked of the term that
+  `after_demoted` gives for the term after, and of the term before
+  converted or, for the two of the reading, of the term that
+  `before_read` gives for it; and not of the term after as
+  converted. For a verdict of a function of
+  `FlambdaValidateInliningSpec.v` or of
+  `FlambdaValidateCopyingSpec.v` that was asked of the term that
+  `after_demoted` gives, the theorem from the imports of that
+  function is of that term, with the tests that it has above, and
+  `demoted_unit_refines_statement` brings its conclusion to the
+  term after as it is given. The tool computes the term by
+  `after_demoted` as it is extracted, and gives it to the tests
+  with the verdict that it reports. Trusted of that call besides:
+  that the term which the tool gives the tests for the term after
+  is the one that the asking whose verdict it reports was of.
   Where the test accepts the verdict, the
   line
   begins "validated with its imports", and the verdict is of the two

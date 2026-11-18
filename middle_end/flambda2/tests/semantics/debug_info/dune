@@ -1,0 +1,92 @@
+;; The test tool given -g. Its Simplify then keeps the handler of a try that
+;; a raise of a kind which records a backtrace reaches, where without -g it
+;; makes an ordinary continuation of it. The validation makes ordinary
+;; continuations of such handlers in the term before only; so, where it
+;; refuses the two terms as they are, the tool asks it again of the term
+;; after with those handlers made ordinary continuations too (see
+;; ../../tools/flsemantics.ml, "The exception handlers of the term after").
+;; The rules of ../ocaml/pairs/ also give the tool -g, for a unit whose
+;; first line asks it: three such units have a try (its README.md, "Units
+;; that are here for their first line"). `dune promote` updates an
+;; X.expected. The rules are written out below.
+;;
+;; try_catch_all, try_reraise: two units of ../ocaml/, whose handler is
+;; reached by a raise and by a reraise. X.expected here is what the tool
+;; prints, given -g, of ../ocaml/X.fl: the unit is validated, and the line
+;; under the verdict says that the validation was asked of the term after
+;; with its handlers made ordinary continuations. ../ocaml/X.expected is
+;; what the tool prints of the same text without -g: the same verdict, and
+;; no such line. With the validation asked of the two terms as they are and
+;; no more, the tool given -g says "not validated" of both.
+;;
+;; two_raises_unread: a unit that the second asking does not validate
+;; either. Its handler does not read the exception, and its body raises one
+;; of two predefined exceptions. two_raises_unread.expected is what the tool
+;; prints of it given -g, "not validated": with the handler made an
+;; ordinary continuation, the term after still gives it the exception, a
+;; different symbol at each raise, and the validation, which has removed
+;; that parameter from the term before, has no rewrite of the term after
+;; that removes it. Nothing of the second asking is printed.
+;; two_raises_unread_without_g.expected is what the tool prints of the same
+;; text without -g: validated. two_raises_unread.fl is the term that the
+;; compiler gives Simplify, as ../ocaml/from_ocaml.sh makes it of
+;; two_raises_unread.ml, and a rule checks that it still makes it. The unit
+;; is in none of the tables and counts of ../ocaml/README.md.
+
+(rule
+ (with-stdout-to
+  try_catch_all.output
+  (run ../../tools/flsemantics.exe -g %{dep:../ocaml/try_catch_all.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff try_catch_all.expected try_catch_all.output)))
+
+(rule
+ (with-stdout-to
+  try_reraise.output
+  (run ../../tools/flsemantics.exe -g %{dep:../ocaml/try_reraise.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff try_reraise.expected try_reraise.output)))
+
+(rule
+ (targets two_raises_unread.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:two_raises_unread.ml}
+   two_raises_unread.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff two_raises_unread.fl two_raises_unread.fl.made)))
+
+(rule
+ (with-stdout-to
+  two_raises_unread.output
+  (run ../../tools/flsemantics.exe -g %{dep:two_raises_unread.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff two_raises_unread.expected two_raises_unread.output)))
+
+(rule
+ (with-stdout-to
+  two_raises_unread_without_g.output
+  (run ../../tools/flsemantics.exe %{dep:two_raises_unread.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   two_raises_unread_without_g.expected
+   two_raises_unread_without_g.output)))

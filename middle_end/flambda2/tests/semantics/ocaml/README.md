@@ -585,6 +585,85 @@ unit made from OCaml.
   the inlining. One unit of this directory has the line in its
   expected file, which is made at the default flags,
   `local_rec_inlined_twice.ml`.
+- **(asked of the term after with the exception handlers that no call
+  can raise to made ordinary continuations)**, a line under a verdict,
+  or under the line "the validation accepts the pair" of a unit whose
+  term before is undefined ("nothing to validate", below): the
+  validation that accepted the pair was asked of another term than
+  the term after. The validation makes ordinary continuations of the
+  exception handlers of the term before that no call can raise to
+  (`FlambdaDemoteSpec.demote_handlers`; "Exceptions", below), and
+  does not do so to the term after. Given `-g`, Simplify keeps such
+  a handler where a raise that reaches it is of a kind that it takes
+  for a use that escapes, and the two terms can then differ by the
+  handler at every attempt. Such a handler can also be in the code
+  that the tool puts in front of both terms from the `.cmx` of
+  another unit, where that unit was compiled with `-g`, whatever the
+  flags of the unit that is checked (`../stdlib/README.md`,
+  `stringLabels.ml`). So where every attempt that the tool
+  makes of the two terms as it converted them refuses the pair, the
+  attempts of the three lines above and the second asking included,
+  and that rewrite changes the term after
+  (`FlambdaValidateDemotedSpec.after_demoted`), the tool makes all
+  its attempts again, in the same order, of the term before and of
+  the term after so rewritten: every guess, every asking and every
+  test of the verdict from the imports is made again of those two
+  terms, and nothing that the first attempts found is used. Where
+  the function asked was `validate_unit`, `validate_unit_knowing` or
+  one of the two of the reading, the function asked now is the one
+  of `FlambdaValidateDemotedSpec.v` that asks it of the rewritten
+  term (`validate_unit_demoted`, `validate_unit_knowing_demoted`,
+  `validate_unit_reading_demoted`,
+  `validate_unit_knowing_reading_demoted`), and it is given the
+  term after as converted; an attempt with calls inlined first, or
+  with copies of code, asks the function that it asked, of the
+  rewritten term. Where these attempts accept the pair, what the
+  tool prints of the acceptance is theirs, and is printed as of any
+  acceptance: a verdict and its lines, or, where the run of the term
+  before that the acceptance is of is undefined, the line "nothing
+  to validate" with the line "the validation accepts the pair" under
+  it; this line stands under them. Where they refuse it too they
+  print nothing, and the tool prints what it prints of the attempts
+  of the two terms as converted: "not validated", the lines under it
+  and the second check, or, where the run of the term before that is
+  shown is undefined, "nothing to validate" and no second check.
+  What is proved of a pair accepted so is of the term after as the
+  tool converted it, with its handlers in place, and not of the
+  rewritten term. The rewrite is an equivalence in the model, under
+  all environments
+  (`FlambdaDemoteSpec.demote_handlers_equivalent_statement`), so
+  the term after as converted refines the rewritten term
+  (`after_demoted_refines_statement`), and a refinement of the term
+  before by the rewritten term is one by the term after as converted
+  (`demoted_program_refines_statement`, of the unit run on its own
+  from empty environments; `demoted_unit_refines_statement`, of the
+  unit run from its imports). So the unit after refines the unit
+  before, each run on its own from empty environments
+  (`validate_unit_demoted_sound_statement` and the three beside
+  it), and, where the tests of the verdict from the imports that the
+  attempt has pass, made of the rewritten term for the term after,
+  each run from its imports
+  (`validate_unit_demoted_imports_statement` and the three beside
+  it). Those eight statements are of the four functions of that
+  file. For an attempt with calls inlined first, or with copies of
+  code, the same is concluded by the statements of its entry above,
+  at the rewritten term, and then by
+  `demoted_program_refines_statement` or
+  `demoted_unit_refines_statement`.
+  The statements are of the machine of the model, which goes by
+  names and executes no trap action: they say nothing of backtraces.
+  The tests that the tool makes before the validation (that the term
+  after is well-formed and mentions static names where they are in
+  scope, the two runs, the check of kinds) are of the term after as
+  converted.
+  No expected file of this directory has the line, and the tables
+  below have no class for it. Two units of `pairs/` whose first line
+  gives `-g` have it (`pairs/README.md`, "Units that are here for
+  their first line"); so have two controls of `../debug_info/`,
+  whose rules give the tool `-g` on two texts of this directory
+  (`try_catch_all.fl`, `try_reraise.fl`); and so has one stored
+  file of the compiler's own run of the standard library
+  (`../stdlib/README.md`).
 - **the same, not validated**: the two runs came to the same result,
   which is a test of one run and no proof. The validator could not make
   the two terms the same; the table says what it is missing.
@@ -1574,6 +1653,11 @@ removed it:
   (`FlambdaDemoteSpec.demote_handlers`,
   `FlambdaValidateSpec.demote_and_tidy`). The conversion keeps, for
   that, the `Let` by which a handler ends its region (see above).
+  The validator does not do the same to the term after. Where every
+  attempt refuses a pair and the rewrite changes the term after, the
+  tool makes its attempts again of the term after so rewritten, and
+  says so under what it prints of a pair that they accept ("What the
+  verdicts mean", the line "(asked of the term after ...)").
 - A continuation whose handler is one jump, bound above a `Let` and
   applied by an arm of a `Switch`, once a call is inlined
   (`option_inlined.ml`): the rounds of the first phase, which send

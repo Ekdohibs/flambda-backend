@@ -1,0 +1,28 @@
+let $camlTwo_raises_unread__first_const_0 = Block 0 () in
+(let try_region/27 = %begin_try_region () in
+ let try_ghost_region/28 = %begin_try_ghost_region () in
+ cont k/23 push(k/22)
+   where k/23 =
+     ((let Popaque/32 = %opaque (1) in
+       (let untagged/33 = %untag_imm (Popaque/32) in
+        switch untagged/33
+          | 0 -> k/26
+          | 1 -> k/27)
+         where k/27 =
+           cont k/24
+         where k/26 =
+           cont k/25)
+        where k/25 =
+          cont k/22 pop(regular k/22) ($`*predef*`.caml_exn_End_of_file)
+        where k/24 =
+          cont k/22 pop(regular k/22) ($`*predef*`.caml_exn_Not_found))
+   where k/22 exn (exn/29 : val) =
+     let unit/30 = %end_try_region (try_region/27) in
+     let unit/31 = %end_try_ghost_region (try_ghost_region/28) in
+     cont k/21 (2))
+  where k/21 (result/25 : imm tagged) =
+    let Pmakeblock/26 = %block.[`0`].`toplevel` (result/25) in
+    cont k/20 (Pmakeblock/26)
+  where k/20 define_root_symbol (module_block/24) =
+    let $camlTwo_raises_unread = Block 0 (2) in
+    cont done ($camlTwo_raises_unread)

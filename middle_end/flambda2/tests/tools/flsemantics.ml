@@ -283,6 +283,38 @@
    second check, which is asked only where these attempts refuse the unit too,
    and of the two terms as converted.
 
+   The exception handlers of the term after. The validation makes ordinary
+   continuations of the exception handlers of the term before that no call can
+   raise to (FlambdaDemoteSpec.demote_handlers), as Simplify does, and it does
+   not do so to the term after. Given [-g], Simplify keeps such a handler where
+   a raise that reaches it is of a kind that it takes for a use that escapes;
+   this can make every attempt above refuse the unit. So where they all do, and
+   FlambdaValidateDemotedSpec.after_demoted, which is that rewrite, changes the
+   term after, the attempts are all made again, in the same order, of the term
+   before and of the term that after_demoted gives ([validate], where
+   [demoted]). Everything that an attempt guesses, asks or tests is made again
+   of those two terms, and nothing that the attempts above found is used. Where
+   the function asked was [validate_unit], [validate_unit_knowing] or one of the
+   two of the reading, the function asked now is the one of
+   FlambdaValidateDemotedSpec.v that asks it of that term (validate_unit_demoted
+   and the three beside it), given the term after as converted. For an attempt
+   with calls inlined first, or with copies of code, the function is the one
+   that it was, given the term that after_demoted gives; what it accepts of that
+   term is brought to the term after as converted by
+   demoted_program_refines_statement and demoted_unit_refines_statement of that
+   file. What is accepted so is reported as an acceptance of the attempts above
+   is, an undefined run included, with a line under it that begins "(asked of
+   the term after". Each of those statements concludes of the term after as it
+   was converted, with its handlers in place, on the machine that goes by names,
+   and says nothing of backtraces. The test of the verdict from the imports is
+   made of the term that after_demoted gives, with the term before or what the
+   reading, the inlining or the copies make of it, as those statements have that
+   test. Where these attempts refuse the unit too, they print nothing: what is
+   printed is what the attempts above print, and the second check is asked where
+   it was. The tests before the validation (that the term after is well-formed
+   and mentions static names where they are in scope, the two runs, the check of
+   kinds) and the second check are of the term after as converted.
+
    The second check. Where every attempt of the validation that the tool makes
    has refused a unit, and the run of the term before that is shown is not
    reported undefined, the tool asks
@@ -349,6 +381,7 @@ module Lift_observed = Flambda2_rocq_semantics.FlambdaLiftObservedSpec
 module Validate_related = Flambda2_rocq_semantics.FlambdaValidateRelatedSpec
 module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
 module Validate_inlining = Flambda2_rocq_semantics.FlambdaValidateInliningSpec
+module Validate_demoted = Flambda2_rocq_semantics.FlambdaValidateDemotedSpec
 module My_closure = Flambda2_rocq_semantics.FlambdaMyClosureSpec
 module Closure_of_code = Flambda2_rocq_semantics.FlambdaClosureOfCodeSpec
 module Unused_slots = Flambda2_rocq_semantics.FlambdaUnusedSlotsSpec
@@ -6658,14 +6691,45 @@ let inlining_choices
   in
   choices_from 1 before []
 
-let validate ~(imports : (Model.symbol * Values.import_class) list)
-    ~(prefix_units : int) ~(outcome_before : outcome) (before : converted)
-    (after : converted) =
+(* Raised in [validate_or_leave] to end it with the verdict carried, where it is
+   not to print the lines of a verdict (see there). [validate] takes it, and it
+   goes no further. *)
+exception Left_with of Validate.validation
+
+(* The validation of the two terms, with the lines that it prints. [demoted] is
+   for the attempts of the term after with its exception handlers demoted (the
+   header of this file, "The exception handlers of the term after"), which
+   [validate_or_leave] asks for itself where the attempts of the two terms as
+   converted refuse them: a caller does not give it. *)
+let rec validate ?(demoted = false) ~imports ~prefix_units ~outcome_before
+    before after : Validate.validation =
+  try
+    validate_or_leave ~demoted ~imports ~prefix_units ~outcome_before before
+      after
+  with Left_with validation -> validation
+
+and validate_or_leave ~(demoted : bool)
+    ~(imports : (Model.symbol * Values.import_class) list) ~(prefix_units : int)
+    ~(outcome_before : outcome) (before : converted) (after : converted) =
+  (* Where [demoted], the term after from here on is the term that
+     FlambdaValidateDemotedSpec.after_demoted gives of the term after as
+     converted: every guess, every asking and every test below is of it.
+     [after_as_converted] is the term that this function was given, for the
+     functions of that file, which take it. *)
+  let after_as_converted = after in
+  let after =
+    if demoted
+    then { after with body = Validate_demoted.after_demoted after.body }
+    else after
+  in
   let recursive = recursive_code before.body @ recursive_code after.body in
-  let inlined = Normalise.inline_calls recursive [] before.body in
-  Format.printf
-    "  calls outside code once those of known code are inlined: %d@."
-    (calls_outside_code inlined);
+  (* The line is of the term before, and the attempts of the two terms as
+     converted have printed it. *)
+  if not demoted
+  then
+    Format.printf
+      "  calls outside code once those of known code are inlined: %d@."
+      (calls_outside_code (Normalise.inline_calls recursive [] before.body));
   (* The count above is made with the list by direct calls, as it was, and not
      with the lists that the askings are given: it is of one pass, which cannot
      unroll. From here the recursive code is that of the list with the code that
@@ -7608,12 +7672,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | Some choices ->
             ( Validate_inlining.validate_unit_inlining choices,
               Validate_inlining.validate_unit_knowing_inlining choices )
-          | None ->
-            if reading
-            then
+          | None -> (
+            match demoted, reading with
+            | false, true ->
               ( Validate_reading.validate_unit_reading,
                 Validate_reading.validate_unit_knowing_reading )
-            else Validate.validate_unit, Validate_knowing.validate_unit_knowing)
+            | false, false ->
+              Validate.validate_unit, Validate_knowing.validate_unit_knowing
+            | true, _ ->
+              (* The functions of FlambdaValidateDemotedSpec.v: each asks the
+                 function of the case above of the term before and of
+                 after_demoted of the term after that it is given. So it is
+                 given the term after as converted, and not the term that the
+                 askings below give for the term after, which is after_demoted
+                 of that one. Where [copying] or [inlining], above, the function
+                 is the one that it is where not [demoted], and is given the
+                 term that the askings give. *)
+              let of_the_term_as_converted asked rounds unused slots loops
+                  liftings kept before (_ : Model.expr) =
+                asked rounds unused slots loops liftings kept before
+                  after_as_converted.body
+              in
+              if reading
+              then
+                ( of_the_term_as_converted
+                    Validate_demoted.validate_unit_reading_demoted,
+                  of_the_term_as_converted
+                    Validate_demoted.validate_unit_knowing_reading_demoted )
+              else
+                ( of_the_term_as_converted Validate_demoted.validate_unit_demoted,
+                  of_the_term_as_converted
+                    Validate_demoted.validate_unit_knowing_demoted )))
       in
       let first =
         ask ~calling ~own ~asked:(reading, false)
@@ -8099,6 +8188,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           _ ) ) as accepted ->
       accepted
   in
+  (* The exception handlers of the term after (the header of this file). No line
+     of a verdict is printed yet. Where the attempts above are of the term that
+     after_demoted gives ([demoted]) and they refuse the unit, they are left
+     here with nothing printed. Where they are of the two terms as converted,
+     they refuse the unit, and after_demoted changes the term after, the
+     attempts are made again of the term that it gives. If those accept the
+     unit, they have printed their answer, as any acceptance is printed, and
+     nothing more is printed here. If they refuse it, they have printed nothing
+     and what follows is what it would be had they not been made, of the two
+     terms as converted: a refusal and the second check, or, of an undefined
+     run, the line that there is nothing to validate. *)
+  (match validation with
+  | Not_validated -> (
+    if demoted
+    then raise_notrace (Left_with Validate.Not_validated)
+    else if Validate_demoted.after_demoted after.body <> after.body
+    then
+      match
+        (validate ~demoted:true ~imports ~prefix_units ~outcome_before before
+           after
+          : Validate.validation)
+      with
+      | Not_validated -> ()
+      | ( Same_up_to_bound_names | Same_once_normalised
+        | Same_once_unused_statics_removed | Same_once_head_statics_removed
+        | Same_once_lifted ) as accepted ->
+        raise_notrace (Left_with accepted))
+  | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed
+  | Same_once_lifted ->
+    ());
   (* Whether the verdict is of the two runs that were shown. It is for a unit
      that imports nothing. For a unit that has imports it is where the model
      says that the verdict holds of the unit run from its imports
@@ -8276,6 +8396,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   | Same_once_unused_statics_removed | Same_once_head_statics_removed
   | Same_once_lifted ->
     ());
+  if demoted
+  then
+    Format.printf
+      "  (asked of the term after with the exception handlers that no call can \
+       raise to made ordinary continuations)@.";
   if !asked_again
   then
     Format.printf

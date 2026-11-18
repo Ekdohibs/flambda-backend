@@ -537,10 +537,10 @@ undefined, and nothing to validate.
 
 | Unit | Its first line | What it is | What the tool says of it |
 |------|----------------|------------|--------------------------|
-| `handler_kept_with_g.ml` | `(* flags: -g *)` | a function whose `try` catches, by name, the exception that its body raises | both runs return the module block; the same; not validated, with no line of the second check |
+| `handler_kept_with_g.ml` | `(* flags: -g *)` | a function whose `try` catches, by name, the exception that its body raises | both runs return the module block; the same; validated with its imports, with the line that says the validation was asked of the term after with the exception handlers that no call can raise to made ordinary continuations |
 | `handler_gone_without_g.ml` | none | its control: the same source without the line | validated with its imports |
 | `handler_gone_with_g_notrace.ml` | `(* flags: -g *)` | a control: the same with `raise_notrace` in the place of `raise` | validated with its imports |
-| `handler_of_reraise_kept_with_g.ml` | `(* flags: -g *)` | a `try` inside a `try`: the body raises by `raise_notrace`, the inner handler raises again what it caught, and the outer handler catches that by name | both runs return the module block; the same; not validated, with no line of the second check |
+| `handler_of_reraise_kept_with_g.ml` | `(* flags: -g *)` | a `try` inside a `try`: the body raises by `raise_notrace`, the inner handler raises again what it caught, and the outer handler catches that by name | both runs return the module block; the same; validated with its imports, with the line that says the validation was asked of the term after with the exception handlers that no call can raise to made ordinary continuations |
 | `handler_of_reraise_gone_without_g.ml` | none | its control: the same source without the line | validated with its imports |
 
 Each has one import, the predefined exception that it raises, and
@@ -575,18 +575,24 @@ these five units: it is not said here that Simplify makes a jump of
 every raise that has not the mark.
 
 The validation removes a handler of exceptions in the term before
-(`FlambdaDemoteSpec.demote_handlers`), and not in the term after:
-where Simplify kept the handler the two terms differ by it, and the
-unit is not validated.
+(`FlambdaDemoteSpec.demote_handlers`). Asked of the two terms as
+they are, it does not validate these two units: where Simplify kept
+the handler the two terms differ by it. The tool then asks it
+again, of the term after with the same removal made in it
+(`after_demoted` in `FlambdaValidateDemotedSpec.v`), and that asking
+validates both.
 
-The two expected files that say "not validated" say what the tool
-of this tree prints of those units. They are no finding about the
-compiler: the two runs are the same, and what stops the validation
-is that limit of it. What is expected to turn them is the same
-removal in the term after, which is not done
-(`middle_end/flambda2/rocq/status/C5.md`). The units are here with
-their controls so that their expected files change when it comes.
-The flags are given to the tool as to the compiler, and
+The two expected files say "validated with its imports" and, on the
+line under it, that the validation was asked of the term after with
+the exception handlers that no call can raise to made ordinary
+continuations. The units were put here with their controls when the
+tool did not ask again: their expected files then said "not
+validated", which was a limit of the validation and no finding
+about the compiler, since the two runs are the same. What the
+second asking establishes is in
+`middle_end/flambda2/rocq/status/C5.md` ("The demotion asked of the
+term after") and in `rocq/TRUST-LEDGER.md`; it says nothing of
+backtraces. The flags are given to the tool as to the compiler, and
 with `-g` the tool's Simplify keeps the handler as the compiler's
 does; the directory above, whose rules give no flags, has no unit
 compiled with `-g`.

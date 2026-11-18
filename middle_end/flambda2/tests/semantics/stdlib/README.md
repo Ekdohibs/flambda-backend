@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 12 of the 79 files, and "What a
+At this commit the driver validates 13 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -221,8 +221,10 @@ from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 6;
-- validated with its imports: 6;
-- compared, not validated: 8. Four have a line under the verdict:
+- validated with its imports: 7, of which `stringLabels.ml` has a line
+  under the verdict, "(asked of the term after with the exception
+  handlers that no call can raise to made ordinary continuations)";
+- compared, not validated: 7. Four have a line under the verdict:
   `camlinternalAtomic.ml` has "related once lifted", and `option.ml`,
   `pqueue.ml` and `result.ml` have the line of a function slot named
   `partial_app_closure`, the name that Simplify gives the wrapper which
@@ -234,14 +236,16 @@ this commit, and a commit that moves a stored file moves its row.)
   tool makes of the code that the `.cmx` files of the other units give
   it.
 
-The 79 sources have 29,925 lines; the twelve that are validated, with or
-without their imports, have 1,109.
+The 79 sources have 29,925 lines; the thirteen that are validated, with or
+without their imports, have 1,133.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
 that is compared and not validated the cell is empty unless the driver
-prints a line under the verdict. The verdicts are in the words of
-`../ocaml/README.md`, "What the verdicts mean".
+prints a line under the verdict. The line that the driver prints under
+the verdict of `stringLabels.ml` is in the cell of its verdict. The
+verdicts are in the words of `../ocaml/README.md`, "What the verdicts
+mean".
 
 | File | Unit | Lines | What the driver says | What stops it |
 |---|---|---|---|---|
@@ -318,7 +322,7 @@ prints a line under the verdict. The verdicts are in the words of
 | `std_exit.ml` | `std_exit` | 22 | not checked | a primitive: `Atomic_load Field_index` |
 | `stdlib.ml` | `stdlib` | 692 | not checked | a C function: `caml_lessequal` |
 | `string.ml` | `stdlib__String` | 389 | not checked | a C function: `caml_blit_string` |
-| `stringLabels.ml` | `stdlib__StringLabels` | 24 | compared, not validated |  |
+| `stringLabels.ml` | `stdlib__StringLabels` | 24 | validated with its imports (asked of the term after with the exception handlers that no call can raise to made ordinary continuations) |  |
 | `sys.ml` | `stdlib__Sys` | 324 | not checked | a C function: `caml_install_signal_handler` |
 | `type.ml` | `stdlib__Type` | 48 | not checked | a C function: `caml_fresh_oo_id` |
 | `uchar.ml` | `stdlib__Uchar` | 112 | not checked | a C function: `caml_format_int` |
@@ -336,6 +340,17 @@ closures and constants, and calls little. "Validated" says that the
 validation accepts the pair of that term before and after Simplify, as
 `../ocaml/README.md`, "What the verdicts mean", says of any unit: where
 that run returns, refinement preserves what it exits with and its heap.
+Of `stringLabels.ml` the pair that the validation accepts is of the term
+before and of the term after with the exception handlers that no call
+can raise to made ordinary continuations, as the validation makes them
+in the term before; the driver asks that where it has refused the two
+terms as they are, and says so under the verdict. What is proved is of
+the term after as it was, with its handlers, and says nothing of
+backtraces (the entry of that line in the same section).
+`stringLabels.ml` has no `try`: the stored file shows three exception
+handlers, and they are in the code of `contains`, `contains_from` and
+`rcontains_from` of `String`, which the prefix has from the `.cmx` of
+`String`; the build compiles the library with `-g`.
 
 What it is not:
 

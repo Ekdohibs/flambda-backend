@@ -271,6 +271,13 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaDemote*` (the demotion of an
     exception handler that no call can raise to, as a rewrite, with
     what it keeps)
+  - `middle_end/flambda2/rocq/validation/**/FlambdaValidateDemoted*`
+    (the validation asked of the term after with its exception
+    handlers that no call can raise to made ordinary continuations)
+  - `middle_end/flambda2/tests/semantics/debug_info/` (controls that
+    run the test tool given `-g`: when a stage changes the text or
+    the output of a unit of `tests/semantics/ocaml/` that they read,
+    their expected files are C5's to make again)
   - `middle_end/flambda2/rocq/requests/C5-never-returns.md` (a
     request: calls that never return)
   - `middle_end/flambda2/rocq/rewrites/calls/FlambdaNeverReturns*` (the rewrite of
