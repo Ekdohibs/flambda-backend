@@ -1,0 +1,23 @@
+(* MUST BE REFUSED: a symbol is not in scope. The partner of
+   symbol_pushed_handler_never_applied.fl. One arm of the body raises to k_h
+   with nothing bound; the other binds $S and leaves without raising. The
+   handler of k_h reads $S. The run takes the arm that binds (v = 1). *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((cont k_body push(k_h)
+    where k_body =
+      ((switch v
+          | 0 -> k_raise
+          | 1 -> k_bind)
+         where k_raise =
+           let bucket = %block.[`0`].`toplevel` (o, 7) in
+           cont k_h pop(notrace k_h) (bucket)
+         where k_bind =
+           let $S = Block 0 (o) in
+           cont k_c pop(k_h) (0)))
+   where k_h exn (e : val) =
+     let x = %block_load.[`0`] ($S) in
+     cont k_c (x))
+  where k_c (r) =
+    let $camlSymbol_raise_before_binding_on_one_way = Block 0 (r) in
+    cont done ($camlSymbol_raise_before_binding_on_one_way)

@@ -1,0 +1,28 @@
+(* MUST BE REFUSED: a code id is not in scope. An intersection that is not
+   empty and leaves a name out: n_0 is bound at the head of the body, on both
+   ways to k_c; m_0 is bound on one of the two ways. The handler of k_c
+   allocates a closure of each. (With the closure of n_0 alone it is
+   code_join_other_name_on_one_way_not_mentioned.fl, which passes.) *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+    cont k (x)
+  in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       let code size(1) m_0 (x) my_closure &my_region my_depth -> k * e =
+         cont k (x)
+       in
+       cont k_c (0)
+     where k_a =
+       cont k_c (0)))
+   where k_c (y) =
+     let f = closure n_0 @n &toplevel in
+     let g = closure m_0 @m &toplevel in
+     let p = %block.[`0`].`toplevel` (f, g) in
+     cont k_end (p))
+  where k_end (r) =
+    let $camlCode_join_other_name_on_one_way = Block 0 (r) in
+    cont done ($camlCode_join_other_name_on_one_way)

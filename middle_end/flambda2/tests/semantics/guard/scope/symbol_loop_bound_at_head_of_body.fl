@@ -1,0 +1,29 @@
+(* MUST PASS the check of static names. The counterpart for a symbol of
+   code_loop_bound_at_head_of_body.fl. The block $S is bound at the head of
+   the body of the recursive Let_cont, before the test and inside that
+   Let_cont; both arms enter k_loop, whose handler reads $S and goes round
+   once more. (../../statics_scope_loop_bound_before.fl binds the symbol
+   outside the Let_cont.) *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let $S = Block 0 (o) in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       cont k_loop (0, 0)
+     where k_a =
+       cont k_loop (0, 0)))
+   where rec k_loop (i, acc) =
+     let x = %block_load.[`0`] ($S) in
+     let sum = %int_barith.`add` (acc, x) in
+     let more = %int_comp.`lt` (i, 1) in
+     (switch more
+        | 0 -> k_end (sum)
+        | 1 -> k_next
+        where k_next =
+          let i2 = %int_barith.`add` (i, 1) in
+          cont k_loop (i2, sum)))
+  where k_end (r) =
+    let $camlSymbol_loop_bound_at_head_of_body = Block 0 (r) in
+    cont done ($camlSymbol_loop_bound_at_head_of_body)

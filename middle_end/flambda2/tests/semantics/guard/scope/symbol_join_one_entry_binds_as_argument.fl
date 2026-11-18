@@ -1,0 +1,19 @@
+(* MUST BE REFUSED: a symbol is not in scope. As
+   symbol_join_one_entry_binds_run_binds.fl, with another kind of mention: the
+   handler of k_c gives $S to the next continuation, and does nothing else.
+   Only k_b binds $S. The run takes the way that binds (v = 1). *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((switch v
+    | 0 -> k_a
+    | 1 -> k_b)
+   where k_b =
+     let $S = Block 0 (o) in
+     cont k_c (0)
+   where k_a =
+     cont k_c (0)
+   where k_c (y) =
+     cont k_end ($S))
+  where k_end (r) =
+    let $camlSymbol_join_one_entry_binds_as_argument = Block 0 (r) in
+    cont done ($camlSymbol_join_one_entry_binds_as_argument)

@@ -1,0 +1,27 @@
+(* MUST BE REFUSED: a code id is not in scope. As
+   code_join_one_entry_binds.fl, but the mention of n_0 is in the body of
+   code: the handler of k_c binds the code m_0, whose body allocates a closure
+   of n_0, and allocates a closure of m_0. Code is checked with what is in
+   scope where it is bound. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((switch v
+    | 0 -> k_a
+    | 1 -> k_b)
+   where k_b =
+     let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+       cont k (x)
+     in
+     cont k_c (0)
+   where k_a =
+     cont k_c (0)
+   where k_c (y) =
+     let code size(5) m_0 (x) my_closure &my_region my_depth -> k * e =
+       let h = closure n_0 @n &my_region in
+       cont k (h)
+     in
+     let g = closure m_0 @m &toplevel in
+     cont k_end (g))
+  where k_end (r) =
+    let $camlCode_in_code_one_entry_binds = Block 0 (r) in
+    cont done ($camlCode_in_code_one_entry_binds)

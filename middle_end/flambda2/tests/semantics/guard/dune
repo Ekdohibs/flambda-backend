@@ -18,6 +18,12 @@
 ;; is what the tool prints of X.fl, with the status 0. These units are in
 ;; none of the tables and counts of ../ocaml/README.md.
 ;;
+;; The directory scope/ holds T5b's controls of the scope of static names
+;; in a handler (decision D60): texts that the check of static names must
+;; refuse and texts that it must pass, with a rule, a run.sh and a table
+;; (scope/README.md) of their own. None of them is run by a rule of this
+;; file.
+;;
 ;; static_in_arm: a static binding in the handler of one arm of a test,
 ;; mentioned in that handler only. The term passes the two tests of the
 ;; guard (the binding is outside loops and code, and the symbol is in

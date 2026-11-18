@@ -1,0 +1,22 @@
+(* MUST PASS the check of static names. The counterpart for a symbol of
+   code_join_bound_at_head_of_body.fl. The block $S is bound at the head of
+   the body of the Let_cont of k_c, before the test and inside that Let_cont;
+   both arms enter k_c, whose handler reads $S. (In
+   ../../statics_scope_handler_after_both_arms.fl the binding is in the
+   handler that reads the symbol.) *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let $S = Block 0 (o) in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       cont k_c (0)
+     where k_a =
+       cont k_c (0)))
+   where k_c (y) =
+     let x = %block_load.[`0`] ($S) in
+     cont k_end (x))
+  where k_end (r) =
+    let $camlSymbol_join_bound_at_head_of_body = Block 0 (r) in
+    cont done ($camlSymbol_join_bound_at_head_of_body)

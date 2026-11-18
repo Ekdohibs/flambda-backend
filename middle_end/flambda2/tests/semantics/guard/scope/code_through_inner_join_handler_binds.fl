@@ -1,0 +1,23 @@
+(* MUST PASS the check of static names. The partner of
+   code_through_inner_join_one_entry_binds.fl: it is the handler of k_m,
+   through which every way to k_c goes, that binds n_0. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+(((switch v
+     | 0 -> k_a
+     | 1 -> k_b)
+    where k_b =
+      cont k_m (0)
+    where k_a =
+      cont k_m (0)
+    where k_m (z) =
+      let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+        cont k (x)
+      in
+      cont k_c (z))
+   where k_c (y) =
+     let f = closure n_0 @n &toplevel in
+     cont k_end (f))
+  where k_end (r) =
+    let $camlCode_through_inner_join_handler_binds = Block 0 (r) in
+    cont done ($camlCode_through_inner_join_handler_binds)

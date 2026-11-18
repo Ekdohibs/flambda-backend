@@ -1,0 +1,26 @@
+(* MUST PASS the check of static names. The partner of
+   code_join_other_name_on_one_way.fl: n_0 is bound at the head of the body,
+   on both ways to k_c, and m_0 on one of the two ways, and the handler of k_c
+   allocates a closure of n_0 alone. That one way lacks m_0 takes nothing
+   from what every way binds. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+    cont k (x)
+  in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       let code size(1) m_0 (x) my_closure &my_region my_depth -> k * e =
+         cont k (x)
+       in
+       cont k_c (0)
+     where k_a =
+       cont k_c (0)))
+   where k_c (y) =
+     let f = closure n_0 @n &toplevel in
+     cont k_end (f))
+  where k_end (r) =
+    let $camlCode_join_other_name_on_one_way_not_mentioned = Block 0 (r) in
+    cont done ($camlCode_join_other_name_on_one_way_not_mentioned)

@@ -1,0 +1,23 @@
+(* MUST PASS the check of static names. The partner of
+   code_join_one_entry_binds_called_directly.fl: the code n_0 is bound, and
+   its closure made, at the head of the body of the Let_cont of k_c, before
+   the test; both arms give k_c the closure, and the handler of k_c calls n_0
+   directly. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+    cont k (x)
+  in
+  let f = closure n_0 @n &toplevel in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       cont k_c (f)
+     where k_a =
+       cont k_c (f)))
+   where k_c (y) =
+     apply direct(n_0 &toplevel) y (5) -> k_end * error)
+  where k_end (r) =
+    let $camlCode_join_bound_at_head_of_body_called_directly = Block 0 (r) in
+    cont done ($camlCode_join_bound_at_head_of_body_called_directly)

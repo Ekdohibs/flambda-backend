@@ -1,0 +1,20 @@
+(* MUST BE REFUSED: a symbol is not in scope, though no run takes the way that
+   does not bind: the scrutinee of the test is the constant 1. Every arm of a
+   Switch counts, whatever the scrutinee is: what a handler has in scope is a
+   lower bound read off the text. *)
+let o = %opaque (1) in
+let v = 1i in
+((switch v
+    | 0 -> k_a
+    | 1 -> k_b)
+   where k_b =
+     let $S = Block 0 (o) in
+     cont k_c (0)
+   where k_a =
+     cont k_c (0)
+   where k_c (y) =
+     let x = %block_load.[`0`] ($S) in
+     cont k_end (x))
+  where k_end (r) =
+    let $camlSymbol_switch_arm_never_taken = Block 0 (r) in
+    cont done ($camlSymbol_switch_arm_never_taken)

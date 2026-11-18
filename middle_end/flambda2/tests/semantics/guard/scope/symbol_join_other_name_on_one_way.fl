@@ -1,0 +1,23 @@
+(* MUST BE REFUSED: a symbol is not in scope. An intersection that is not empty
+   and leaves a name out: $S is bound at the head of the body, on both ways to
+   k_c; $T is bound on one of the two ways. The handler of k_c reads both. The
+   run takes the way that binds $T (v = 1). *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let $S = Block 0 (o) in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       let $T = Block 0 (o) in
+       cont k_c (0)
+     where k_a =
+       cont k_c (0)))
+   where k_c (y) =
+     let x = %block_load.[`0`] ($S) in
+     let z = %block_load.[`0`] ($T) in
+     let sum = %int_barith.`add` (x, z) in
+     cont k_end (sum))
+  where k_end (r) =
+    let $camlSymbol_join_other_name_on_one_way = Block 0 (r) in
+    cont done ($camlSymbol_join_other_name_on_one_way)

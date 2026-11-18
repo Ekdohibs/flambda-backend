@@ -124,7 +124,9 @@ design out; that is the request, not the change.
     `.expected` files, and `middle_end/flambda2/tests/semantics/guard/`
     (the controls of the two tests that the tool asks of each term
     before a verdict: where a static binding stands, and that a static
-    name is in scope where it is mentioned; decision D60)
+    name is in scope where it is mentioned; decision D60). The
+    directory `scope` under `guard/` is T5b's, on
+    `flambda2-rocq/T5b-scope-controls`.
   - `middle_end/flambda2/tests/tools/scope_diagnosis_control.ml` (a
     control of the words that the tool has for what is out of scope,
     on terms made by hand)
@@ -369,6 +371,11 @@ In the folders of `middle_end/flambda2/rocq/types/`, library
   - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeProject.v`
     (`Type_grammar.project_variables_out`)
   - `middle_end/flambda2/rocq/requests/T5-join.md`
+- T5b, controls of the scope of static names in a handler. Owner: T5b,
+  on `flambda2-rocq/T5b-scope-controls`.
+  - `middle_end/flambda2/tests/semantics/guard/scope/` (texts that the
+    check of static names must refuse and texts that it must pass, each
+    run as the term before and as the term after; decision D60)
 - T6, provers and reification. Owner: T6, on `flambda2-rocq/T6-provers`.
   - `middle_end/flambda2/rocq/requests/T6-provers.md` (the plan: the
     provers, the shape of their statements, the order)

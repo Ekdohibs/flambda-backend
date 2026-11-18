@@ -1,0 +1,31 @@
+;; Controls of the second test of the guard of the test tool, the check of
+;; static names (see ../../../tools/flsemantics.ml, "The check of static
+;; names"; decision D60): the handler of a continuation has in scope only
+;; what is bound on every way to it. Each X.fl is a text written by hand;
+;; the first words of its comment say what the check must do with it, MUST
+;; BE REFUSED or MUST PASS, and the comment says why. README.md has the
+;; table of the controls and says what they tell apart.
+;;
+;; run.sh runs the tool on each text alone and with the text as the term
+;; after too (the option -after), and on a text that must be refused beside
+;; a plain unit, as the term after and as the term before. The tool exits
+;; with the status 1 where the term after is out of scope, which is why
+;; these texts are not in the directory two levels up, whose rules take the
+;; status 0 and no other. run.sh prints the status of each run, and fails
+;; where a run is not as the comment of its text says.
+;;
+;; To add a control, add X.fl (its module symbol must match its name) and
+;; nothing else: there is no list. `dune promote` updates scope.expected.
+
+(rule
+ (deps
+  (glob_files *.fl))
+ (action
+  (with-stdout-to
+   scope.output
+   (run sh %{dep:run.sh} %{dep:../../../tools/flsemantics.exe} %{deps}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff scope.expected scope.output)))
