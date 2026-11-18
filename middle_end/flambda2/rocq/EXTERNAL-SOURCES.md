@@ -332,6 +332,54 @@ documents:
 | N1, 16 November: about 14:10 to 14:50 for the three files named; for anything further, the time is not recorded | of the Ltac2 library as installed: parts of Control.v and Init.v, the declarations of Ltac1.v, and the listing of its directory. The tactic also calls Env.expand, Std.VarRef, Constr.Unsafe.iter and functions of Message, Ref, List, Int and Ident by name; N1 has no record either way of opening the files that define them. So for the rest of the installed Ltac2 directory: parts may have been read on 16 November, by a search for a name; which files, how much and when is not recorded. Whether N1 also looked at Rocq's reference manual is likewise not recorded either way | to write the tactic and its bound (a limit of time, stopping a call, the number of goals); `nominal/FlambdaEquivarianceTactic.v` | an interface used (functions called by name); no text |
 | N2, 11 November | Utf8_core is named in `nominal/FlambdaFreshQuantifierSpec.v` as the model for making a letter a keyword; whether the installed file was opened is not recorded | that comment | the remark |
 | C0 and C2, 16 November | the help text that "rocq compile" prints (C2 also rocq and "rocq native-precompile") | timing and rebuilding in their own working trees; nothing in the tree | nothing |
+| N2 and C0, 18 November, between 11:49 and 12:05 | no source text of the library read. By N2: the names of the source files of the library as installed and of the packages of the installation, by listings; what Rocq prints of its version; Rocq's answers when asked to locate 23 names of definitions and 7 of modules (it prints full names and no body); and the size and the sha256 of Floats/SpecFloat.v, computed by a tool over its bytes, to check a reader's report of it. By C0, for its own account of the same files: the names of the compiled files of the twelve modules, of the directories of the installation and of its packages, by listings; the first five lines of the file META of rocq-stdlib as installed (a file of the package's installation, not of the library's source), after a search of the META files of rocq-core, rocq-stdlib and rocq-runtime for the line of the version; what Rocq prints of its version and of where its library is; and Rocq's answers when asked to locate the twelve names of modules and twelve of definitions | which module of the library each generated file of `middle_end/flambda2/tests/semantics/extracted_rocq_library/` is made from: the two paragraphs after this table | nothing; no text or code taken |
+| C0, 18 November, from 12:23 | of the packages as installed. By hand, between 12:23 and about 12:40. The file doc/rocq-core/LICENSE of rocq-core 9.3.0 (24381 bytes, 458 lines, sha256 d4594b82f4d50840df6a7e9d14132a8c0a3cc05d0ac46d15310a264a1f75447e): its first 40 lines printed, its headings and the words copyright, inria, rocq and coq searched for, its size and hash computed; the same hash computed of the LICENSE of rocq-runtime, of rocq-devtools and of the source of rocq-stdlib 9.2.0 as opam keeps it. The fields license, version, authors and maintainer of the opam files of rocq-core 9.3.0 and rocq-stdlib 9.2.0. Of the source file of each of the twelve modules of the paragraphs after this table (under lib/coq of the installation: theories/ for rocq-core, user-contrib/Stdlib/ for rocq-stdlib), the header and little more: the hash of its nine lines; the line before them where there is one; a search of its first 25 lines for a year, an author or a copyright; the nine lines of theories/Init/Datatypes.v printed; lines 10 to 14 of Arith/PeanoNat.v printed, one of which is a line of source that is not of the header (a line that begins "From Stdlib Require Import"); and, later, a search of ZArith/BinInt.v for the words "Initial author", which printed its line 21. The names of the files of the packages' directories, by listings; a file CREDITS of the source of rocq-core was seen in a listing and not opened. No definition, lemma or proof of the library printed or read. After those readings C0's scripts hashed, compared and copied the same files | the files `LICENSE` and `README.md` of `middle_end/flambda2/tests/semantics/extracted_rocq_library/` | COPIED into the tree, with the source of each named in that `README.md`. The whole of doc/rocq-core/LICENSE, byte for byte, as `LICENSE`: the text of the GNU Lesser General Public License, version 2.1. Lines 1 to 9 of theories/Init/Datatypes.v (sha256 of the nine lines b4a9db4ebd8900837ba85450347bba5b605d515252c193f409b29ad1e619444e): the header of Rocq's source files, which states the copyright and the licence, and whose third line is the copyright line. And, quoted in the same file: the first line of BinInt.v, BinPos.v and PosDef.v, the words of line 10 of Arith/PeanoNat.v and line 21 of ZArith/BinInt.v, the last two of which name an author |
+| N2, 18 November, between 12:24 and 12:50 | no installed source file of the library opened; what was printed is text that Rocq generated, and lines of the sources as C0 quotes them. Between 12:24 and 12:30: Rocq's extraction run in scratch directories outside the tree, on two files written for the purpose: one that asks for SFcompare of Floats/SpecFloat alone, where the two .mli files that Rocq wrote for SpecFloat and IntDef were printed (a type of four constructors and two declarations) and the lines of its files counted; and one with a definition that calls 17 functions of the library, each put onto a function of OCaml's library by a directive, where the files that Rocq wrote were printed (those of the library's modules empty, but for one short function, bool_dec, in that of Bool) and compiled by OCaml, the first time with an error and the second without. The names of the compiled files of the installed directory of Rocq's extraction modules, by a listing. Of another package as installed, zarith 1.14: the field license of its opam file. Between 12:47 and 12:50: the header of Rocq's source files and the three other lines, read as C0's `README.md` of the directory quotes them | the probes: a page for the human on what not generating these files would take, which is not in the tree. The quoted lines: the paragraphs after this table | nothing. That page names two of Rocq's extraction modules beside the one that `validation/checks/FlambdaExtract.v` takes, and gives zarith's licence field; what it says that those two do is from the model's knowledge (point 3 of "What is not certain"), not from a reading |
+
+Files generated from Rocq's library are in the tree, in a directory of their own.
+`rocq/Makefile` compiles `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v` in
+`middle_end/flambda2/tests/semantics/extracted/`, where Rocq then writes OCaml files, and
+passes those files through ocamlformat. That .v file names definitions of this tree only
+(its command Separate Extraction), and Rocq writes an .ml and an .mli for each module that
+they use. The same rule of the Makefile then moves to
+`middle_end/flambda2/tests/semantics/extracted_rocq_library/` each of those files whose
+module is not a .v file that the Makefile compiles; it keeps no list of their names. No line
+of the generated files of either directory is written by hand. Before landing, C0's gate is
+to delete them, make the extraction again and check that each is written with the bytes of
+the commit. Twenty-four files are in the second directory: an .ml and an .mli for each of
+twelve modules of Rocq's library, named BinInt, BinNums, BinPos, Bool, Datatypes, List,
+ListDef, Nat, NatDef, PeanoNat, PosDef and Specif (the two files of Specif are empty). Nine
+of the twelve came into the tree with commits of 10 November (point 2 of "What is not
+certain"), and Bool, Nat and NatDef with commits of 11 November. Until 18 November all were
+in the first directory, among the generated files of the tree's own modules, and no file of
+notices was beside them. The files have no header: the extraction writes none. Beside them
+the second directory has a file `LICENSE`, which is the text of the GNU Lesser General
+Public License, version 2.1, as rocq-core 9.3.0 installs it, and a file `README.md`, which
+has a table of the twelve modules and the header of Rocq's source files, where Rocq states
+the copyright and the licence. The first is a copy, whole; the second is written for the
+tree and quotes that header and three other lines of Rocq's source files. What was copied is
+entered in C0's row of 18 November in the table. The directory has nothing else but its dune
+file.
+
+What is known of where the files come from is of one day. As the library is installed on 18
+November (rocq-core 9.3.0, rocq-stdlib 9.2.0), Rocq has modules of those names as follows.
+In rocq-core alone: Datatypes and Specif (of Corelib.Init). In rocq-stdlib alone: BinInt (of
+Stdlib.ZArith), BinPos (of Stdlib.PArith), Bool (of Stdlib.Bool), List (of Stdlib.Lists) and
+PeanoNat (of Stdlib.Arith). In both: BinNums, ListDef, Nat, NatDef and PosDef, and the
+definitions of those five that were located are of rocq-core's modules
+(Corelib.Numbers.BinNums, Corelib.Lists.ListDef, Corelib.Init.Nat, Corelib.BinNums.NatDef,
+Corelib.BinNums.PosDef). That is by the names of the modules and of one to three definitions
+of each file, which Rocq was asked to locate (the row of N2 and C0 in the table), not by
+every definition; the table of that `README.md` gives the same, with the source file of each
+module. On 18 November each of the twelve source files has the same header of nine lines,
+which C0 compared by a hash and copied once (its row). What is not known: which versions of
+Rocq and of ocamlformat wrote the files in the commits of 10 to 13 November that added or
+changed them, and what notice the sources carried then. None of the accounts cited here
+records a reading of a definition in the original Rocq source files of these twelve modules.
+Besides the header and other notice lines, C0 printed one line of source code: the line of
+Arith/PeanoNat.v beginning "From Stdlib Require Import" (C0's row). Readings of the 24
+generated files already in this repository are outside this inventory's scope. The licence
+of the library is as said above.
 
 **[R2] The other tools, run and not read:** OCaml 5.4.1, dune 3.24.2, menhir 20231231,
 ocamlformat 0.29.0, Python 3.6.8, git, GNU Make, perl, bash, the GNU coreutils, gcc and ld.
