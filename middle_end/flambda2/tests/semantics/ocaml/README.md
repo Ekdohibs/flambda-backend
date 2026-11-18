@@ -3729,14 +3729,13 @@ again.
 - Units that are not in this directory. The rule is of the units that
   are here, and says nothing of any other. On a list of 2,689 units
   that the testers keep outside the tree, T3 set what the program says
-  of each unit beside what the tool says of its text, with the tool
-  built at 22698f64d1, the program built at 3d5db97911 and a compiler
-  that has the files of the one above. That count is T3's: it is no
-  measure of the rules of this directory, nothing in the tree makes
-  it, and it is the count made with that tool and that program, not
-  a count made with the tool and the program of this tree, which are
-  of after decision D60. The lines of the two
-  verdicts differ of 47 units at the default flags and of 46 with
+  of each unit beside what the tool says of its text, with the tool,
+  the program and the compiler built at d17aee7309, and of the text
+  that that compiler prints of each unit. That count is T3's: it is
+  no measure of the rules of this directory, nothing in the tree
+  makes it, and it is the count made with the tool and the program of
+  that commit. The lines of the two
+  verdicts differ of 35 units at the default flags and of 34 with
   `-O3`, and none of those units has the name of a unit of this
   directory. A line that differs is not always another verdict: of 10
   and 6 of those units both ways say that the term before is undefined
@@ -3750,14 +3749,25 @@ again.
     those the term before is undefined in both ways, and the two
     differ in whether the two terms were then found the same. In 1 and
     2 the tool's Simplify shares equal constants that the compiler's
-    does not (discrepancy X5-10).
-  - Of 12 and 12, the reader does not read the text that the printer
-    wrote, and the tool has no verdict (discrepancy T4-15 for 9 of
-    them at each setting).
+    does not (discrepancy X5-10). `copy_heap.ml` and `copy_local.ml`
+    of this directory are T3's two controls of the block built again,
+    and are not on that list: the two ways do not print the same of
+    `copy_heap.ml`, which has `copy_heap.own_expected` ("The rule").
   - Of 16 and 16, the unit uses another unit. In that measure the tool
     was given no directory in which to look for a `.cmx` file, where
     the program reads those that the compilation reads; given the
     same files, the tool has the program's verdict of each.
+
+  The causes are those that T3 found by controls and readings in an
+  earlier count, made with a tool and a program of before the text of
+  a term was mended; in this one the units of each cause were counted
+  again and are the same units, and the readings were not made again.
+  The earlier count had 12 and 12 units more, of which the reader did
+  not read the text that the printer wrote (discrepancies T4-15 and
+  T4-14). Of the text that the compiler of d17aee7309 prints of those
+  units the tool prints what the program prints, of 8 and 8 byte for
+  byte; of 4 and 4 both say "not checked" of the same primitive, and
+  the two lines differ in the name of its argument.
 - `pairs/`. The second unit of a pair needs the `.cmx` file of the
   first. `own_run.sh` compiles one unit in a directory that has nothing
   else, and the program checks one unit in a process; the rules of
