@@ -6,6 +6,12 @@ cut loose, in files of my own, to statements that T4 fixes. Reviewer
 of the meet: R1. (My own stream, the type traversal of the n-way
 join, is `status/T5b.md`.)
 
+Read this first (2026-11-18, at the landed tip of stage 131). This
+file is of 11 and 12 November 2026 and is not kept current: what it
+says in the present was so then. One thing is later: the folder
+that it names for the files was brought up to date on 16 November,
+in N2's commit of the folders.
+
 Files, in `middle_end/flambda2/rocq/`:
 
 - `FlambdaMeetProductsSpec.v`, `FlambdaMeetProductsProofs.v`: slice 1.
@@ -339,6 +345,6 @@ Validation at the tip: `make -C rocq -j8 all`,
 - The fourth conjunct of `scoped_env_of`: T5's request, T4's
   decision; made here because the files were open.
 
-## Found
+## Found (2026-11-11)
 
 Nothing of the compiler yet.
