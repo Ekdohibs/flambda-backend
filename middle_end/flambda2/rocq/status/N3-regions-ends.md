@@ -1,9 +1,15 @@
 # N3, a second verdict of the check of regions, about ends: status
 
-Owner: N3, on `flambda2-rocq/N3-regions-ends`. The machine of regions
+Owner: N3. What this file describes is merged. The machine of regions
 and the check of regions, beside which this stands, are their owner's
 (`status/C2.md`). The statuses of the other work of the same stream
 are `status/N3.md` and `status/N3-types.md`.
+
+On 18 November 2026: the sections "Done" and "What is not said" are
+as the tree is at this commit, and "The test tool" gives its counts
+with their dates and the directories that they are of. The other
+sections were written on 15 November 2026, with the work, and say
+what was so then; they are not kept current.
 
 The task: the check of regions does not say that a region is ended
 (decision D48). A second test of the same term, with the same
@@ -12,8 +18,9 @@ where code returns, or is forgotten at a jump unless the handler may
 be entered stale (below); and a proof of what the run of a term that
 passes it leaves on the stack.
 
-Files (new, mine): `FlambdaRegionsEndsSpec.v`, to be reviewed, and
-eight files of proofs, which need no review:
+Files (mine): `FlambdaRegionsEndsSpec.v`, which two reviewers read
+for its meaning (below, "Agreed with others"), and eight files of
+proofs, which need no review:
 `FlambdaRegionsEndsBasicsProofs.v`, `FlambdaRegionsEndsStableProofs.v`,
 `FlambdaRegionsEndsViewProofs.v`,
 `FlambdaRegionsEndsHandlersProofs.v`,
@@ -21,7 +28,7 @@ eight files of proofs, which need no review:
 `FlambdaRegionsEndsCallProofs.v` and `FlambdaRegionsEndsProofs.v`. In
 the test tool, one block ("The ends of regions") and one statement in
 `check_regions`, with the words of the owners of the tool and of that
-function. No definition and no statement of another file changes.
+function. No definition and no statement of another file changed.
 
 ## Done
 
@@ -152,11 +159,20 @@ nothing that is proved relates the two answers of a line.
 rests on, what of the tool is trusted for it, and what it does not
 say.
 
-In the expected files of the tree the line is in 146: the 26
-examples of `tests/semantics` that have the line of the check of
-regions with two runs, four files of `tests/semantics/regions` (the
-three of counts, and `region_param_loop.regions-only`), and 116 units
-made from OCaml sources. Of the 116 units from OCaml both terms are
+On 15 November 2026 the line was in 146 of the expected files of the
+tree: the 26 examples of `tests/semantics` that have the line of the
+check of regions with two runs, four files of
+`tests/semantics/regions` (the three of counts, and
+`region_param_loop.regions-only`), and 116 units made from OCaml
+sources. On 18 November 2026 it was in 154, counted in these
+directories and in no other: the same 26 of `tests/semantics` itself
+and the same four of `tests/semantics/regions`, three examples of
+`tests/semantics/guard`, and 121 units made from OCaml sources (109
+of `tests/semantics/ocaml` itself, six of its `library` and six of
+its `pairs`). A directory of tests that entered the tree after that
+count is not in it. The rest of this paragraph is of those
+directories on that day. Of the 121 units from OCaml, and of the
+three examples of `guard`, both terms are
 accepted, with and without the option. So are both terms of each of
 the eight controls of the cells that the conversion of the tool makes
 (`region_cell_*`), those three included whose run the check of
