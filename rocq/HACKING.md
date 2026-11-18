@@ -1413,8 +1413,21 @@ not a proof.
   `tests/semantics/extracted/` (`make -C rocq all` regenerates it; the
   files are committed, and none is written by hand). No part of the
   compiler is built from it.
+- The modules of Rocq's own library that the machine uses (`Datatypes`,
+  `BinInt` and the like) are generated with it. Their files are Rocq's
+  and not ours, so the same rule of `rocq/Makefile` moves them to
+  `tests/semantics/extracted_rocq_library/`, a library of its own, which
+  has the licence of Rocq's library (`LICENSE`) and a `README.md` that
+  says what the files are generated from. The rule has no list of names:
+  a generated file is moved when its module is not a `.v` file of this
+  tree. If a change to the model makes the extraction write a file there
+  for a module that the table of that `README.md` has not got, or no
+  longer write one of them, tell the integrator: the table and the entry
+  of `middle_end/flambda2/rocq/EXTERNAL-SOURCES.md` for those files
+  change in the same stage.
 - Who commits the extracted files. Only the integrator commits
-  `tests/semantics/extracted/`, on the integration branch. They are
+  `tests/semantics/extracted/`, on the integration branch, and
+  `tests/semantics/extracted_rocq_library/` with it. They are
   generated, one file from many sources, so two workstream branches that
   each committed them would conflict at every merge, in files nobody
   wrote. On a workstream branch, run `make -C rocq all` before the tests,
@@ -1422,7 +1435,8 @@ not a proof.
   out of your commits: stage the files you changed by name, not with
   `git add -A`. `git status` will go on showing them as modified;
   `git checkout -- middle_end/flambda2/tests/semantics/extracted` puts
-  them back, which a rebase needs first. When a branch is merged, the
+  them back, which a rebase needs first (the same with
+  `extracted_rocq_library`). When a branch is merged, the
   integrator runs `make -C rocq all` on the result and commits what it
   regenerates, on top of the branch.
 - An extracted file that is no longer written. The extraction writes a
@@ -1432,10 +1446,12 @@ not a proof.
   were last written and are still compiled into the library of the
   tests, and `git diff` after `make -C rocq all` does not show them. To
   see them: delete every `.ml` and `.mli` of `tests/semantics/extracted/`
-  (not its `dune` file, which is written by hand) and
+  and of `tests/semantics/extracted_rocq_library/` (not their `dune`
+  files, which are written by hand, and not `LICENSE` and `README.md` of
+  the second) and
   `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.vo`, and run
-  `make -C rocq all`. Look at `git status` of the directory only when
-  that build has succeeded: a build that stops before the extraction
+  `make -C rocq all`. Look at `git status` of the two directories only
+  when that build has succeeded: a build that stops before the extraction
   leaves every file deleted. A file then shown as deleted is one that
   the extraction no longer writes. That alone does not show that nothing
   uses it: a test tool is written by hand and may still name the module.

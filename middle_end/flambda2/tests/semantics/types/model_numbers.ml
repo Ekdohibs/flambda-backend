@@ -44,8 +44,8 @@
    number that is outside the range of what it is to become has no conversion:
    the functions answer [None], and never reduce a number modulo anything. *)
 
-module Numbers = Flambda2_rocq_semantics.BinNums
-module Datatypes = Flambda2_rocq_semantics.Datatypes
+module Numbers = Flambda2_rocq_library.BinNums
+module Datatypes = Flambda2_rocq_library.Datatypes
 
 type positive = Numbers.positive
 

@@ -1,8 +1,15 @@
 ;; The machine of the Flambda 2 semantics, extracted from Rocq by
 ;; rocq/Makefile (see middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v). For tests
 ;; only: no part of the compiler depends on it.
+;;
+;; The modules of Rocq's own library that the machine uses (Datatypes,
+;; BinInt and the like) are generated with it, and rocq/Makefile moves
+;; their files to ../extracted_rocq_library/, a library of its own. It is
+;; opened here because the generated files name those modules as Rocq
+;; does, without the name of a library before them.
 
 (library
  (name flambda2_rocq_semantics)
+ (libraries flambda2_rocq_library)
  (flags
-  (:standard -w -a)))
+  (:standard -w -a -open Flambda2_rocq_library)))

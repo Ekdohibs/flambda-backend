@@ -60,6 +60,11 @@ Owner: C0. Phase 0 was done as C0, and what it created is C0's.
 - `middle_end/flambda2/rocq/status/phase0.md` (Phase 0)
 - `middle_end/flambda2/tests/semantics/extracted/` (generated; only the
   integrator commits it, see `rocq/HACKING.md`)
+- `middle_end/flambda2/tests/semantics/extracted_rocq_library/` (the
+  generated files of the modules of Rocq's own library that the machine
+  uses, with the licence of that library, `LICENSE`, a `README.md` and
+  the `dune` file; only the integrator commits it, see
+  `rocq/HACKING.md`)
 - `middle_end/flambda2/tests/semantics/dune`,
   `middle_end/flambda2/tests/semantics/gen_rules.sh` and
   `middle_end/flambda2/tests/semantics/run/dune` (Phase 0: the rules that
@@ -403,7 +408,9 @@ In the folders of `middle_end/flambda2/rocq/types/`, library
     the generator of types; the differential tests and their dune
     rules). What it links of the model is extracted by
     `FlambdaExtract.v`, which is C0's, into
-    `middle_end/flambda2/tests/semantics/extracted/`.
+    `middle_end/flambda2/tests/semantics/extracted/`, and what it links
+    of Rocq's own library into
+    `middle_end/flambda2/tests/semantics/extracted_rocq_library/`.
 
 ## S1 to S7: simplifier rewrites
 

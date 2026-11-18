@@ -344,7 +344,7 @@ module Lift_from_code = Flambda2_rocq_semantics.FlambdaLiftFromCodeSpec
 module Lift_from_arms = Flambda2_rocq_semantics.FlambdaLiftFromArmsSpec
 module Heap_free = Flambda2_rocq_semantics.FlambdaHeapFreeSpec
 module Statics_in_scope = Flambda2_rocq_semantics.FlambdaStaticsInScopeSpec
-module Numbers = Flambda2_rocq_semantics.BinNums
+module Numbers = Flambda2_rocq_library.BinNums
 module Value_approximation = Flambda2_classic_mode_types.Value_approximation
 module P = Flambda_primitive
 
@@ -361,11 +361,11 @@ let rec positive_of_int n : Numbers.positive =
   then Coq_xO (positive_of_int (n lsr 1))
   else Coq_xI (positive_of_int (n lsr 1))
 
-let rec nat_of_int n : Flambda2_rocq_semantics.Datatypes.nat =
+let rec nat_of_int n : Flambda2_rocq_library.Datatypes.nat =
   if n <= 0 then O else S (nat_of_int (n - 1))
 
-let int_of_nat (n : Flambda2_rocq_semantics.Datatypes.nat) =
-  let rec count acc (n : Flambda2_rocq_semantics.Datatypes.nat) =
+let int_of_nat (n : Flambda2_rocq_library.Datatypes.nat) =
+  let rec count acc (n : Flambda2_rocq_library.Datatypes.nat) =
     match n with O -> acc | S n -> count (acc + 1) n
   in
   count 0 n

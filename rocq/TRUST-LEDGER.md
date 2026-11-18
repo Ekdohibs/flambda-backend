@@ -1780,7 +1780,9 @@ it gave back.
 - **The extraction**: Rocq's extraction to OCaml, by
   `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v`. It has no directive that
   realises a definition of the model by hand-written OCaml. The extracted
-  modules are in `middle_end/flambda2/tests/semantics/extracted/`.
+  modules are in `middle_end/flambda2/tests/semantics/extracted/`; those
+  of Rocq's own library that they use are generated with them and are in
+  `middle_end/flambda2/tests/semantics/extracted_rocq_library/`.
 - **What the tool reports**, in the same file (`check`, `run`,
   `observe`): that it calls `validate_unit` on the two terms converted
   or, where that does not validate them, `validate_unit_knowing` on the

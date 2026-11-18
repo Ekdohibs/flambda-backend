@@ -537,6 +537,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
 )
 FLAMBDA2_EXTRACT := $(FLAMBDA2_DIR)/validation/checks/FlambdaExtract.v
 FLAMBDA2_EXTRACTED_DIR := $(ROOT)/middle_end/flambda2/tests/semantics/extracted
+FLAMBDA2_EXTRACTED_LIBRARY_DIR := \
+  $(ROOT)/middle_end/flambda2/tests/semantics/extracted_rocq_library
 FLAMBDA2_TYPES := $(addprefix $(FLAMBDA2_DIR)/, \
   types/naive/FlambdaAliasesProofs.v \
   types/naive/FlambdaAliasesSpec.v \
@@ -1058,10 +1060,40 @@ $(EXTRACT:.v=.vo): $(EXTRACT)
 # modules into the directory of the test tool that runs it
 # (middle_end/flambda2/tests/semantics/extracted/); nothing there is written
 # by hand but the dune file.
+#
+# Rocq also writes there the files of each module of its own library that
+# the machine uses (Datatypes, BinInt and the like). Those files are Rocq's
+# and not ours. Once formatted they are moved to a directory of their own,
+# middle_end/flambda2/tests/semantics/extracted_rocq_library/, which has
+# the licence of Rocq's library (LICENSE, a copy of the file that Rocq's
+# package installs) and says what they are generated from (README.md);
+# README.md and the dune file are the only files there that are written
+# by hand. No list of their names is kept: a generated file is
+# moved when no .v file of $(SOURCES) has the name of its module, so the
+# file of a module that a later change of the model brings is moved as
+# well.
+#
+# The compilation writes FlambdaExtract.vo before the files are formatted
+# and moved. If the compilation, the formatting or a move fails, the recipe
+# removes that .vo, so that the next make runs the extraction again and
+# does not take an unfinished move for a finished one.
+FLAMBDA2_OWN_MODULES := $(basename $(notdir $(SOURCES)))
+
 $(FLAMBDA2_EXTRACT:.v=.vo): $(FLAMBDA2_EXTRACT)
-	cd $(FLAMBDA2_EXTRACTED_DIR) && $(ROCQ) compile $(FLAGS) $<
+	{ cd $(FLAMBDA2_EXTRACTED_DIR) && $(ROCQ) compile $(FLAGS) $<; } \
+	  || { s=$$?; rm -f $@; exit $$s; }
 	$(OCAMLFORMAT) -i $(FLAMBDA2_EXTRACTED_DIR)/*.ml \
-	  $(FLAMBDA2_EXTRACTED_DIR)/*.mli
+	  $(FLAMBDA2_EXTRACTED_DIR)/*.mli || { s=$$?; rm -f $@; exit $$s; }
+	@set -eu; trap 'rm -f $@' 0; \
+	  for f in $(FLAMBDA2_EXTRACTED_DIR)/*.ml \
+	      $(FLAMBDA2_EXTRACTED_DIR)/*.mli; do \
+	    m=$${f##*/}; m=$${m%.*}; \
+	    case " $(FLAMBDA2_OWN_MODULES) " in \
+	      *" $$m "*) ;; \
+	      *) mv "$$f" $(FLAMBDA2_EXTRACTED_LIBRARY_DIR)/;; \
+	    esac; \
+	  done; \
+	  trap - 0
 
 %.vo: %.v
 	$(ROCQ) compile $(FLAGS) $<

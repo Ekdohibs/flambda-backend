@@ -91,7 +91,7 @@ open Import
 module Kinds = Flambda2_rocq_semantics.FlambdaKindModel
 module Model = Flambda2_rocq_semantics.FlambdaModel
 module Compare = Flambda2_rocq_semantics.FlambdaCompareSpec
-module Numbers = Flambda2_rocq_semantics.BinNums
+module Numbers = Flambda2_rocq_library.BinNums
 module Printer = Flmodel_to_fexpr
 
 type converted =

@@ -40,4 +40,5 @@
   flambda2_bound_identifiers
   flambda2_term_basics
   flambda2_rocq_semantics
+  flambda2_rocq_library
   unix))

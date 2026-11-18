@@ -92,7 +92,7 @@ open Flambda2_bound_identifiers
 module Kinds = Flambda2_rocq_semantics.FlambdaKindModel
 module Primitives = Flambda2_rocq_semantics.FlambdaPrimitiveModel
 module Model = Flambda2_rocq_semantics.FlambdaModel
-module Numbers = Flambda2_rocq_semantics.BinNums
+module Numbers = Flambda2_rocq_library.BinNums
 module P = Flambda_primitive
 module F = Fexpr
 
