@@ -77,8 +77,9 @@
      them.
    It needs no review, but for the fix of faults of the compiler's
    unboxing, which is not on the branch (the seeds of its rules, its
-   check, [unboxing_relations_with], [Keep_unused] and the mode [fixed]
-   of the rebuild), which FlambdaReaperUnboxingSpec.v names for review
+   check, [unboxing_relations_with], the mode [fixed] of the rebuild and
+   its fatal errors, [rebuild_fails_u]), which
+   FlambdaReaperUnboxingSpec.v names for review
    with its statements: that file says what the checks mean, and the test tool
    compares the decisions and the rebuilt term with those of the
    compiler's reaper. It is extracted ([derive_dominated],
@@ -91,8 +92,8 @@
    [rebuild_unit_unbox], [rebuild_unit_unbox_repr], and, for the model
    with the fix, [fix_seeds], [derive_to_unbox_fixed],
    [check_to_unbox_fixed], [check_to_change_representation_fixed],
-   [rebuild_unit_unbox_repr_fixed] and, for a variant of the fix,
-   [rebuild_unit_unbox_repr_fixed_tail]).
+   [rebuild_unit_unbox_repr_fixed] and
+   [rebuild_unit_unbox_repr_fixed_fails]).
 
    What is transcribed is the reaper run with
    [-reaper-change-calling-conventions] and [-reaper-unbox], the
@@ -201,24 +202,31 @@
    The fix. Its two rules of the analysis are seeds of [cannot_unbox0]
    ([fix_seeds]), with which the tables are computed again
    ([unboxing_relations_with]). Its rebuild is the mode [fixed] of
-   [rebuild_expr_u]: the decision [Keep] of the compiler has a flag
-   [unused], which is [Keep_unused] here, for a parameter of a
-   continuation that is kept with no use, and such a parameter is given
-   poison by an [Apply_cont] and by the wrapper of a call, before the
-   case of a disagreement on unboxing. The compiler gives decisions to
-   every continuation, those of fixed arity included (the return and
-   exception continuations of code, whose parameters are those of the
-   code dep); the model gives decisions to these only in the mode of the
-   fix ([code_continuation_decisions]), where they make a difference:
-   without the flag, the decisions of fixed arity keep every parameter,
-   as the model does for a continuation without decisions. The fix gives
-   poison to a parameter kept with no use whatever the callee returns, so
-   that a call in tail position, from code that keeps its calling
-   convention and whose result has no use, returns to a wrapper. A variant
-   ([tail], [rebuild_unit_unbox_repr_fixed_tail]) passes a result that the
-   callee keeps on as it is, and gives poison only for one that the
-   callee unboxes or deletes: the call needs no wrapper if that is all it
-   would do, and stays in tail position.
+   [rebuild_expr_u]. The compiler gives decisions to every continuation,
+   those of fixed arity included (the return and exception
+   continuations of code, whose parameters are those of the code dep);
+   the model gives decisions to these only in the mode of the fix
+   ([code_continuation_decisions]), where they make a difference.
+   [make_apply_wrapper] passes a result that the callee keeps to a
+   parameter kept, and gives poison to one kept for a result that the
+   callee deletes or unboxes; one unboxed for a result that the callee
+   does not unbox is a fatal error. A call some of whose results have no
+   source ([never_returns]: a result of the code of the call, or one
+   read off the call witness of its callee, with no source) is made one
+   that never returns, with no wrapper, which the model writes as the
+   wrapper [Invalid] (below). A call of code that keeps its calling
+   convention gives the arguments that the code dep uses, the others
+   being poison ([used_params]: [kept_code_mask]); a callee that is
+   unboxed there is a fatal error ("TO CHECK"); and code with
+   [never_returns] whose rebuilt body still has its return continuation
+   free is a fatal error ([check_never_returns]). The model rebuilds the
+   unit as before at these three errors (an [Invalid]); whether the
+   compiler stops is [rebuild_fails_u], which walks the unit as the
+   compiler rebuilds it ([rebuild_unit_unbox_repr_fixed_fails]).
+   [Keep_unused] is the [Keep] of a parameter kept with no use, which the
+   fix no longer distinguishes: the rebuild treats it as [Keep], and the
+   statements read the mark (an earlier fix gave such a parameter poison,
+   whatever the callee returned, and lost a tail call).
 
    The deliberate differences from the OCaml, each where the model cannot
    follow it or does not have what it reads:
@@ -267,15 +275,17 @@
      order of the closures, as the compiler's [Let] of the set does, and
      the projections are dropped; where its representation changes, the
      projections are at the new function slots.
-   - The fix drops the callee of a call of code that changes its calling
-     convention and does not use its [my_closure]
-     ([Keep_my_closure { unused = true }]). The model keeps it, as it does
-     the callee of a call under [Keep_my_closure] that has no use: its
-     calls have a callee, and its machine runs a call by the closure that
-     its callee is. The code does not read the closure, so that the call
-     runs as the compiler's does without it; the traversal gives the
-     callee of a call in code that is used a use, through the witness of
-     the call, so that its binding is kept.
+   - In the fix, a call whose code is not known and whose callee is a
+     constant gives its arguments as they are; the model rewrites them,
+     as on the branch ([rebuild_arguments]). A call of unknown arity with
+     no argument, a fatal error of the analysis in the fix, is not one
+     that never returns ([never_returns_of_call]).
+   - A call of code that changes its calling convention under
+     [Keep_my_closure] whose callee has no use has no callee in the OCaml
+     ([rewrite_simple_opt]). The model keeps it: its calls have a callee,
+     and its machine runs a call by the closure that its callee is. The
+     code does not read the closure, so that the call runs as the
+     compiler's does without it.
    - A call whose callee is unboxed has no callee in the OCaml, whether
      the code unboxes its [my_closure] ([Unbox_my_closure]) or keeps it
      ([Keep_my_closure], [rewrite_simple_opt]); the model's calls always
@@ -1794,9 +1804,8 @@ Definition unit_changed_representations (is_local : field -> bool)
 (* [Unboxing_analysis.param_decision]: one of
    FlambdaReaperCallingConventions.v, [Keep] or [Delete], or [Unbox] with
    the unboxed fields of the parameter. In the mode of the fix,
-   [Keep_unused] is the [Keep] with [unused = true] of a parameter of a
-   continuation kept though it has no use, which is given poison; the
-   other [Keep]s are [unused = false]. *)
+   [Keep_unused] marks the [Keep] of a parameter of a continuation kept
+   though it has no use; the rebuild treats it as [Keep]. *)
 Inductive decision : Type :=
   | Decided (d : param_decision)
   | Unbox (fields : unboxed_fields)
@@ -2004,11 +2013,11 @@ Definition wrapper_params (func : list (wrapper_decision * flambda_kind))
    otherwise [None] where one decision unboxes and the other does not
    ([Invalid]). A result beyond the decisions of the continuation, or of
    a continuation that has none, is kept, as a continuation of fixed
-   arity keeps it. In the mode of the fix, a result that the continuation
-   keeps with no use ([Keep_unused]) is poison, whatever the callee does
-   with it; in the variant [tail] of the fix, one that the callee keeps is
-   passed on as it is. *)
-Fixpoint wrapper_args_u (tail : bool) (apply_decisions : list decision)
+   arity keeps it. In the mode of the fix ([fixed]), a parameter kept is
+   given poison for a result that the callee unboxes, as for one that it
+   deletes; one unboxed for a result that the callee does not unbox is
+   the fatal error of the fix ([wrapper_fails_u]), [None] here. *)
+Fixpoint wrapper_args_u (fixed : bool) (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
   | [] => Some []
@@ -2019,7 +2028,7 @@ Fixpoint wrapper_args_u (tail : bool) (apply_decisions : list decision)
       | ad :: apply_decisions => (ad, apply_decisions)
       end
     in
-    match wrapper_args_u tail apply_decisions func with
+    match wrapper_args_u fixed apply_decisions func with
     | None => None
     | Some rest =>
       match ad, fd with
@@ -2027,18 +2036,19 @@ Fixpoint wrapper_args_u (tail : bool) (apply_decisions : list decision)
          unboxed variables" (#7952): before, a result that the callee
          unboxes and the continuation deletes was the case below. *)
       | Decided Delete, _ => Some rest
-      (* The fix: before the case of a disagreement on unboxing. *)
-      | Keep_unused kind, Wrapper_keep x =>
-        Some ((if tail then Var x else Const (Poison kind)) :: rest)
-      | Keep_unused kind, _ => Some (Const (Poison kind) :: rest)
-      (* The case where the compiler stops with a fatal error if
-         [has_any_source], a test that is [false] there ("CR ncourant:
-         restore this check"). *)
-      | Unbox _, (Wrapper_keep _ | Wrapper_delete)
-      | Decided (Keep _), Wrapper_unbox _ => None
-      | Decided (Keep _), Wrapper_keep x => Some (Var x :: rest)
-      | Decided (Keep kind), Wrapper_delete =>
+      | Decided (Keep _), Wrapper_keep x | Keep_unused _, Wrapper_keep x =>
+        Some (Var x :: rest)
+      | Decided (Keep kind), Wrapper_delete
+      | Keep_unused kind, (Wrapper_delete | Wrapper_unbox _) =>
         Some (Const (Poison kind) :: rest)
+      (* The case where the compiler on the branch stops with a fatal
+         error if [has_any_source], a test that is [false] there ("CR
+         ncourant: restore this check"); the fix gives poison to a
+         parameter kept, and stops with a fatal error for one
+         unboxed. *)
+      | Decided (Keep kind), Wrapper_unbox _ =>
+        if fixed then Some (Const (Poison kind) :: rest) else None
+      | Unbox _, (Wrapper_keep _ | Wrapper_delete) => None
       | Unbox fields_apply, Wrapper_unbox fields_func =>
         match
           unboxed_field_pairs Value (Unboxed fields_apply)
@@ -2049,6 +2059,20 @@ Fixpoint wrapper_args_u (tail : bool) (apply_decisions : list decision)
         end
       end
     end
+  end.
+
+(* The fatal error of [make_apply_wrapper] in the fix: a parameter that
+   the continuation unboxes for a result that the callee keeps or
+   deletes, at some position of the decisions of the continuation
+   [apply_decisions] and those of the callee [func]. *)
+Fixpoint wrapper_fails_u (apply_decisions func : list decision) : bool :=
+  match apply_decisions, func with
+  | ad :: apply_decisions, fd :: func =>
+    match ad, fd with
+    | Unbox _, (Decided _ | Keep_unused _) => true
+    | _, _ => wrapper_fails_u apply_decisions func
+    end
+  | _, _ => false
   end.
 
 (* The arguments are the parameters, in order. *)
@@ -2078,12 +2102,8 @@ Definition field_read (d : named) : option (field * simple) :=
 Section Rebuild.
 
 (* The mode: [false] for the rebuild of the compiler on the branch,
-   [true] for that of the fix, which gives poison for the parameters of
-   continuations that are kept with no use ([Keep_unused]). *)
+   [true] for that of the fix. *)
 Variable fixed : bool.
-(* The variant of the fix: [wrapper_args_u] passes a result that the
-   callee keeps on to a parameter kept with no use. *)
-Variable tail : bool.
 Variable F : facts.
 Variable sol : solution.
 Variable cannot_change : node -> bool.
@@ -2511,7 +2531,7 @@ Definition rebuild_changed_static_const (en : rebuild_env)
 (* [should_keep_param] of [rebuild]: an unboxed parameter is [Unbox] of
    its fields; any other is kept as FlambdaReaperRebuild.params_to_keep
    says, and in the mode of the fix, a parameter kept with no use (the
-   first of an exception handler) is [Keep_unused]. *)
+   first of an exception handler) is marked [Keep_unused]. *)
 Definition handler_decisions (is_exn_handler : bool)
     (h : continuation_handler) : list decision :=
   match h with
@@ -2533,7 +2553,8 @@ Definition handler_decisions (is_exn_handler : bool)
 (* [should_keep_param] of [rebuild] for the continuations of fixed arity
    that the model gives decisions, the return and exception
    continuations of code, in the mode of the fix: every parameter is kept,
-   [Keep_unused] if it has no use, and an unboxed one is [Unbox]. *)
+   marked [Keep_unused] if it has no use, and an unboxed one is
+   [Unbox]. *)
 Definition fixed_arity_decisions (nodes : list node)
     (kinds : list flambda_kind) : list decision :=
   map
@@ -2563,8 +2584,7 @@ Definition unboxed_args (fields : unboxed_fields) (arg : simple)
    and for those unboxed the variables of the argument; the arguments
    beyond the decisions are kept, as by FlambdaReaperRebuild.filter_kept.
    [None] where an argument given to an unboxed parameter is not unboxed
-   alike (a fatal error in the OCaml). A parameter kept with no use
-   ([Keep_unused]) is given poison. *)
+   alike (a fatal error in the OCaml). *)
 Fixpoint get_args (en : rebuild_env) (decisions : list decision)
     (args : list simple) : option (list simple) :=
   match args, decisions with
@@ -2576,8 +2596,8 @@ Fixpoint get_args (en : rebuild_env) (decisions : list decision)
     | None => None
     | Some rest =>
       match d with
-      | Decided (Keep _) => Some (rewrite_simple sol_u en arg :: rest)
-      | Keep_unused kind => Some (Const (Poison kind) :: rest)
+      | Decided (Keep _) | Keep_unused _ =>
+        Some (rewrite_simple sol_u en arg :: rest)
       | Decided Delete => Some rest
       | Unbox fields =>
         option_map (fun l => map fst l ++ rest) (unboxed_args fields arg)
@@ -2594,9 +2614,8 @@ Fixpoint get_args_with_kinds_u (en : rebuild_env) (decisions : list decision)
     | None => None
     | Some rest =>
       match d with
-      | Decided (Keep kind) =>
+      | Decided (Keep kind) | Keep_unused kind =>
         Some ((rewrite_simple sol_u en arg, kind) :: rest)
-      | Keep_unused kind => Some ((Const (Poison kind), kind) :: rest)
       | Decided Delete => Some rest
       | Unbox fields =>
         option_map (fun l => l ++ rest) (unboxed_args fields arg)
@@ -2622,8 +2641,8 @@ Fixpoint get_extra_args (en : rebuild_env) (decisions : list decision)
     | None => None
     | Some rest =>
       match d with
-      | Decided (Keep _) => Some ((rewrite_simple sol_u en s, kind) :: rest)
-      | Keep_unused kind' => Some ((Const (Poison kind'), kind') :: rest)
+      | Decided (Keep _) | Keep_unused _ =>
+        Some ((rewrite_simple sol_u en s, kind) :: rest)
       | Decided Delete => Some rest
       | Unbox fields => option_map (fun l => l ++ rest) (unboxed_args fields s)
       end
@@ -2745,6 +2764,105 @@ Definition apply_my_closure_u (ap : apply_expr) : option unboxed_fields :=
   | None => None
   end.
 
+(* [never_returns] of [compute_code_changes], in the fix: some result of
+   the code dep of [id] has no source. *)
+Definition code_never_returns (id : code_id) : bool :=
+  match lookup id code_deps with
+  | Some cd => existsb (fun r => negb (s_has_source sol r)) (cd_return cd)
+  | None => false
+  end.
+
+(* [get_returns_with_source] of points_to_analysis.ml: a node of [ws]
+   holds at the result of rank [i] a node with a source. *)
+Definition result_has_source_of (ws : node -> bool) (i : nat) : bool :=
+  existsb
+    (fun '(x, f, y) =>
+       ws x && field_eqb f (Field_return_of_call (Normal i))
+       && s_has_source sol y)
+    (f_constructor F).
+
+(* The [never_returns] of [arguments_used_by_call], in the fix, for a
+   call of [nres] results with groups of arguments of the sizes
+   [num_args]: some result of rank below [nres], read off the witness of
+   the last group, has no source; [false] where a callee or a witness
+   has any source. *)
+Fixpoint never_returns_of_call (ep : closure_entry_point)
+    (callee_sources : allocation_sources) (num_args : list nat)
+    (nres : nat) : bool :=
+  match num_args with
+  | [] => false
+  | _ :: num_args_rest =>
+    match callee_sources with
+    | Any_source => false
+    | Sources callee_sources =>
+      match get_field_sources F sol callee_sources (Field_call_witness ep)
+      with
+      | Any_source => false
+      | Sources ws =>
+        match num_args_rest with
+        | [] => existsb (fun i => negb (result_has_source_of ws i)) (seq 0 nres)
+        | _ :: _ =>
+          never_returns_of_call ep
+            (get_field_sources F sol ws (Field_return_of_call (Normal 0)))
+            num_args_rest nres
+        end
+      end
+    end
+  end.
+
+(* The [never_returns] of a call ([decide_whether_apply_needs_calling_
+   convention_change] in the fix): that of the code it is known to call,
+   if of the unit; otherwise that read off its callee, at the field of
+   its arity; [false] for a constant callee or code of no unit. *)
+Definition apply_never_returns (ap : apply_expr) : bool :=
+  match code_id_actually_called F sol ap with
+  | Some id =>
+    match lookup id codes with
+    | Some _ => code_never_returns id
+    | None => false
+    end
+  | None =>
+    match ap_callee ap with
+    | Const _ => false
+    | Var _ | Symbol _ =>
+      let callee := get_direct_sources sol (node_of_simple (ap_callee ap)) in
+      let nres := length (unarize (ap_return_arity ap)) in
+      match ap_call_kind ap with
+      | Direct _ | Indirect_known_arity _ =>
+        never_returns_of_call Known_arity_code_pointer callee
+          [length (ap_args ap)] nres
+      | Indirect_unknown_arity =>
+        never_returns_of_call Unknown_arity_code_pointer callee
+          (map (fun c => length (unarize_component c)) (ap_args_arity ap))
+          nres
+      end
+    end
+  end.
+
+(* The [used_params] of a call of code that keeps its calling convention,
+   in the fix: for code of the unit known to be called, the parameters of
+   its code dep with a use ([compute_code_changes]); for code of no unit,
+   every argument; [None] where the code is not known, whose mask is
+   read off the callee ([rebuild_arguments]). *)
+Definition kept_code_mask (ap : apply_expr) : option (list bool) :=
+  match code_id_actually_called F sol ap with
+  | Some id =>
+    match lookup id codes, lookup id code_deps with
+    | Some _, Some cd => Some (map (s_has_usage sol) (cd_params cd))
+    | _, _ => Some (repeat true (length (ap_args ap)))
+    end
+  | None => None
+  end.
+
+(* The arguments of a call of code that keeps its calling convention: in
+   the mode of the fix, at [kept_code_mask] if the code is known. *)
+Definition kept_arguments_u (en : unbox_env) (ap : apply_expr)
+    : list simple :=
+  match (if fixed then kept_code_mask ap else None) with
+  | Some mask => mask_arguments (ue_env en) mask (ap_args ap)
+  | None => rebuild_arguments F sol_u (ue_env en) ap
+  end.
+
 (* [make_apply_wrapper], given the decisions of the callee for its
    results, each with the kind of the result in the return arity of the
    call: no wrapper if what the continuation of the call is given is what
@@ -2754,9 +2872,11 @@ Definition apply_my_closure_u (ap : apply_expr) : option unboxed_fields :=
    the continuation does not delete, the compiler makes a call that never
    returns, which the conversion of the test tool writes as a call
    returning to a continuation whose handler is [Invalid]: the wrapper,
-   with that handler. *)
+   with that handler. In the mode of the fix, so is a call that
+   [never_returns], whatever the decisions. *)
 Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
-    (func_decisions : list (decision * flambda_kind)) : expr :=
+    (func_decisions : list (decision * flambda_kind)) (never_returns : bool)
+    : expr :=
   let func := freshen_decisions func_decisions first_fresh in
   let params := wrapper_params func in
   let wrapper handler :=
@@ -2771,24 +2891,28 @@ Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
     | None => []
     end
   in
-  match wrapper_args_u tail apply_decisions func with
-  | Some args =>
-    if args_are_params args (map fst params)
-    then Apply ap
-    else
-      wrapper
-        (Apply_cont
-           {| ac_continuation := ap_continuation ap; ac_args := args;
-              ac_trap_action := None |})
-  | None => wrapper Invalid
-  end.
+  if fixed && never_returns
+  then wrapper Invalid
+  else
+    match wrapper_args_u fixed apply_decisions func with
+    | Some args =>
+      if args_are_params args (map fst params)
+      then Apply ap
+      else
+        wrapper
+          (Apply_cont
+             {| ac_continuation := ap_continuation ap; ac_args := args;
+                ac_trap_action := None |})
+    | None => wrapper Invalid
+    end.
 
 (* [rebuild_apply]. A call whose callee does not change its calling
    convention is that of FlambdaReaperRebuild.rebuild_apply, but for an
-   unboxed callee, which makes it [Invalid]; one whose callee changes gives
-   the parameters kept and the fields of those unboxed, a product for each
-   group, and expects the results kept and the fields of those
-   unboxed. *)
+   unboxed callee, which makes it [Invalid] (in the fix, the fatal error
+   "TO CHECK"), and, in the mode of the fix, for the arguments
+   ([kept_arguments_u]); one whose callee changes gives the parameters
+   kept and the fields of those unboxed, a product for each group, and
+   expects the results kept and the fields of those unboxed. *)
 Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
   if simple_is_dead sol (ue_env en) (ap_callee ap)
      || existsb (simple_is_dead sol (ue_env en)) (ap_args ap)
@@ -2807,7 +2931,7 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
                ap_call_kind :=
                  rewrite_call_kind F sol preserve_direct_calls unit_code_ids
                    ap;
-               ap_args := rebuild_arguments F sol_u (ue_env en) ap;
+               ap_args := kept_arguments_u en ap;
                ap_continuation := ap_continuation ap;
                ap_exn_continuation := ap_exn_continuation ap;
                ap_exn_extra_args := exn_extra_args;
@@ -2815,6 +2939,7 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
                ap_return_arity := ap_return_arity ap |}
             (map (fun kind => (Decided (Keep kind), kind))
                (unarize (ap_return_arity ap)))
+            (apply_never_returns ap)
         end
       | Changing_u params_decisions return_decisions =>
         (* [Unbox_my_closure]: the fields of the callee are given at the
@@ -2854,6 +2979,7 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
                ap_args_arity := arity_of_groups groups;
                ap_return_arity := arity_of_decisions_u return_decisions |}
             (combine return_decisions (unarize (ap_return_arity ap)))
+            (apply_never_returns ap)
         end
       end
     end.
@@ -3076,6 +3202,143 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
     end
   end.
 
+(* The fatal errors of the fix at a call ([rebuild_apply]): an unboxed
+   callee of code that keeps its calling convention ("TO CHECK"), and the
+   arm of [make_apply_wrapper] ([wrapper_fails_u]) for a call that does
+   not [never_returns]. A call that the rebuild makes [Invalid] before
+   (a dead name, or the fatal error of another check) does not reach
+   them. *)
+Definition apply_fails_u (en : unbox_env) (ap : apply_expr) : bool :=
+  if simple_is_dead sol (ue_env en) (ap_callee ap)
+     || existsb (simple_is_dead sol (ue_env en)) (ap_args ap)
+  then false
+  else
+    match rebuild_exn_extra_args_u en ap with
+    | None => false
+    | Some _ =>
+      let apply_decisions :=
+        match lookup (ap_continuation ap) (ue_decisions en) with
+        | Some decisions => decisions
+        | None => []
+        end
+      in
+      match apply_change_u ap with
+      | Not_changing_u =>
+        match unboxed_of (ap_callee ap) with
+        | Some _ => true
+        | None =>
+          negb (apply_never_returns ap)
+          && wrapper_fails_u apply_decisions
+               (map (fun kind => Decided (Keep kind))
+                  (unarize (ap_return_arity ap)))
+        end
+      | Changing_u params_decisions return_decisions =>
+        match
+          match apply_my_closure_u ap with
+          | Some fields => unboxed_args fields (ap_callee ap)
+          | None => Some []
+          end,
+          all_some
+            (map
+               (fun '(args, decisions) =>
+                  get_args_with_kinds_u (ue_env en) decisions args)
+               (combine (group_by_parameter (ap_args_arity ap) (ap_args ap))
+                  (group_by_parameter (ap_args_arity ap) params_decisions)))
+        with
+        | Some _, Some _ =>
+          negb (apply_never_returns ap)
+          && wrapper_fails_u apply_decisions return_decisions
+        | _, _ => false
+        end
+      end
+    end.
+
+(* Whether the rebuild of the fix stops with a fatal error, walking the
+   unit as the compiler rebuilds it: under the decisions of the
+   continuations in scope, as [rebuild_expr_u] binds them, the calls
+   ([apply_fails_u]), the body of a [Let] whatever its binding (the
+   compiler rebuilds the body first), a handler where the rebuilt body
+   applies it and its parameters are not dead, and every code of the unit,
+   used or not (the compiler rebuilds all code), whose body is rebuilt
+   where its parameters are not dead. Code that [never_returns] stops
+   the compiler where its rebuilt body has its return continuation free
+   ([check_never_returns]). *)
+Fixpoint rebuild_fails_u (en : unbox_env) (e : expr) {struct e} : bool :=
+  match e with
+  | Let x kind defining_expr body =>
+    let en' :=
+      if is_pending_projection (ue_env en) x defining_expr
+      then
+        ubind_set en [(x, kind)] (tl (env_projections (ue_env en)))
+          (ue_drop_projections en)
+      else
+        match defining_expr with
+        | Set_of_closures _ _ | Closure_of_set _ _ _ =>
+          let projections := projections_of_set x defining_expr body in
+          if existsb (fun y => is_unboxed_name (Node_variable y))
+               (x :: projections)
+          then ubind_set en [(x, kind)] projections true
+          else if is_var_used sol x kind
+                  || existsb (fun y => is_var_used sol y Value) projections
+          then ubind_variables_then en [(x, kind)] projections
+          else ubind_variables en [(x, kind)]
+        | _ => ubind_variables en [(x, kind)]
+        end
+    in
+    rebuild_fails_u en' body
+  | Let_static bindings body =>
+    existsb binding_fails_u bindings
+    || rebuild_fails_u (ubind_variables en []) body
+  | Let_cont_non_recursive k h body =>
+    let decisions := handler_decisions (handler_is_exn_handler h) h in
+    let en' := ubind_continuations en [(k, decisions)] in
+    rebuild_fails_u en' body
+    || among k (free_continuations_of_expr (rebuild_expr_u en' body))
+       && handler_fails_u en true h
+  | Let_cont_recursive handlers body =>
+    let en :=
+      ubind_continuations en
+        (map (fun '(k, h) => (k, handler_decisions false h)) handlers)
+    in
+    existsb (fun '(_, h) => handler_fails_u en false h) handlers
+    || rebuild_fails_u en body
+  | Apply ap => apply_fails_u en ap
+  | Apply_cont _ | Switch _ _ | Invalid => false
+  end
+with handler_fails_u (en : unbox_env) (dead_check : bool)
+    (h : continuation_handler) : bool :=
+  match h with
+  | Handler params metadata handler =>
+    let bound := with_kinds params (hm_params_kinds metadata) in
+    negb (dead_check
+          && existsb (fun '(x, kind) => is_dead_var sol x kind) bound)
+    && rebuild_fails_u (ubind_variables en bound) handler
+  end
+with binding_fails_u (binding : static_binding) : bool :=
+  match binding with
+  | Bind_code id c => code_fails_u id c
+  | Bind_deleted_code _ | Bind_symbol _ _ => false
+  end
+with code_fails_u (id : code_id) (c : code) : bool :=
+  match c with
+  | Code params my_closure return_continuation exn_continuation metadata
+      body =>
+    let bound :=
+      (my_closure, Value)
+      :: with_kinds params (unarize (cm_params_arity metadata))
+    in
+    let en :=
+      ubind_continuations empty_unbox_env
+        (code_continuation_decisions id metadata (code_change_u id metadata)
+           return_continuation exn_continuation)
+    in
+    negb (existsb (fun '(x, kind) => is_dead_var sol x kind) bound)
+    && rebuild_fails_u (ubind_variables en bound) body
+    || code_never_returns id
+       && among return_continuation
+            (free_continuations_of_expr (code_body (rebuild_code_u id c)))
+  end.
+
 End Rebuild.
 
 (* [Rebuild.rebuild] with unboxing, changes of calling convention and
@@ -3085,32 +3348,39 @@ End Rebuild.
    [to_change_representation] ([tcr]), and the code deps of the
    traversal. The variables of the unboxed fields are the names after
    every name of the unit, and the wrappers the names after them; the new
-   slots are the names after every slot of the unit. [fixed] and [tail]
-   are the modes of [rebuild_expr_u]. *)
-Definition rebuild_unit_unbox_repr_modes (fixed tail : bool)
+   slots are the names after every slot of the unit. [fixed] is the mode
+   of [rebuild_expr_u]. *)
+Definition rebuild_unit_unbox_repr_mode (fixed : bool)
     (is_local : field -> bool) (F : facts) (T : tables)
     (cannot_change : list node) (code_deps : finite_map code_dep)
     (dominated : list (node * node)) (to_unbox tcr : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
-  rebuild_expr_u fixed tail F (solution_of_tables T)
+  rebuild_expr_u fixed F (solution_of_tables T)
     (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
     (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
     empty_unbox_env e.
 
-Definition rebuild_unit_unbox_repr_mode (fixed : bool) :=
-  rebuild_unit_unbox_repr_modes fixed false.
-
-(* The rebuild of the compiler on the branch, that of the fix, and that of
-   its variant. *)
+(* The rebuild of the compiler on the branch, and that of the fix. *)
 Definition rebuild_unit_unbox_repr := rebuild_unit_unbox_repr_mode false.
 
 Definition rebuild_unit_unbox_repr_fixed :=
   rebuild_unit_unbox_repr_mode true.
 
-Definition rebuild_unit_unbox_repr_fixed_tail :=
-  rebuild_unit_unbox_repr_modes true true.
+(* Whether the rebuild of the fix stops with a fatal error, with the
+   arguments of [rebuild_unit_unbox_repr_fixed]. *)
+Definition rebuild_unit_unbox_repr_fixed_fails (is_local : field -> bool)
+    (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox tcr : list node) (preserve_direct_calls : bool) (e : expr)
+    : bool :=
+  let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
+  rebuild_fails_u true F (solution_of_tables T)
+    (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
+    (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
+    (unit_changed_representations is_local F T dominated to_unbox tcr e)
+    empty_unbox_env e.
 
 (* The rebuild with no change of representation: a set of closures that
    is not unboxed keeps its slots. *)

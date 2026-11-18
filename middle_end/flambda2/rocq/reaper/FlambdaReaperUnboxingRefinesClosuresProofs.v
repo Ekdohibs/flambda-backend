@@ -334,8 +334,6 @@ End Names.
 
 Section Rebuilds.
 
-(* The fix, or its variant. *)
-Variable tail : bool.
 Variable F : facts.
 Variable sol : solution.
 Variable cannot_change : node -> bool.
@@ -397,7 +395,7 @@ Definition cc_rebuild (en : rebuild_env) (e : expr) : expr :=
     e.
 
 Definition u_rebuild (en : unbox_env) (e : expr) : expr :=
-  rebuild_expr_u true tail F sol cannot_change code_deps pdc unit_code_ids
+  rebuild_expr_u true F sol cannot_change code_deps pdc unit_code_ids
     codes unboxed ffu changed en e.
 
 (* The continuations in scope ([C]): those that may be applied have the
@@ -830,10 +828,11 @@ Lemma wrapper_u_none (tl : bool) (next : positive) (enu : unbox_env)
   | Some ds => forallb2 same_decision ds (map Decided rd) = true
   | None => forallb keeps (map Decided rd) = true
   end ->
-  make_apply_wrapper_u tl next enu ap (combine (map Decided rd) ks)
+  make_apply_wrapper_u tl next enu ap (combine (map Decided rd) ks) false
   = Apply ap.
 Proof.
   intros Hlen Hds. unfold make_apply_wrapper_u. cbv zeta.
+  rewrite andb_false_r. cbn iota.
   rewrite (wrapper_args_u_decided tl rd ks _ next Hlen).
   - rewrite args_are_params_vars. reflexivity.
   - destruct (lookup (ap_continuation ap) (ue_decisions enu));
@@ -1019,7 +1018,11 @@ Proof.
   apply andb_true_iff in Hcall as [Hcall Hfu].
   apply andb_true_iff in Hcall as [Hcall Hcl].
   apply andb_true_iff in Hcall as [Hcall Hmcd].
+  apply andb_true_iff in Hcall as [Hcall Hnr].
+  apply negb_true_iff in Hnr.
   apply andb_true_iff in Hcall as [Hpd Hrd].
+  assert (Hnr_ap : apply_never_returns F sol code_deps codes ap = false)
+    by (unfold apply_never_returns; rewrite Hcalled, Hmd; exact Hnr).
   destruct (code_change_decided id md pd rd Hchange Hpd Hrd)
     as (cd & pd_cc & rd_cc & Hcd & Hcc & -> & ->).
   destruct (ap_exn_extra_args ap) eqn:Hext; [ | discriminate Hextra ].
@@ -1107,7 +1110,8 @@ Proof.
          exact (kept_same ds rd_cc Hret).
        - destruct (ci_out _ _ _ Hci _ HC) as (_ & Hm). rewrite Hm.
          exact (keeps_kept rd_cc Hret). }
-  rewrite (wrapper_u_none tail ffu enu ap' rd_cc _ Hlen_ks).
+  rewrite Hnr_ap.
+  rewrite (wrapper_u_none true ffu enu ap' rd_cc _ Hlen_ks).
   2: { cbn [ap_continuation ap'].
        destruct (lookup (ap_continuation ap) C) as [[ds [ | ]] | ] eqn:HC;
          [ | discriminate Hret | ].
@@ -1320,7 +1324,7 @@ Lemma u_let_cont (enu : unbox_env) (k : continuation)
     if among k (free_continuations_of_expr body')
     then
       Let_cont_non_recursive k
-        (rebuild_handler_u true tail F sol cannot_change code_deps pdc
+        (rebuild_handler_u true F sol cannot_change code_deps pdc
            unit_code_ids codes unboxed ffu changed enu true ds h)
         body'
     else body'.
@@ -1354,7 +1358,7 @@ Lemma u_let_cont_rec (enu : unbox_env)
     Let_cont_recursive
       (map
          (fun '(k, h) =>
-            (k, rebuild_handler_u true tail F sol cannot_change code_deps pdc
+            (k, rebuild_handler_u true F sol cannot_change code_deps pdc
                   unit_code_ids codes unboxed ffu changed enu' false
                   (handler_decisions true sol unboxed false h) h))
          handlers)
@@ -1377,7 +1381,7 @@ Lemma u_let_static (enu : unbox_env) (bindings : list static_binding)
   u_rebuild enu (Let_static bindings body)
   = Let_static
       (flat_map
-         (rebuild_binding_u true tail F sol cannot_change code_deps pdc
+         (rebuild_binding_u true F sol cannot_change code_deps pdc
             unit_code_ids codes unboxed ffu changed enu)
          bindings)
       (u_rebuild (ubind_variables enu []) body).
@@ -1492,7 +1496,7 @@ Lemma code_rebuilt (id : code_id) (c : code) :
     code_frame MM CH CSf id
       (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes
          ff id c)
-      (rebuild_code_u true tail F sol cannot_change code_deps pdc
+      (rebuild_code_u true F sol cannot_change code_deps pdc
          unit_code_ids codes unboxed ffu changed id c)
       ci
     ∧ rr MM CH CSf
@@ -1500,7 +1504,7 @@ Lemma code_rebuilt (id : code_id) (c : code) :
            (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids
               codes ff id c))
         (code_body
-           (rebuild_code_u true tail F sol cannot_change code_deps pdc
+           (rebuild_code_u true F sol cannot_change code_deps pdc
               unit_code_ids codes unboxed ffu changed id c)).
 Proof.
   intros IH Hrepr Hnames Hedges.
@@ -1625,7 +1629,7 @@ Lemma bindings_rebuilt (C : finite_map (list decision * bool))
           codes ff en)
        bindings)
     (flat_map
-       (rebuild_binding_u true tail F sol cannot_change code_deps pdc
+       (rebuild_binding_u true F sol cannot_change code_deps pdc
           unit_code_ids codes unboxed ffu changed enu)
        bindings).
 Proof.
@@ -1926,7 +1930,7 @@ Proof.
         destruct Hnamed_edges as [_ Hnamed_edges].
         destruct (bind_block_fields_lets2 sol unboxed (ue_env enu) x tag args
                     fields)
-          with (body := rebuild_expr_u true tail F sol cannot_change code_deps
+          with (body := rebuild_expr_u true F sol cannot_change code_deps
                           pdc unit_code_ids codes unboxed ffu changed
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
@@ -1954,7 +1958,7 @@ Proof.
         destruct (bind_boxed_number_lets unboxed x bn c fields
                     (rebuild_named sol (ue_env enu) x
                        (Prim (Unary (Box_number bn)) [c])) Hc)
-          with (body := rebuild_expr_u true tail F sol cannot_change code_deps
+          with (body := rebuild_expr_u true F sol cannot_change code_deps
                           pdc unit_code_ids codes unboxed ffu changed
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
@@ -1981,7 +1985,7 @@ Proof.
         rewrite (ci_kinds _ _ _ Hci), Hyused.
         unfold rebuild_unboxed_binding.
         destruct (bind_fields_pairs fields fields_y
-                    (rebuild_expr_u true tail F sol cannot_change code_deps pdc
+                    (rebuild_expr_u true F sol cannot_change code_deps pdc
                        unit_code_ids codes unboxed ffu changed
                        (ubind_variables enu [(x, Value)]) body)
                     Hflat)
@@ -2003,7 +2007,7 @@ Proof.
           with (fields_of unboxed y).
         rewrite Hy, Hny.
         destruct (bind_fields_pairs fields nested
-                    (rebuild_expr_u true tail F sol cannot_change code_deps pdc
+                    (rebuild_expr_u true F sol cannot_change code_deps pdc
                        unit_code_ids codes unboxed ffu changed
                        (ubind_variables enu [(x, Value)]) body)
                     Halike)
@@ -2220,7 +2224,7 @@ Lemma rebuild_rr :
                unit_code_ids codes ff en dead_check (handler_mask sol is_exn h)
                h
              = Handler ps md hp
-             ∧ rebuild_handler_u true tail F sol cannot_change code_deps pdc
+             ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
                  unit_code_ids codes unboxed ffu changed enu dead_check
                  (handler_decisions true sol unboxed is_exn h) h
                = Handler ps md hu
@@ -2353,7 +2357,7 @@ Proof.
                         (handler_mask sol false h) h))
              hs)
           (map (fun '(k, h) =>
-                  (k, rebuild_handler_u true tail F sol cannot_change
+                  (k, rebuild_handler_u true F sol cannot_change
                         code_deps pdc unit_code_ids codes unboxed ffu changed
                         enu' false (handler_decisions true sol unboxed false h)
                         h))
@@ -2456,8 +2460,8 @@ Proof.
     exact (IH id mc H).
 Qed.
 
-(* The statement of the fix and of its variant. *)
-Lemma rebuild_repr_modes_refines_cc (tail : bool)
+(* The statement of the fix. *)
+Lemma rebuild_repr_modes_refines_cc
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool) :
@@ -2471,7 +2475,7 @@ Lemma rebuild_repr_modes_refines_cc (tail : bool)
   program_refines
     (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
        (unit_code_deps flag u e) pdc e)
-    (rebuild_unit_unbox_repr_modes true tail is_local
+    (rebuild_unit_unbox_repr_mode true is_local
        (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
        dominated to_unbox tcr pdc e).
 Proof.
@@ -2481,7 +2485,7 @@ Proof.
   apply andb_true_iff in Hrepr as [Hrepr Huses].
   pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
     as [Hdistinct Hfresh].
-  unfold rebuild_unit_unbox_repr_modes, rebuild_unit_cc_from_tables,
+  unfold rebuild_unit_unbox_repr_mode, rebuild_unit_cc_from_tables,
     rebuild_unit_cc.
   destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
     eqn:Hunboxed.
@@ -2611,7 +2615,7 @@ Proof.
             among mc (field_variables unboxed) = false).
   { intros id mc H. apply Hfresh.
     exact (proj1 bound_my_closures_in e id mc (lookup_in id mc _ H)). }
-  pose proof (proj1 (rebuild_rr tail F (solution_of_tables T)
+  pose proof (proj1 (rebuild_rr F (solution_of_tables T)
                        (fun n => mem_node n cannot_change)
                        (unit_code_deps flag u e) pdc
                        (static_names code_ids_bound e) (bound_code_metadata e)
@@ -2639,17 +2643,13 @@ Theorem rebuild_repr_fixed_refines_cc :
   rebuild_repr_fixed_refines_cc_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox tcr pdc.
-  exact (rebuild_repr_modes_refines_cc false flag is_local u e T
+  exact (rebuild_repr_modes_refines_cc flag is_local u e T
            cannot_change dominated to_unbox tcr pdc).
 Qed.
 
 Theorem rebuild_repr_fixed_tail_refines_cc :
   rebuild_repr_fixed_tail_refines_cc_statement.
-Proof.
-  intros flag is_local u e T cannot_change dominated to_unbox tcr pdc.
-  exact (rebuild_repr_modes_refines_cc true flag is_local u e T
-           cannot_change dominated to_unbox tcr pdc).
-Qed.
+Proof. exact rebuild_repr_fixed_refines_cc. Qed.
 
 Theorem rebuild_repr_fixed_refines_observably_local :
   rebuild_repr_fixed_refines_observably_local_statement.
@@ -2680,31 +2680,11 @@ Qed.
 
 Theorem rebuild_repr_fixed_tail_refines_observably_local :
   rebuild_repr_fixed_tail_refines_observably_local_statement.
-Proof.
-  intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
-    Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hrepr Hcheck.
-  exact (refines_observably_refines _ _ _
-           (FlambdaReaperCallingConventionsProofs
-            .rebuild_cc_refines_observably_local
-              flag is_local u e T cannot_change pdc Hslots Hfrag Hany
-              Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
-           (rebuild_repr_fixed_tail_refines_cc flag is_local u e T
-              cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hclosed
-              Hrepr Hcheck)).
-Qed.
+Proof. exact rebuild_repr_fixed_refines_observably_local. Qed.
 
 Theorem rebuild_repr_fixed_tail_refines_observably :
   rebuild_repr_fixed_tail_refines_observably_statement.
-Proof.
-  intros flag is_local u e T cannot_change dominated to_unbox tcr pdc Hslots
-    Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hrepr Hcheck.
-  exact (rebuild_repr_fixed_tail_refines_observably_local flag is_local u e
-           T cannot_change dominated to_unbox tcr pdc Hslots Hfrag Hany Hrk
-           Hwf Hone Hclosed
-           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
-              is_local u e T Hslots Hproj)
-           Hexact Hccc Hwid Hrepr Hcheck).
-Qed.
+Proof. exact rebuild_repr_fixed_refines_observably. Qed.
 
 (* ======================================================================== *)
 (* Examples                                                                 *)

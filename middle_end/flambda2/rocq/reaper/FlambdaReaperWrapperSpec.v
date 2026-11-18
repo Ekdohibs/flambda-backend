@@ -32,8 +32,10 @@
          ... (* CR ncourant: restore this check *)
          let has_any_source = false in
          if has_any_source then error () else Invalid
-   in the rebuild of the fix of the unboxing ([Keep_unused] first, the
-   seeds [fix_seeds]), and whether it could be a fatal error.
+   on the branch, in the rebuild of the fix of the unboxing (the seeds
+   [fix_seeds]), and whether it could be a fatal error. The fix gives
+   poison for [Keep _, Unbox _] and makes [Unbox _, (Keep _ | Delete)] a
+   fatal error, reached only by a call that does not [never_returns].
 
    This file is to be reviewed: the arm ([arm_pair], against
    FlambdaReaperUnboxing.wrapper_args_u), the calls that the rebuild in
@@ -45,8 +47,9 @@
 
    The answer: the arm is reached only where the result of the callee at
    that position has no source, so restoring the test [has_any_source]
-   would never stop the compiler, but an unconditional fatal error
-   would.
+   would never stop the compiler, but an unconditional fatal error would
+   but for [never_returns], which makes such a call one that never
+   returns before the arm.
    - [arm_needs_no_source_statement]: for every direct call, or call of
      known arity, of the unit that the rebuild with the fix makes (code
      that changes its calling convention, code that keeps it, and code
@@ -82,10 +85,11 @@
      result has a use and no source, and the parameter of the
      continuation of the call is unboxed from the allocation that another
      jump gives it. The rebuilt unit, whose call returns to a wrapper
-     [Invalid], exits as the unit does. The compiler with the fix reaches
-     the arm too (repro-wrapper/x.ml: a [[@loop never]] recursive
+     [Invalid], exits as the unit does. The compiler with an earlier fix
+     reaches the arm too (repro-wrapper/x.ml: a [[@loop never]] recursive
      function that raises, whose result Simplify does not know to be
-     bottom).
+     bottom); with the fix, the call [never_returns], and the arm is not
+     reached.
 
    The premises of [arm_needs_no_source_statement], besides tables that
    are a least solution of the rules and tables of
@@ -151,8 +155,10 @@ Import ListNotations.
 (* The arm                                                                  *)
 (* ======================================================================== *)
 
-(* The pairs of [wrapper_args_u] that are the arm, after [Decided Delete]
-   and [Keep_unused]: the decision of the continuation for its parameter
+(* The pairs of [wrapper_args_u] that are the arm on the branch, after
+   [Decided Delete], for a parameter with a use or unboxed (one kept with
+   no use, marked [Keep_unused], is given poison by the fix and by an
+   earlier one): the decision of the continuation for its parameter
    [ad] and that of the callee for its result [fd] (which
    [freshen_decisions] makes a [Wrapper_keep], [Wrapper_delete] or
    [Wrapper_unbox]). *)
@@ -265,8 +271,8 @@ with code_rebuilt_calls (id : code_id) (c : code) {struct c}
 
 End Calls.
 
-(* The calls of the unit [e] that [rebuild_unit_unbox_repr_fixed] (and
-   its variant [_tail], whose decisions are the same) rebuilds, with the
+(* The calls of the unit [e] that [rebuild_unit_unbox_repr_fixed]
+   rebuilds, with the
    arguments that it gives [rebuild_expr_u]; and the decisions of the
    callee of each. *)
 Definition unit_rebuilt_calls (T : tables) (cannot_change : list node)
@@ -284,7 +290,7 @@ Definition unit_callee_decisions (F : facts) (T : tables)
     ap.
 
 (* The unboxed fields of the names of the unit, as
-   [rebuild_unit_unbox_repr_modes] computes them. *)
+   [rebuild_unit_unbox_repr_mode] computes them. *)
 Definition unit_unboxed (F : facts) (T : tables)
     (dominated : list (node * node)) (to_unbox : list node) (e : expr)
     : list (node * unboxed_fields) :=
@@ -738,12 +744,14 @@ End NoSourceExample.
 
 (* The unit meets every premise of [arm_needs_no_source_statement]; its
    one call has the decision [Unbox] of [x30] and the decision [Keep] of
-   the callee for the result 3, which has a use and no source; the
-   rebuild with the fix (and its variant) makes the wrapper [Invalid];
-   and the unit and the rebuilt unit raise 7. *)
+   the callee for the result 3, which has a use and no source; the call
+   [never_returns], and the rebuild with the fix makes the wrapper
+   [Invalid] and does not stop; and the unit and the rebuilt unit
+   raise 7. *)
 Definition no_source_arm_statement : Prop :=
   let F := NoSourceExample.facts in
   let T := NoSourceExample.tables in
+  let T' := solution_of_tables T in
   let e := NoSourceExample.unit_expr in
   least_solution Examples.no_local F T
   ∧ in_flow_fragment e = true ∧ projection_free e = true
@@ -785,11 +793,14 @@ Definition no_source_arm_statement : Prop :=
       NoSourceExample.dominated NoSourceExample.to_unbox NoSourceExample.tcr
       true e
     = NoSourceExample.rebuilt
-  ∧ rebuild_unit_unbox_repr_fixed_tail Examples.no_local F T
+  ∧ apply_never_returns F T' NoSourceExample.code_deps (bound_code_metadata e)
+      (NoSourceExample.call_f 20%positive [Singleton Value])
+    = true
+  ∧ rebuild_unit_unbox_repr_fixed_fails Examples.no_local F T
       NoSourceExample.cannot_change NoSourceExample.code_deps
       NoSourceExample.dominated NoSourceExample.to_unbox NoSourceExample.tcr
       true e
-    = NoSourceExample.rebuilt
+    = false
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own e)
       (Exits 2%positive [Value_const (Tagged_immediate 7)] empty_heap)
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own NoSourceExample.rebuilt)

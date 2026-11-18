@@ -40,11 +40,13 @@
    against the two rules of the fix below, and, of
    FlambdaReaperUnboxing.v, [other_source_reader_seeds],
    [any_source_reader_seeds], [fix_seeds] and [check_alias_readers]
-   against those rules, [Keep_unused], the cases of it in
-   [wrapper_args_u], [get_args], [get_args_with_kinds_u] and
-   [get_extra_args], [handler_decisions], [fixed_arity_decisions] and
-   [code_continuation_decisions] in the mode [fixed] against the rebuild
-   of the fix, and [unboxing_relations_with] and [derive_to_unbox_with]
+   against those rules, [wrapper_args_u], [wrapper_fails_u],
+   [code_never_returns], [never_returns_of_call], [apply_never_returns],
+   [kept_code_mask], [kept_arguments_u], [make_apply_wrapper_u],
+   [rebuild_apply_u], [handler_decisions], [fixed_arity_decisions],
+   [code_continuation_decisions], [apply_fails_u] and [rebuild_fails_u]
+   in the mode [fixed] against the rebuild of the fix, and
+   [unboxing_relations_with] and [derive_to_unbox_with]
    against [unboxing_relations] and [derive_to_unbox],
    [unbox_dead_unit] against testsuite/tests/reaper/unbox_dead.ml,
    [wrapper_args_u_before_fix] against [make_apply_wrapper] of rebuild.ml
@@ -245,23 +247,26 @@
    without [is_real_field], so that a call through such a use, which reads
    the call witness off it, forbids the unboxing too. In the model they are
    seeds of [cannot_unbox0] ([fix_seeds]), and [check_alias_readers] is
-   what they ask of a table of [to_unbox]. The rebuild has a flag
-   [unused] on the decision [Keep], for a parameter of a continuation
-   that is kept though it has no use: the first parameter of an
-   exception handler, and the parameters of the continuations of fixed
-   arity, the return and exception continuations of code, whose
-   decisions the model has in the mode of the fix only
-   ([fixed_arity_decisions]). Such a parameter ([Keep_unused]) is given
-   poison by an [Apply_cont] ([get_args]) and by the wrapper of a call
-   ([make_apply_wrapper]), whatever the callee does with the result. The
-   two rules are to forbid the unboxing of a result given to a parameter
-   kept with a use, which then has another source or any source; one
-   kept with no use takes poison. The mode [fixed] of [rebuild_expr_u] is
-   that rebuild
-   ([rebuild_unit_unbox_repr_fixed]). The fix also drops the callee of a
-   call of code that does not use its [my_closure]
-   ([Keep_my_closure { unused = true }]), which the model does not
-   transcribe: see FlambdaReaperUnboxing.v.
+   what they ask of a table of [to_unbox]. The other half is the
+   rebuild, the mode [fixed] of [rebuild_expr_u]
+   ([rebuild_unit_unbox_repr_fixed]): the
+   wrapper of a call ([make_apply_wrapper]) passes a result that the
+   callee keeps to a parameter kept, gives poison to a parameter kept
+   for a result that the callee deletes or unboxes, and stops with a
+   fatal error for a parameter unboxed for a result that the callee
+   keeps or deletes; a call some of whose results have no source
+   ([never_returns]) is made one that never returns. A call of code
+   that keeps its calling convention gives the arguments that the code
+   dep uses, and stops with a fatal error if its callee is unboxed; code
+   that never returns stops with a fatal error if its rebuilt body has
+   its return continuation free. [rebuild_unit_unbox_repr_fixed_fails]
+   says whether the compiler stops. The decisions of the continuations
+   of fixed arity, the return and exception continuations of code, are
+   the model's in the mode of the fix only ([fixed_arity_decisions]);
+   a parameter kept with no use is marked [Keep_unused], which the
+   rebuild treats as [Keep]. The two rules are to forbid the unboxing of
+   a result given to a parameter kept with a use, which then has
+   another source or any source; one kept with no use takes poison.
 
    The fix repairs the five counterexamples, and the statements say so:
    with the seeds of the two rules ([derive_to_unbox_fixed]) the tables
@@ -274,9 +279,10 @@
    parameter of any source is called), and [check_alias_readers] rejects
    the tables without the fix. The pair of [tail_result_unit] is still
    unboxed, as the result of any source has no use: the decision of the
-   return continuation of the first code is [Keep_unused], and the tail
-   call returns poison to it. [check_alias_readers] passes the tables of
-   [unboxed_closure], of the four examples of blocks of
+   return continuation of the first code is [Keep] (marked
+   [Keep_unused]), and the tail call, whose callee unboxes the result,
+   returns poison to it through a wrapper. [check_alias_readers] passes
+   the tables of [unboxed_closure], of the four examples of blocks of
    FlambdaReaperUnboxing.v, of [unbox_dead_unit] and of
    [dead_callee_unit] with lambda lifting. *)
 
@@ -1012,8 +1018,8 @@ Definition unbox_dead_exit : behaviour :=
 (* [rev_args_or_invalid] of [make_apply_wrapper] before the fix, the
    match of [wrapper_args_u] in its old order: a result that the callee
    unboxes and the continuation deletes is [None] ([Invalid]). The
-   decision [Keep_unused], of a later fix, is as in [wrapper_args_u] in the
-   mode of that fix ([tail] [false]). *)
+   mark [Keep_unused], which the rebuild of the branch does not make, is
+   given poison. *)
 Fixpoint wrapper_args_u_before_fix (apply_decisions : list decision)
     (func : list (wrapper_decision * flambda_kind)) : option (list simple) :=
   match func with
@@ -1727,7 +1733,8 @@ Definition tail_result_statement : Prop :=
    no use: the tail call of 51 has the decision [Keep] of 9 for a result
    that 51 unboxes. No use of [x42] has another source or any source:
    [x42] is not a seed of the fix. In the mode of the fix, the decision
-   of 9 is [Keep_unused]. *)
+   of 9 is [Keep], marked [Keep_unused], to which the wrapper of the tail
+   call gives poison for the result that 51 unboxes. *)
 Definition tail_result_cause_statement : Prop :=
   tail_result_to_unbox false = [v 42]
   ∧ mem_pair (v 42) (m 3) tail_result_dominated = true

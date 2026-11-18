@@ -65,9 +65,9 @@
    the rebuilt unit refines the unit up to observation. It is that
    statement composed with the first; no closure whose representation
    changes reaches an exit, in this fragment, so that exits compare
-   exactly. The same two statements hold of the variant of the fix
-   ([rebuild_repr_fixed_tail_refines_cc_statement],
-   [rebuild_repr_fixed_tail_refines_observably_statement]). The [_local]
+   exactly. The names of the statements of a variant of an earlier fix,
+   which the fix now is, are kept
+   ([rebuild_repr_fixed_tail_refines_cc_statement], and so on). The [_local]
    versions of the two statements up to observation hold with local
    fields: they ask the check of the fix of local fields
    ([check_local_reads_used], FlambdaReaperLocalFieldsSpec.v) in place
@@ -117,8 +117,8 @@
      [my_closure] ([my_closure_decision_u] is [None]), which is not
      unboxed, and has plain parameters, as many as its decisions.
    - Calls ([repr_call]): direct, of the code they are known to call, or
-     of known arity, at
-     the arities of that code, with plain arguments and no extra argument
+     of known arity, at the arities of that code, whose results all have a
+     source ([code_never_returns]), with plain arguments and no extra argument
      for the exception continuation, by a variable that is plain if the
      [my_closure] of the code is, and changed with the same
      representation if that is changed; they return to a continuation
@@ -418,6 +418,7 @@ Definition repr_call (C : finite_map (list decision * bool))
          with
          | Changing_u pd rd =>
            forallb decided pd && forallb decided rd
+           && negb (code_never_returns sol code_deps id)
            && is_none
                 (my_closure_decision_u cannot_change code_deps unit_code_ids
                    unboxed id)
@@ -569,23 +570,7 @@ Definition rebuild_repr_fixed_refines_cc_statement : Prop :=
          preserve_direct_calls e).
 
 Definition rebuild_repr_fixed_tail_refines_cc_statement : Prop :=
-  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
-    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
-    (dominated : list (node * node)) (to_unbox tcr : list node)
-    (preserve_direct_calls : bool),
-    is_local_slots_only is_local ->
-    in_flow_fragment e = true ->
-    check_closed is_local (traverse_unit flag u e) T = true ->
-    repr_unboxing is_local (traverse_unit flag u e) T cannot_change
-      (unit_code_deps flag u e) dominated to_unbox tcr e
-    = true ->
-    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-    program_refines
-      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
-         (unit_code_deps flag u e) preserve_direct_calls e)
-      (rebuild_unit_unbox_repr_fixed_tail is_local (traverse_unit flag u e) T
-         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
-         preserve_direct_calls e).
+  rebuild_repr_fixed_refines_cc_statement.
 
 Definition rebuild_repr_fixed_refines_observably_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
@@ -644,60 +629,12 @@ Definition rebuild_repr_fixed_refines_observably_local_statement : Prop :=
          preserve_direct_calls e).
 
 Definition rebuild_repr_fixed_tail_refines_observably_statement : Prop :=
-  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
-    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
-    (dominated : list (node * node)) (to_unbox tcr : list node)
-    (preserve_direct_calls : bool),
-    is_local_slots_only is_local ->
-    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
-    in_flow_fragment e = true ->
-    any_kind_arguments e = true ->
-    results_kinded [] [] e = true ->
-    well_formed_unit u e = true ->
-    exits_one_value u e = true ->
-    check_closed is_local (traverse_unit flag u e) T = true ->
-    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
-    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
-    FlambdaReaperCallingConventionsSpec.check_apply_widgets
-      (traverse_unit flag u e) T
-    = true ->
-    repr_unboxing is_local (traverse_unit flag u e) T cannot_change
-      (unit_code_deps flag u e) dominated to_unbox tcr e
-    = true ->
-    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-    program_refines_observably e
-      (rebuild_unit_unbox_repr_fixed_tail is_local (traverse_unit flag u e) T
-         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
-         preserve_direct_calls e).
+  rebuild_repr_fixed_refines_observably_statement.
 
 (* The same with local fields: the tables pass the check of the fix
    too (FlambdaReaperLocalFieldsSpec.v). *)
 Definition rebuild_repr_fixed_tail_refines_observably_local_statement : Prop :=
-  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
-    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
-    (dominated : list (node * node)) (to_unbox tcr : list node)
-    (preserve_direct_calls : bool),
-    is_local_slots_only is_local ->
-    in_flow_fragment e = true ->
-    any_kind_arguments e = true ->
-    results_kinded [] [] e = true ->
-    well_formed_unit u e = true ->
-    exits_one_value u e = true ->
-    check_closed is_local (traverse_unit flag u e) T = true ->
-    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
-    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
-    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
-    FlambdaReaperCallingConventionsSpec.check_apply_widgets
-      (traverse_unit flag u e) T
-    = true ->
-    repr_unboxing is_local (traverse_unit flag u e) T cannot_change
-      (unit_code_deps flag u e) dominated to_unbox tcr e
-    = true ->
-    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-    program_refines_observably e
-      (rebuild_unit_unbox_repr_fixed_tail is_local (traverse_unit flag u e) T
-         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
-         preserve_direct_calls e).
+  rebuild_repr_fixed_refines_observably_local_statement.
 
 (* ======================================================================== *)
 (* Examples                                                                 *)
