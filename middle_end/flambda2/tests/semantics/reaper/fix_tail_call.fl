@@ -1,5 +1,5 @@
-(* A tail call that the fix of the unboxing makes a call that is not in tail
-   position. The unit is made by ../ocaml/from_ocaml.sh of
+(* A tail call that an earlier fix of the unboxing made a call that is not
+   in tail position. The unit is made by ../ocaml/from_ocaml.sh of
 
      external opaque : 'a -> 'a = "%opaque"
      external ( - ) : int -> int -> int = "%subint"
@@ -14,16 +14,16 @@
    with an interface that exports r. ping and pong are called at unknown
    arity through the join f, so neither can change its calling convention,
    and the result of neither has a use. Each calls the other in tail
-   position. Without the fix the call passes its result on as it is, and is
-   left in tail position. With the fix, the parameter of the return
-   continuation of each code is kept with no use ([Keep { unused = true }]),
-   and [make_apply_wrapper] gives it poison, whatever the callee returns:
-   the call returns to a wrapper that passes the poison on, and is no longer
-   in tail position. The model, which transcribes the fix, does the same: in
-   the last section, its rebuild with the fix runs in more steps than its
-   rebuild without it. The same program with the standard library, ping and
-   pong called with 100_000_000, stops on Stack_overflow when compiled with
-   the fix and the reaper, and runs without the fix. *)
+   position. The earlier fix kept the parameter of the return continuation
+   of each code with no use ([Keep { unused = true }]), and
+   [make_apply_wrapper] gave it poison whatever the callee returned: the
+   call returned to a wrapper, and was no longer in tail position (the same
+   program with the standard library, ping and pong called with
+   100_000_000, stopped on Stack_overflow). The fix proposed for the reaper
+   passes a result that the callee keeps on as it is, as the compiler
+   without a fix does, so that the call stays in tail position; the model,
+   which transcribes it, rebuilds the unit as without the fix, and the last
+   section is not printed. *)
 let $camlFix_tail_call__first_const_0 = Block 0 () in
 (let code rec inline(never) size(23)
        ping_0 (n/70 : imm tagged)

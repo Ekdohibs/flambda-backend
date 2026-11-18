@@ -41,15 +41,3 @@ fix_tail_call.fl:
     the model's rebuild against the input: the same
     the compiler's output (36 steps): returns [0: 1]
     the compiler's output against the input: the same
-  with unboxing and the fix:
-    the fix changes no table, and changes the rebuild
-    the table of to_unbox: passes the check of the rules without the fix, passes that of the rules with it
-    the table of to_change_representation: passes the check of the rules with the fix
-    the check that sets of closures are unboxed or changed whole: the tables pass it
-    my_closure/v4: representation {}, with function slot pong, function slot ping, at function slot pong
-    my_closure/v8: representation {}, with function slot pong, function slot ping, at function slot ping
-    $camlFix_tail_call__ping_1_0: representation {}, with function slot pong, function slot ping, at function slot ping
-    $camlFix_tail_call__pong_0_1: representation {}, with function slot pong, function slot ping, at function slot pong
-    the reaper's input (34 steps): returns [0: 1]
-    the model's rebuild (42 steps): returns [0: 1]
-    the model's rebuild against the input: the same

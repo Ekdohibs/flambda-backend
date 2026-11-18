@@ -2608,7 +2608,10 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
    must pass the checks of the rules with the fix ([check_to_unbox_fixed],
    [check_to_change_representation_fixed]) and that of sets of closures, or the
    tool fails. The allocations whose decisions differ are printed, then what the
-   model unboxes and changes, as [compare_unboxing] prints it. *)
+   model unboxes and changes, as [compare_unboxing] prints it. Where the rebuild
+   of the fix would stop with one of its fatal errors
+   ([rebuild_unit_unbox_repr_fixed_fails], within the budget of the rebuild), a
+   line says so, for every unit. *)
 let run_with_fixes ~(names : unit_names) ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~ends ~(model_facts : Graph_spec.facts)
     ~(model_tables : Graph_spec.tables) : bool =
@@ -2644,6 +2647,15 @@ let run_with_fixes ~(names : unit_names) ~(input : Flsemantics.converted)
     | Never | Zero_alloc -> false
   in
   let tables_differ = dedup to_unbox <> dedup to_unbox_fixed in
+  (let _, _, allowed = rebuild_estimate model_facts input.body in
+   if
+     allowed
+     && Unboxing.rebuild_unit_unbox_repr_fixed_fails is_local model_facts
+          model_tables cannot_change deps dominated to_unbox_fixed tcr_fixed
+          preserve input.body
+   then
+     Format.printf
+       "  with unboxing and the fix: the rebuild stops with a fatal error@.");
   let rebuild_differs () =
     let _, _, allowed = rebuild_estimate model_facts input.body in
     allowed
