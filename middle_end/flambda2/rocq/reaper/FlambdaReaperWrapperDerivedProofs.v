@@ -539,3 +539,74 @@ Proof.
   | |- _ => vm_compute; reflexivity
   end.
 Qed.
+
+(* A position at which the fix stops in [make_apply_wrapper]. *)
+Lemma wrapper_fails_pos (ads : list decision) :
+  ∀ func : list decision,
+    wrapper_fails_u ads func = true ->
+    ∃ (i : nat) (fields : unboxed_fields) (fd : decision),
+      nth_error ads i = Some (Unbox fields) ∧ nth_error func i = Some fd
+      ∧ arm_pair (Unbox fields) fd = true.
+Proof.
+  induction ads as [ | ad ads IH]; intros [ | fd func] H; cbn in H;
+    try discriminate.
+  destruct ad as [d | fields | k], fd as [d' | fields' | k'];
+    try (exists 0, fields; eexists;
+         split; [ reflexivity | split; [ reflexivity | reflexivity ] ]);
+    destruct (IH func H) as (i & fs & fd0 & H1 & H2 & H3);
+    exists (S i), fs, fd0;
+    (split; [ exact H1 | split; [ exact H2 | exact H3 ] ]).
+Qed.
+
+Theorem fix_arm_never_returns_auto_derived :
+  fix_arm_never_returns_auto_derived_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting F code_deps
+    cannot_change to_unbox unboxed Hloc Hslots Hfrag Hleast Hcount Hkinds ads
+    ap Hin Hkind Har Hfails.
+  destruct (wrapper_fails_pos ads _ Hfails)
+    as (i & fields & fd & Hads & Hfd & Harm).
+  rewrite nth_error_map in Hfd.
+  destruct (nth_error
+              (unit_callee_decisions F T cannot_change code_deps unboxed e ap)
+              i)
+    as [[fd' kind] | ] eqn:E; [ | discriminate ].
+  cbn in Hfd. injection Hfd as ->.
+  assert (Hunbox :
+            check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+              lambda_lifting to_unbox
+            = true)
+    by (unfold to_unbox; apply derive_to_unbox_fixed_checked).
+  pose proof (proj1 (FlambdaReaperCallingConventionsProofs
+                       .derive_cannot_change_least F T)) as Hcc.
+  pose proof (FlambdaReaperWrapperAutoProofs.derive_dominated_checked T)
+    as Hdom.
+  pose proof (FlambdaReaperLeastProofs.least_apply_widgets is_local F T Hloc
+                Hleast
+                (FlambdaReaperLeastProofs.traverse_widgets_read_only u e))
+    as Hwid.
+  pose proof (FlambdaReaperWrapperShapeProofs.traverse_used_code_ids Auto
+                is_local u e T Hloc Hleast) as Hcodes.
+  pose proof (FlambdaReaperWrapperShapeProofs.traverse_argument_reads Auto u
+                e) as Hargs.
+  pose proof (FlambdaReaperWrapperAutoProofs.traverse_known_witnesses is_local
+                u e T Hloc Hleast) as Hknown.
+  destruct (ap_call_kind ap) eqn:Hk.
+  1, 3:
+    refine (FlambdaReaperWrapperProofs.fix_arm_never_returns Auto is_local u e
+              T cannot_change max_unbox_size lambda_lifting (derive_dominated T)
+              to_unbox Hloc Hslots Hfrag Hleast Hcc Hdom Hunbox Hwid Hcodes
+              Hargs Hknown Hcount Hkinds ads ap i fields fd kind Hin _ Har E
+              Hads Harm);
+    intros Hc; rewrite Hk in Hc; discriminate Hc.
+  destruct Hkind as [H | Hlen]; [ exfalso; exact (H eq_refl) | ].
+  exact (FlambdaReaperWrapperProofs.indirect_fix_arm_never_returns Auto
+           is_local u e T cannot_change max_unbox_size lambda_lifting
+           (derive_dominated T) to_unbox Hloc Hslots Hfrag Hleast Hcc Hdom
+           Hunbox Hwid Hcodes Hargs Hknown
+           (FlambdaReaperWrapperUnknownProofs.traverse_unknown_widgets Auto
+              is_local u e T Hloc Hleast)
+           (FlambdaReaperWrapperUnknownProofs.traverse_unknown_witnesses Auto
+              is_local u e T Hloc Hleast)
+           Hcount Hkinds ads ap i fields fd kind Hin Hk Hlen E Hads Harm).
+Qed.

@@ -56,6 +56,24 @@
    The fatal errors of the fix ([rebuild_fails_u] of
    FlambdaReaperUnboxing.v), with the flag [Auto], a least solution and
    the tables derived from it:
+   - [fix_arm_never_returns_auto_derived_statement]: the arm of
+     [make_apply_wrapper] that the fix stops on ([wrapper_fails_u]: the
+     continuation unboxes a result that the callee keeps or deletes) is
+     reached, by a call that the rebuild makes (in the unit or in code
+     that is used), only if the call never returns
+     ([apply_never_returns]), which the fix tests first: the arm is not
+     reached. Of the calls: those that are not of unknown arity, which
+     expect of the code they are known to call no more results than its
+     code dep has (a premise on the arity, which the compiler's terms
+     meet), and those of unknown arity with one group of arguments. The
+     statements of FlambdaReaperWrapperSpec.v give no source to the
+     result at the call witness that the call reads off its callee; the
+     witness is that of the code dep of the code the call is known to
+     call, which then has a result with no source
+     ([code_never_returns]), or the sources of the witness that
+     [never_returns_of_call] reads are those of the node read, by the
+     rules ([fix_arm_never_returns_statement],
+     [indirect_fix_arm_never_returns_statement] there).
    - [unboxed_callee_fails_statement]: the error of an unboxed callee of a
      call whose code keeps its calling convention ("TO CHECK" in the fix,
      now "Unboxed callee ... cannot be applied without changing calling
@@ -292,3 +310,35 @@ Definition unboxed_callee_fails_statement : Prop :=
   ∧ behaves (FlambdaReaperTupledSpec.on_its_own UnboxedCalleeExample.rebuilt)
       (Exits 1%positive [Value_const (Tagged_immediate 1)] empty_heap).
 
+Definition fix_arm_never_returns_auto_derived_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (max_unbox_size : nat) (lambda_lifting : bool),
+    let F := traverse_unit Auto u e in
+    let code_deps := unit_code_deps Auto u e in
+    let cannot_change := derive_cannot_change F T in
+    let to_unbox :=
+      derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+        lambda_lifting
+    in
+    let unboxed := unit_unboxed F T (derive_dominated T) to_unbox e in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    ∀ (ads : list decision) (ap : apply_expr),
+      (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+      ap_call_kind ap <> Indirect_unknown_arity
+      ∨ length (ap_args_arity ap) = 1 ->
+      (∀ (id : code_id) (cd : code_dep),
+         code_id_actually_called F (solution_of_tables T) ap = Some id ->
+         (id, cd) ∈ code_deps ->
+         length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+      wrapper_fails_u ads
+        (map fst
+           (unit_callee_decisions F T cannot_change code_deps unboxed e ap))
+      = true ->
+      apply_never_returns F (solution_of_tables T) code_deps
+        (bound_code_metadata e) ap
+      = true.

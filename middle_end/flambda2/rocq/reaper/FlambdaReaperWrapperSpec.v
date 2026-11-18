@@ -642,6 +642,96 @@ Definition kept_result_never_unboxed_statement : Prop :=
       arm_pair (apply_decision_at ads i kind) (Unbox fields) = false.
 
 (* ======================================================================== *)
+(* The arm in the fix                                                       *)
+(* ======================================================================== *)
+
+(* The call of [make_apply_wrapper] that the fix stops on, the
+   continuation unboxing a result that the callee keeps or deletes, never
+   returns ([apply_never_returns]), so that the fix makes it a call that
+   never returns before the arm: a direct call or one of known arity
+   that expects of the code it is known to call no more results than the
+   code dep has, and a call of unknown arity with one group of
+   arguments. *)
+Definition fix_arm_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (max_unbox_size : nat) (lambda_lifting : bool)
+    (dominated : list (node * node)) (to_unbox : list node),
+    let F := traverse_unit flag u e in
+    let code_deps := unit_code_deps flag u e in
+    let unboxed := unit_unboxed F T dominated to_unbox e in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    check_cc_closed F T cannot_change = true ->
+    check_dominated T dominated = true ->
+    check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+      lambda_lifting to_unbox
+    = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets F T = true ->
+    check_used_code_ids T = true ->
+    check_argument_reads F = true ->
+    check_known_witnesses F T code_deps = true ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
+      (fields : unboxed_fields) (fd : decision) (kind : flambda_kind),
+      (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
+      (∀ (id : code_id) (cd : code_dep),
+         code_id_actually_called F (solution_of_tables T) ap = Some id ->
+         (id, cd) ∈ code_deps ->
+         length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+      nth_error
+        (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
+      = Some (fd, kind) ->
+      nth_error ads i = Some (Unbox fields) ->
+      arm_pair (Unbox fields) fd = true ->
+      apply_never_returns F (solution_of_tables T) code_deps
+        (bound_code_metadata e) ap
+      = true.
+
+Definition indirect_fix_arm_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (max_unbox_size : nat) (lambda_lifting : bool)
+    (dominated : list (node * node)) (to_unbox : list node),
+    let F := traverse_unit flag u e in
+    let code_deps := unit_code_deps flag u e in
+    let unboxed := unit_unboxed F T dominated to_unbox e in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    check_cc_closed F T cannot_change = true ->
+    check_dominated T dominated = true ->
+    check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+      lambda_lifting to_unbox
+    = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets F T = true ->
+    check_used_code_ids T = true ->
+    check_argument_reads F = true ->
+    check_known_witnesses F T code_deps = true ->
+    check_unknown_widgets F T = true ->
+    check_unknown_witnesses F T = true ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
+      (fields : unboxed_fields) (fd : decision) (kind : flambda_kind),
+      (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+      ap_call_kind ap = Indirect_unknown_arity ->
+      length (ap_args_arity ap) = 1 ->
+      nth_error
+        (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
+      = Some (fd, kind) ->
+      nth_error ads i = Some (Unbox fields) ->
+      arm_pair (Unbox fields) fd = true ->
+      apply_never_returns F (solution_of_tables T) code_deps
+        (bound_code_metadata e) ap
+      = true.
+
+(* ======================================================================== *)
 (* The arm reached                                                          *)
 (* ======================================================================== *)
 

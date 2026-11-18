@@ -1363,7 +1363,8 @@ Definition call_ok (ads : list decision) (ap : apply_expr) : Prop :=
     = Some (fd, kind) ->
     arm_pair (apply_decision_at ads i kind) fd = true ->
     is_unbox_decision fd = false
-    ∧ callee_result_has_source F T (node_of_simple (ap_callee ap)) i = false.
+    ∧ callee_result_has_source F T (node_of_simple (ap_callee ap)) i = false
+    ∧ ∃ a, (a, known, node_of_simple (ap_callee ap)) ∈ f_accessor F.
 
 Definition call_ok_indirect (ads : list decision) (ap : apply_expr) : Prop :=
   check_unknown_widgets F T = true -> check_unknown_witnesses F T = true ->
@@ -1374,7 +1375,8 @@ Definition call_ok_indirect (ads : list decision) (ap : apply_expr) : Prop :=
     = Some (fd, kind) ->
     arm_pair (apply_decision_at ads i kind) fd = true ->
     result_has_source_at F T unknown (node_of_simple (ap_callee ap)) i
-    = false.
+    = false
+    ∧ ∃ a, (a, unknown, node_of_simple (ap_callee ap)) ∈ f_accessor F.
 
 Lemma apply_decision_facts (ds : finite_map (list decision))
     (ce : finite_map (list node)) (k : continuation) (ns : list node)
@@ -1473,6 +1475,7 @@ Proof.
     as [[Hadu Hfdu] | ((kk & Hadk) & Hfdu)].
   - (* [Unbox _, (Keep _ | Delete)]: the result has no source. *)
     split; [ exact Hfdu | ].
+    split; [ | exists a; exact Hread ].
     destruct (Had_unbox Hadu) as (a0 & Ha0x & Ha0).
     pose proof (dominated_no_any_source a0 x Ha0x) as Hasx.
     assert (Hasw : s_any_source S w = false).
@@ -1750,6 +1753,7 @@ Proof.
   pose proof (return_not_local is_local (Normal i) Hloc) as Hret_local.
   destruct (arm_pair_cases ad _ Harm) as [[Hadu _] | (_ & Hfdu)];
     [ | discriminate Hfdu ].
+  split; [ | exists a; exact Hread ].
   destruct (Had_unbox Hadu) as (a0 & Ha0x & Ha0).
   pose proof (dominated_no_any_source a0 x Ha0x) as Hasx.
   assert (Hasw : s_any_source S w = false).
@@ -2055,6 +2059,219 @@ Proof.
     exact (IH ctx ce ds He Hc Hk Hl Ha ads ap Hin).
 Qed.
 
+
+(* ------------------------------------------------------------------------ *)
+(* The call of the arm never returns                                        *)
+(* ------------------------------------------------------------------------ *)
+
+(* A result with no source at the node [a] that a call reads off its
+   callee: [a] has no source of any source, and no source of [a] holds
+   a result of that rank with a source. *)
+Lemma no_source_at (fld : field) (f a s r : node) (i : nat) :
+  result_has_source_at F T fld f i = false -> (a, fld, f) ∈ f_accessor F ->
+  s_any_source S a = false
+  ∧ (s_sources S a s = true ->
+     (s, Field_return_of_call (Normal i), r) ∈ f_constructor F ->
+     s_has_source S r = false).
+Proof.
+  intros H Ha. unfold result_has_source_at in H.
+  assert (Hrow : ∀ b : bool,
+            (field_eqb fld fld && node_eqb f f
+             && (mem_node a (t_any_source T)
+                 || existsb
+                      (fun '(a', s0) =>
+                         node_eqb a' a
+                         && existsb
+                              (fun '(s', f', r0) =>
+                                 node_eqb s' s0
+                                 && field_eqb f'
+                                      (Field_return_of_call (Normal i))
+                                 && mem_node r0 (t_has_source T))
+                              (f_constructor F))
+                      (t_sources T))) = true -> b = false).
+  { intros b E. exfalso. rewrite <- (Bool.not_true_iff_false _) in H.
+    apply H. apply existsb_exists. exists (a, fld, f).
+    split; [ exact Ha | exact E ]. }
+  rewrite field_eqb_refl, node_eqb_refl in Hrow. cbn [andb] in Hrow.
+  split.
+  - destruct (s_any_source S a) eqn:E; [ | reflexivity ].
+    apply (Hrow true). cbn in E. rewrite E. reflexivity.
+  - intros Hs Hc. destruct (s_has_source S r) eqn:E; [ | reflexivity ].
+    apply (Hrow true). apply orb_true_iff. right.
+    apply existsb_exists. exists (a, s).
+    split; [ apply (mem_pair_In _ _ _); exact Hs | ].
+    cbn beta iota. rewrite node_eqb_refl. cbn [andb]. apply existsb_exists.
+    exists (s, Field_return_of_call (Normal i), r).
+    split; [ exact Hc | ]. cbn beta iota.
+    rewrite node_eqb_refl, field_eqb_refl. exact E.
+Qed.
+
+Lemma witness_not_local (ep : closure_entry_point) :
+  is_local (Field_call_witness ep) = false.
+Proof.
+  destruct (is_local (Field_call_witness ep)) eqn:E; [ | reflexivity ].
+  destruct (Hloc _ E) as [(w & Hw) | (fs & Hfs)]; discriminate.
+Qed.
+
+(* A call of one group of arguments whose code is not known, read at the
+   field of its arity, of whose result of rank [i] no source of the node
+   read off its callee has a source: it never returns
+   ([never_returns_of_call]). *)
+Lemma one_group_never_returns (ep : closure_entry_point) (f a : node)
+    (n nres i : nat) :
+  (a, Field_call_witness ep, f) ∈ f_accessor F ->
+  result_has_source_at F T (Field_call_witness ep) f i = false ->
+  i < nres ->
+  never_returns_of_call F S ep (get_direct_sources S f) [n] nres = true.
+Proof.
+  intros Ha Hno Hi.
+  destruct (no_source_at _ f a a a i Hno Ha) as [Hasa _].
+  pose proof (witness_not_local ep) as Hnl.
+  cbn [never_returns_of_call]. unfold get_direct_sources.
+  destruct (s_any_source S f) eqn:Ef.
+  { rewrite (any_source_accessor _ _ _ closedU f _ a Ef Ha Hnl) in Hasa.
+    discriminate. }
+  unfold get_field_sources.
+  match goal with
+  | |- context [if existsb ?p (f_constructor F) then _ else _] =>
+    destruct (existsb p (f_constructor F)) eqn:Eany
+  end.
+  { exfalso. apply existsb_exists in Eany as ([[x f'] y] & Hc & Ht).
+    cbn beta iota in Ht.
+    apply andb_true_iff in Ht as [Ht Hy].
+    apply andb_true_iff in Ht as [Hx Hf'].
+    apply andb_true_iff in Hx as [Hfx _].
+    apply field_eqb_eq in Hf'. subst f'.
+    pose proof (alias_accessor_source _ _ _ closedU f x _ a y Ha Hfx Ef Hc)
+      as Hay.
+    rewrite (any_source_alias _ _ _ closedU y a Hay Hy) in Hasa.
+    discriminate. }
+  cbn beta iota.
+  apply existsb_exists. exists i.
+  split; [ apply in_seq; lia | ].
+  apply negb_true_iff. unfold result_has_source_of.
+  apply Bool.not_true_iff_false. intros E.
+  apply existsb_exists in E as ([[z f'] r] & Hc & Ht).
+  cbn beta iota in Ht.
+  apply andb_true_iff in Ht as [Ht Hr].
+  apply andb_true_iff in Ht as [Hz Hf'].
+  apply field_eqb_eq in Hf'. subst f'.
+  apply existsb_exists in Hz as ([[x f'] y] & Hcx & Ht).
+  cbn beta iota in Ht.
+  apply andb_true_iff in Ht as [Ht _].
+  apply andb_true_iff in Ht as [Ht Hyz].
+  apply andb_true_iff in Ht as [Hx Hf'].
+  apply andb_true_iff in Hx as [Hfx _].
+  apply field_eqb_eq in Hf'. subst f'.
+  pose proof (alias_accessor_source _ _ _ closedU f x _ a y Ha Hfx Ef Hcx)
+    as Hay.
+  assert (Hasy : s_any_source S y = false).
+  { destruct (s_any_source S y) eqn:E; [ | reflexivity ].
+    rewrite (any_source_alias _ _ _ closedU y a Hay E) in Hasa.
+    discriminate. }
+  pose proof (sources_alias _ _ _ closedU y a z Hyz Hasy Hay Hasa) as Haz.
+  destruct (no_source_at _ f a z r i Hno Ha) as [_ Hnr].
+  rewrite (Hnr Haz Hc) in Hr. discriminate.
+Qed.
+
+(* The call of the arm, direct or of known arity, never returns: its code,
+   if known, has a result with no source (that of rank [i], which the
+   call expects of it), and otherwise the witness that it reads has
+   none. *)
+Lemma known_never_returns (ap : apply_expr) (a : node) (i : nat) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  (a, known, node_of_simple (ap_callee ap)) ∈ f_accessor F ->
+  callee_result_has_source F T (node_of_simple (ap_callee ap)) i = false ->
+  i < length (unarize (ap_return_arity ap)) ->
+  (∀ (id : code_id) (cd : code_dep),
+     code_id_actually_called F S ap = Some id -> (id, cd) ∈ cds ->
+     length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+  apply_never_returns F S cds (bound_code_metadata e0) ap = true.
+Proof.
+  intros Hk Hread Hno Hi Har.
+  unfold callee_result_has_source in Hno.
+  destruct (no_source_at _ _ a a a i Hno Hread) as [Hasa _].
+  unfold apply_never_returns.
+  destruct (code_id_actually_called F S ap) as [id | ] eqn:Ecall.
+  - destruct (called_some F S ap id Ecall) as (ids & Eids & Esing).
+    assert (Hid : id ∈ ids).
+    { pose proof (proj1 (FlambdaMapProofs.keyed_get_singleton _ Pos.eqb
+                           pos_eqb_decides id ids) Esing id) as H.
+      rewrite Pos.eqb_refl in H.
+      exact (proj1 (FlambdaMapProofs.keyed_among_in _ Pos.eqb pos_eqb_decides
+                      id ids) H). }
+    destruct (directly_inv F S _ ids id Eids Hid)
+      as (a1 & s & Ha1 & Hs1 & Hhs & Hcid).
+    destruct (kw_source F T cds Hknown a1 _ s Ha1 Hs1 Hhs)
+      as (id' & cd & Hcd & ->).
+    pose proof (proj2 (kw_constructor F T cds Hknown id' cd _ _ Hcd Hcid)
+                  eq_refl) as Heq.
+    injection Heq as <-.
+    destruct (cds_code id cd Hcd) as (Hkw & (c & Hc) & _).
+    pose proof (Har id cd eq_refl Hcd) as Hlen.
+    destruct (nth_error (cd_return cd) i) as [r | ] eqn:Hr.
+    2:{ apply nth_error_None in Hr. lia. }
+    destruct Hkw as (_ & Hkw_res & _).
+    pose proof (Hkw_res i r Hr) as Hcr.
+    destruct (no_source_at _ _ a1 (cd_known_arity_call_witness cd) r i Hno
+                Ha1)
+      as [_ Hnr].
+    pose proof (Hnr Hs1 Hcr) as Hnr'.
+    destruct (lookup id (bound_code_metadata e0)) as [md | ] eqn:Emd.
+    + unfold code_never_returns.
+      rewrite (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd).
+      apply existsb_exists. exists r.
+      split; [ exact (nth_error_In _ _ Hr) | ].
+      rewrite Hnr'. reflexivity.
+    + exfalso. apply FlambdaMapProofs.lookup_none_not_in in Emd. apply Emd.
+      rewrite (proj1 bound_code_metadata_codes e0), map_map.
+      apply in_map_iff. exists (id, c). split; [ reflexivity | exact Hc ].
+  - destruct (ap_callee ap) as [x | sym | c0] eqn:Hcallee;
+      cbv zeta.
+    3:{ cbn [node_of_simple] in Hread.
+        pose proof (any_source_input _ _ _ closedU _ Hconsts) as Hac.
+        rewrite (any_source_accessor _ _ _ closedU _ _ a Hac Hread
+                   (known_not_local is_local Hloc))
+          in Hasa.
+        discriminate. }
+    all: destruct (ap_call_kind ap) eqn:Hkind;
+      try (exfalso; apply Hk; first [ reflexivity | exact Hkind ]);
+      exact (one_group_never_returns Known_arity_code_pointer _ a _ _ i
+               Hread Hno Hi).
+Qed.
+
+(* The call of the arm, of unknown arity with one group of arguments,
+   never returns. *)
+Lemma unknown_never_returns (ap : apply_expr) (a : node) (i : nat) :
+  ap_call_kind ap = Indirect_unknown_arity ->
+  length (ap_args_arity ap) = 1 ->
+  (a, unknown, node_of_simple (ap_callee ap)) ∈ f_accessor F ->
+  result_has_source_at F T unknown (node_of_simple (ap_callee ap)) i
+  = false ->
+  i < length (unarize (ap_return_arity ap)) ->
+  apply_never_returns F S cds (bound_code_metadata e0) ap = true.
+Proof.
+  intros Hk Hlen Hread Hno Hi.
+  destruct (no_source_at _ _ a a a i Hno Hread) as [Hasa _].
+  assert (Hone : ∃ c, ap_args_arity ap = [c]).
+  { destruct (ap_args_arity ap) as [ | c [ | c' cs]] eqn:E;
+      cbn in Hlen; try discriminate.
+    exists c. reflexivity. }
+  destruct Hone as (c & Hc).
+  unfold apply_never_returns, code_id_actually_called. rewrite Hk, Hc.
+  cbn beta iota.
+  destruct (ap_callee ap) as [x | sym | c0] eqn:Hcallee;
+    cbv zeta.
+  3:{ cbn [node_of_simple] in Hread.
+      pose proof (any_source_input _ _ _ closedU _ Hconsts) as Hac.
+      rewrite (any_source_accessor _ _ _ closedU _ _ a Hac Hread
+                 (witness_not_local Unknown_arity_code_pointer))
+        in Hasa.
+      discriminate. }
+  all: exact (one_group_never_returns Unknown_arity_code_pointer _ a _ _ i
+                Hread Hno Hi).
+Qed.
+
 End Unit.
 
 (* ======================================================================== *)
@@ -2113,11 +2330,12 @@ Proof.
     dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
     Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap i fd kind Hin
     Hdirect Hfd Harm.
-  exact (proj2 (proj1 (arm_unit flag is_local u e T cannot_change
-                         max_unbox_size lambda_lifting dominated to_unbox Hloc
-                         Hslots Hfrag Hleast Hcc Hdom Hunbox Hwidgets Hcodes
-                         Hargs Hknown Hcount Hkinds ads ap Hin)
-                  i fd kind Hdirect Hfd Harm)).
+  exact (proj1 (proj2 (proj1 (arm_unit flag is_local u e T cannot_change
+                                max_unbox_size lambda_lifting dominated
+                                to_unbox Hloc Hslots Hfrag Hleast Hcc Hdom
+                                Hunbox Hwidgets Hcodes Hargs Hknown Hcount
+                                Hkinds ads ap Hin)
+                         i fd kind Hdirect Hfd Harm))).
 Qed.
 
 Theorem arm_needs_no_source_auto : arm_needs_no_source_auto_statement.
@@ -2155,9 +2373,81 @@ Proof.
     dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
     Hunbox Hwidgets Hcodes Hargs Hknown Huw Hux Hcount Hkinds ads ap i fd
     kind Hin Hind Hlen Hfd Harm.
-  exact (proj2 (arm_unit flag is_local u e T cannot_change max_unbox_size
-                  lambda_lifting dominated to_unbox Hloc Hslots Hfrag Hleast
-                  Hcc Hdom Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds
-                  ads ap Hin)
-           Huw Hux i fd kind Hind Hlen Hfd Harm).
+  exact (proj1 (proj2 (arm_unit flag is_local u e T cannot_change
+                         max_unbox_size lambda_lifting dominated to_unbox Hloc
+                         Hslots Hfrag Hleast Hcc Hdom Hunbox Hwidgets Hcodes
+                         Hargs Hknown Hcount Hkinds ads ap Hin)
+                  Huw Hux i fd kind Hind Hlen Hfd Harm)).
+Qed.
+
+(* The position of a decision of the callee is that of a result of the
+   call. *)
+Lemma callee_decision_rank (F : facts) (T : tables)
+    (cannot_change : list node) (cds : finite_map code_dep)
+    (unboxed : list (node * unboxed_fields)) (e : expr) (ap : apply_expr)
+    (i : nat) (fd : decision) (kind : flambda_kind) :
+  nth_error (unit_callee_decisions F T cannot_change cds unboxed e ap) i
+  = Some (fd, kind) ->
+  i < length (unarize (ap_return_arity ap)).
+Proof.
+  unfold unit_callee_decisions, callee_decisions. intros Hfd.
+  apply nth_error_Some.
+  destruct (apply_change_u _ _ _ _ _ _ _ ap) as [ | pds rds].
+  - rewrite nth_error_map in Hfd.
+    destruct (nth_error (unarize (ap_return_arity ap)) i); [ | discriminate ].
+    discriminate.
+  - apply nth_error_combine in Hfd as [_ H]. rewrite H. discriminate.
+Qed.
+
+Lemma decision_at_unbox (ads : list decision) (i : nat)
+    (fields : unboxed_fields) (kind : flambda_kind) :
+  nth_error ads i = Some (Unbox fields) ->
+  apply_decision_at ads i kind = Unbox fields.
+Proof. intros H. unfold apply_decision_at. rewrite H. reflexivity. Qed.
+
+Theorem fix_arm_never_returns : fix_arm_never_returns_statement.
+Proof.
+  intros flag is_local u e T cannot_change max_unbox_size lambda_lifting
+    dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
+    Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap i fields fd
+    kind Hin Hdirect Har Hfd Hads Harm.
+  rewrite <- (decision_at_unbox ads i fields kind Hads) in Harm.
+  destruct (proj1 (arm_unit flag is_local u e T cannot_change max_unbox_size
+                     lambda_lifting dominated to_unbox Hloc Hslots Hfrag Hleast
+                     Hcc Hdom Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds
+                     ads ap Hin)
+              i fd kind Hdirect Hfd Harm)
+    as (_ & Hno & a & Hread).
+  destruct (unit_facts flag u e (∀ f : field, is_local f = false) Hfrag
+              Hslots)
+    as (noted & deps & Hedges & Hconsts & _ & Hnodup & Hids).
+  exact (known_never_returns flag is_local u e T Hloc Hleast Hknown _ noted
+           deps Hconsts Hnodup Hids
+           (fun id c Hc =>
+              proj1 (unit_codes_edges _ _ _ _ _ _ _ _ _) e None
+                (unit_conts u) Hedges id c Hc)
+           ap a i Hdirect Hread Hno
+           (callee_decision_rank _ _ _ _ _ _ ap i fd kind Hfd) Har).
+Qed.
+
+Theorem indirect_fix_arm_never_returns :
+  indirect_fix_arm_never_returns_statement.
+Proof.
+  intros flag is_local u e T cannot_change max_unbox_size lambda_lifting
+    dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
+    Hunbox Hwidgets Hcodes Hargs Hknown Huw Hux Hcount Hkinds ads ap i fields
+    fd kind Hin Hind Hlen Hfd Hads Harm.
+  rewrite <- (decision_at_unbox ads i fields kind Hads) in Harm.
+  destruct (proj2 (arm_unit flag is_local u e T cannot_change max_unbox_size
+                     lambda_lifting dominated to_unbox Hloc Hslots Hfrag Hleast
+                     Hcc Hdom Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds
+                     ads ap Hin)
+              Huw Hux i fd kind Hind ltac:(lia) Hfd Harm)
+    as (Hno & a & Hread).
+  destruct (unit_facts flag u e (∀ f : field, is_local f = false) Hfrag
+              Hslots)
+    as (noted & deps & Hedges & Hconsts & _ & Hnodup & Hids).
+  exact (unknown_never_returns flag is_local u e T Hloc Hleast Hconsts ap a
+           i Hind Hlen Hread Hno
+           (callee_decision_rank _ _ _ _ _ _ ap i fd kind Hfd)).
 Qed.
