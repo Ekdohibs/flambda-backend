@@ -84,13 +84,32 @@
      source or any source). The call, of no known code, keeps its calling
      convention, and the rebuild of the fix stops; the model rebuilds the
      call as [Invalid], and both the unit and the model's rebuilt unit
-     exit with 1. *)
+     exit with 1.
+   - [check_never_returns_auto_statement]: [check_never_returns], the
+     third error, is not reached by code that is used: the rebuilt body
+     of code with a result of no source ([code_never_returns]) has its
+     return continuation free nowhere. It holds of any tables of the
+     rebuild, with a least solution. An [Apply_cont] to the return
+     continuation passes the result an argument of which it is an
+     alias, which so has no source, and is rebuilt as [Invalid]; a call
+     that returns there gives it its own result, of which it is an alias
+     where the code is used, so that the call never returns
+     ([apply_never_returns]) and returns to the wrapper [Invalid]; every
+     other term of the rebuild keeps the free continuations of its
+     parts, or fewer. The premises: the exception handlers well formed
+     ([exn_handlers_well_formed], of [well_formed_unit]: no call has the
+     return continuation of code as its exception continuation), and two
+     of the calls the rebuild makes, which the compiler's terms meet: one
+     of code that is known expects of it no more results than its code
+     dep has (as for the arm), and one of unknown arity has an argument
+     (the compiler's analysis stops on one that has none). Code that is
+     not used is not covered (see S7.md). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaWellFormedSpec FlambdaSemanticsSpec FlambdaValueSpec
-  FlambdaReaperGraphSpec
+  FlambdaMapSpec FlambdaBindersSpec FlambdaWellFormedSpec FlambdaSemanticsSpec
+  FlambdaValueSpec FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperRebuild
   FlambdaReaperCallingConventions FlambdaReaperUnboxing FlambdaReaperLeast
   FlambdaReaperFlowSpec FlambdaReaperLeastSpec FlambdaReaperWrapperSpec.
@@ -342,3 +361,35 @@ Definition fix_arm_never_returns_auto_derived_statement : Prop :=
       apply_never_returns F (solution_of_tables T) code_deps
         (bound_code_metadata e) ap
       = true.
+
+Definition check_never_returns_auto_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change : list node) (unboxed : list (node * unboxed_fields))
+    (first_fresh : positive) (changed : list (node * closure_repr))
+    (preserve_direct_calls : bool),
+    let F := traverse_unit Auto u e in
+    let code_deps := unit_code_deps Auto u e in
+    let S := solution_of_tables T in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    exn_handlers_well_formed e = true ->
+    (∀ (ads : list decision) (ap : apply_expr),
+       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+       (ap_call_kind ap = Indirect_unknown_arity -> ap_args_arity ap <> [])
+       ∧ ∀ (id : code_id) (cd : code_dep),
+           code_id_actually_called F S ap = Some id ->
+           (id, cd) ∈ code_deps ->
+           length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+    ∀ (id : code_id) (c : code),
+      (id, c) ∈ unit_codes e -> is_code_id_used S id = true ->
+      code_never_returns S code_deps id
+      && among (code_return_continuation c)
+           (free_continuations_of_expr
+              (code_body
+                 (rebuild_code_u true F S (fun n => mem_node n cannot_change)
+                    code_deps preserve_direct_calls
+                    (static_names code_ids_bound e) (bound_code_metadata e)
+                    unboxed first_fresh changed id c)))
+      = false.
