@@ -676,8 +676,31 @@ a `CR` at the place in the `Spec` file.
 - **D63.** Atomics are cells of a model that has one thread: a verdict
   is of runs with one thread. The addition was approved by the human on
   18 November 2026. Decided, provisionally; not yet in the tree.
-- **D64.** A pause (`Cpu_relax`) has no effect in the model. Decided,
-  provisionally; not yet in the tree.
+- **D64.** A pause (`Cpu_relax`) has no effect in the model. The
+  model has no primitive for a pause and no event of a pause or of a
+  poll: it has no time and one thread, and what a polling point may
+  run (a finaliser, a signal handler) it has for no allocation
+  either. Chosen: the conversion of the test tool gives the primitive
+  as `Opaque_identity` of the unit value (`convert_prim` of
+  `tests/tools/flsemantics.ml`), which binds the unit value that the
+  primitive returns, leaves the heap as it is, costs the step of a
+  `Let` and records no effect of pausing. No statement and no
+  definition of the model has it. What that gives away: the theorem
+  of a validation is about the converted terms, and it does not
+  establish that Simplify kept a pause, nor where, nor how many
+  times. Whether the validator accepts a term in which Simplify had
+  removed a pause, moved it or made it twice is promised neither
+  way: the opaque `Let`s stay in the terms that it compares, since
+  none of its rewrites folds an `Opaque_identity`, removes its `Let`
+  for being unused or shares two. Nothing is claimed of the two runs
+  that the tool makes: a `Let` is a step, so their numbers of steps
+  may differ with the pauses, and the bound of steps may end one. In
+  the ordinary conversion the form is the one that the end of the
+  region of a handler has, and there the model does not tell a pause
+  from one. The trust ledger has the paragraph ("What the conversion
+  of terms leaves out", *A pause*), and the `CR` is at the case of
+  the conversion. Decided provisionally by the team while the human
+  was away, with the conversion and not before it; his to overrule.
 - **D65.** Whether the guards of a lifting need look inside the
   functions of a unit that has no call outside them. Meanwhile they do.
   Open: the human's.

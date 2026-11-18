@@ -1009,6 +1009,37 @@ it gave back.
   body the model has not got (the entry on what those files say), the
   unit being still checked; and in the term that Simplify makes of a
   unit, where it inlines such a body, the unit being then not checked.
+  *A pause* (decision D64): the primitive `Cpu_relax`, which has no
+  argument and returns the unit value, is converted as
+  `Opaque_identity` of the unit value (`convert_prim`). The model has
+  no primitive for a pause and no event of a pause or of a poll: it
+  has no time and one thread, and what a polling point may run (a
+  finaliser, a signal handler) it has for no allocation either. So the
+  form binds the unit value, leaves the heap as it is, costs the step
+  of a `Let`, and records no effect of pausing. What that gives away:
+  the theorem of a validation is about the converted terms, and it
+  does not establish that Simplify kept a pause, nor where, nor how
+  many times. Whether the validator accepts a term in which Simplify
+  had removed a pause, moved it or made it twice is promised neither
+  way. The opaque `Let`s stay in the terms that it compares, and can
+  make its comparisons differ: none of its rewrites folds an
+  `Opaque_identity`, removes its `Let` for being unused
+  (`FlambdaNormaliseSpec.prim_may_fold`) or shares two
+  (`FlambdaCseSpec.shareable`), as Simplify does none of these to a
+  `Cpu_relax`, whose effects are arbitrary
+  (`effects_and_coeffects_of_nullary_primitive` of
+  `terms/flambda_primitive.ml`). Nor is anything claimed of the two
+  runs that the tool makes, whose comparison is apart from the
+  validation: a `Let` is a step, so their numbers of steps may differ
+  with the pauses, and a run that the bound of steps ends is printed
+  as still running, the comparison of the runs being then "not
+  decided" where the run before is not undefined; the validation is
+  asked all the same. In the ordinary conversion, which is the one
+  that the validation is given, this is the form that the end of the
+  region of a handler has (*Regions*, above), and there the model does
+  not tell a pause from one; the conversion for the check of regions
+  keeps that end as a primitive of regions where its region is kept.
+  The unit `cpu_relax.fl` of `tests/semantics` has the primitive.
   *Phantom bindings*: a binding whose variables are phantom is refused
   (`convert_let`, before any of its cases). The program runs nothing
   for such a binding (`To_cmm_expr.let_expr` compiles its body alone),

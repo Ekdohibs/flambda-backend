@@ -120,9 +120,10 @@ does what the line says). Dates are of 2026.
 - **D56.** A verdict need not establish that the array kind of a store,
   or the kind of a length, agrees in the two terms: the machine reads
   neither (provisional).
-- **D63, D64.** Atomics are to be built (approved 18 Nov) as cells of a
-  model that has one thread, so a verdict is of runs with one thread; a
-  pause (`Cpu_relax`) has no effect (provisional; not yet in the tree).
+- **D63.** Atomics are to be built (approved 18 Nov) as cells of a model
+  that has one thread, so a verdict is of runs with one thread
+  (provisional; not yet in the tree).
+- **D64.** A pause (`Cpu_relax`) has no effect (provisional).
 - **D67, D68.** Arrays that may hold floats, and bytes, are to be built
   (approved 18 Nov). How such an array is read, and what bytes hold
   before they are filled, are open: the model is to say least.

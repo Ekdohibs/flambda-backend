@@ -229,7 +229,7 @@ this commit, and a commit that moves a stored file moves its row.)
   it makes of a partial application;
 - undefined in the model: none;
 - not checked: 59. The first thing that the driver names is a C function
-  for 42 of them, a primitive that the model has not got for 15, a call
+  for 43 of them, a primitive that the model has not got for 14, a call
   with no callee for `effect.ml`, and for `moreLabels.ml` a test that the
   tool makes of the code that the `.cmx` files of the other units give
   it.
@@ -249,7 +249,7 @@ prints a line under the verdict. The verdicts are in the words of
 | `array.ml` | `stdlib__Array` | 540 | not checked | a primitive: `Array_set Naked_floats` |
 | `arrayLabels.ml` | `stdlib__ArrayLabels` | 24 | validated with its imports |  |
 | `atomic.ml` | `stdlib__Atomic` | 149 | not checked | a primitive: `Atomic_int_arith Field_index` |
-| `backoff.ml` | `stdlib__Backoff` | 71 | not checked | a primitive: `Cpu_relax` |
+| `backoff.ml` | `stdlib__Backoff` | 71 | not checked | a C function: `caml_lxm_next_unboxed` |
 | `bigarray.ml` | `stdlib__Bigarray` | 653 | not checked | a C function: `caml_ba_set_generic` |
 | `bool.ml` | `stdlib__Bool` | 49 | not checked | a C function: `caml_hash_exn` |
 | `buffer.ml` | `stdlib__Buffer` | 419 | not checked | a C function: `caml_create_bytes` |

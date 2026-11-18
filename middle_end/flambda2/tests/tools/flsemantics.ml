@@ -1933,6 +1933,29 @@ and convert_prim (prim : P.t) : Model.named =
     match convert_variadic_primitive p ~num_args:(List.length args) with
     | Some p -> Prim (Variadic p, convert_simples args)
     | None -> unsupported "primitive %a" print_refused_primitive prim)
+  | Nullary Cpu_relax ->
+    (* CR mshinwell: a pause is converted as [Opaque_identity] of the unit
+       value, which is the value that [Cpu_relax] returns. The model has no
+       primitive for a pause and no event of one: it has no time and one thread,
+       and what a polling point may run (a finaliser, a signal handler) it has
+       for no allocation either. So the form binds the unit value, leaves the
+       heap as it is, costs the step of a [Let], and records no effect of
+       pausing. What is proved of a validation is of the converted terms: it
+       does not establish that Simplify kept a pause, nor where, nor how many
+       times. Whether the validator accepts a term in which a pause was removed,
+       moved or made twice is promised neither way: the [Let]s stay in the terms
+       that it compares, as none of its normalisations folds an
+       [Opaque_identity], removes its [Let] for being unused or shares two
+       (FlambdaNormaliseSpec.prim_may_fold, FlambdaCseSpec.shareable), which
+       Simplify does not do to a [Cpu_relax] either, whose effects are
+       arbitrary. Nothing is claimed of the two runs: a [Let] is a step, so
+       their numbers of steps may differ with the pauses, and [fuel] may end
+       one. With [keep_regions] unset this is the form that the end of the
+       region of a handler has ([convert_let]); there the model does not tell a
+       pause from one. Decision D64. *)
+    Prim
+      ( Unary (Opaque_identity (convert_kind Flambda_kind.value)),
+        [Const (Tagged_immediate (z_of_int 0))] )
   | Nullary _ | Ternary _ | Quaternary _ ->
     unsupported "primitive %a" print_refused_primitive prim
 
