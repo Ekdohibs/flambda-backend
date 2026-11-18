@@ -1,0 +1,11 @@
+(* A primitive that the conversion refuses, on a variable and on a constant
+   that is poison. To show a variable by its name alone the tool prints the
+   primitive with a stand-in for each variable, whose name is the first of
+   <variable 0>, <variable 0'>, <variable 0''> and so on that is in no part of
+   the print of the primitive. Here the variable has the first of those names
+   and the name of the constant has the second in it: the line "not checked"
+   shows both as they are. *)
+let `<variable 0>` = %opaque (1) in
+let r = %poke.[`imm`] (`<variable 0>`, poison.imm."<variable 0'>/11N") in
+let $camlNot_checked_named_as_stand_in = Block 0 (`<variable 0>`) in
+cont done ($camlNot_checked_named_as_stand_in)

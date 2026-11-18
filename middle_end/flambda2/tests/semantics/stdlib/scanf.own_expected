@@ -1,1 +1,1 @@
-stdlib__Scanf.fl: not checked: the model has not got primitive ((String_load bytes 8) buf/28409N prim/28414N)
+stdlib__Scanf.fl: not checked: the model has not got primitive ((String_load bytes 8) buf prim)

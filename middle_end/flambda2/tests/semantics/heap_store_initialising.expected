@@ -1,2 +1,1 @@
-heap_store_initialising.fl: not checked: the model has not got primitive ((Block_set (Values (tag ⊤) (size ⊤) (field_kind Immediate)) Init
-           0) c/36UV x/31UV)
+heap_store_initialising.fl: not checked: the model has not got primitive ((Block_set (Values (tag ⊤) (size ⊤) (field_kind Immediate)) Init 0) c x)

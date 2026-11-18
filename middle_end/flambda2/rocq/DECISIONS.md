@@ -1474,6 +1474,15 @@ says so. Only the labels that this tree cites are listed.
 - **V4-3.** Simplify makes no shortcut through an exception handler and
   keeps its exception parameter though unused, where the machine would
   allow both.
+- **X1-5.** A fault of a tool of the tests, not of the compiler. A
+  line "not checked" of the test tool showed a term as the compiler
+  prints it, each variable with the stamp that the process gave it, so
+  the line of one refusal changed with the number of variables made
+  before it: with one more binding in the example, or in the
+  compiler's own run of the file. The line of a primitive that the
+  model has not got shows a variable by its name alone since; a
+  binding, a static constant, a call and a variable used as a value
+  are still shown with the stamps.
 - **X2-8.** The reader of the text of terms stops with a fatal error on
   a variable whose name has a `/` in it: an operator with a `/` in its
   name, an anonymous function when the path of the source has a

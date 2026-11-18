@@ -403,8 +403,11 @@ says what is trusted in the driver.
 ## What a stored file holds, and what moves it
 
 A stored file is the whole of what the driver prints of the unit: for
-most units what it says of a unit that is not checked, with the call or
-the primitive that stops the unit, which may take several lines; for a
+most units what it says of a unit that is not checked, with the call
+that stops the unit, which may take several lines, or the primitive,
+which is on one line in every stored file of this commit (the driver
+prints a primitive with a margin of a million columns, and a name that
+has a newline in it with its newline); for a
 unit inside the model, the two runs, the checks and the verdict. Its
 first line begins with the name that the build gives the unit, and `.fl`
 (`stdlib__List.fl:`). It is stored byte for byte: at this commit 13
@@ -418,9 +421,10 @@ uses; with a change of the compiler that gives Simplify another term or
 makes it return another; with a change of the model, of the conversion or
 of the validation; with a change of the build's flags or of the
 configuration. **It can move when no verdict does**: a line "not
-checked" prints the call or the primitive with the numbers of its names
+checked" prints a call with the numbers of its names
 (`sig_num/857UV`), which move when a change before them makes one name
-more or fewer, and most files hold a place in the source
+more or fewer (it prints a primitive with the names of its variables
+alone, which do not), and most files hold a place in the source
 (`/workspace_root/stdlib/build/sys.ml.in:142,41--65`), which moves with
 the lines of the source. A file that is validated with its imports names
 the code of the other unit by its numbers.

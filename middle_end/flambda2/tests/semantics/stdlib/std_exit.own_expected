@@ -1,1 +1,1 @@
-std_exit.fl: not checked: the model has not got primitive ((Atomic_load Field_index Any_value) exit_function/33N 0)
+std_exit.fl: not checked: the model has not got primitive ((Atomic_load Field_index Any_value) exit_function 0)

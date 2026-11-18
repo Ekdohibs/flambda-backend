@@ -1381,6 +1381,123 @@ let local_allocation (var : Model.variable) (region : Variable.t) : Model.named
   in
   Prim (Region_primitive Local_allocation, Var var :: named)
 
+(* Whether [sub] occurs in [s] at the index [i]. *)
+let occurs_at ~(sub : string) (s : string) (i : int) : bool =
+  let n = String.length sub in
+  i + n <= String.length s && String.equal (String.sub s i n) sub
+
+(* Whether [sub] occurs in [s]. *)
+let occurs_in ~(sub : string) (s : string) : bool =
+  let rec from i =
+    i <= String.length s && (occurs_at ~sub s i || from (i + 1))
+  in
+  from 0
+
+(* [s] read once from left to right: where one of the strings [sub] of
+   [replacements] occurs, the first of the list that does, the [by] that goes
+   with it is put in its place and the reading goes on after the occurrence.
+   What is put is not read again. No [sub] is empty. *)
+let replace_in_one_pass (replacements : (string * string) list) (s : string) :
+    string =
+  let b = Buffer.create (String.length s) in
+  let rec from i =
+    if i < String.length s
+    then
+      match List.find_opt (fun (sub, _) -> occurs_at ~sub s i) replacements with
+      | Some (sub, by) ->
+        Buffer.add_string b by;
+        from (i + String.length sub)
+      | None ->
+        Buffer.add_char b s.[i];
+        from (i + 1)
+  in
+  from 0;
+  Buffer.contents b
+
+(* A primitive that the conversion refuses, as the line "not checked" shows it:
+   the compiler's print of the primitive, with the margin of the printer raised
+   to a million columns so that a print of an ordinary length is not wrapped (a
+   longer one can still be), and with each variable shown by its name alone. The
+   compiler shows a variable as its name, the stamp that the process gave it and
+   a mark that says whether it is user-visible ([x/31UV]), after the name of its
+   unit if that is another. The stamp depends on how many variables were made
+   before this one, by the reader of the text and by whatever else has run, and
+   the text does not write the mark: neither is of the unit, and the line is
+   there to say which primitive the model has not got (discrepancy X1-5). The
+   variables are those that the compiler counts as free in the primitive: its
+   arguments, the variables of the depths in the coercion of an argument, and
+   the regions that the mode of an allocation names. Two variables of one name
+   are shown alike.
+
+   The stamps are not taken out by looking for the print of each variable in the
+   printed text: the name of a variable and the name of a constant that is
+   poison are any strings, so the print of a variable can also be a part of one
+   of them. The primitive is printed twice. From its print as it is, a name is
+   chosen for a stand-in of each variable: [<variable n>], with quotes after the
+   number for as long as the name occurs in that print. The stand-ins are new
+   variables with those names, and the second print is of the primitive with
+   each variable renamed to its stand-in. The second print is read once from
+   left to right, and each print of a stand-in found in it is replaced, by the
+   name of its variable.
+
+   Checked as the line is made: the second print, with the print of the variable
+   put at each of those places and not its name, is the first print, byte for
+   byte. If it is not, the line is the first print, stamps and all. So the line
+   is the first print but for places where the print of a variable stood and its
+   name now stands. Trusted, of the compiler's printer and of its renaming: that
+   those are places where the printer showed a variable, as the name of a
+   stand-in, which is in no part of the first print, comes into the second only
+   where the printer shows the stand-in; and that the renaming reaches every
+   variable that the printer shows, one that it did not reach being shown with
+   its stamp. A symbol, a constant and the fields of the primitive are shown as
+   the compiler shows them, a name that has a newline in it with its newline.
+
+   The stand-ins are new variables of this process, so the stamps of the
+   variables made after a refusal move by their number; the conversion of the
+   unit stops at the refusal.
+
+   The other refusals that show a term (a binding, a static constant, a call, a
+   variable used as a value) show the compiler's print of it, with the stamps
+   that this process gave. *)
+let print_refused_primitive ppf (prim : P.t) =
+  let printed (prim : P.t) =
+    let buffer = Buffer.create 256 in
+    let no_break = Format.formatter_of_buffer buffer in
+    Format.pp_set_margin no_break 1_000_000;
+    Format.fprintf no_break "%a@?" P.print prim;
+    Buffer.contents buffer
+  in
+  let as_it_is = printed prim in
+  let rec stand_in_name n quotes =
+    let name = Printf.sprintf "<variable %d%s>" n quotes in
+    if occurs_in ~sub:name as_it_is
+    then stand_in_name n (quotes ^ "'")
+    else name
+  in
+  let renaming, stand_ins =
+    Flambda2_nominal.Name_occurrences.fold_variables (P.free_names prim)
+      ~init:(Flambda2_nominal.Renaming.empty, [])
+      ~f:(fun (renaming, stand_ins) var ->
+        let stand_in =
+          Variable.create
+            (stand_in_name (List.length stand_ins) "")
+            (Variable.kind var)
+        in
+        ( Flambda2_nominal.Renaming.add_variable renaming var stand_in,
+          (stand_in, var) :: stand_ins ))
+  in
+  let renamed = printed (P.apply_renaming prim renaming) in
+  let print_of var = Format.asprintf "%a" Variable.print var in
+  let with_each_stand_in_as (shown : Variable.t -> string) =
+    replace_in_one_pass
+      (List.map (fun (stand_in, var) -> print_of stand_in, shown var) stand_ins)
+      renamed
+  in
+  Format.pp_print_string ppf
+    (if String.equal (with_each_stand_in_as print_of) as_it_is
+     then with_each_stand_in_as Variable.name
+     else as_it_is)
+
 let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
   match Flambda.Expr.descr e with
   | Let let_expr ->
@@ -1758,10 +1875,10 @@ and convert_prim (prim : P.t) : Model.named =
         [convert_simple block; convert_simple new_value] )
   | Ternary (Array_set (kind, set_kind), array, index, new_value) -> (
     match convert_array_kind kind with
-    | None -> unsupported "primitive %a" P.print prim
+    | None -> unsupported "primitive %a" print_refused_primitive prim
     | Some kind -> (
       match convert_array_set_kind kind set_kind with
-      | None -> unsupported "primitive %a" P.print prim
+      | None -> unsupported "primitive %a" print_refused_primitive prim
       | Some set_kind ->
         Prim
           ( Heap (Array_set (kind, set_kind)),
@@ -1799,21 +1916,21 @@ and convert_prim (prim : P.t) : Model.named =
     -> (
     match convert_array_kind kind with
     | Some kind -> Prim (Heap (Make_mutable_array kind), convert_simples args)
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Unary (p, arg) -> (
     match convert_unary_primitive p with
     | Some p -> Prim (Unary p, [convert_simple arg])
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Binary (p, arg1, arg2) -> (
     match convert_binary_primitive p with
     | Some p -> Prim (Binary p, [convert_simple arg1; convert_simple arg2])
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Variadic (p, args) -> (
     match convert_variadic_primitive p ~num_args:(List.length args) with
     | Some p -> Prim (Variadic p, convert_simples args)
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Nullary _ | Ternary _ | Quaternary _ ->
-    unsupported "primitive %a" P.print prim
+    unsupported "primitive %a" print_refused_primitive prim
 
 and convert_or_variable : type a.
     (a -> Model.const) -> a Or_variable.t -> Model.simple =

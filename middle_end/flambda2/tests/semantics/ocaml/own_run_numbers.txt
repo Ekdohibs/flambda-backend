@@ -6,8 +6,6 @@
 # after it, of each word that own_same.sh takes for a variable. One name a
 # line; a line that begins with # is a comment.
 #
-# float_add: both ways print that line, which shows the primitive with its
-# two arguments. They are variables. The number of a variable is the one
-# that the process gave it, and the letters after it say whether the
-# variable is user-visible, which the text does not write.
-float_add
+# No unit is named now: the line shows a variable by its name alone,
+# whichever way prints it, and of float_add, the one unit that was named
+# here, the two ways print the same bytes.

@@ -1,0 +1,8 @@
+(* As not_checked_variable_named_as_variable.fl, with the variable whose name
+   has the print of the other in it bound first: the other, x, has the stamp
+   18 in the process of the tool that reads this text. *)
+let `yx/18UV` = %opaque (1i) in
+let x = %opaque (1) in
+let r = %poke.[`imm`] (x, `yx/18UV`) in
+let $camlNot_checked_variable_named_as_later_variable = Block 0 (x) in
+cont done ($camlNot_checked_variable_named_as_later_variable)
