@@ -2994,6 +2994,66 @@ let static_names (e : Model.expr) :
   in_expr None e;
   !references, !bound
 
+(* The blocks that an expression binds symbols to, and the variables that it
+   binds to a block or a closure that the [Let] makes, outside the bodies of its
+   code. And whether two such blocks cannot be the same block, by what is
+   certain alone: another tag or number of fields; a field that is a constant in
+   one and a symbol or another constant in the other; a field that is in the
+   first a variable of [made], so a block or a closure, and in the second a
+   constant. A variable against a symbol is not such a case: the variable may be
+   a block that has not its symbol yet. Both are for the second sign of a wrong
+   guess of the liftings ([validate], at [misplaced]). *)
+let static_blocks (e : Model.expr) =
+  let blocks = ref [] in
+  let made = ref [] in
+  let rec in_expr (e : Model.expr) =
+    match e with
+    | Let (x, _, d, body) ->
+      (match d with
+      | Prim (Variadic (Make_block (Block_kind_values _)), _)
+      | Set_of_closures _ | Closure_of_set _ ->
+        made := x :: !made
+      | Prim _ | Simple _ | Project_value_slot _ | Project_value_slot_from _
+      | Project_function_slot _ ->
+        ());
+      in_expr body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_symbol (sym, Static_const_block (tag, fields)) ->
+            blocks := (sym, (tag, fields)) :: !blocks
+          | Bind_symbol _ | Bind_code _ | Bind_deleted_code _ -> ())
+        bindings;
+      in_expr body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      in_expr handler;
+      in_expr body
+    | Let_cont_recursive (handlers, body) ->
+      List.iter
+        (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
+        handlers;
+      in_expr body
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
+  in
+  in_expr e;
+  !blocks, !made
+
+let cannot_be_the_same made (tag, fields) (tag', fields') =
+  tag <> tag'
+  || List.compare_lengths fields fields' <> 0
+  || List.exists2
+       (fun (field : Model.simple) (field' : Model.simple) ->
+         match field, field' with
+         | Const c, Const c' -> c <> c'
+         | Const _, Symbol _ | Symbol _, Const _ -> true
+         | Var x, Const _ -> List.mem x made
+         | Var _, (Var _ | Symbol _)
+         | Symbol _, (Var _ | Symbol _)
+         | Const _, Var _ ->
+           false)
+       fields fields'
+
 let unused_statics (e : Model.expr) : Unused_statics.dropped =
   let references, bound = static_names e in
   let rec live_from live =
@@ -6904,8 +6964,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          lifted: the sequence is guessed again with that [Let] banned for it, a
          few times at most. A symbol that the term after does not bind is one
          that the guess made for a constant that Simplify has no use for, and is
-         not such a symbol. *)
+         not such a symbol.
+
+         A second sign of a symbol that went to the wrong [Let]: in the term
+         that the liftings and the rounds give, the symbol is bound to a block
+         that cannot be the block that the term after binds it to
+         ([cannot_be_the_same]: the certain cases alone). The case aimed at: the
+         cell that ends a list, whose head is the result of a call when the
+         first lifting is guessed, agrees with a pair that ends in 0 and takes
+         its symbol; the rounds then inline the call, and the pair that they
+         bring has no symbol left to take
+         (tests/semantics/ocaml/list_of_pair_made_by_call.ml). The sequence is
+         guessed again with that [Let] banned for that symbol, in the same few
+         times. Both signs change which sequence of liftings is tried and
+         nothing else: whatever sequence is guessed is given to [validate_unit],
+         the extracted validation, which decides. *)
       let bound_after = snd (static_names normalised_after) in
+      let blocks_after = fst (static_blocks normalised_after) in
       (* The guesses made, the last first: what each was given and the terms
          that the rounds gave it. [made] is the sequence of a first guess that
          is made already (below). *)
@@ -6950,8 +7025,30 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
                    lifting.lifted_lets)
                liftings)
         in
-        match wrong with
-        | _ :: _ when again > 0 -> guessed None (wrong @ banned) (again - 1)
+        let blocks_lifted, made_lifted = static_blocks lifted in
+        let misplaced =
+          List.concat
+            (List.mapi
+               (fun stage (lifting : Lift.lifting) ->
+                 List.filter_map
+                   (fun (path, (target : Lift.lift_to)) ->
+                     match target with
+                     | Lift_to_symbol sym -> (
+                       match
+                         ( List.assoc_opt sym blocks_lifted,
+                           List.assoc_opt sym blocks_after )
+                       with
+                       | Some block, Some block'
+                         when cannot_be_the_same made_lifted block block' ->
+                         Some (stage, path, sym)
+                       | (Some _ | None), (Some _ | None) -> None)
+                     | Lift_to_closure_symbols _ -> None)
+                   lifting.lifted_lets)
+               liftings)
+        in
+        match wrong @ misplaced with
+        | _ :: _ as wrong when again > 0 ->
+          guessed None (wrong @ banned) (again - 1)
         | _ -> liftings, lifted, slots, unused
       in
       let asked_of guess =
