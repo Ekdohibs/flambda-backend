@@ -2276,15 +2276,8 @@ Qed.
 
 (* What a rewriting of the arbitrary types is asked: to be sound, and to
    give, under a metadata that forgets, a type that every value of the
-   kind has. [rw_sound] is of the first statements; [rw_sound_ext] of the
-   fragment of [loose], with the closures rebuilt with their set. *)
-Definition rw_sound (rw : rewrite_metadata -> flambda_type -> flambda_type)
-    : Prop :=
-  ∀ (m : rewrite_metadata) (t : flambda_type) (v v' : value),
-    type_in_fragment valuation t -> rebuilt_under G sol m v v' ->
-    type_satisfied statics valuation v t ->
-    type_satisfied statics' valuation' v' (rw m t).
-
+   kind has, in the fragment of [loose], with the closures rebuilt with
+   their set. *)
 Definition rw_sound_ext
     (rw : rewrite_metadata -> flambda_type -> flambda_type) : Prop :=
   ∀ (m : rewrite_metadata) (t : flambda_type) (v v' : value),
@@ -4595,27 +4588,29 @@ Qed.
 
 Section Destructure.
 
+Context {loose : bool}.
 Variable statics : static_env.
 Variable valuation : env.
 Variable tenv : Typing_env.t.
 Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
-Hypothesis Hfrag : env_in_fragment valuation tenv.
+Hypothesis Hfrag : env_in_fragment_with loose valuation tenv.
 
 (* The type of a field of a block or of a boxed number, destructured from
    an expanded type of the value. *)
 Lemma destructure_field_sound (f : field) (e0 : Expanded_type.t)
     (w w1 : value) :
   type_satisfied statics valuation w (Expanded_type.to_type e0) ->
-  type_in_fragment valuation (Expanded_type.to_type e0) ->
+  type_in_fragment_with loose valuation (Expanded_type.to_type e0) ->
   field_of_value f w = Some w1 ->
   (∀ bn : boxable_number,
      f = Field_boxed_number bn -> kind_of_value w1 = unboxed_kind bn) ->
-  type_in_fragment valuation (destructure_field f (Some e0))
+  type_in_fragment_with loose valuation (destructure_field f (Some e0))
   ∧ (type_satisfied statics valuation w1 (destructure_field f (Some e0))
      ∨ destructure_field f (Some e0) = unknown (U.field_kind f)).
 Proof.
   intros Hsat Hfr Hfv Hbk.
-  assert (Hunk : type_in_fragment valuation (unknown (U.field_kind f))
+  assert (Hunk : type_in_fragment_with loose valuation
+                   (unknown (U.field_kind f))
                  ∧ (type_satisfied statics valuation w1
                       (unknown (U.field_kind f))
                     ∨ unknown (U.field_kind f) = unknown (U.field_kind f)))
@@ -4650,10 +4645,11 @@ Proof.
       rewrite row_like_for_blocks_find_iff in Hb.
       unfold destructure_block_field.
       assert (Hcase : ∀ case : row_like_block_case,
-                (∀ ty, ty ∈ case_maps_to case -> type_in_fragment valuation ty)
+                (∀ ty, ty ∈ case_maps_to case ->
+                   type_in_fragment_with loose valuation ty)
                 -> row_like_block_case_satisfied statics valuation tag fields
                      case ->
-                type_in_fragment valuation
+                type_in_fragment_with loose valuation
                   match nth_error (case_maps_to case) i with
                   | Some ty => ty
                   | None => unknown k
@@ -4745,6 +4741,7 @@ Variable tenv : Typing_env.t.
 Variable canon : canon_fn.
 Variables statics statics' : static_env.
 Variables valuation valuation' : env.
+Variable loose : bool.
 Variable dominated : list (node * node).
 Variable to_unbox : list node.
 Variable e : expr.
@@ -4761,10 +4758,11 @@ Hypothesis Hlocal : is_local_slots_only is_local.
 Hypothesis Hsets : sets_of_graph G sets.
 Hypothesis Hkinds : block_fields_of_one_kind G.
 Hypothesis Henv : typing_env_satisfied_strictly statics valuation tenv.
-Hypothesis Hfrag : env_in_fragment valuation tenv.
+Hypothesis Hfrag : env_in_fragment_with loose valuation tenv.
 Hypothesis Halloc : statics_allocated sol statics.
 Hypothesis Hst : statics_rebuilt G sol statics statics'.
 Hypothesis Hcopies : copies_valued tenv canon valuation valuation'.
+Hypothesis Hwhole : loose = true -> static_sets_whole sol statics statics'.
 Hypothesis Huses : UCS.check_unboxed_uses F T unboxed = true.
 
 Lemma unboxed_closed : closed is_local G sol.
@@ -4772,24 +4770,27 @@ Proof. exact (least_closed_tables is_local F T Hleast). Qed.
 
 Local Abbreviation Hcl := unboxed_closed.
 
-Lemma rw_sound_arbitrary (fuel : nat) :
-  rw_sound F T statics statics' valuation valuation'
-    (rewrite_arbitrary fx ctx tenv canon fuel).
+Lemma rw_sound_arbitrary (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (v v' : value) :
+  type_in_fragment_with loose valuation t -> rebuilt_under G sol m v v' ->
+  type_satisfied statics valuation v t ->
+  type_satisfied statics' valuation' v'
+    (rewrite_arbitrary fx ctx tenv canon fuel m t).
 Proof.
-  intros m t v v' Ht Hv Hsat.
+  intros Ht Hv Hsat.
   exact (proj1 (rewrite_sound fx Hfix_boxed Hfix_alias Hfix_refine Hfix_null
                   is_local F T sets tenv canon statics statics' valuation
-                  valuation' false Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
-                  Hst Hcopies (fun H => False_ind _ (diff_false_true H)) fuel)
+                  valuation' loose Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
+                  Hst Hcopies Hwhole fuel)
            m t v v' Ht (or_introl Hv) Hsat).
 Qed.
 
 Lemma rw_forgets_arbitrary (fuel : nat) :
-  rw_forgets statics statics' valuation valuation' false
+  rw_forgets statics statics' valuation valuation' loose
     (rewrite_arbitrary fx ctx tenv canon fuel).
 Proof.
   exact (proj1 (rewrite_forgets fx Hfix_alias is_local F T sets tenv canon
-                  statics statics' valuation valuation' false Henv fuel)).
+                  statics statics' valuation valuation' loose Henv fuel)).
 Qed.
 
 Lemma unboxed_not_local_block (i : nat) (k : flambda_kind) :
@@ -4819,7 +4820,7 @@ Definition leaf_rewritten (ty : flambda_type) (l : unboxed_leaf)
 Definition ty_ok (w : value) (ty : flambda_type) : Prop :=
   (∀ e0 : Expanded_type.t,
      expand_head tenv ty = Some e0 ->
-     type_in_fragment valuation (Expanded_type.to_type e0))
+     type_in_fragment_with loose valuation (Expanded_type.to_type e0))
   ∧ (type_satisfied statics valuation w ty ∨ ∃ k, ty = unknown k).
 
 (* A level of the unboxing: a value at [n] comes from the allocation [b]
@@ -4955,7 +4956,7 @@ Proof. destruct k as [ | [] | | ]; reflexivity. Qed.
 Lemma expand_alias_fragment (t : flambda_type) (s : simple)
     (e0 : Expanded_type.t) :
   get_alias_opt t = Some s -> expand_head tenv t = Some e0 ->
-  type_in_fragment valuation (Expanded_type.to_type e0).
+  type_in_fragment_with loose valuation (Expanded_type.to_type e0).
 Proof.
   intros Ha. unfold expand_head. rewrite Ha.
   destruct (Typing_env.get_canonical_simple_exn tenv
@@ -4976,7 +4977,7 @@ Proof.
 Qed.
 
 Lemma ty_ok_of (w : value) (ty : flambda_type) :
-  type_in_fragment valuation ty ->
+  type_in_fragment_with loose valuation ty ->
   (type_satisfied statics valuation w ty ∨ ∃ k, ty = unknown k) ->
   ty_ok w ty.
 Proof.
@@ -4989,7 +4990,8 @@ Lemma ty_step (f : field) (w w1 : value) (ty : flambda_type) :
   ty_ok w ty -> field_of_value f w = Some w1 ->
   (∀ bn : boxable_number,
      f = Field_boxed_number bn -> kind_of_value w1 = unboxed_kind bn) ->
-  type_in_fragment valuation (destructure_field f (expand_head tenv ty))
+  type_in_fragment_with loose valuation
+    (destructure_field f (expand_head tenv ty))
   ∧ (type_satisfied statics valuation w1
        (destructure_field f (expand_head tenv ty))
      ∨ destructure_field f (expand_head tenv ty) = unknown (U.field_kind f)).
@@ -4998,7 +5000,7 @@ Proof.
   assert (Hua : unknown_accessor f = unknown (U.field_kind f)).
   { clear -Hfv. destruct f; cbn [field_of_value] in Hfv; try discriminate Hfv;
       reflexivity. }
-  assert (Hunk : type_in_fragment valuation (unknown_accessor f)
+  assert (Hunk : type_in_fragment_with loose valuation (unknown_accessor f)
                  ∧ (type_satisfied statics valuation w1 (unknown_accessor f)
                     ∨ unknown_accessor f = unknown (U.field_kind f)))
     by (rewrite Hua; split; [ apply unknown_fragment | right; reflexivity ]).
@@ -5489,7 +5491,11 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
+            eq_refl eq_refl is_local F T sets tenv canon statics statics'
+            valuation valuation' false);
+    try eassumption.
+  intros H. discriminate H.
 Qed.
 
 Theorem rewrite_unboxed_result_type_sound_local :
@@ -5499,7 +5505,39 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  eapply rewrite_unboxed_result_type_sound_in; try eassumption; reflexivity.
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
+            eq_refl eq_refl is_local F T sets tenv canon statics statics'
+            valuation valuation' false);
+    try eassumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_unaliased_unboxed_result_type_sound :
+  rewrite_unaliased_unboxed_result_type_sound_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
+            eq_refl eq_refl is_local F T sets tenv canon statics statics'
+            valuation valuation' true);
+    try eassumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_unboxed_result_type_sound_local :
+  rewrite_unaliased_unboxed_result_type_sound_local_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
+            eq_refl eq_refl is_local F T sets tenv canon statics statics'
+            valuation valuation' true);
+    try eassumption.
+  intros _. exact Hwhole.
 Qed.
 
 (* ======================================================================== *)

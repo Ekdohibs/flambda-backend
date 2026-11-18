@@ -203,8 +203,8 @@
      field of the type of the variable ([fold_destructuring]), rewritten
      under the metadata that [patterns_for_unboxed_fields] gives the
      field. Each holds of the value of that variable in the run of the
-     unit rebuilt with unboxing ([rebuild_unit_unbox_repr_fixed] and
-     [_fixed_tail], with no change of representation). Of the runs, it
+     unit rebuilt with unboxing ([rebuild_unit_unbox_repr_fixed], that of
+     the fix, with no change of representation). Of the runs, it
      asks the value [v_mid] that the run of the unit rebuilt without
      unboxing has at the variable, related to the value of the first run
      there as for a variable kept ([rebuilt_value]), and the values [ws]
@@ -223,6 +223,8 @@
      ([block_fields_of_one_kind]), as the traversal gives: the field
      unboxed in turn is read at the kind of the read, and its source
      is taken among what the allocation holds at that kind.
+     [rewrite_unaliased_unboxed_result_type_sound_statement]: the same
+     for the fragment [loose], the static sets kept whole.
    - [exported_types_sound_statement]: the statement of the two runs.
      Where the unit exits, from a state whose static environment and a
      valuation satisfy a typing environment of the fragment, the rebuilt
@@ -329,10 +331,7 @@
      the fixes and as the compiler has it.
 
    What is left out:
-   - Of closure types that are not aliases: the result types of the
-     unboxed variables of code
-     ([rewrite_unboxed_result_type_sound_statement] is of the fragment of
-     aliases). Closures of a set of one function with no slot named
+   - Closures of a set of one function with no slot named
      ([Value_closure], [Static_closure]): only the older forms
      [Set_of_closures] and [Static_const_set_of_closures] make them,
      which no term of the compiler is converted to and which
@@ -1035,6 +1034,45 @@ Definition rewrite_unboxed_result_type_sound_with (fx : fixes) : Prop :=
 
 Definition rewrite_unboxed_result_type_sound_statement : Prop :=
   rewrite_unboxed_result_type_sound_with all_fixes.
+
+(* [rewrite_unboxed_result_type_sound_statement] for the types whose
+   closure types need not be aliases, the static sets of closures being
+   kept whole. *)
+Definition rewrite_unaliased_unboxed_result_type_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
+    (ws : list value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    Keyed.lookup node_eqb (Node_variable code_var)
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = Some fields ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v_mid ->
+    unboxed_values fields v_mid ws ->
+    Forall2 (type_satisfied statics' valuation') ws
+      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
+         tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
+         type_var fields).
 
 (* ======================================================================== *)
 (* Closures whose representation changes                                    *)
@@ -2143,6 +2181,42 @@ Definition rewrite_unboxed_result_type_sound_local_statement : Prop :=
     statics_allocated (solution_of_tables T) statics ->
     statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
       statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    Keyed.lookup node_eqb (Node_variable code_var)
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = Some fields ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v_mid ->
+    unboxed_values fields v_mid ws ->
+    Forall2 (type_satisfied statics' valuation') ws
+      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
+         tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
+         type_var fields).
+
+Definition rewrite_unaliased_unboxed_result_type_sound_local_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
+    (ws : list value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
     copies_valued tenv canon valuation valuation' ->
     FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
       (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
