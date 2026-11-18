@@ -801,7 +801,7 @@ Owner: N2.
 - `middle_end/flambda2/rocq/validation/names/FlambdaValidateScope*` (N2's, though it is
   about the rounds of `FlambdaValidateSpec.v`: each keeps scope)
 - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaLiftConts*` (N2's, though it is a
-  normalisation written for the validation, which does not apply it:
+  normalisation written for the validation, which applies it:
   the continuations that a handler binds on its way to its `Switch`,
   bound outside the handler)
 - `middle_end/flambda2/rocq/requests/N2-fresh-quantifier.md`
