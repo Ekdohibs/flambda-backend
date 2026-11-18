@@ -453,7 +453,7 @@ directory fails if `sys.own_expected` has the first line of `VERSION`.
 
 The driver must exit with the status 0 of every unit that
 `driver_status.txt` does not name; no unit is named there at this
-commit. A unit whose check did not end in 10 minutes of processor time
+commit. A unit whose check did not end in 30 minutes of processor time
 would be in neither alias and would have no stored file (`not_run.txt`);
 there is none at this commit.
 
@@ -463,7 +463,7 @@ No rule has a limit of time: a stored verdict must not depend on the
 machine. A unit is in the first alias if its rule takes at most 10
 seconds of processor time, and the first alias as a whole is to stay
 under 2 minutes; the others are in the second alias, by `long.txt`; a
-unit whose check did not end in 10 minutes would be in neither
+unit whose check did not end in 30 minutes would be in neither
 (`not_run.txt`). Which unit is where is in those lists, and is changed
 by a commit, not decided when the rules run.
 
