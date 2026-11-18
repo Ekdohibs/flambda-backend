@@ -32,7 +32,8 @@
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
+  FlambdaMapSpec FlambdaWellFormedSpec FlambdaSemanticsSpec
+  FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperSolutionProofs
   FlambdaReaperRebuild FlambdaReaperCallingConventions FlambdaReaperUnboxing
   FlambdaReaperLeast FlambdaReaperFlowSpec FlambdaReaperLeastSpec
@@ -523,4 +524,18 @@ Proof.
            .indirect_arm_needs_no_source_auto_end_to_end
            is_local u e T max_unbox_size lambda_lifting to_unbox Hloc Hslots
            Hfrag Hleast Hunbox Hcount Hkinds).
+Qed.
+
+Theorem unboxed_callee_fails : unboxed_callee_fails_statement.
+Proof.
+  hnf. split.
+  { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity. }
+  repeat match goal with |- _ ∧ _ => split end;
+  lazymatch goal with
+  | |- behaves _ _ =>
+      exists 40%nat; exists FlambdaValueSpec.no_reads; vm_compute;
+      reflexivity
+  | |- _ => vm_compute; reflexivity
+  end.
 Qed.

@@ -51,15 +51,32 @@
      [kept_result_never_unboxed_auto_end_to_end_statement] and
      [indirect_arm_needs_no_source_auto_end_to_end_statement] with the
      table of [to_unbox] derived from the solution. What is left of the
-     graph is a least solution. *)
+     graph is a least solution.
 
-From Stdlib Require Import List Bool.
+   The fatal errors of the fix ([rebuild_fails_u] of
+   FlambdaReaperUnboxing.v), with the flag [Auto], a least solution and
+   the tables derived from it:
+   - [unboxed_callee_fails_statement]: the error of an unboxed callee of a
+     call whose code keeps its calling convention ("TO CHECK" in the fix,
+     now "Unboxed callee ... cannot be applied without changing calling
+     convention") is reached. A block, of which a field is read, is also
+     called at unknown arity in an arm that is not taken; nothing in the
+     rules forbids to unbox it (a call reads the field of the call witness,
+     not a real field, and the seeds of the fix need a use with another
+     source or any source). The call, of no known code, keeps its calling
+     convention, and the rebuild of the fix stops; the model rebuilds the
+     call as [Invalid], and both the unit and the model's rebuilt unit
+     exit with 1. *)
+
+From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaWellFormedSpec FlambdaReaperGraphSpec
+  FlambdaMapSpec FlambdaWellFormedSpec FlambdaSemanticsSpec FlambdaValueSpec
+  FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperRebuild
   FlambdaReaperCallingConventions FlambdaReaperUnboxing FlambdaReaperLeast
   FlambdaReaperFlowSpec FlambdaReaperLeastSpec FlambdaReaperWrapperSpec.
+From OxCamlFlambda2 Require FlambdaReaperTupledSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -161,3 +178,117 @@ Definition indirect_arm_needs_no_source_auto_derived_statement : Prop :=
       arm_pair (apply_decision_at ads i kind) fd = true ->
       result_has_source_at F T unknown (node_of_simple (ap_callee ap)) i
       = false.
+
+(* ======================================================================== *)
+(* The fatal errors of the fix                                              *)
+(* ======================================================================== *)
+
+(* A block [x10] whose field is read into [x11], which the unit returns,
+   and which an arm that is not taken calls at unknown arity:
+
+     let k20 x30 = return x30 in
+     let x10 = [1; 2] in
+     let x11 = x10.(0) in
+     let k21 () = return x11 in
+     let k22 () = x10 3 (unknown arity) -> k20 in
+     switch 0 [0 -> k21 (); 1 -> k22 ()]
+
+   The tables are the least solution of the rules
+   (FlambdaReaperLeast.compute_least), and those of [cannot_change],
+   [dominated], [to_unbox] and [to_change_representation] the ones
+   derived from it. *)
+Module UnboxedCalleeExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition jump (k : continuation) (args : list simple) : apply_cont :=
+  {| ac_continuation := k; ac_args := args; ac_trap_action := None |}.
+
+Definition call : apply_expr :=
+  {| ap_callee := Var 10; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [int 3]; ap_continuation := 20; ap_exn_continuation := 2;
+     ap_exn_extra_args := []; ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+(* The unit, with [k22] the handler of the arm that calls. *)
+Definition unit_with (k22 : expr) : expr :=
+  Let_cont_non_recursive 20
+    (Handler [30] (make_handler_metadata [Value]) (return_to 1 [Var 30]))
+    (Let 10 Value (make_block [int 1; int 2])
+       (Let 11 Value (load 0 (Var 10))
+          (Let_cont_non_recursive 21
+             (Handler [] (make_handler_metadata []) (return_to 1 [Var 11]))
+             (Let_cont_non_recursive 22
+                (Handler [] (make_handler_metadata []) k22)
+                (Switch (Const (Naked_immediate 0))
+                   [(0%Z, jump 21 []); (1%Z, jump 22 [])]))))).
+
+Definition unit_expr : expr := unit_with (Apply call).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match compute_least no_local facts 40 with
+  | Some T => T
+  | None => empty_tables
+  end.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox_fixed no_local facts tables cannot_change max_unbox_size
+    false.
+
+Definition tcr : list node :=
+  derive_to_change_representation no_local facts tables cannot_change
+    max_unbox_size false to_unbox.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The rebuilt unit: [x10] is the variable [x31] of its field, the call
+   is [Invalid], and so is the continuation [k20], which nothing applies
+   any more. *)
+Definition rebuilt : expr :=
+  Let 31 Value (Simple (int 1))
+    (Let 11 Value (Simple (Var 31))
+       (Let_cont_non_recursive 21
+          (Handler [] (make_handler_metadata []) (return_to 1 [Var 11]))
+          (Let_cont_non_recursive 22
+             (Handler [] (make_handler_metadata []) Invalid)
+             (Switch (Const (Naked_immediate 0))
+                [(0%Z, jump 21 []); (1%Z, jump 22 [])])))).
+
+End UnboxedCalleeExample.
+
+Definition unboxed_callee_fails_statement : Prop :=
+  let F := UnboxedCalleeExample.facts in
+  let T := UnboxedCalleeExample.tables in
+  let e := UnboxedCalleeExample.unit_expr in
+  least_solution Examples.no_local F T
+  ∧ in_flow_fragment e = true ∧ projection_free e = true
+  ∧ conts_counted (unit_counts Examples.interface) e = true
+  ∧ plain_kinds e = true
+  ∧ UnboxedCalleeExample.to_unbox = [Node_variable 10%positive]
+  ∧ unit_unboxed F T UnboxedCalleeExample.dominated
+      UnboxedCalleeExample.to_unbox e
+    = [(Node_variable 10%positive,
+        [(Field_block 0 Value, Not_unboxed 31%positive)])]
+  ∧ rebuild_unit_unbox_repr_fixed_fails Examples.no_local F T
+      UnboxedCalleeExample.cannot_change UnboxedCalleeExample.code_deps
+      UnboxedCalleeExample.dominated UnboxedCalleeExample.to_unbox
+      UnboxedCalleeExample.tcr true e
+    = true
+  ∧ rebuild_unit_unbox_repr_fixed Examples.no_local F T
+      UnboxedCalleeExample.cannot_change UnboxedCalleeExample.code_deps
+      UnboxedCalleeExample.dominated UnboxedCalleeExample.to_unbox
+      UnboxedCalleeExample.tcr true e
+    = UnboxedCalleeExample.rebuilt
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own e)
+      (Exits 1%positive [Value_const (Tagged_immediate 1)] empty_heap)
+  ∧ behaves (FlambdaReaperTupledSpec.on_its_own UnboxedCalleeExample.rebuilt)
+      (Exits 1%positive [Value_const (Tagged_immediate 1)] empty_heap).
+
