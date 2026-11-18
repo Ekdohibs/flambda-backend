@@ -87,7 +87,8 @@
      is among them; [join_metadata] makes a closure that escapes
      ([usages_of] gives [None]) contribute no usage, so the recovered
      sources may miss its set. The fix keeps, there, the sets whose
-     closure has any usage.
+     closure has any usage: the rule of the fix proposed for the
+     rewriting of types ([~include_any_usage] of [for_known_sources]).
    - [fix_null]: the closure case of [Rewriter.rewrite] makes its type
      with [MTC.at_least_this_closure], which is not null; a closure type
      that may be null loses that. The fix keeps the nullability.
@@ -624,7 +625,9 @@ Definition intersect_all (sets : list (list node)) : list node :=
 
 (* [refine_sets_of_closures]: the sets of closures of the unit that the
    closure at [current] may come from, and whether it may also come
-   from outside the unit. *)
+   from outside the unit. [recovered && fix_refine fx] is the
+   [~include_any_usage] of the fix proposed for the rewriting of types.
+   *)
 Definition refine_sets_of_closures (t0 : rewrite_metadata)
     (current : function_slot)
     (code_ids_of_function_slots : list (function_slot * Or_unknown.t code_id))

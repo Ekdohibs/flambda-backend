@@ -108,12 +108,14 @@
    that there is none; [Single_source a], that it is [a];
    [Many_sources_any_usage], that it has any usage, so the rebuild has
    kept it whole; [Many_sources_usages us], that it has any usage or each
-   of [us] as a use, which has a use; [At_least_one_source_no_usages],
-   nothing. A metadata holds at a node if it describes every allocation
-   that a value at the node may come from ([metadata_at]); a value is
-   rebuilt under a metadata if it is a constant, rebuilt as itself, or
-   is at a node where the metadata holds, which has a use unless the
-   metadata forgets the type ([rebuilt_under]).
+   of [us] as a use, which has a use (the comment names the case of any
+   usage with the fix proposed for the rewriting of types);
+   [At_least_one_source_no_usages], nothing. A metadata holds at a node
+   if it describes every allocation that a value at the node may come
+   from ([metadata_at]); a value is rebuilt under a metadata if it is a
+   constant, rebuilt as itself, or is at a node where the metadata
+   holds, which has a use unless the metadata forgets the type
+   ([rebuilt_under]).
 
    The fragment ([type_in_fragment]): types of a shape ([shaped_type])
    whose aliases are to names that hold, in the first run, a constant or
@@ -295,8 +297,10 @@
      OCaml with [-reaper-local-fields] and result types for all
      functions, another unit inlines code that reads the value slot of
      one set from a closure that the type says is of the other, and
-     reaches [Invalid]. [refine_example_statement]: the two rewritings
-     of that closure type, computed.
+     reaches [Invalid]. The fix is that proposed for the rewriting of
+     types, which keeps the sets whose closure has any usage, and makes
+     that unit run as without the reaper. [refine_example_statement]:
+     the two rewritings of that closure type, computed.
    - [rewrite_keeps_null_statement]: [Null], which every rebuild keeps
      as it is, has every type that it had, rewritten, of any type,
      closure types included, under any metadata and any solution, with
@@ -1493,8 +1497,8 @@ Definition compiler_rewrite_unsound_statement : Prop :=
 Definition boxed_result_fix_needed_statement : Prop :=
   ~ rewrite_result_type_sound_with (Fixes false true true true).
 
-(* Without the fix of [refine_sets_of_closures], the first statement is
-   false. *)
+(* Without the fix of [refine_sets_of_closures], the fix proposed for
+   the rewriting of types, the first statement is false. *)
 Definition refine_fix_needed_statement : Prop :=
   ~ rewrite_type_sound_with (Fixes true true false true).
 
