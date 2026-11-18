@@ -111,15 +111,13 @@
 
    Known differences, from the status of S7
    (middle_end/flambda2/rocq/status/S7.md) and the header of
-   FlambdaReaperTraversal.v: the model has one kind of indirect call, which its
-   traversal reads as a call of unknown arity, so a unit with a call of known
-   arity has another graph in the model, and the tool says so; the closures of a
-   set other than the first are bound in the model by projections of the first,
-   each of which adds to the model's graph one accessor fact that the compiler's
-   has not (the closures themselves have the same facts in both); and a static
-   boxed number of a variable is aliased to the constants and uses the variable,
-   where the compiler gives the variable as the field of the number's kind. From
-   the conversion: a call that never returns is a call that returns to a
+   FlambdaReaperTraversal.v: the closures of a set other than the first are
+   bound in the model by projections of the first, each of which adds to the
+   model's graph one accessor fact that the compiler's has not (the closures
+   themselves have the same facts in both); and a static boxed number of a
+   variable is aliased to the constants and uses the variable, where the
+   compiler gives the variable as the field of the number's kind. From the
+   conversion: a call that never returns is a call that returns to a
    continuation of the conversion's, whose parameters the model's rebuild may
    remove, so that the two rebuilt terms then differ
    (tests/semantics/arity_text_never_returns.fl). The units are converted with
@@ -1351,9 +1349,10 @@ let rec max_groups_of_unknown_calls (e : Rocq_model.expr) =
     max
       (max_of (List.map (fun (_, handler) -> in_handler handler) handlers))
       (max_groups_of_unknown_calls body)
-  | Apply { ap_call_kind = Indirect; ap_args_arity; _ } ->
+  | Apply { ap_call_kind = Indirect_unknown_arity; ap_args_arity; _ } ->
     List.length ap_args_arity
-  | Apply { ap_call_kind = Direct _; _ } | Apply_cont _ | Switch _ | Invalid ->
+  | Apply { ap_call_kind = Direct _ | Indirect_known_arity _; _ }
+  | Apply_cont _ | Switch _ | Invalid ->
     0
 
 (* The estimate above, and whether it is within the budget. *)
@@ -1711,9 +1710,9 @@ let model_change (change : Reaper.Unboxing_analysis.calling_convention_change) :
    [compute_code_changes], a code id of the unit that has no code dep having
    none; and the model's rebuild ([rebuild_unit_cc_from_tables]) is compared
    with what [Reaper.run] returns with the two flags, as [compare_rebuild] does.
-   The model reads every indirect call as one of unknown arity, which keeps the
-   code it may call from changing ([cc_code_id_unknown_arity]), where the
-   compiler's call of known arity does not; that difference is expected. *)
+   A call of unknown arity keeps the code it may call from changing
+   ([cc_code_id_unknown_arity]); a call of known arity, in the model as in the
+   compiler, does not. *)
 let compare_calling_conventions ~(input : Flsemantics.converted)
     ~(input_unit : Flambda_unit.t) ~(unit_code_ids : Graph_spec.node list)
     ~(model_facts : Graph_spec.facts) ~(model_tables : Graph_spec.tables)
@@ -3241,10 +3240,13 @@ let flow_fragment_misses (e : Rocq_model.expr) : string list =
       then
         miss
           (match ap.ap_call_kind with
-          | Direct _ -> "a direct call of tupled code, or at another arity"
-          | Indirect ->
-            "an indirect call, with code of no parameter or tupled code of \
-             products")
+          | Direct _ ->
+            "a direct call of tupled code, at another arity, or with no group \
+             of arguments"
+          | Indirect_known_arity _ -> "a call of known arity"
+          | Indirect_unknown_arity ->
+            "a call of unknown arity, with code of no parameter or tupled code \
+             of products")
     | Apply_cont _ | Switch _ | Invalid -> ()
   and handler (Rocq_model.Handler (_, _, body)) = expr body
   and binding (binding : Rocq_model.static_binding) =
@@ -3347,7 +3349,6 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
     true
   | input -> (
     let names = take_unit_names () in
-    let known_arity_call = !Flsemantics.known_arity_call_met in
     let compiler =
       match
         timed "the compiler's graph and solution" (fun () ->
@@ -3395,11 +3396,6 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
                 compiler_tables ))
       in
       Format.printf "%s:@." filename;
-      if known_arity_call
-      then
-        Format.printf
-          "  the unit has a call of known arity, which the model reads as one \
-           of unknown arity: the two graphs differ there@.";
       if not all_related
       then
         Format.printf

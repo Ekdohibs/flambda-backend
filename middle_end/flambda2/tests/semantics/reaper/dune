@@ -1,7 +1,7 @@
 ;; The reaper checked against its Rocq transcriptions: for each example X.fl,
 ;; after Simplify, the compiler's reaper and the transcriptions extracted from
-;; middle_end/flambda2/rocq/FlambdaReaper*.v are run on the same unit, and the
-;; graphs, the solutions and the rebuilt terms are compared (see
+;; middle_end/flambda2/rocq/reaper/FlambdaReaper*.v are run on the same unit,
+;; and the graphs, the solutions and the rebuilt terms are compared (see
 ;; ../../tools/flreaper.ml). What the tool prints is kept in X.expected,
 ;; beside X.fl; a difference that it finds is printed and kept there too. The
 ;; tool fails only when the solution it computes for the model's graph does

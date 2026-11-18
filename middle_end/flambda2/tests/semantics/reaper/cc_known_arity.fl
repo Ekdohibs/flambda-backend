@@ -1,9 +1,8 @@
 (* The closure of [f] comes back from [pass], which is not inlined, so Simplify
    does not know it, and is called with a known arity. The reaper knows that
-   only [f] is called there. The model reads an indirect call as one of unknown
-   arity, which keeps the code it calls from changing its calling convention
-   ([cc_code_id_unknown_arity]); the compiler's call of known arity does not,
-   so the two may differ here, as is expected. *)
+   only [f] is called there: it makes the call direct, and changes the calling
+   convention of [f], which a call of unknown arity would keep from changing
+   ([cc_code_id_unknown_arity]). The model does the same. *)
 let code inline(never) size(1) pass (g) my_closure &my_region my_depth
       -> k * e =
   cont k (g)
