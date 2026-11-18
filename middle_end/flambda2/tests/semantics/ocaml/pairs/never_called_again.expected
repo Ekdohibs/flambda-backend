@@ -22,5 +22,6 @@ never_called_again.fl:
   calls outside code: 1 before, 2 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 1
-  validated with its imports, given the .cmx of 2 of them: the same once normalised and unused static bindings removed, at the head of the term after too
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair with its imports, given the .cmx of 2 of them: the same once normalised and unused static bindings removed, at the head of the term after too
   the term before is undefined in the model, so the validation says nothing of this unit

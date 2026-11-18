@@ -6,5 +6,6 @@ static_array_load_past_the_end.fl:
   calls outside code: 0 before, 0 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 0
-  validated: the same up to bound names
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair: the same up to bound names
   the term before is undefined in the model, so the validation says nothing of this unit

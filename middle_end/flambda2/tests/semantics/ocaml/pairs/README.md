@@ -197,13 +197,14 @@ then "after the prefix".
   "What the verdicts mean"), and an import is left. What is proved
   is of the two terms run with no import at all.
 - The other outcomes are those of the directory above, of the two
-  terms with the prefix in front: "not validated"; "nothing to
+  terms with the prefix in front: "not validated"; and "nothing to
   validate, as the term before is undefined", where the term before
-  is undefined and the validator does not accept the pair; and,
-  where it is undefined and the validator accepts the pair, a line
-  after the verdict which says that the validation says nothing of
-  the unit. No line begins "validated:" for a unit that has a
-  prefix.
+  is undefined. Where it is undefined and the validator accepts the
+  pair, the line under that one begins "the validation accepts the
+  pair", with the words that a verdict has after "validated", and a
+  line after it says that the validation says nothing of the unit:
+  no line of such a unit begins "validated". No line begins
+  "validated:" for a unit that has a prefix.
 - What the prefix leaves out is not said to be absent. Code that has
   no body in the file is declared deleted and bound to nothing, and
   a call of it is undefined when it runs. A module block with a field
@@ -250,30 +251,30 @@ from the others.
 | Second unit | First unit | What the second unit does | What the tool says of it |
 |-------------|------------|---------------------------|--------------------------|
 | `lengths_called_in_function.ml` | `lengths.ml` | a function calls a function of the first unit | a prefix of five bindings; both runs return the module block; the same; validated with its imports, given the `.cmx` |
-| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; undefined before and after; validated, with the line that says the validation says nothing of a unit whose term before is undefined |
+| `lengths_called_at_toplevel.ml` | `lengths.ml` | a toplevel calls one | the same prefix; undefined before and after; nothing to validate; the validation accepts the pair, and the tool says that it says nothing of a unit whose term before is undefined |
 | `lengths_included.ml` | `lengths.ml` | a toplevel reads the fields of the first unit and keeps them (`include`) | the same prefix; both runs return a block of the two closures; the same; validated with its imports, given the `.cmx` |
 | `lengths_kept_with_exception.ml` | `lengths.ml` | the same, and exports a predefined exception too | the same prefix, and one import left; both runs return a block of the two closures and the imported exception; the same; validated with its imports, given the `.cmx` |
-| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of three bindings; undefined before and after; validated, with the line that says the validation says nothing |
-| `never_called_again.ml` | `never_called.ml` | a toplevel calls the function of `never_called.ml`, which calls that of `never.ml` | the tool reads the `.cmx` of both units: a prefix of five bindings, with the code of `add_two`, and the code of `add_one` declared deleted; undefined before and after; the check of static names passes; validated, with the line that says the validation says nothing |
+| `never_called.ml` | `never.ml` | calls a function that is never inlined, whose code has no body in the `.cmx`, in a function and at toplevel | a prefix of three bindings; undefined before and after; nothing to validate; the validation accepts the pair, and the tool says that it says nothing of the unit |
+| `never_called_again.ml` | `never_called.ml` | a toplevel calls the function of `never_called.ml`, which calls that of `never.ml` | the tool reads the `.cmx` of both units: a prefix of five bindings, with the code of `add_two`, and the code of `add_one` declared deleted; undefined before and after; the check of static names passes; nothing to validate; the validation accepts the pair, and the tool says that it says nothing of the unit |
 | `never_called_unread.ml` | `never_called.ml` | the same unit; the tool is given the `.cmx` of `never_called.ml` alone | a control: the prefix binds the code of `add_two`, which names the code of `add_one`, of a unit that was not read and of which nothing is declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
 | `maker_kept_unread.ml` | `maker_kept.ml` | a toplevel reads a field of the second unit that is a constant | a control: the tool reads the `.cmx` of `maker_kept.ml` and not that of `maker.ml`; the prefix binds the module block and the closure that is a field of it, whose code is of `maker.ml`, a unit that was not read, and is not declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
 | `maker_kept_read.ml` | `maker_kept.ml` | a toplevel keeps the function of `maker.ml`, which the second unit gives again | the tool reads the `.cmx` of both units: a prefix of five bindings, the same module block and closure, the closure of `make`, and the code of both, bound from the file of `maker.ml`; the check of static names passes; both runs return the module block; the same; validated with its imports, given the `.cmx` of both |
-| `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows, and adds the two | a prefix of one binding, the module block with a symbol of which nothing is known in that field; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows, and adds the two | a prefix of one binding, the module block with a symbol of which nothing is known in that field; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `hidden_known_read.ml` | `hidden.ml` | a toplevel reads the field that the `.cmx` knows, and not the one of which it says nothing | a prefix of one binding, the module block with a symbol of which nothing is known in the other field, which is the one import left; both runs return the module block; the same; validated with its imports, given the `.cmx` |
 | `hidden_included.ml` | `hidden.ml` | a toplevel reads the two fields and keeps them (`include`) | the same prefix; both runs return a block of the number and of the symbol of which nothing is known; the same; validated with its imports, given the `.cmx` |
 | `hidden_kept.ml` | `hidden.ml` | a toplevel puts the two fields in a block that it makes | the same prefix; both runs return the module block, whose field is the block of the symbol and of the number; the same; validated with its imports, given the `.cmx` |
 | `hidden_in_function.ml` | `hidden.ml` | a function that nothing calls loads the field of which the `.cmx` says nothing | a control: the load is in the body of code, so the block is not bound and there is no prefix; both runs return the module block; the same; validated with its imports |
-| `hidden_in_loop.ml` | `hidden.ml` | a loop at toplevel loads that field each time round | a control: the load is in the handler of a recursive continuation, so the block is not bound and there is no prefix; undefined before and after; validated with its imports, with the line that says the validation says nothing |
-| `hidden_tested.ml` | `hidden.ml` | a toplevel tests that field (`match`) | the prefix of one binding; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `hidden_same.ml` | `hidden.ml` | a toplevel compares that field with itself | the prefix of one binding; undefined before; the run after returns the answer that the two are the same; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `hidden_joined.ml` | `hidden.ml` | a toplevel takes that field down one arm of a test and a number down the other, and adds to what it has | the prefix of one binding; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `hidden_in_loop.ml` | `hidden.ml` | a loop at toplevel loads that field each time round | a control: the load is in the handler of a recursive continuation, so the block is not bound and there is no prefix; undefined before and after; nothing to validate; the validation accepts the pair with its imports, and the tool says that it says nothing of the unit |
+| `hidden_tested.ml` | `hidden.ml` | a toplevel tests that field (`match`) | the prefix of one binding; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `hidden_same.ml` | `hidden.ml` | a toplevel compares that field with itself | the prefix of one binding; undefined before; the run after returns the answer that the two are the same; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `hidden_joined.ml` | `hidden.ml` | a toplevel takes that field down one arm of a test and a number down the other, and adds to what it has | the prefix of one binding; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `several_included.ml` | `several.ml` | a toplevel reads the four fields, of each of which the `.cmx` says nothing, and keeps them (`include`) | a prefix of one binding, the module block with four symbols of which nothing is known, the four imports left; both runs return a block of the four; the same; validated with its imports, given the `.cmx` |
 | `several_compared.ml` | `several.ml` | a toplevel compares two of the fields | the same prefix; undefined before and after; nothing to validate |
-| `several_loaded.ml` | `several.ml` | a toplevel loads a field of one of the fields | the same prefix; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `several_called.ml` | `several.ml` | a toplevel calls one of the fields | the same prefix; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
-| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of five bindings; undefined before and after; validated, with the line that says the validation says nothing |
-| `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime, and tests it | a prefix of one binding, the module block with two symbols of which nothing is known; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `several_loaded.ml` | `several.ml` | a toplevel loads a field of one of the fields | the same prefix; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `several_called.ml` | `several.ml` | a toplevel calls one of the fields | the same prefix; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of five bindings; undefined before and after; nothing to validate; the validation accepts the pair, and the tool says that it says nothing of the unit |
+| `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime, and tests it | a prefix of one binding, the module block with two symbols of which nothing is known; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of five bindings without the body, which the conversion refuses; the run is undefined before and after, and the validation says nothing of it |
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
 | `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of three bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
@@ -407,13 +408,14 @@ as the load from an import has no value.
 
 A unit whose run inspects such a symbol is undefined in the model
 before Simplify, and of such a unit no line is a validation:
-whatever the tool prints of the comparison of the two terms, it
-prints under it that the validation says nothing of the unit, or it
-prints "nothing to validate". Where the tool prints "validated with
-its imports" above the line "the term before is undefined in the
-model, so the validation says nothing of this unit", that is not a
-meaningful validation of the unit: the run before goes wrong in the
-model, and the refinement then asks nothing of the term after.
+the tool prints "nothing to validate, as the term before is
+undefined". Where the validator accepts the pair, the tool prints
+under that line "the validation accepts the pair with its imports",
+with the comparison that accepted, and then the line "the term
+before is undefined in the model, so the validation says nothing of
+this unit": the acceptance is no validation of the unit, as the run
+before goes wrong in the model, and the refinement then asks nothing
+of the term after.
 `hidden_read.ml` adds to the field,
 `hidden_tested.ml` tests it, `hidden_joined.ml` adds to what is the
 field down one arm of a test and a number down the other,

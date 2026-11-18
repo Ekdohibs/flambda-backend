@@ -207,6 +207,19 @@
    and the unit before is run from the empty static environment as well, to say
    whether the validation with nothing imported is of a term that is undefined.
 
+   An acceptance of an undefined run. A term before that is undefined is refined
+   by anything, so where the validator accepts and the run of the term before
+   that the acceptance is of is undefined, the acceptance says nothing of the
+   unit. No line begins "validated" then: the leading line is "nothing to
+   validate, as the term before is undefined" (or, where the acceptance is of
+   the unit with nothing imported, "nothing to validate with nothing imported,
+   as the term before is then undefined"), as for a unit that the validator does
+   not accept and whose term before is undefined; the line under it begins "the
+   validation accepts the pair" and has the words that the verdict would have
+   had after "validated"; and the line that says that the term before is
+   undefined in the model, so that the validation says nothing of the unit,
+   follows as before.
+
    The .cmx of other units. The compiler's Simplify reads the .cmx of another
    unit when it meets a symbol of that unit, and uses what the file says: it
    puts a closure symbol in the place of a load from the module block of the
@@ -8109,21 +8122,17 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   let of_the_runs_shown =
     match imports with [] -> true | _ :: _ -> !last_asking_holds ()
   in
-  let validated =
+  let given =
     match prefix_units, imports with
-    | 0, [] -> "validated"
+    | 0, [] -> ""
     | 0, _ :: _ ->
       if of_the_runs_shown
-      then "validated with its imports"
-      else "validated with nothing imported"
+      then " with its imports"
+      else " with nothing imported"
     | n, _ ->
       if of_the_runs_shown
-      then
-        Printf.sprintf
-          "validated with its imports, given the .cmx of %d of them" n
-      else
-        Printf.sprintf
-          "validated with nothing else imported, given the .cmx of %d" n
+      then Printf.sprintf " with its imports, given the .cmx of %d of them" n
+      else Printf.sprintf " with nothing else imported, given the .cmx of %d" n
   in
   (* The run of the term before that the validation is of. *)
   let outcome_before =
@@ -8136,6 +8145,36 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       | Same_once_unused_statics_removed | Same_once_head_statics_removed
       | Same_once_lifted ->
         fst (run ~statics:Values.empty_static_env before)
+  in
+  (* A term before that is undefined is refined by anything. So where the
+     validation accepts and the run that it is of is undefined, the acceptance
+     says nothing of the unit, and the line that names it is no verdict: the
+     leading line is then that of a unit with nothing to validate, and the line
+     of the acceptance follows it and begins "the validation accepts the pair",
+     with the words that the verdict would have had. No line begins "validated"
+     for such a unit. The line further down that says that the term before is
+     undefined in the model is as it was. *)
+  let accepted_of_an_undefined_run =
+    match validation with
+    | Not_validated -> false
+    | Same_up_to_bound_names | Same_once_normalised
+    | Same_once_unused_statics_removed | Same_once_head_statics_removed
+    | Same_once_lifted ->
+      outcome_before = Undefined
+  in
+  if accepted_of_an_undefined_run
+  then
+    Format.printf "  %s@."
+      (if of_the_runs_shown
+       then "nothing to validate, as the term before is undefined"
+       else
+         "nothing to validate with nothing imported, as the term before is \
+          then undefined");
+  let validated =
+    (if accepted_of_an_undefined_run
+     then "the validation accepts the pair"
+     else "validated")
+    ^ given
   in
   Format.printf "  %s@."
     (match validation with

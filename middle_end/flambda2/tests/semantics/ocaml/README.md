@@ -799,9 +799,16 @@ unit made from OCaml.
   has no step somewhere in the run of the term before, so anything
   refines it and a validation would say nothing. The compiler runs
   these programs: the model is what lacks something, and the table
-  says what. Such a unit is not counted as validated; where the
-  validator accepts one all the same, the tool says so on a line of its
-  own.
+  says what. Such a unit is not counted as validated. Where the
+  validator accepts the pair all the same, the line under this one
+  begins "the validation accepts the pair" and goes on with the words
+  that a verdict has after "validated": it is no verdict, no line of
+  such a unit begins "validated", and the line "the term before is
+  undefined in the model, so the validation says nothing of this unit"
+  follows. (Where the acceptance is of the unit with nothing imported,
+  the first line is "nothing to validate with nothing imported, as the
+  term before is then undefined".) The two units of the table
+  "Undefined in the model" have the two lines.
 - **not checked**: the conversion refused the unit, as it has something
   the model has not got, or something that the conversion does not
   make though the model has it. The line of the tool says "the model
