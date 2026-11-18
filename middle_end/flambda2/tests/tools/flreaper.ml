@@ -88,6 +88,10 @@
    which the extracted FlambdaReaperLeast.check_least tests and compute_least
    computes ([compare_least]).
 
+   - Where FLREAPER_WRAPPER_PREMISES is set, each unit is first said to meet, or
+   not, the premises on the term of the statements of
+   FlambdaReaperWrapperDerivedSpec.v ([print_wrapper_premises]).
+
    This is a test and not a proof. What is trusted: the conversion of
    flsemantics.ml (its header says what that is), and, for the comparison only,
    the reading of the compiler's graph and solution here, which must send each
@@ -3068,6 +3072,243 @@ let compare_least ~indent ~names ~(model_facts : Graph_spec.facts)
         least_against_compiler ~indent ~names ~least:model_least
           ~compiler:compiler_tables)
 
+(* ---- The premises of the wrapper -------------------------------------- *)
+
+(* Where FLREAPER_WRAPPER_PREMISES is set, each unit is first said to meet, or
+   not, the premises on the term of the statements of
+   FlambdaReaperWrapperDerivedSpec.v ([arm_needs_no_source_auto_derived] and the
+   two after it): [conts_counted] of the continuations of the unit
+   ([unit_counts]), [plain_kinds] and [in_flow_fragment], and [projection_free],
+   which they ask for where a field is local. The term is the one that the
+   model's traversal is given. The verdicts are the extracted checks; what is
+   said of where a check fails is found here, by walks that follow the
+   definitions, and is not trusted. Nothing depends on any of it. *)
+
+module Flow_spec = Flambda2_rocq_semantics.FlambdaReaperFlowSpec
+module Wrapper_spec = Flambda2_rocq_semantics.FlambdaReaperWrapperSpec
+
+let wrapper_premises_wanted () =
+  match Sys.getenv_opt "FLREAPER_WRAPPER_PREMISES" with
+  | None | Some "" -> false
+  | Some _ -> true
+
+let continuation_shown k =
+  match Flsemantics.Continuations.name_of k with
+  | Some k -> Format.asprintf "%a" Continuation.print k
+  | None ->
+    Format.asprintf "the continuation %d of the conversion" (int_of_positive k)
+
+let kind_shown (kind : Kinds.flambda_kind) =
+  match kind with
+  | Value -> "Value"
+  | Naked_number _ -> "Naked_number"
+  | Region -> "Region"
+  | Rec_info -> "Rec_info"
+
+let unarized_count arity = List.length (Rocq_model.unarize arity)
+
+(* The first place where [conts_counted ks e] fails, [ks] with its numbers as
+   integers. *)
+let conts_counted_failure (ks : (Numbers.positive * int) list)
+    (e : Rocq_model.expr) : string option =
+  let count ks k n what =
+    match List.assoc_opt k ks with
+    | Some m when m = n -> None
+    | Some m ->
+      Some
+        (Printf.sprintf "%s gives %d values to %s, which has %d parameters" what
+           n (continuation_shown k) m)
+    | None ->
+      Some
+        (Printf.sprintf "%s gives %d values to %s, which is not in scope" what n
+           (continuation_shown k))
+  in
+  let params (Rocq_model.Handler (params, _, _)) = List.length params in
+  let rec expr ks (e : Rocq_model.expr) =
+    match e with
+    | Let (_, _, _, body) | Let_static (_, body) -> expr ks body
+    | Let_cont_non_recursive (k, h, body) -> (
+      match handler ks h with
+      | Some _ as failure -> failure
+      | None -> expr ((k, params h) :: ks) body)
+    | Let_cont_recursive (handlers, body) -> (
+      let ks = List.map (fun (k, h) -> k, params h) handlers @ ks in
+      match List.find_map (fun (_, h) -> handler ks h) handlers with
+      | Some _ as failure -> failure
+      | None -> expr ks body)
+    | Apply ap -> (
+      match
+        count ks ap.ap_continuation
+          (unarized_count ap.ap_return_arity)
+          "a call, returning,"
+      with
+      | Some _ as failure -> failure
+      | None ->
+        count ks ap.ap_exn_continuation
+          (1 + List.length ap.ap_exn_extra_args)
+          "a call, raising,")
+    | Apply_cont ac ->
+      count ks ac.ac_continuation (List.length ac.ac_args) "an Apply_cont"
+    | Switch (_, arms) ->
+      List.find_map
+        (fun (_, (ac : Rocq_model.apply_cont)) ->
+          count ks ac.ac_continuation (List.length ac.ac_args)
+            "an arm of a Switch")
+        arms
+    | Invalid -> None
+  and handler ks (Rocq_model.Handler (_, _, body)) = expr ks body in
+  expr ks e
+
+(* The first handler or code where [plain_kinds e] fails. *)
+let plain_kinds_failure (e : Rocq_model.expr) : string option =
+  let not_plain kinds =
+    List.find_opt (fun kind -> not (Wrapper_spec.plain_kind kind)) kinds
+  in
+  let rec expr (e : Rocq_model.expr) =
+    match e with
+    | Let (_, _, _, body) -> expr body
+    | Let_static (bindings, body) -> (
+      match List.find_map binding bindings with
+      | Some _ as failure -> failure
+      | None -> expr body)
+    | Let_cont_non_recursive (k, h, body) -> (
+      match handler k h with Some _ as failure -> failure | None -> expr body)
+    | Let_cont_recursive (handlers, body) -> (
+      match List.find_map (fun (k, h) -> handler k h) handlers with
+      | Some _ as failure -> failure
+      | None -> expr body)
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> None
+  and handler k (Rocq_model.Handler (_, metadata, body)) =
+    match not_plain metadata.hm_params_kinds with
+    | Some kind ->
+      Some
+        (Printf.sprintf "the handler of %s has a parameter of kind %s"
+           (continuation_shown k) (kind_shown kind))
+    | None -> expr body
+  and binding (binding : Rocq_model.static_binding) =
+    match binding with
+    | Bind_code (id, Code (_, _, _, _, metadata, body)) -> (
+      match not_plain (Rocq_model.unarize metadata.cm_result_arity) with
+      | Some kind ->
+        let code =
+          match Flsemantics.Code_ids.name_of id with
+          | Some id -> Format.asprintf "%a" Code_id.print id
+          | None -> string_of_int (int_of_positive id)
+        in
+        Some
+          (Printf.sprintf "the code %s has a result of kind %s" code
+             (kind_shown kind))
+      | None -> expr body)
+    | Bind_deleted_code _ | Bind_symbol _ -> None
+  in
+  expr e
+
+(* What keeps [e] out of the fragment of [in_flow_fragment], each sort of thing
+   once. *)
+let flow_fragment_misses (e : Rocq_model.expr) : string list =
+  let codes = Flow_spec.unit_codes e in
+  let symbols =
+    Flsemantics.Well_formed.static_names
+      Flsemantics.Well_formed.symbols_of_binding e
+  in
+  let misses = ref [] in
+  let miss what =
+    if not (List.mem what !misses) then misses := what :: !misses
+  in
+  let rec expr (e : Rocq_model.expr) =
+    match e with
+    | Let (_, _, named, body) ->
+      (match named with
+      | Prim (p, _) when Flow_spec.prim_of_heap p ->
+        miss "a primitive of the heap"
+      | Set_of_closures _ -> miss "a Set_of_closures"
+      | Project_value_slot _ -> miss "a Project_value_slot"
+      | Prim _ | Simple _ | Closure_of_set _ | Project_value_slot_from _
+      | Project_function_slot _ ->
+        ());
+      expr body
+    | Let_static (bindings, body) ->
+      List.iter binding bindings;
+      expr body
+    | Let_cont_non_recursive (_, h, body) ->
+      handler h;
+      expr body
+    | Let_cont_recursive (handlers, body) ->
+      List.iter (fun (_, h) -> handler h) handlers;
+      expr body
+    | Apply ap ->
+      if not (Flow_spec.apply_in_flow_fragment codes ap)
+      then
+        miss
+          (match ap.ap_call_kind with
+          | Direct _ -> "a direct call of tupled code, or at another arity"
+          | Indirect ->
+            "an indirect call, with code of no parameter or tupled code of \
+             products")
+    | Apply_cont _ | Switch _ | Invalid -> ()
+  and handler (Rocq_model.Handler (_, _, body)) = expr body
+  and binding (binding : Rocq_model.static_binding) =
+    match binding with
+    | Bind_code (_, Code (_, _, return, exn, metadata, body)) ->
+      if return = exn
+      then miss "code whose return and exception continuations are one";
+      if Flsemantics.Semantics.binds_statics body
+      then miss "code that binds statics";
+      (match
+         conts_counted_failure
+           [exn, 1; return, unarized_count metadata.cm_result_arity]
+           body
+       with
+      | Some failure -> miss ("in code, " ^ failure)
+      | None -> ());
+      expr body
+    | Bind_symbol _ ->
+      if not (Flow_spec.binding_flow_fragment true codes symbols binding)
+      then miss "a static set of closures"
+    | Bind_deleted_code _ -> ()
+  in
+  expr e;
+  if
+    Flow_spec.flow_fragment false codes symbols e
+    && not (Flow_spec.in_flow_fragment e)
+  then miss "code ids bound twice";
+  List.rev !misses
+
+let print_wrapper_premises ~filename (input : Flsemantics.converted) =
+  let e = input.body in
+  let counts = Wrapper_spec.unit_counts (Flsemantics.interface input) in
+  let counted = Flow_spec.conts_counted counts e in
+  let plain = Wrapper_spec.plain_kinds e in
+  let in_fragment = Flow_spec.in_flow_fragment e in
+  let region_params =
+    Continuation.Map.fold
+      (fun _ places n -> n + List.length (List.filter Fun.id places))
+      !Flsemantics.region_params 0
+  in
+  Format.printf
+    "%s: the premises of the wrapper: conts_counted %s, plain_kinds %s, \
+     in_flow_fragment %s, projection_free %s; parameters of kind Region \
+     dropped by the conversion: %d@."
+    filename (passes counted) (passes plain) (passes in_fragment)
+    (passes (Flow_spec.projection_free e))
+    region_params;
+  let reason = function Some why -> why | None -> "no place found here" in
+  if not counted
+  then
+    Format.printf "  conts_counted: %s@."
+      (reason
+         (conts_counted_failure
+            (List.map (fun (k, n) -> k, int_of_nat n) counts)
+            e));
+  if not plain
+  then Format.printf "  plain_kinds: %s@." (reason (plain_kinds_failure e));
+  if not in_fragment
+  then
+    Format.printf "  in_flow_fragment: %s@."
+      (match flow_fragment_misses e with
+      | [] -> "no place found here"
+      | misses -> String.concat "; " misses)
+
 (* ---- One example ------------------------------------------------------ *)
 
 let print_graphs () =
@@ -3124,6 +3365,7 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
         { input with body = ends_as_effects ends_of_regions input.body }
       | Error _ -> input
     in
+    if wrapper_premises_wanted () then print_wrapper_premises ~filename input;
     let model_facts =
       timed "the traversal of the model" (fun () ->
           Traversal.traverse_unit (preserve_direct_calls ())
