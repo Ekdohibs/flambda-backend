@@ -1506,7 +1506,7 @@ Equations on variables, then a type of kind value and a smaller type made from i
   1 not converted: not in the compiler: a head with no number (the bits of a mask)
   998 converted
   meet: the model and the n-way meet of the compiler: 997 agree
-    1 not run: neither answers (the model: no answer of the meet; the compiler: a fatal error: Kind mismatch upon meet: (Naked_mask [Nm[N;N;N;Nm⊤[Nm) versus)
+    1 not run: neither answers (the model: no answer of the meet; the compiler: a fatal error: Kind mismatch upon meet: (Naked_mask ⊤) versus)
   of which those where the meet is not bottom: 600 agree
   of which those where a variable that was made is mentioned: 0 agree
   meet: the model and the binary meet of the compiler: 995 agree, 2 disagree as recorded
@@ -2287,7 +2287,7 @@ The same with uses that know equations on variables, for the join of the model a
   5 not converted: not in the compiler: a head with no number (the bits of a vecN)
   987 converted
   join: the model and the n-way join of the compiler: 986 agree
-    1 not run: neither answers (the model: no answer of the join; the compiler: a fatal error: Kind mismatch upon join: (Naked_float ([Nm[N;N;N;Nm=[Nm [Nm[N;N;N;Nmf/NN[Nm)) versus)
+    1 not run: neither answers (the model: no answer of the join; the compiler: a fatal error: Kind mismatch upon join: (Naked_float (= f/NN)) versus)
   of which those where a variable that was made is mentioned: 56 agree
   the analysis of the join, where the two targets are the same: 986 agree
   of which those where a variable was created at the join: 85 agree

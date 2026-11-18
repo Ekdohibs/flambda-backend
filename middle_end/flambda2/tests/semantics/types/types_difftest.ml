@@ -8693,24 +8693,6 @@ type static_group_verdict =
         in_the_model_as_simplify : seen
       }
 
-(* A fatal error of Simplify without the escape sequences that colour it. *)
-let without_colours (line : string) : string =
-  let plain = Buffer.create (String.length line) in
-  let rec go i ~in_sequence =
-    if i < String.length line
-    then
-      let c = line.[i] in
-      if in_sequence
-      then go (i + 1) ~in_sequence:(not (Char.equal c 'm'))
-      else if Char.equal c '\027'
-      then go (i + 1) ~in_sequence:true
-      else (
-        Buffer.add_char plain c;
-        go (i + 1) ~in_sequence:false)
-  in
-  go 0 ~in_sequence:false;
-  Buffer.contents plain
-
 (* What the comparisons of static groups share: the model run, its environment
    of the tests, and the names that are asked about, which are those of the
    tests and the symbols that a group may bind. *)
@@ -8825,9 +8807,7 @@ let static_group_in_simplify (names : names)
         or_fatal_error (fun () -> env_before_a_static_group names before)
       with
       | Error line ->
-        Error
-          ("a fatal error where an alias is added: "
-          ^ general (without_colours line))
+        Error ("a fatal error where an alias is added: " ^ general line)
       | Ok env -> (
         let after =
           List.init
@@ -8844,14 +8824,13 @@ let static_group_in_simplify (names : names)
                 (fun n (after : (TE.t, string) result) ->
                   match after with
                   | Ok _ -> None
-                  | Error line -> Some (n - 1, general (without_colours line)))
+                  | Error line -> Some (n - 1, general line))
                 after,
               fun n ->
                 match List.nth after n with
                 | Ok env ->
                   seen_in_the_compiler names.numbering ~threshold asked None env
-                | Error line ->
-                  Nothing_seen ("a fatal error: " ^ without_colours line) )))
+                | Error line -> Nothing_seen ("a fatal error: " ^ line) )))
 
 let verdict_of_a_static_group (names : names)
     (setting : setting_of_static_groups) (input : static_group) :
@@ -10724,6 +10703,20 @@ let control_of_the_repaired_test () =
 (* ======================================================================== *)
 
 let () =
+  (* No colours in what is printed. The compiler colours the kinds and the names
+     that it prints unless that was decided otherwise before the first of them
+     is printed, and it is decided once: [Misc.Style.setup] acts at its first
+     call only. The two entry points of the middle end that run Simplify on a
+     unit ([Flambda2.flambda_to_flambda] and [Flambda2.lambda_to_flambda]) make
+     that call, and decide against colours where the error output is not a
+     terminal. This program goes through neither: it calls the meet, the join
+     and, for the static groups, [Simplify_static_const.simplify_static_consts]
+     themselves. So nothing had decided: a fatal error of the meet or of the
+     join that a test quotes had its kinds between the escape sequences of a
+     terminal, whatever the output was written to. It is decided here, before
+     anything is printed: a call made after a kind or a name has been printed
+     would come too late. *)
+  Misc.Style.setup (Some Misc.Color.Never);
   let comp_unit = Compilation_unit.of_string "Types_difftest" in
   Env.set_current_unit
     (Unit_info.make_dummy ~input_name:"types_difftest" comp_unit);
