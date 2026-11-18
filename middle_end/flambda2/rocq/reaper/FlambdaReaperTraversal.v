@@ -168,14 +168,13 @@
      Nor is anything that only the rebuild reads ([continuation_info],
      [fixed_arity_continuation], [record_apply_for_rebuild],
      [add_set_of_closures], [add_code]).
-   - Calls. The model has [Direct] and [Indirect]. A direct call is read
-     as [Direct], whose callee is always given (the model has no direct
-     call without a callee). An indirect call is read as
-     [Indirect_unknown_arity], with [make_unknown_arity_apply_widget];
-     the compiler's [Indirect_known_arity] is not in the model (the
-     status of S7 says so). The model has no [Never_returns], method, C
-     call or effect, so the [default_acc] of [traverse_apply] is never
-     used.
+   - Calls. The three call kinds are the compiler's. A direct call
+     always has a callee (the model has no direct call without one). A
+     call of known arity reads the field of known arity of its callee,
+     as a direct call does, and has no delayed dep; its code ids, if
+     given, are not read, as in the OCaml. The model has no
+     [Never_returns], method, C call or effect, so the [default_acc] of
+     [traverse_apply] is never used.
    - Where the OCaml stops with a fatal error, the model does something
      defined, which no term that the compiler builds reaches:
      a continuation not in scope ([Env.find_cont]) has fresh parameters
@@ -1097,7 +1096,12 @@ Definition traverse_call_kind (env : traverse_env) (ap : apply_expr)
     | Preserve_no =>
       if is_external then add_apply env id closure call_widget false a else a
     end
-  | Indirect =>
+  | Indirect_known_arity _ =>
+    let '(call_widget, a) :=
+      make_known_arity_apply_widget env ap return_args exn_arg a in
+    add_fact (Fact_accessor call_widget
+           (Field_call_witness Known_arity_code_pointer) closure) a
+  | Indirect_unknown_arity =>
     let '(call_widget, a) :=
       make_unknown_arity_apply_widget env ap return_args exn_arg a in
     add_fact (Fact_accessor call_widget
@@ -1557,17 +1561,38 @@ Proof. vm_compute. reflexivity. Qed.
    call (one parameter) is 10, and [apply] 11 reads the unknown-arity
    witness of the closure. There is no delayed dep of the call. *)
 Example traverse_indirect_call :
-  f_accessor (traverse_unit Never interface (call_identity Indirect)) =
+  let F := traverse_unit Never interface
+             (call_identity Indirect_unknown_arity) in
+  f_accessor F =
   [(Node_made 11, Field_call_witness Unknown_arity_code_pointer,
     Node_variable 13);
    (Node_variable 12, Field_return_of_call (Normal 0), Node_made 10);
    (Node_made 2, Field_return_of_call Exn, Node_made 10);
    (Node_made 9, Field_code_id_of_call_witness, Node_made 10)]
-  ∧ f_alias (traverse_unit Never interface (call_identity Indirect)) =
+  ∧ f_alias F =
   [(Node_made 10, Node_made 11); (Node_made 1, Node_variable 12);
    (Node_made 3, Node_variable 30); (Node_variable 31, Node_made 5);
    (Node_variable 30, Node_made 6)].
 Proof. vm_compute. split; reflexivity. Qed.
+
+(* The same call of known arity: the witness 9, [called] 10 and [apply]
+   11 of a direct call, which reads the known-arity witness of the
+   closure, and no delayed dep, whatever the mode. *)
+Example traverse_known_arity_call :
+  let F := traverse_unit Auto interface
+             (call_identity (Indirect_known_arity (Some [20]))) in
+  f_accessor F =
+  [(Node_made 11, Field_call_witness Known_arity_code_pointer,
+    Node_variable 13);
+   (Node_variable 12, Field_return_of_call (Normal 0), Node_made 9);
+   (Node_made 2, Field_return_of_call Exn, Node_made 9);
+   (Node_made 10, Field_code_id_of_call_witness, Node_made 9)]
+  ∧ f_alias F =
+  [(Node_made 9, Node_made 11); (Node_made 1, Node_variable 12);
+   (Node_made 3, Node_variable 30); (Node_variable 31, Node_made 5);
+   (Node_variable 30, Node_made 6)]
+  ∧ f_alias_if_any_source F = [].
+Proof. vm_compute. repeat split; reflexivity. Qed.
 
 (* Tupled code of two parameters (30 and 32). The witness of unknown
    arity, 9, takes one parameter, the tuple 10, whose fields are the

@@ -127,14 +127,14 @@
      [any_usage] ([cond_alias] is a [propagate] there). Elsewhere the
      model keeps a callee that the compiler drops, and whose binding
      the rebuild may have removed.
-   - Call kinds. The model has [Direct] and [Indirect]. [Indirect] is
-     read as [Indirect_unknown_arity], which the rebuild keeps. The call
-     kind that [decide_whether_apply_needs_calling_convention_change]
-     gives a direct call is [Direct] of the one code it calls, or
-     [Indirect_known_arity], which is [Indirect] in the model; the
-     arguments are those of a call of known arity in both cases, as in
-     the OCaml, where the new call kind is of known arity when the old
-     one is.
+   - Call kinds. The three call kinds are the compiler's. The rebuild
+     keeps a call of unknown arity. The call kind that
+     [decide_whether_apply_needs_calling_convention_change] gives a
+     direct call or a call of known arity is [Direct] of the one code
+     it calls, or of known arity, with the code ids it may call if they
+     are known; the arguments are those of a call of known arity in
+     every case, as in the OCaml, where the new call kind is of known
+     arity when the old one is.
    - [should_preserve_direct_calls] is a boolean, [true] for the modes
      [Auto] and [Always], which the rebuild treats alike, and [false]
      for [Never] and [Zero_alloc] (the model has no code that is checked
@@ -197,9 +197,10 @@
      it are kept; a continuation that has no decisions (one that is not
      bound in the term, as the return and exception continuations of
      the unit and of code are not) has all its arguments kept, as a
-     continuation of fixed arity has; a direct call whose callee calls
-     no code ([code_id_actually_directly_called] finds an empty set)
-     keeps its call kind; a name found where a code id is expected is
+     continuation of fixed arity has; a direct call or a call of known
+     arity whose callee calls no code
+     ([code_id_actually_directly_called] finds an empty set) keeps its
+     call kind; a name found where a code id is expected is
      ignored. *)
 
 From Stdlib Require Import ZArith List Bool.
@@ -755,30 +756,39 @@ Definition rebuild_switch (en : rebuild_env) (scrutinee : simple)
 (* Calls                                                                    *)
 (* ======================================================================== *)
 
-(* The call kind of [decide_whether_apply_needs_calling_convention_change]
-   (with [called]). *)
-Definition rewrite_call_kind (ap : apply_expr) : call_kind :=
-  match ap_call_kind ap with
-  | Indirect => Indirect
-  | Direct id =>
-    let call_kind_if_unknown :=
-      if preserve_direct_calls || negb (among id unit_code_ids)
-      then Direct id
-      else Indirect
-    in
-    match ap_callee ap with
-    | Const _ => call_kind_if_unknown
-    | Var _ | Symbol _ =>
-      match code_id_actually_directly_called (node_of_simple (ap_callee ap))
-      with
-      | None => call_kind_if_unknown
-      | Some ids =>
-        match Keyed.get_singleton Pos.eqb ids with
-        | Some id' => Direct id'
-        | None => if Keyed.is_empty ids then Direct id else Indirect
-        end
+(* [called] of [decide_whether_apply_needs_calling_convention_change]:
+   the call kind of a call of known arity or a direct call, given that
+   of a callee whose code is not known. *)
+Definition called_call_kind (ap : apply_expr) (call_kind_if_unknown : call_kind)
+    : call_kind :=
+  match ap_callee ap with
+  | Const _ => call_kind_if_unknown
+  | Var _ | Symbol _ =>
+    match code_id_actually_directly_called (node_of_simple (ap_callee ap))
+    with
+    | None => call_kind_if_unknown
+    | Some ids =>
+      match Keyed.get_singleton Pos.eqb ids with
+      | Some id' => Direct id'
+      | None =>
+        if Keyed.is_empty ids
+        then ap_call_kind ap
+        else Indirect_known_arity (Some ids)
       end
     end
+  end.
+
+(* The call kind of
+   [decide_whether_apply_needs_calling_convention_change]. *)
+Definition rewrite_call_kind (ap : apply_expr) : call_kind :=
+  match ap_call_kind ap with
+  | Indirect_unknown_arity => Indirect_unknown_arity
+  | Direct id =>
+    called_call_kind ap
+      (if preserve_direct_calls || negb (among id unit_code_ids)
+       then Direct id
+       else Indirect_known_arity None)
+  | Indirect_known_arity _ => called_call_kind ap (Indirect_known_arity None)
   end.
 
 (* The arguments of a call, at the mask of the arguments used: one not
@@ -804,8 +814,9 @@ Definition rebuild_arguments (en : rebuild_env) (ap : apply_expr)
     let callee := node_of_simple (ap_callee ap) in
     mask_arguments en
       (match ap_call_kind ap with
-       | Direct _ => arguments_used_by_known_arity_call callee (ap_args ap)
-       | Indirect =>
+       | Direct _ | Indirect_known_arity _ =>
+         arguments_used_by_known_arity_call callee (ap_args ap)
+       | Indirect_unknown_arity =>
          arguments_used_by_unknown_arity_call callee (ap_args_arity ap)
        end)
       (ap_args ap)

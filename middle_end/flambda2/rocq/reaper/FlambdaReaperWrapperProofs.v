@@ -881,8 +881,8 @@ Lemma called_some (ap : apply_expr) (id : code_id) :
     ∧ Keyed.get_singleton Pos.eqb ids = Some id.
 Proof.
   unfold code_id_actually_called.
-  destruct (ap_call_kind ap); try discriminate.
-  destruct (ap_callee ap); try discriminate;
+  destruct (ap_call_kind ap); try discriminate;
+    destruct (ap_callee ap); try discriminate;
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
     try discriminate; intros H; exists ids; split; auto.
 Qed.
@@ -1366,7 +1366,8 @@ Definition call_ok (ads : list decision) (ap : apply_expr) : Prop :=
 Definition call_ok_indirect (ads : list decision) (ap : apply_expr) : Prop :=
   check_unknown_widgets F T = true -> check_unknown_witnesses F T = true ->
   ∀ i fd kind,
-    ap_call_kind ap = Indirect -> length (ap_args_arity ap) <= 1 ->
+    ap_call_kind ap = Indirect_unknown_arity ->
+    length (ap_args_arity ap) <= 1 ->
     nth_error (unit_callee_decisions F T cannot_change cds unboxed e0 ap) i
     = Some (fd, kind) ->
     arm_pair (apply_decision_at ads i kind) fd = true ->

@@ -1568,7 +1568,8 @@ Proof.
   - (* What is left of an over-application calls the value returned. *)
     cbn [apply_cont_value ks_kinds].
     destruct vs as [ | v [ | v0 vs]]; try exact I.
-    destruct (shape_of_call S v Indirect rem ra (cs_result_arity cs))
+    destruct (shape_of_call S v Indirect_unknown_arity rem ra
+                (cs_result_arity cs))
       as [shp | ] eqn:Hsh; [ | exact I ].
     assert (Hk : map kind_of_value [v] = KS)
       by (cbn [map]; rewrite (shape_of_call_value _ _ _ _ _ _ _ Hsh), HKS;
@@ -1826,7 +1827,7 @@ Lemma shape_of_call_cases (S S' : static_env) (v : value)
       ∧ shape_of_call S' v kind vs ra rta
         = shape_of_closure_call S' cl kind0 vs0 ra0 rta.
 Proof.
-  unfold shape_of_call. destruct kind as [id | ].
+  unfold shape_of_call. destruct kind as [id | | code_ids].
   - right. exists v, (Direct id), vs, ra.
     destruct (partial_application_of v) as [[[cl applied] aa] | ];
       split; reflexivity.
@@ -1834,7 +1835,10 @@ Proof.
     + destruct ra as [ | a ra]; [ left; reflexivity | ].
       destruct (kinds_eqb _ _); [ | left; reflexivity ].
       right. eexists _, _, _, _. split; reflexivity.
-    + right. exists v, Indirect, vs, ra. split; reflexivity.
+    + right. exists v, Indirect_unknown_arity, vs, ra. split; reflexivity.
+  - right. exists v, (Indirect_known_arity code_ids), vs, ra.
+    destruct (partial_application_of v) as [[[cl applied] aa] | ];
+      split; reflexivity.
 Qed.
 
 (* Code of the same arities is called alike. *)
@@ -1995,9 +1999,24 @@ Proof.
   unfold shape_of_closure_call. cbv zeta.
   rewrite (closure_of_values S S' cl Hval).
   destruct (closure_of S cl) as [[called slots] | ]; [ | exact I ].
+  (* The tests of a call of known arity read the same code in both. *)
+  assert (Hkf : known_arity_full S' called ra0
+                = known_arity_full S called ra0).
+  { unfold known_arity_full.
+    destruct (lookup called (static_code S)) as [cc | ] eqn:Hcc.
+    - destruct (Hcode called cc Hcc) as (cc' & Hcc' & cs' & Hframe & _).
+      rewrite Hcc'.
+      destruct Hframe as (_ & Hpa' & _ & Hlen & _ & Htup1 & Htup1' & _).
+      destruct ra0 as [ | a0 ra0]; [ reflexivity | ]. cbv beta iota.
+      rewrite Htup1, Htup1', Hpa', Hlen. reflexivity.
+    - rewrite (lookup_none_keys _ _ called Hkeys Hcc). reflexivity. }
+  rewrite Hkf.
   destruct (match kind0 with
             | Direct named => Pos.eqb called named
-            | Indirect => true
+            | Indirect_unknown_arity => true
+            | Indirect_known_arity code_ids =>
+              code_ids_allow code_ids called
+              && known_arity_full S called ra0
             end); [ | exact I ].
   destruct (lookup called (static_code S)) as [cc | ] eqn:Hcc;
     [ | exact I ].
@@ -2206,7 +2225,8 @@ Proof.
     cbn [ks_shapes] in Hv.
     destruct vs as [ | v [ | v0 vs]];
       try (cbn [apply_cont_value]; exact I).
-    destruct (shape_of_call S v Indirect rem ra (cs_result_arity cs))
+    destruct (shape_of_call S v Indirect_unknown_arity rem ra
+                (cs_result_arity cs))
       as [shp | ] eqn:Hsh.
     2: { cbn [apply_cont_value]. rewrite Hsh. cbn [run_call]. exact I. }
     assert (Hvs : vs' = [v]).
@@ -2216,7 +2236,8 @@ Proof.
       exact (vrel_plain_eq _ _ _ (Htr [v] vs' Hv Hk)
                (Forall_cons _ eq_refl (Forall_nil _))). }
     subst vs'. cbn [apply_cont_value].
-    exact (ind_call_answered cs Indirect v rem ra c c' e e' S S' rd Hind Hc
+    exact (ind_call_answered cs Indirect_unknown_arity v rem ra c c' e e' S S'
+             rd Hind Hc
              He (fun ws ws' rd0 Hw => IHc ws ws' S S' rd0 Hw Hst) Hst).
 Qed.
 

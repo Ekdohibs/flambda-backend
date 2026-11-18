@@ -730,7 +730,7 @@ Proof.
   intros Hinv. unfold traverse_call_kind. cbv zeta.
   pose proof (cinv_note_simple (ap_callee ap) a Hinv) as Hb.
   set (b := note_simple (ap_callee ap) a) in *. clearbody b.
-  destruct (ap_call_kind ap) as [id | ].
+  destruct (ap_call_kind ap) as [id | | code_ids].
   - destruct (make_known_spec env ap return_args exn_arg b Hb)
       as (H1 & _ & _ & _ & _).
     destruct (make_known_arity_apply_widget env ap return_args exn_arg b)
@@ -747,6 +747,11 @@ Proof.
   - destruct (make_unknown_spec env ap return_args exn_arg b Hb)
       as (H1 & _ & _ & _).
     destruct (make_unknown_arity_apply_widget env ap return_args exn_arg b)
+      as [w c]. cbn [fst snd] in *. cbv beta iota zeta.
+    apply cinv_add_plain; [ exact H1 | plain_tac ].
+  - destruct (make_known_spec env ap return_args exn_arg b Hb)
+      as (H1 & _ & _ & _ & _).
+    destruct (make_known_arity_apply_widget env ap return_args exn_arg b)
       as [w c]. cbn [fst snd] in *. cbv beta iota zeta.
     apply cinv_add_plain; [ exact H1 | plain_tac ].
 Qed.

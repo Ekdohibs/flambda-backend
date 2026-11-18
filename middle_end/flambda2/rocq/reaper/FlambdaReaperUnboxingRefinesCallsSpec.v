@@ -472,9 +472,9 @@ Definition kept_args_ok (f : variable) (args : list simple) : bool :=
 Definition call_mask (s : solution) (f : variable) (ap : apply_expr)
     : list bool :=
   match ap_call_kind ap with
-  | Direct _ =>
+  | Direct _ | Indirect_known_arity _ =>
     arguments_used_by_known_arity_call F s (Node_variable f) (ap_args ap)
-  | Indirect =>
+  | Indirect_unknown_arity =>
     arguments_used_by_unknown_arity_call F s (Node_variable f)
       (ap_args_arity ap)
   end.

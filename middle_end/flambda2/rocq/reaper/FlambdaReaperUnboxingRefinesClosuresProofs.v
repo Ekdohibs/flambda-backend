@@ -984,7 +984,7 @@ Lemma rewrite_call_kind_c (ap : apply_expr) (id : code_id) :
   rewrite_call_kind F sol pdc unit_code_ids ap = Direct id.
 Proof.
   intros Hk Hc. unfold code_id_actually_called in Hc.
-  unfold rewrite_call_kind. rewrite Hk in Hc |- *.
+  unfold rewrite_call_kind. rewrite Hk in Hc |- *. unfold called_call_kind.
   destruct (ap_callee ap); try discriminate Hc;
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
     try discriminate Hc; rewrite Hc; reflexivity.
@@ -1001,7 +1001,8 @@ Lemma call_rebuilt (C : finite_map (list decision * bool))
   rr MM CH CSf (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hcall Hz. unfold repr_call in Hcall.
-  destruct (ap_call_kind ap) as [id | ] eqn:Hkind; [ | discriminate Hcall ].
+  destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind;
+    [ | discriminate Hcall | discriminate Hcall ].
   destruct (ap_callee ap) as [f | | ] eqn:Hcallee; try discriminate Hcall.
   destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
     [ | discriminate Hcall ].

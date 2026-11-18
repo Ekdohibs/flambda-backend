@@ -1493,7 +1493,10 @@ Proof.
       [ | discriminate Hs ].
     destruct (match kind' with
               | Direct named => Pos.eqb called named
-              | Indirect => true
+              | Indirect_unknown_arity => true
+              | Indirect_known_arity code_ids =>
+                code_ids_allow code_ids called
+                && known_arity_full statics called aa
               end);
       [ | discriminate Hs ].
     destruct (lookup called (static_code statics)) as [c | ] eqn:Hl;
@@ -1509,7 +1512,7 @@ Proof.
     destruct (code_is_tupled c); [ discriminate Hs | ].
     injection Hs as <-. exact I. }
   intros Hs. unfold shape_of_call in Hs.
-  destruct kind; [ exact (Hcl _ _ _ _ Hs) | ].
+  destruct kind; [ exact (Hcl _ _ _ _ Hs) | | exact (Hcl _ _ _ _ Hs) ].
   destruct (partial_application_of callee) as [[[closure applied] aa] | ];
     [ | exact (Hcl _ _ _ _ Hs) ].
   destruct args_arity; [ discriminate Hs | ].
@@ -3371,10 +3374,11 @@ Proof.
     exact (IH c (vs ++ extra) statics hp rd s' Hc0 Hst).
   - inversion Hc as [ | | | rem0 ra0 reta0 rt0 et0 Hrt Het ]; subst.
     destruct vs as [ | v [ | v2 vs]]; [ discriminate | | discriminate ].
-    destruct (shape_of_call statics v Indirect remaining ra reta)
+    destruct (shape_of_call statics v Indirect_unknown_arity remaining ra reta)
       as [shape | ] eqn:Hshape; [ | discriminate ].
-    apply (run_call_bounded B _ shape statics v Indirect remaining ra reta rt
-             et hp rd s' Hshape); [ | exact Hrt | exact Het | exact Hst ].
+    apply (run_call_bounded B _ shape statics v Indirect_unknown_arity
+             remaining ra reta rt et hp rd s' Hshape);
+      [ | exact Hrt | exact Het | exact Hst ].
     intros partial s'' H. exact (IH rt [partial] statics hp rd s'' Hrt Hst H).
 Qed.
 
@@ -3699,7 +3703,7 @@ Definition unchanged (id : code_id) (c : code) : Prop :=
 
 (* A call of unknown arity is rebuilt as in FlambdaReaperRebuild.v. *)
 Lemma rebuild_apply_indirect (en : rebuild_env) (ap : apply_expr) :
-  ap_call_kind ap = Indirect ->
+  ap_call_kind ap = Indirect_unknown_arity ->
   rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids code_metadatas first_fresh en ap
   = rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh en ap.
@@ -10573,38 +10577,60 @@ Proof.
   destruct Ha as [-> | []]. reflexivity.
 Qed.
 
-(* The call kind of the rebuilt call: the direct call of the code that
-   the callee is a closure of, or an indirect call. *)
+(* The call kind of the rebuilt call of a direct call with a group of
+   arguments: the direct call of the code that the callee is a closure
+   of, or a call of known arity that allows that code. *)
 Lemma rewrite_call_kind_cases (ap : apply_expr) (id : code_id)
     (b w apply_node : node) :
   ap_call_kind ap = Direct id ->
+  ap_args_arity ap <> [] ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
   may_come_from sol b (node_of_simple (ap_callee ap)) ->
   g_constructor G b (Field_call_witness Known_arity_code_pointer) w ->
   g_constructor G w Field_code_id_of_call_witness (Node_code_id id) ->
   may_come_from sol w w ->
-  rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap = Indirect
-  ∨ rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap
-    = Direct id.
+  calls_as_direct
+    (rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap) id
+    (ap_args_arity ap).
 Proof.
-  intros Hk Happly Hb Hcw Hcode Hww.
+  intros Hk Hne Happly Hb Hcw Hcode Hww.
   pose proof (directly_called_in _ _ _ _ id Happly Hb Hcw Hcode Hww) as Hin.
-  unfold rewrite_call_kind. rewrite Hk. cbv zeta.
+  unfold rewrite_call_kind, called_call_kind. rewrite Hk.
+  assert (Hdirect : calls_as_direct (Direct id) id (ap_args_arity ap))
+    by (right; left; reflexivity).
   assert (Hunknown :
-    (if preserve_direct_calls || negb (among id unit_code_ids)
-     then Direct id else Indirect) = Indirect
-    ∨ (if preserve_direct_calls || negb (among id unit_code_ids)
-       then Direct id else Indirect) = Direct id)
-    by (destruct (_ || _); auto).
+    calls_as_direct
+      (if preserve_direct_calls || negb (among id unit_code_ids)
+       then Direct id else Indirect_known_arity None) id (ap_args_arity ap))
+    by (destruct (_ || _);
+        [ exact Hdirect
+        | right; right; split; [ exists None; split; reflexivity
+                               | exact Hne ] ]).
   revert Hin.
   destruct (ap_callee ap) as [x | sym | c]; intros Hin; [ | | exact Hunknown ];
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
     try exact Hunknown;
     specialize (Hin ids eq_refl);
     (destruct (Keyed.get_singleton Pos.eqb ids) as [id' | ] eqn:Hs;
-     [ right; f_equal; exact (singleton_in ids id id' Hs Hin)
-     | destruct (Keyed.is_empty ids); auto ]).
+     [ rewrite (singleton_in ids id id' Hs Hin); exact Hdirect
+     | destruct (Keyed.is_empty ids);
+       [ exact Hdirect
+       | right; right; split; [ | exact Hne ];
+         exists (Some ids); split; [ reflexivity | ];
+         exact (proj2 (among_In id ids) Hin) ] ]).
+Qed.
+
+(* A call known to call code is rebuilt as the direct call of it. *)
+Lemma rewrite_call_kind_called (ap : apply_expr) (id : code_id) :
+  code_id_actually_called F sol ap = Some id ->
+  rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap = Direct id.
+Proof.
+  unfold code_id_actually_called, rewrite_call_kind, called_call_kind.
+  destruct (ap_call_kind ap); [ | intros H; discriminate H | ];
+    destruct (ap_callee ap); try (intros H; discriminate H);
+    destruct (code_id_actually_directly_called F sol _) as [ids | ];
+    try (intros H; discriminate H); intros Hs; rewrite Hs; reflexivity.
 Qed.
 
 (* Whether code changes its calling convention does not depend on its
@@ -11096,7 +11122,7 @@ Lemma call_rebuilt_code (callee' : value) (kind : call_kind) (id : code_id)
     (callee_vars' : env) :
   unchanged id c ->
   closure_of statics' callee' = Some (id, slots') ->
-  kind = Indirect ∨ kind = Direct id ->
+  calls_as_direct kind id args_arity ->
   lookup id (static_code statics') = Some (rebuild_c id c) ->
   code_is_tupled c = false ->
   length args_arity = length (code_params_arity c) ->
@@ -11120,14 +11146,10 @@ Proof.
   assert (Hshape : shape_of_call statics' callee' kind vs' args_arity
                      return_arity
                    = Some (Full_call callee' (rebuild_c id c) vs' args_arity)).
-  { assert (Hfull' :
-      shape_of_closure_call statics' callee' kind vs' args_arity return_arity
-      = Some (Full_call callee' (rebuild_c id c) vs' args_arity)).
-    { apply (shape_of_closure_call_full _ _ _ _ _ _ id slots' _ Hcl Hk Hcode);
-        [ rewrite Et; exact Htup | rewrite Epa; exact Hfull ]. }
-    destruct Hk as [-> | ->]; [ | exact Hfull' ].
-    unfold shape_of_call.
-    destruct callee'; try discriminate Hcl; exact Hfull'. }
+  { rewrite (shape_of_call_as_direct _ _ _ _ _ _ id slots' Hcl Hk).
+    apply (shape_of_closure_call_as_direct _ _ _ _ _ _ id slots' _ Hcl Hk
+             Hcode);
+      [ rewrite Et; exact Htup | rewrite Epa; exact Hfull ]. }
   unfold call_function. rewrite Hshape. cbn [run_call]. unfold call_code.
   rewrite Hbinds, Hk1, Epa, Hk2, Era, Hk3. cbn [negb andb].
   rewrite Ep, Em, Hbind, Er, Ee. reflexivity.
@@ -11207,7 +11229,7 @@ Lemma call_rebuilt_code_cc (callee' : value) (kind : call_kind)
     (callee_vars' : env) :
   changing id c pd rd ->
   closure_of statics' callee' = Some (id, slots') ->
-  kind = Indirect ∨ kind = Direct id ->
+  kind = Indirect_unknown_arity ∨ kind = Direct id ->
   lookup id (static_code statics') = Some (rebuild_c id c) ->
   binds_statics (code_body (rebuild_c id c)) = false ->
   kinds_eqb (map kind_of_value vs')
@@ -12243,7 +12265,7 @@ Qed.
    of the code of its callee, which the unit binds. *)
 Lemma indirect_call_step (ap : apply_expr) (vars : env) (K : cont_env)
     (statics : static_env) (hp : heap) (rcd : read_record) :
-  ap_call_kind ap = Indirect ->
+  ap_call_kind ap = Indirect_unknown_arity ->
   (∀ (id : code_id) (c : code),
      (id, c) ∈ codes ->
      code_is_tupled c = false
@@ -12284,10 +12306,10 @@ Proof.
     eqn:Hextra; [ | exact I ].
   unfold call_function. rewrite Hkind.
   assert (Hshape :
-    shape_of_call statics callee Indirect vs (ap_args_arity ap)
+    shape_of_call statics callee Indirect_unknown_arity vs (ap_args_arity ap)
       (ap_return_arity ap)
-    = shape_of_closure_call statics callee Indirect vs (ap_args_arity ap)
-        (ap_return_arity ap)).
+    = shape_of_closure_call statics callee Indirect_unknown_arity vs
+        (ap_args_arity ap) (ap_return_arity ap)).
   { unfold shape_of_call. rewrite (Hnpa callee eq_refl). reflexivity. }
   rewrite Hshape.
   destruct (closure_of statics callee) as [[id slots] | ] eqn:Hclosure;
@@ -12296,7 +12318,7 @@ Proof.
     [ | unfold shape_of_closure_call; rewrite Hclosure, Hcode; exact I ].
   destruct (Hcodes id c Hcode) as [Hin _].
   destruct (Hfull id c Hin) as [Htupled Hlen].
-  rewrite (shape_of_closure_call_full statics callee Indirect vs
+  rewrite (shape_of_closure_call_full statics callee Indirect_unknown_arity vs
              (ap_args_arity ap) (ap_return_arity ap) id slots c Hclosure
              (or_introl eq_refl) Hcode Htupled (eq_sym Hlen)).
   simpl. unfold call_code.
@@ -12818,9 +12840,9 @@ Lemma call_entered (ap : apply_expr) (vars vars' : env)
        statics hp rcd) ->
   eval_simple vars' (ap_callee ap) = Some callee' ->
   closure_of statics' callee' = Some (id, slots') ->
-  rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap = Indirect
-  ∨ rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap
-    = Direct id ->
+  calls_as_direct
+    (rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap) id
+    (ap_args_arity ap) ->
   lookup id (static_code statics')
   = Some (rebuild_c id (Code params mc ret exn_k md cbody)) ->
   cm_is_tupled md = false ->
@@ -13368,9 +13390,8 @@ Lemma call_entered_cc (ap : apply_expr) (vars vars' : env)
        statics hp rcd) ->
   eval_simple vars' (ap_callee ap) = Some callee' ->
   closure_of statics' callee' = Some (id, slots') ->
-  rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap = Indirect
-  ∨ rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap
-    = Direct id ->
+  rewrite_call_kind F sol preserve_direct_calls unit_code_ids ap
+  = Direct id ->
   lookup id (static_code statics')
   = Some (rebuild_c id (Code params mc ret exn_k md cbody)) ->
   scrutinees_used G (Some id) cbody ->
@@ -13559,7 +13580,7 @@ Proof.
              (Code params mc ret exn_k md cbody) pd rd
              (filter_kept (map is_kept pd) vs') _ _ statics' hp' rcd'
                callee_vars'
-             Hch Hclosure' Hkind' Hcode').
+             Hch Hclosure' (or_intror Hkind') Hcode').
     - apply rebuilt_code_no_statics; assumption.
     - apply kinds_eqb_eq. rewrite Epa, <- filter_kept_map, Hkinds', Hk1.
       rewrite (unarize_per_parameter_eq _ _ Hk2).
@@ -13981,7 +14002,11 @@ Proof.
   subst e'. cbn [rebuild_expr_cc] in Hconts |- *.
   (* The code is of the fragment, and as the unit asks. *)
   pose proof Hfrag_ap as Hall. unfold apply_in_flow_fragment in Hall.
-  rewrite Hkind, forallb_forall in Hall. specialize (Hall (id, c) Hin_codes).
+  rewrite Hkind in Hall. apply andb_true_iff in Hall as [Hall Hne_args].
+  assert (Hgroup : ap_args_arity ap <> []).
+  { intros E. rewrite E in Hne_args. simpl in Hne_args.
+    discriminate Hne_args. }
+  rewrite forallb_forall in Hall. specialize (Hall (id, c) Hin_codes).
   simpl in Hall. rewrite Pos.eqb_refl in Hall. simpl in Hall.
   apply andb_true_iff in Hall as [Htupled Hfull].
   apply negb_true_iff in Htupled. apply Nat.eqb_eq in Hfull.
@@ -13995,8 +14020,8 @@ Proof.
   assert (Hnc : ∀ c0 : const, ap_callee ap <> Const c0).
   { intros c0 E. rewrite E in Hcallee. injection Hcallee as <-.
     discriminate Hclosure. }
-  pose proof (rewrite_call_kind_cases ap id b w apply_node Hkind Happly Hb Hcw
-                Hcodeid Hw_self) as Hkind'.
+  pose proof (rewrite_call_kind_cases ap id b w apply_node Hkind Hgroup Happly
+                Hb Hcw Hcodeid Hw_self) as Hkind'.
   assert (Hl_exn : is_local (Field_return_of_call Exn) = false)
     by (apply (not_local is_local Hlocal); intros; discriminate).
   assert (Hl_ret : ∀ i : nat,
@@ -14203,7 +14228,9 @@ Proof.
              callee callee' slots' vs vs' extra extra' callee_vars
              callee_vars' rets Hun Hret_ce Hexn_ce Henv Hconts Hnr_cc Hst Hheap
              Hk_exn Hk_ret Hks Hagree Hxs Hxagree Hff_exn Hextra Hextra' Hkx
-             Hflow' Hcallee' Hclosure' Hkind' Hcode' Hscr_c Hcf_c Hraises_c
+             Hflow' Hcallee' Hclosure'
+             (rewrite_call_kind_called ap id Hcalled_ap) Hcode' Hscr_c Hcf_c
+             Hraises_c
              Hclosed_c Hkinded_c Hfresh_c (Hraise_c Hne) Hrc_c Hne Hbinds
              Hcounted
              Hbody Lr Lp Hpd Hrd Hvs' Hkinds' Hk1 Hk2' Hk3 La Hbind Hbind' Hok'
@@ -14475,9 +14502,14 @@ Definition called_ok (rt : cont_value) : Prop :=
     codes_ok G noted deps cds keep codes symbols heap_prims slots_read
       statics ->
     statics_flow_ statics ->
-    result_flow (call_function callee Indirect vs a ret rt et statics hp rcd) ->
-    result_rel (call_function callee Indirect vs a ret rt et statics hp rcd)
-      (call_function callee' Indirect vs' a ret rt' et' statics' hp' rcd').
+    result_flow
+      (call_function callee Indirect_unknown_arity vs a ret rt et statics hp
+         rcd) ->
+    result_rel
+      (call_function callee Indirect_unknown_arity vs a ret rt et statics hp
+         rcd)
+      (call_function callee' Indirect_unknown_arity vs' a ret rt' et' statics'
+         hp' rcd').
 
 Lemma over_rel_inv (n0 : node) (c c' : cont_value) :
   over_rel n0 c c' ->
@@ -15182,8 +15214,9 @@ Lemma shape_rebuilt (statics statics' : static_env) (closure closure' : value)
   lookup id (static_code statics') = Some (rebuild_c id c) ->
   code_is_tupled c = false ->
   map kind_of_value all' = map kind_of_value all ->
-  shape_of_closure_call statics closure Indirect all A ret = Some shape ->
-  shape_of_closure_call statics' closure' Indirect all' A ret
+  shape_of_closure_call statics closure Indirect_unknown_arity all A ret
+  = Some shape ->
+  shape_of_closure_call statics' closure' Indirect_unknown_arity all' A ret
   = Some
       (match shape with
        | Full_call _ _ _ _ => Full_call closure' (rebuild_c id c) all' A
@@ -15318,7 +15351,8 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
   statics_rel statics statics' -> heaps_rel hp hp' ->
   codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   statics_flow_ statics ->
-  shape_of_closure_call statics closure Indirect (applied ++ vs) (aa ++ a) ret
+  shape_of_closure_call statics closure Indirect_unknown_arity (applied ++ vs)
+    (aa ++ a) ret
   = Some shape ->
   result_flow
     (run_call (fun partial => apply_cont_value rt [partial] statics hp rcd)
@@ -15327,8 +15361,8 @@ Lemma closure_called (rt rt' et et' : cont_value) (closure closure' : value)
     (run_call (fun partial => apply_cont_value rt [partial] statics hp rcd)
        (Some shape) ret rt et statics hp rcd)
     (run_call (fun partial => apply_cont_value rt' [partial] statics' hp' rcd')
-       (shape_of_closure_call statics' closure' Indirect (applied' ++ vs')
-          (aa ++ a) ret)
+       (shape_of_closure_call statics' closure' Indirect_unknown_arity
+          (applied' ++ vs') (aa ++ a) ret)
        ret rt' et' statics' hp' rcd').
 Proof.
   intros Hret_ok Hexf Hunt Hne Hlen_ws Hrel_c HhuM Hcl_pa Hshift Haa Ha
@@ -15935,7 +15969,8 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
   statics_rel statics statics' -> heaps_rel hp hp' ->
   codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   statics_flow_ statics ->
-  shape_of_closure_call statics callee Indirect vs a ret = Some shape ->
+  shape_of_closure_call statics callee Indirect_unknown_arity vs a ret
+  = Some shape ->
   result_flow
     (run_call (fun partial => apply_cont_value rt [partial] statics hp rcd)
        (Some shape) ret rt et statics hp rcd) ->
@@ -15943,7 +15978,7 @@ Lemma tupled_called (rt rt' et et' : cont_value) (callee callee' : value)
     (run_call (fun partial => apply_cont_value rt [partial] statics hp rcd)
        (Some shape) ret rt et statics hp rcd)
     (run_call (fun partial => apply_cont_value rt' [partial] statics' hp' rcd')
-       (shape_of_closure_call statics' callee' Indirect vs' a ret)
+       (shape_of_closure_call statics' callee' Indirect_unknown_arity vs' a ret)
        ret rt' et' statics' hp' rcd').
 Proof.
   intros Hexf Hunt Hlen_ws Hrel_c HhuN Ha Hclosure Hcode Htupled Hreads Hret
@@ -16055,7 +16090,7 @@ Proof.
     - exfalso. exact (H (au_hu _ _ _ Hc _ Hlive')). }
   destruct (code_fields_rebuild id c Hun) as (_ & _ & _ & _ & Epa & _ & Et).
   rewrite (FlambdaTupledProofs.shape_of_closure_call_tupled statics' callee'
-             Indirect tuple' rest' first rest_arity ret id slots'
+             Indirect_unknown_arity tuple' rest' first rest_arity ret id slots'
              (rebuild_c id c) fields' Hclosure' (or_introl eq_refl) Hcode'
              ltac:(rewrite Et; exact Htupled)
              ltac:(rewrite (proj1 Ha); exact Hk1) Hk2
@@ -16351,8 +16386,8 @@ Proof.
       Hvs_pa
     Hreads Hret Hrt_pa Hexn Hst Hheap Hcodes Hsflow Hflow'.
   unfold call_function in Hflow' |- *.
-  destruct (shape_of_call statics callee Indirect vs a ret) as [shape | ]
-    eqn:Hshape; [ | exact I ].
+  destruct (shape_of_call statics callee Indirect_unknown_arity vs a ret)
+    as [shape | ] eqn:Hshape; [ | exact I ].
   destruct (partial_application_of callee)
     as [[[closure applied] aa] | ] eqn:Hpa_of.
   - (* A partial application: the call of its closure with the arguments
@@ -16397,7 +16432,8 @@ Proof.
   - (* A closure. *)
     unfold shape_of_call in Hshape. rewrite Hpa_of in Hshape.
     assert (Hshape' :
-      shape_of_closure_call statics callee Indirect vs a ret = Some shape)
+      shape_of_closure_call statics callee Indirect_unknown_arity vs a ret
+      = Some shape)
       by exact Hshape.
     destruct (shape_of_closure_call_cases _ _ _ _ _ _ _ Hshape')
       as (id0 & slots0 & c0 & vs0 & a0 & Hclosure0 & Hcode0 & _ & _ & _).
@@ -16650,11 +16686,12 @@ Lemma call_function_kinds (callee : value) (vs : list value) (a ret : arity)
   indirect_codes ->
   codes_ok G noted deps cds keep codes symbols heap_prims slots_read statics ->
   map kind_of_value vs <> unarize a ->
-  call_function callee Indirect vs a ret rt et statics hp rcd = Undefined.
+  call_function callee Indirect_unknown_arity vs a ret rt et statics hp rcd
+  = Undefined.
 Proof.
   intros Hunt Hcodes Hk. unfold call_function.
-  destruct (shape_of_call statics callee Indirect vs a ret) as [shape | ]
-    eqn:Hshape; [ | reflexivity ].
+  destruct (shape_of_call statics callee Indirect_unknown_arity vs a ret)
+    as [shape | ] eqn:Hshape; [ | reflexivity ].
   unfold shape_of_call in Hshape.
   destruct (partial_application_of callee) as [[[cl app] aa] | ].
   - exfalso. destruct a as [ | a0 a1]; [ discriminate Hshape | ].
@@ -16689,12 +16726,12 @@ Lemma call_function_closure_not_exit (callee : value) (vs : list value)
     (et : cont_value) (statics : static_env) (hp : heap) (rcd : read_record)
     (k : continuation)
     (vs' : list value) (hp' : heap) (rcd0 : read_record) :
-  call_function callee Indirect vs a ret (Closure h hvars hconts recursive) et
-    statics hp rcd
+  call_function callee Indirect_unknown_arity vs a ret
+    (Closure h hvars hconts recursive) et statics hp rcd
   <> Exit k vs' hp' rcd0.
 Proof.
   unfold call_function.
-  destruct (shape_of_call statics callee Indirect vs a ret)
+  destruct (shape_of_call statics callee Indirect_unknown_arity vs a ret)
     as [[cl c vs0 a0 | cl c vs0 rem a0 ra | partial] | ];
     cbn [run_call].
   - apply call_code_not_exit.
@@ -16714,12 +16751,13 @@ Lemma call_function_not_exit (callee : value) (vs : list value)
   (ret = [Singleton Value] ->
    ∀ v : value, apply_cont_value rt [v] statics hp rcd <> Exit k vs' hp' rcd0)
      ->
-  call_function callee Indirect vs a ret rt et statics hp rcd
+  call_function callee Indirect_unknown_arity vs a ret rt et statics hp rcd
   <> Exit k vs' hp' rcd0.
 Proof.
   intros H. unfold call_function.
-  pose proof (shape_of_call_arities statics callee Indirect vs a ret) as Ha.
-  destruct (shape_of_call statics callee Indirect vs a ret)
+  pose proof (shape_of_call_arities statics callee Indirect_unknown_arity vs a
+                ret) as Ha.
+  destruct (shape_of_call statics callee Indirect_unknown_arity vs a ret)
     as [[cl c vs0 a0 | cl c vs0 rem a0 ra | partial] | ];
     cbn [run_call].
   - apply call_code_not_exit.
@@ -16747,7 +16785,7 @@ Lemma indirect_answered (ap : apply_expr) (vars vars' : env)
     (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
     (rcd rcd' : read_record)
     (e' : expr) :
-  ap_call_kind ap = Indirect ->
+  ap_call_kind ap = Indirect_unknown_arity ->
   related (State (Apply ap) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd') ->
   answered_r related
@@ -16853,8 +16891,8 @@ Proof.
     [ | unfold answered_h; rewrite step_apply, Hcallee, Hvs, Hextra; exact I ].
   assert (Hstep1 :
     step (State (Apply ap) vars conts statics hp rcd)
-    = call_function callee Indirect vs (ap_args_arity ap) (ap_return_arity ap)
-        (resolve (ap_continuation ap) conts)
+    = call_function callee Indirect_unknown_arity vs (ap_args_arity ap)
+        (ap_return_arity ap) (resolve (ap_continuation ap) conts)
         (with_extra_args (resolve (ap_exn_continuation ap) conts) extra)
         statics hp rcd)
     by (rewrite step_apply, Hcallee, Hvs, Hextra, Hkind; reflexivity).
@@ -16865,7 +16903,7 @@ Proof.
   }
   destruct Hne_or as [Hne_a | Hnil].
   2: { unfold answered_h. rewrite Hstep1, Hnil. unfold call_function.
-       destruct (shape_of_call statics callee Indirect vs []
+       destruct (shape_of_call statics callee Indirect_unknown_arity vs []
                    (ap_return_arity ap)) as [shape | ] eqn:Hshape;
          [ exfalso | exact I ].
        unfold shape_of_call in Hshape.
@@ -17196,8 +17234,8 @@ Proof.
             = resolve (ap_exn_continuation ap) conts' ->
             step (State (Apply (with_continuation ap' k1)) vars' conts1
                     statics' hp' rcd')
-            = call_function callee' Indirect vs' (ap_args_arity ap)
-                (ap_return_arity ap) (resolve k1 conts1)
+            = call_function callee' Indirect_unknown_arity vs'
+                (ap_args_arity ap) (ap_return_arity ap) (resolve k1 conts1)
                 (with_extra_args (resolve (ap_exn_continuation ap) conts')
                    extra'')
                 statics' hp' rcd').
@@ -17390,7 +17428,26 @@ Proof.
         reflexivity.
 Qed.
 
-(* A call: direct or indirect. *)
+(* A call of known arity is not in the fragment. *)
+Lemma known_arity_answered (ap : apply_expr)
+    (code_ids : option (list code_id)) (vars vars' : env)
+    (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
+    (rcd rcd' : read_record)
+    (e' : expr) :
+  ap_call_kind ap = Indirect_known_arity code_ids ->
+  related (State (Apply ap) vars conts statics hp rcd)
+    (State e' vars' conts' statics' hp' rcd') ->
+  answered_r related
+    (State (Apply ap) vars conts statics hp rcd)
+    (State e' vars' conts' statics' hp' rcd').
+Proof.
+  intros Hkind. related_intro.
+  destruct He as (Hfrag_ap & _).
+  unfold apply_in_flow_fragment in Hfrag_ap. rewrite Hkind in Hfrag_ap.
+  discriminate Hfrag_ap.
+Qed.
+
+(* A call: direct, of unknown arity, or of known arity. *)
 Lemma apply_answered (ap : apply_expr) (vars vars' : env)
     (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
     (rcd rcd' : read_record)
@@ -17401,13 +17458,15 @@ Lemma apply_answered (ap : apply_expr) (vars vars' : env)
     (State (Apply ap) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd').
 Proof.
-  destruct (ap_call_kind ap) as [id | ] eqn:Hkind.
+  destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind.
   - exact (direct_answered ap id vars vars' conts conts' statics statics' hp hp'
     rcd rcd'
              e' Hkind).
   - exact (indirect_answered ap vars vars' conts conts' statics statics' hp hp'
     rcd rcd'
              e' Hkind).
+  - exact (known_arity_answered ap code_ids vars vars' conts conts' statics
+             statics' hp hp' rcd rcd' e' Hkind).
 Qed.
 
 Lemma related_answered (s t : state) :
@@ -17923,8 +17982,7 @@ Proof.
     intros ap _ env _.
     eapply grows_weaken;
       [ | apply (makes_grows []); apply (traverse_apply_makes env []) ].
-    + intros; exact I.
-    + unfold apply_in_flow_fragment. destruct (ap_call_kind ap); reflexivity.
+    intros; exact I.
   - (* [Apply_cont] *)
     intros ac _ env _.
     eapply grows_weaken;
@@ -20033,7 +20091,7 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin _ (Hhs _ Hin)).
   - intros ap bound H. unfold direct_tail_call in H. unfold direct_call.
-    destruct (ap_call_kind ap); [ | discriminate H ].
+    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
     apply andb_true_iff in H as [H Hk]. apply andb_true_iff in H as [H _].
     apply andb_true_iff in H as [H Hx]. apply andb_true_iff in H as [_ He].
     rewrite He, Hx, Hk. reflexivity.
@@ -20071,7 +20129,7 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin _ (Hhs _ Hin)).
   - intros ap bound H. unfold direct_call in H. unfold only_direct_call.
-    destruct (ap_call_kind ap); [ | discriminate H ].
+    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
     apply andb_true_iff in H as [_ Hk]. exact Hk.
   - reflexivity.
   - reflexivity.
@@ -20107,7 +20165,7 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold only_direct_call in H. unfold full_call.
-    destruct (ap_call_kind ap); [ | discriminate H ].
+    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
     rewrite H. reflexivity.
   - reflexivity.
   - reflexivity.
@@ -20143,7 +20201,7 @@ Proof.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold full_call in H. unfold generic_call.
     apply andb_true_iff in H as [Hk Hcs]. rewrite Hk. cbn [andb].
-    destruct (ap_call_kind ap); [ reflexivity | ].
+    destruct (ap_call_kind ap); [ reflexivity | | discriminate Hcs ].
     rewrite forallb_forall in Hcs |- *. intros [id c] Hin.
     specialize (Hcs (id, c) Hin). cbv beta iota in Hcs |- *.
     apply andb_true_iff in Hcs as [Hcs _]. exact Hcs.
@@ -20181,7 +20239,7 @@ Proof.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold generic_call in H. unfold tupled_call.
     apply andb_true_iff in H as [Hk Hcs]. rewrite Hk. cbn [andb].
-    destruct (ap_call_kind ap); [ reflexivity | ].
+    destruct (ap_call_kind ap); [ reflexivity | | discriminate Hcs ].
     rewrite forallb_forall in Hcs |- *. intros [id c] Hin.
     specialize (Hcs (id, c) Hin). cbv beta iota in Hcs |- *.
     rewrite Hcs. reflexivity.

@@ -132,12 +132,13 @@
    ([Closure_of_set]) and of projections from them
    ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
    recursive or not, [Apply_cont]s (raises among them), [Switch]es,
-   [Invalid], calls, direct or not, with extra arguments for their
-   exception continuations or not, and [Let_static]s of code, of blocks,
-   of boxed numbers, of strings, of immutable arrays of values and of
-   closures of static sets. Every primitive is in it, those of the heap
-   ([prim_of_heap]) among them, and so are partial applications and
-   over-applications, which calls of unknown arity make.
+   [Invalid], calls, direct or of unknown arity, with extra arguments
+   for their exception continuations or not, and [Let_static]s of code,
+   of blocks, of boxed numbers, of strings, of immutable arrays of
+   values and of closures of static sets. Every primitive is in it,
+   those of the heap ([prim_of_heap]) among them, and so are partial
+   applications and over-applications, which calls of unknown arity
+   make.
    [in_flow_fragment], the fragment of the statements before the
    machine ran the primitives of the heap, leaves those out, and is
    narrower ([in_flow_fragment_in_heap_fragment_statement]); the
@@ -145,26 +146,28 @@
    (FlambdaReaperRebuildSpec.v). The primitives of regions are in it:
    the machine gives none of them a value, so a run that reaches one
    goes wrong there, and what they do (FlambdaRegionsSpec.v) is not
-   looked at. The code that a direct call names, if the unit binds it,
-   is not tupled and has as many parameters as the call has arguments
-   (S7's hypothesis); in a unit with an indirect call, code that is not
-   tupled has parameters, and tupled code has parameters of one
-   component each. The body of code binds nothing
-   static, its two continuations differ, and it applies only
+   looked at. A direct call has a group of arguments at least, and the
+   code that it names, if the unit binds it, is not tupled and has as
+   many parameters as the call has arguments (S7's hypothesis): the
+   rebuild may make it a call of known arity, which is undefined with no
+   group of arguments; in a unit with a call of unknown arity, code that
+   is not tupled has parameters, and tupled code has parameters of one
+   component each. Calls of known arity are not in it. The body of code
+   binds nothing static, its two continuations differ, and it applies only
    continuations in scope, each to as many values as it has parameters,
-   the return continuation of the code to as many as the code has
-   results, and its exception continuation, or that of a call, to one
-   and the extra arguments of the call ([conts_counted]); the closure
-   symbols of a static set are symbols that the unit binds, and its
-   slot is among its function slots; the code ids that the unit binds
-   are distinct. Not in it: the older forms of sets of closures
-   ([Set_of_closures], [Static_const_set_of_closures], and
-   [Project_value_slot], which reads a value slot from a closure at any
-   function slot), and direct calls of tupled code (the compiler's are
-   in the convention of the code, which the model has no call kind
-   for). The older forms are the model's first presentation of a set of
-   closures, from before function slots; no conversion of a term of the
-   compiler makes them (tests/tools/flsemantics.ml, which makes
+   the return continuation of the code to as many as the code has results,
+   and its exception continuation, or that of a call, to one and the extra
+   arguments of the call ([conts_counted]); the closure symbols of a
+   static set are symbols that the unit binds, and its slot is among its
+   function slots; the code ids that the unit binds are distinct. Not in
+   it: the older forms of sets of closures ([Set_of_closures],
+   [Static_const_set_of_closures], and [Project_value_slot], which reads a
+   value slot from a closure at any function slot), and direct calls of
+   tupled code (the compiler's are in the convention of the code, which
+   the model has no call kind for). The older forms are the model's first
+   presentation of a set of closures, from before function slots; no
+   conversion of a term of the compiler makes them
+   (tests/tools/flsemantics.ml, which makes
    [Closure_of_set], [Static_const_closure_of_set] and
    [Project_value_slot_from] of every set and projection), and
    FlambdaModel.v is to lose them. Their closures are values of other
@@ -404,10 +407,11 @@ Definition singleton_params (a : arity) : bool :=
        end)
     a.
 
-(* A direct call of code that, if the unit binds it, is not tupled and
-   has as many parameters as the call has arguments; an indirect call in
-   a unit whose code, if not tupled, has parameters, and if tupled, has
-   parameters of one component each. *)
+(* A direct call with one group of arguments at least, of code that, if
+   the unit binds it, is not tupled and has as many parameters as the
+   call has arguments; a call of unknown arity in a unit whose code, if
+   not tupled, has parameters, and if tupled, has parameters of one
+   component each. No call of known arity. *)
 Definition apply_in_flow_fragment (codes : list (code_id * code))
     (ap : apply_expr) : bool :=
   match ap_call_kind ap with
@@ -419,7 +423,9 @@ Definition apply_in_flow_fragment (codes : list (code_id * code))
              && Nat.eqb (length (ap_args_arity ap))
                   (length (code_params_arity c))))
       codes
-  | Indirect =>
+    && negb (Nat.eqb (length (ap_args_arity ap)) 0)
+  | Indirect_known_arity _ => false
+  | Indirect_unknown_arity =>
     forallb
       (fun '(_, c) =>
          if code_is_tupled c
@@ -1294,14 +1300,14 @@ Definition code21 : code :=
     (return_to 6 [Var 40]).
 
 Definition partial_call : apply_expr :=
-  {| ap_callee := Var 10; ap_call_kind := Indirect;
+  {| ap_callee := Var 10; ap_call_kind := Indirect_unknown_arity;
      ap_args := [Const (Tagged_immediate 7)];
      ap_continuation := 5; ap_exn_continuation := 2; ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
      ap_return_arity := [Singleton Value] |}.
 
 Definition over_call : apply_expr :=
-  {| ap_callee := Var 12; ap_call_kind := Indirect;
+  {| ap_callee := Var 12; ap_call_kind := Indirect_unknown_arity;
      ap_args := [Var 11; Const (Tagged_immediate 9)];
      ap_continuation := 1; ap_exn_continuation := 8;
      ap_exn_extra_args := [(Const (Tagged_immediate 3), Value)];

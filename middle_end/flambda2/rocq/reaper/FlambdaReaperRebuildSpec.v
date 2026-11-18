@@ -562,8 +562,10 @@ Definition no_code_no_call_statement : Prop :=
    argument with the exception, returns one value, and gives arguments
    of kinds other than [Region] and [Rec_info]. The bodies of code are
    checked with no handler in scope. What else a direct call is asked,
-   [in_flow_fragment] asks: the code it names, if the unit binds it, is
-   not tupled and has as many parameters as the call has arguments. *)
+   [in_flow_fragment] asks: it has a group of arguments at least, and
+   the code it names, if the unit binds it, is not tupled and has as many
+   parameters as the call has arguments. No check of this file lets a
+   call be of known arity. *)
 Definition argument_kind_ok (kind : flambda_kind) : bool :=
   match kind with
   | Region | Rec_info => false
@@ -579,7 +581,7 @@ Definition direct_tail_call (bound : list continuation) (ap : apply_expr)
     && Nat.eqb (length (ap_exn_extra_args ap)) 0
     && Nat.eqb (length (unarize (ap_return_arity ap))) 1
     && forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect => false
+  | Indirect_unknown_arity | Indirect_known_arity _ => false
   end.
 
 Fixpoint direct_tail_calls (bound : list continuation) (e : expr) : bool :=
@@ -636,7 +638,7 @@ Definition direct_call (bound : list continuation) (ap : apply_expr)
     negb (among (ap_exn_continuation ap) bound)
     && Nat.eqb (length (ap_exn_extra_args ap)) 0
     && forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect => false
+  | Indirect_unknown_arity | Indirect_known_arity _ => false
   end.
 
 Fixpoint direct_calls (bound : list continuation) (e : expr) : bool :=
@@ -686,7 +688,7 @@ Definition direct_tail_calls_direct_calls_statement : Prop :=
 Definition only_direct_call (ap : apply_expr) : bool :=
   match ap_call_kind ap with
   | Direct _ => forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect => false
+  | Indirect_unknown_arity | Indirect_known_arity _ => false
   end.
 
 Fixpoint only_direct_calls (e : expr) : bool :=
@@ -735,7 +737,8 @@ Definition full_call (codes : list (code_id * code)) (ap : apply_expr)
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
      | Direct _ => true
-     | Indirect =>
+     | Indirect_known_arity _ => false
+     | Indirect_unknown_arity =>
        forallb
          (fun '(_, c) =>
             negb (code_is_tupled c)
@@ -792,7 +795,9 @@ Definition generic_call (codes : list (code_id * code)) (ap : apply_expr)
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
      | Direct _ => true
-     | Indirect => forallb (fun '(_, c) => negb (code_is_tupled c)) codes
+     | Indirect_known_arity _ => false
+     | Indirect_unknown_arity =>
+       forallb (fun '(_, c) => negb (code_is_tupled c)) codes
      end.
 
 Fixpoint generic_calls (codes : list (code_id * code)) (e : expr) : bool :=
@@ -846,7 +851,8 @@ Definition tupled_call (codes : list (code_id * code)) (ap : apply_expr)
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
      | Direct _ => true
-     | Indirect =>
+     | Indirect_known_arity _ => false
+     | Indirect_unknown_arity =>
        forallb
          (fun '(_, c) =>
             negb (code_is_tupled c) || singleton_params (code_params_arity c))
@@ -2829,7 +2835,8 @@ Definition code50 : code :=
     (FlowExample.return_to 3 [Var 43]).
 
 Definition call (args : list simple) : apply_expr :=
-  {| ap_callee := Var 11; ap_call_kind := Indirect; ap_args := args;
+  {| ap_callee := Var 11; ap_call_kind := Indirect_unknown_arity;
+     ap_args := args;
      ap_continuation := 1; ap_exn_continuation := 2;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value; Singleton Value];
@@ -2971,7 +2978,8 @@ Definition code50 : code :=
 (* An indirect call of [callee] with one argument, [arg]. *)
 Definition call (callee : variable) (arg : simple) (k : continuation)
     : apply_expr :=
-  {| ap_callee := Var callee; ap_call_kind := Indirect; ap_args := [arg];
+  {| ap_callee := Var callee; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [arg];
      ap_continuation := k; ap_exn_continuation := 2;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
@@ -3123,7 +3131,8 @@ Definition code50 : code :=
     (FlowExample.return_to 3 [Var 43]).
 
 Definition call (args : list simple) : apply_expr :=
-  {| ap_callee := Var 11; ap_call_kind := Indirect; ap_args := args;
+  {| ap_callee := Var 11; ap_call_kind := Indirect_unknown_arity;
+     ap_args := args;
      ap_continuation := 1; ap_exn_continuation := 2;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
@@ -3274,7 +3283,7 @@ Definition code50 : code :=
        (FlowExample.return_to 3 [Var 46])).
 
 Definition call : apply_expr :=
-  {| ap_callee := Var 11; ap_call_kind := Indirect;
+  {| ap_callee := Var 11; ap_call_kind := Indirect_unknown_arity;
      ap_args := [Var 13; Var 12];
      ap_continuation := 1; ap_exn_continuation := 2;
      ap_exn_extra_args := [];

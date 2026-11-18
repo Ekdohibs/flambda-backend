@@ -1285,7 +1285,7 @@ Proof.
   assert (Hin1 : ∀ x, x ∈ exn_arg :: return_args -> ok_node a0 a1 x).
   { intros x Hx. pose proof (Hin x Hx). mono. }
   apply (ext_trans _ _ _ _ H1).
-  destruct (ap_call_kind ap) as [id | ].
+  destruct (ap_call_kind ap) as [id | | code_ids].
   - destruct (ext_make_known a0 env ap return_args exn_arg a1)
       as [Hk Hcw]; [ nexts; lia | exact Hin1 | ].
     destruct (make_known_arity_apply_widget env ap return_args exn_arg a1)
@@ -1304,6 +1304,13 @@ Proof.
       as [Hk Hcw]; [ nexts; lia | exact Hin1 | ].
     destruct (make_unknown_arity_apply_widget env ap return_args exn_arg a1)
       as [cw a2] eqn:E. cbn [fst snd] in *. cbv beta iota.
+    apply (ext_trans _ _ _ _ Hk).
+    apply ext_add_fact; [ intros y [<- | []]; exact Hcw | ].
+    intros ? ? ?; discriminate.
+  - destruct (ext_make_known a0 env ap return_args exn_arg a1)
+      as [Hk Hcw]; [ nexts; lia | exact Hin1 | ].
+    destruct (make_known_arity_apply_widget env ap return_args exn_arg a1)
+      as [cw a2] eqn:E. cbn [fst snd] in *. cbv beta iota zeta.
     apply (ext_trans _ _ _ _ Hk).
     apply ext_add_fact; [ intros y [<- | []]; exact Hcw | ].
     intros ? ? ?; discriminate.

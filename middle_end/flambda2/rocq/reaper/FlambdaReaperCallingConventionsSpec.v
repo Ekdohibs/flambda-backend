@@ -648,7 +648,7 @@ Definition code_52 : code :=
     (Let 47 Value (Project_function_slot 71 70 (Var 46)) (Apply call_51)).
 
 Definition call_52 : apply_expr :=
-  {| ap_callee := Var 11; ap_call_kind := Indirect;
+  {| ap_callee := Var 11; ap_call_kind := Indirect_unknown_arity;
      ap_args := [Const (Tagged_immediate 5)];
      ap_continuation := 20; ap_exn_continuation := 2; ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
@@ -826,7 +826,8 @@ Definition call_52 : apply_expr :=
      ap_return_arity := [Singleton Value; Singleton Value] |}.
 
 Definition call_12 (k : continuation) : apply_expr :=
-  {| ap_callee := Var 12; ap_call_kind := Indirect; ap_args := [Var 31];
+  {| ap_callee := Var 12; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [Var 31];
      ap_continuation := k; ap_exn_continuation := 2; ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
      ap_return_arity := [Singleton Value; Singleton Value] |}.

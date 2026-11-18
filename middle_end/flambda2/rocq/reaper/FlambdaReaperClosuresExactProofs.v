@@ -479,7 +479,7 @@ Proof.
   apply (ns_trans _ _ _ Hns3).
   unfold traverse_call_kind.
   apply (ns_trans _ _ _ (ns_note_simple (ap_callee ap) a3)).
-  destruct (ap_call_kind ap) as [id | ].
+  destruct (ap_call_kind ap) as [id | | code_ids].
   - destruct (make_known_arity_apply_widget env ap ra exn_arg
                 (note_simple (ap_callee ap) a3))
       as [cw a4] eqn:E4.
@@ -499,6 +499,12 @@ Proof.
     assert (Hns4 : ns_ok (note_simple (ap_callee ap) a3) a4)
       by (change a4 with (snd (cw, a4)); rewrite <- E4;
           apply ns_make_unknown).
+    apply (ns_trans _ _ _ Hns4). apply ns_add_fact. cbn. auto.
+  - destruct (make_known_arity_apply_widget env ap ra exn_arg
+                (note_simple (ap_callee ap) a3))
+      as [cw a4] eqn:E4.
+    assert (Hns4 : ns_ok (note_simple (ap_callee ap) a3) a4)
+      by (change a4 with (snd (cw, a4)); rewrite <- E4; apply ns_make_known).
     apply (ns_trans _ _ _ Hns4). apply ns_add_fact. cbn. auto.
 Qed.
 

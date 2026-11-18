@@ -3240,7 +3240,8 @@ Definition goto (k : continuation) : apply_cont :=
 Definition no_params : handler_metadata := make_handler_metadata [].
 
 Definition call_32 : apply_expr :=
-  {| ap_callee := Var 32; ap_call_kind := Indirect; ap_args := [int 3];
+  {| ap_callee := Var 32; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [int 3];
      ap_continuation := 1; ap_exn_continuation := 2;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];

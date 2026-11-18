@@ -1726,7 +1726,7 @@ Proof.
   set (closure := node_of_simple (ap_callee ap)).
   assert (Hin1 : ∀ x, x ∈ exn_arg :: return_args -> ok_node a a1 x).
   { intros x Hx. apply ok_good. exact (Hgood x Hx). }
-  destruct (ap_call_kind ap) as [id | ].
+  destruct (ap_call_kind ap) as [id | | code_ids].
   - apply (ext_close a); [ exact Hinv | ].
     apply (ext_trans _ _ _ _ H1).
     destruct (ext_make_known a env ap return_args exn_arg a1)
@@ -1899,6 +1899,14 @@ Proof.
            exists k. split; [ reflexivity | lia ].
       * right. exists (acc_next b4). split; [ reflexivity | ].
         pose proof (ext_next _ _ _ H03). lia.
+  - apply (ext_close a); [ exact Hinv | ].
+    apply (ext_trans _ _ _ _ H1).
+    destruct (ext_make_known a env ap return_args exn_arg a1)
+      as [Hk Hcw]; [ nexts; lia | exact Hin1 | ].
+    destruct (make_known_arity_apply_widget env ap return_args exn_arg a1)
+      as [cw a2] eqn:E. cbn [fst snd] in *. cbv beta iota zeta.
+    apply (ext_trans _ _ _ _ Hk).
+    apply ext_add_fact; [ intros y [<- | []]; exact Hcw | plain_tac ].
 Qed.
 
 Lemma tstep_traverse_apply (env : traverse_env) (ap : apply_expr) (a : acc) :

@@ -1872,7 +1872,7 @@ Proof.
   set (closure := node_of_simple (ap_callee ap)).
   assert (Hin1 : ∀ x, x ∈ exn_arg :: return_args -> ok_node a a1 x).
   { intros x Hx. apply ok_good. exact (Hgood x Hx). }
-  destruct (ap_call_kind ap) as [id | ].
+  destruct (ap_call_kind ap) as [id | | code_ids].
   - destruct (make_known_spec a env ap return_args exn_arg a1)
       as (Hk & Hcw & Hn & Hc & Hap & Hcl & Hf); [ lia | exact Hin1 | ].
     destruct (make_known_arity_apply_widget env ap return_args exn_arg a1)
@@ -1943,6 +1943,36 @@ Proof.
     apply (ext_trans _ _ _ _ H1). apply (ext_trans _ _ _ _ Hk).
     apply ext_add_fact; [ intros x [<- | []]; exact Hcw | ].
     intros ? ? ?; discriminate.
+  - destruct (make_known_spec a env ap return_args exn_arg a1)
+      as (Hk & Hcw & Hn & Hc & Hap & Hcl & Hf); [ lia | exact Hin1 | ].
+    destruct (make_known_arity_apply_widget env ap return_args exn_arg a1)
+      as [cw a2] eqn:E. cbn [fst snd] in *. subst cw.
+    cbv beta iota zeta.
+    destruct (ext_close a a1 Hinv H1) as [Hinv1 _].
+    destruct (ext_close a a2 Hinv (ext_trans _ _ _ _ H1 Hk))
+      as [Hinv2 Hg2].
+    set (p := Pos.succ (Pos.succ (acc_next a1))) in *.
+    set (a3 := add_fact (Fact_accessor (Node_made p) known closure) a2).
+    assert (Hlt1 : ∀ x, made_lt x (acc_next a1) -> made_lt x p).
+    { intros x Hx. apply (made_lt_mono _ _ _ Hx). subst p. lia. }
+    assert (Hinv3 : winv a3).
+    { apply winv_add_widget; [ exact Hinv2 | rewrite Hn; subst p; lia | | | | ].
+      - intros fct x Hfct Hx. destruct (Hf _ _ Hfct Hx) as [H | H];
+          [ | exact H ].
+        apply Hlt1. exact (wi_into a1 Hinv1 _ _ H Hx).
+      - intros i cd x Hin Hx. rewrite Hc in Hin. apply Hlt1.
+        exact (proj1 (wi_code_deps a1 Hinv1 _ _ _ Hin Hx)).
+      - intros d Hin. rewrite Hap in Hin. apply Hlt1.
+        exact (proj1 (wi_apply_deps a1 Hinv1 _ Hin)).
+      - intros d Hin. rewrite Hcl in Hin. apply Hlt1.
+        exact (proj1 (wi_closure_deps a1 Hinv1 _ Hin)). }
+    assert (Hg3 : grows a a3).
+    { split; [ subst a3; cbn; destruct Hg2; lia | ].
+      intros w [m [Hm | Hm]].
+      - injection Hm as <- _. right. exists p. split; [ reflexivity | ].
+        subst p. lia.
+      - exact (proj2 Hg2 w (ex_intro _ m Hm)). }
+    exact (conj Hinv3 Hg3).
 Qed.
 
 Lemma tstep_traverse_apply (env : traverse_env) (ap : apply_expr) (a : acc) :

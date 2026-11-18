@@ -1145,7 +1145,8 @@ Definition load_mutable (field : Z) (block : simple) : named :=
 (* A call of [callee] with 3, from code that returns to 3 and raises to
    4. *)
 Definition call_with_3 (callee : variable) : apply_expr :=
-  {| ap_callee := Var callee; ap_call_kind := Indirect; ap_args := [int 3];
+  {| ap_callee := Var callee; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [int 3];
      ap_continuation := 3; ap_exn_continuation := 4;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];
@@ -1561,7 +1562,8 @@ Definition tail_f2_code : code :=
     (return_to 7 [int 1]).
 
 Definition tail_call_k : apply_expr :=
-  {| ap_callee := Var 30; ap_call_kind := Indirect; ap_args := [int 3];
+  {| ap_callee := Var 30; ap_call_kind := Indirect_unknown_arity;
+     ap_args := [int 3];
      ap_continuation := 21; ap_exn_continuation := 2;
      ap_exn_extra_args := [];
      ap_args_arity := [Singleton Value];

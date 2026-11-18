@@ -149,7 +149,8 @@
      keeps those beyond, as [FlambdaReaperRebuild.filter_kept] does; code
      with no parameter has an arity of no parameter
      (unboxing_analysis.ml: [compute_code_changes], "Empty parameter
-     groups"); a direct call whose callee calls no code (rebuild.ml:
+     groups"); a direct call or a call of known arity whose callee
+     calls no code (rebuild.ml:
      [decide_whether_apply_needs_calling_convention_change], an empty
      [Code_id.Set.t]) does not change, as it keeps its call kind in
      FlambdaReaperRebuild.v.
@@ -518,11 +519,11 @@ Variable first_fresh : positive.
 (* The code that a call is known to call
    ([decide_whether_apply_needs_calling_convention_change]): the one code
    id that [code_id_actually_directly_called] finds for the callee of a
-   direct call. *)
+   direct call or of a call of known arity. *)
 Definition code_id_actually_called (ap : apply_expr) : option code_id :=
   match ap_call_kind ap with
-  | Indirect => None
-  | Direct _ =>
+  | Indirect_unknown_arity => None
+  | Direct _ | Indirect_known_arity _ =>
     match ap_callee ap with
     | Const _ => None
     | Var _ | Symbol _ =>

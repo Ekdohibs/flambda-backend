@@ -63,12 +63,13 @@
    takes a pair and uses neither component; the code [pass] returns its
    argument. The unit calls [pass] directly with the closure of
    [ignore], calls the closure that [pass] returns, which the unit does
-   not know statically, at unknown arity ([Indirect]) with a pair, and
-   returns the result. Through [pass] the reaper follows the closure to
-   the code, and sees that the code uses no field of the pair. Through
-   [Opaque_identity] it would not: the closure could then be any, the
-   pair would escape ([any_usage]) and be kept, with or without the two
-   facts. The pair is a static block, as Simplify makes it.
+   not know statically, at unknown arity ([Indirect_unknown_arity])
+   with a pair, and returns the result. Through [pass] the reaper
+   follows the closure to the code, and sees that the code uses no
+   field of the pair. Through [Opaque_identity] it would not: the
+   closure could then be any, the pair would escape ([any_usage]) and
+   be kept, with or without the two facts. The pair is a static block,
+   as Simplify makes it.
    middle_end/flambda2/tests/semantics/reaper/tupled_unused_components.fl
    is the same unit in the fexpr language, with the module block that
    an example returns; the test tool runs the compiler's reaper on it
@@ -217,7 +218,8 @@ Definition pass_code : code :=
 (* The call of the closure that [pass] returns, with [tuple], at
    unknown arity, returning to [done]. *)
 Definition call_of_func (tuple : simple) : apply_expr :=
-  Apply_expr (Var func) Indirect [tuple] done error [] a_value a_value.
+  Apply_expr (Var func) Indirect_unknown_arity [tuple] done error []
+    a_value a_value.
 
 (* The unit with [pair_bindings] for the binding of the pair, giving
    [tuple] to the closure that [pass] returns:
