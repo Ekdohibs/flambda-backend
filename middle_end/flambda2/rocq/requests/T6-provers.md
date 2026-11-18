@@ -1,5 +1,15 @@
 # T6: the provers and reification
 
+A note of 18 November 2026. This is the plan as it was written on
+11 November 2026, and it is not kept current: where it says "today",
+or that something is owed, missing, open, on a branch or not under
+this branch, that was so on that day. What was done is in
+`middle_end/flambda2/rocq/status/T6.md`. On 18 November 2026 these
+were brought to what is so on that day, each with its date: four
+rows of the column "State" of the table of section 4, and what is
+said under that table of a stand-in; and, in section 5, item 7 and
+what is owed of renaming. Nothing else was changed.
+
 What workstream T6 transcribes and states, on what it rests, and in what
 order. The guides are `middle_end/flambda2/types/provers.ml` (1624
 lines, 67 exported functions) and `middle_end/flambda2/types/reify.ml`
@@ -207,12 +217,16 @@ of them, with a CR. The array cases are left out.
 
 | Needed | Of | State |
 |--------|----|-------|
-| `type_satisfied` and its equations; `relation_holds` as amended; `is_obviously_bottom_satisfied_statement`, `row_like_for_blocks_is_bottom_satisfied_statement`, `relation_is_int_statement`, `relation_get_tag_statement`, `relation_is_null_statement`, `type_satisfied_kind_statement`, `alias_satisfied_statement` | T1 | on T1's branch, which this branch is cut from |
-| `row_like_for_blocks_all_tags` with `all_tags_satisfied_statement` (slice 1); `all_tags_and_sizes`, `get_singleton`, `get_field` (slice 2); `get_single_tag`, `get_closure`, `get_env_var`, `find_function_type` (slice 4); `type_well_formed` (slices 1 and 4) | T1 | on T1's branch (`FlambdaTypeAccessSpec.v`, `FlambdaTypeWellFormedSpec.v`) |
+| `type_satisfied` and its equations; `relation_holds` as amended; `is_obviously_bottom_satisfied_statement`, `row_like_for_blocks_is_bottom_satisfied_statement`, `relation_is_int_statement`, `relation_get_tag_statement`, `relation_is_null_statement`, `type_satisfied_kind_statement`, `alias_satisfied_statement` | T1 | on 11 November, on T1's branch, which this branch was cut from; on 18 November 2026, in the tree (`middle_end/flambda2/rocq/types/grammar/FlambdaTypeMeaningSpec.v`) |
+| `row_like_for_blocks_all_tags` with `all_tags_satisfied_statement` (slice 1); `all_tags_and_sizes`, `get_singleton`, `get_field` (slice 2); `get_single_tag`, `get_closure`, `get_env_var`, `find_function_type` (slice 4); `type_well_formed` (slices 1 and 4) | T1 | on 11 November, on T1's branch; on 18 November 2026, in the tree (`FlambdaTypeAccessSpec.v`, `FlambdaTypeWellFormedSpec.v`, in `middle_end/flambda2/rocq/types/grammar/`) |
 | `typing_env_satisfied_strictly`; `get_canonical_simple_satisfied_statement`, `get_alias_then_canonical_simple_satisfied_statement` (slices 2, 4, 6); `find_satisfied_strictly_statement` | T2 | merged |
 | the aliases are exact (through T2's statements) | T3 | merged |
-| `Expanded_type`, `expand_head`, `expand_head_sound_statement` | T4 | on T4's branch; a stand-in here until it is under this one (below) |
-| `Phys_equal` on allocated values and symbols (slice 7) | the core | open (decisions D19, D6) |
+| `Expanded_type`, `expand_head`, `expand_head_sound_statement` | T4 | on 11 November, on T4's branch, with a stand-in here (below); on 18 November 2026, in the tree (`FlambdaExpandHead.v`, `FlambdaExpandHeadSpec.v`, in `middle_end/flambda2/rocq/types/meet/`), with no stand-in |
+| `Phys_equal` on allocated values and symbols (slice 7) | the core | on 11 November, open (decisions D19, D6); on 18 November 2026 the primitive has a value on some imported symbols and none on two allocated values (section 5, item 7) |
+
+On 18 November 2026 there is no stand-in: the provers read the
+`expand_head` of `FlambdaExpandHead.v`, and no statement has its
+soundness as a premise. The next paragraph is as it was written.
 
 The stand-in for T4: a copy of T4's `Expanded_type` and `expand_head`
 under T4's names, in a file of its own that goes when T4's is under
@@ -242,14 +256,26 @@ strings; `simplify_binary_primitive.ml` calls
 6. The provers that answer an alias.
 7. `prove_physical_equality`, last: every `Proved` it gives on symbols
    and allocated values is a claim about `Phys_equal` there, which the
-   machine does not define today. P1-1 (two poison constants fold to
-   "different") is its known disagreement.
+   machine did not define on 11 November 2026. P1-1 (two poison
+   constants fold to "different") is its known disagreement. On
+   18 November 2026 the primitive has a value on two tagged
+   immediates; on a tagged immediate against an allocated value or
+   an imported symbol of the class of identities or of data; and on
+   an identity (an imported symbol of the class `Import_identity`)
+   against another identity, an allocated value or an imported
+   symbol of the class of data. It has none on two allocated values,
+   on null or on poison (decision D19; `eval_phys_equal` of
+   `middle_end/flambda2/rocq/semantics/FlambdaPrimitiveSpec.v`).
 8. `reify`.
 
 Each slice is one review request: the functions, the statements, the
 proofs. Owed for every prover, and not in the slices yet: that it
 commutes with a renaming of names. The statement needs the renaming
 of typing environments, which is T2's and is not under this branch.
+On 18 November 2026 the statements of the provers under renaming
+are in the tree, with their proofs (`FlambdaProversRenameSpec.v`,
+`FlambdaProversRenameProofs.v`, in
+`middle_end/flambda2/rocq/types/provers/`).
 T7 can run each extracted prover against the compiler's on its
 generated types, as each is a function of an environment and a type.
 
