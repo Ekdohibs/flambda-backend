@@ -87,7 +87,16 @@
      environments, and so is that the variables of terms of the source
      are variables of terms at each use
      (FlambdaJoinSpec.terms_in_scope_at_uses). No join is named: the
-     statement is of every environment with the guarantees.
+     statement is of every environment with the guarantees. No
+     statement gives those guarantees of the model's join of
+     environments: what is shown of it is of inputs that have
+     conditions and, about values, of runs that have conditions, with
+     a meet that is given (FlambdaJoinInTermsSpec.v). The only join
+     shown to have them is the one that answers the source and learns
+     nothing (FlambdaJoinSpec.join_to_source_sound_statement). So
+     they are a premise here that nothing discharges for a join that
+     learns anything, and no theorem uses
+     [let_cont_handler_joined_statement].
    A [Let_cont] whose body binds something before it applies the
    continuation is brought to this case by moving the [Let_cont] down
    to the application: FlambdaSimplifyPassSpec.find_use looks for the
