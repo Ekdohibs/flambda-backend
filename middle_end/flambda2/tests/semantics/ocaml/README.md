@@ -2856,7 +2856,18 @@ term that the validation normalises: the direct calls of its stubs
 made indirect, its calls of code that never returns cut, its loops
 made (V4's: code whose self tail calls have all become jumps is not
 recursive there, and Simplify inlines it like any other code;
-`local_loop_inlined.ml`). Without such a list
+`local_loop_inlined.ml`). The recursive code of the three lists, and
+of the choices of `inlining_choices` ("What the verdicts mean"), is
+the code that calls itself by direct calls, with the code that the
+compiler marks recursive and that no direct call shows to be so: for
+instance a function whose recursion goes through a closure that it
+gives to another function of the unit, and, by the mark that Simplify
+gives the code whose body uses its depth variable, a function of a
+recursive definition that calls another one of them and never itself
+(C3's; without the mark the term before of a unit of the first shape
+grew at every round where the first list had failed, as it does where
+a primitive of the heap stops the liftings, until the tool had no
+stack or no time left). Without such a list
 each round unrolled a recursive function once more on both sides, and
 `fib.ml` did not end. With such a list a round inlines only code that
 is not recursive in the term that it is given, so the terms stop

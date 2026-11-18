@@ -1312,6 +1312,16 @@ let superseded_code : Code_id.t list ref = ref []
    ([Loopify_attribute.should_loopify]), noted as a unit is converted. *)
 let loopify_marked : Code_id.t list ref = ref []
 
+(* The code that the compiler marks recursive ([Code0.recursive], which the text
+   of a term writes [rec]), noted as a unit is converted and as the code of
+   another unit is bound in the prefix ([make_prefix_refusing]). Code that the
+   prefix declares and does not bind is not noted. The prefix may be made more
+   than once ([make_prefix]), and what an earlier making noted stays here until
+   [reset_conversion]. Neither changes anything: the calls of a code id that
+   neither term nor the prefix binds with its code are left whatever the lists
+   say, as there is no code to inline. *)
+let recursive_marked : Code_id.t list ref = ref []
+
 (* Forgets everything that the conversion has noted so far, so that a unit is
    converted as if it were the first: the numbers given to names and what is
    kept beside the terms. Whoever gives the conversion more state adds it
@@ -1331,6 +1341,7 @@ let reset_conversion () =
   lists_met := false;
   superseded_code := [];
   loopify_marked := [];
+  recursive_marked := [];
   region_variables := Variable.Set.empty;
   kept_regions := Variable.Set.empty;
   code_regions := Variable.Set.empty;
@@ -1642,6 +1653,10 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
             := Code_id.Map.add code_id (Code0.newer_version_of code) !code_older;
           if Loopify_attribute.should_loopify (Code0.loopify code)
           then loopify_marked := code_id :: !loopify_marked;
+          (match Code0.recursive code with
+          | Recursive.Recursive ->
+            recursive_marked := code_id :: !recursive_marked
+          | Recursive.Non_recursive -> ());
           let id = Code_ids.find code_id in
           let outer = !current_code in
           current_code := Some code_id;
@@ -2288,6 +2303,63 @@ let recursive_code (e : Model.expr) : Model.code_id list =
     from id
   in
   List.filter reaches_itself (List.map fst calls)
+
+(* The code that the compiler marks recursive and that [recursive_code] finds in
+   neither of two terms. The lists of the calls to leave have this code too
+   ([validate]).
+
+   Where such code is recursive, its recursion goes through a call that is not
+   direct. A function that gives another function of its unit a closure that
+   calls it back is such code: it calls the other function directly, that one
+   calls the closure indirectly, and the function only makes the closure, which
+   is no call. Without the mark the list of the recursive code alone did not
+   leave the calls of such a function. The tool comes to that list where the
+   first has failed, as it does where a primitive of the heap stops the
+   liftings; and where Simplify has not inlined the other function, the term
+   after has no chain of direct calls from the function to itself either. The
+   rounds then inlined the other function, made the call of the closure direct
+   and inlined the code of the closure, in which the function itself had been
+   inlined. That left a new direct call of the code of the closure for each call
+   of the function in the closure, at every round, and the term grew until the
+   tool had no stack or no time left.
+
+   The mark is the compiler's own ([Code0.recursive]). The front end gives it to
+   the functions of a recursive definition whose bodies mention themselves, at
+   once or through the others, called or not (from_lambda/lambda_to_flambda.ml,
+   [cps_function_bindings]). Simplify gives it to the code whose body still uses
+   its depth variable (simplify/simplify_set_of_closures.ml,
+   [simplify_function_body]). That is more than the recursive code: a function
+   of a recursive definition that calls another one of them, and never itself,
+   has its depth variable in the coercion of that call. Simplify's decision at
+   the definition of code that has the mark is not to inline it, unless the code
+   is a stub or an attribute or a flag says otherwise
+   (simplify_shared/function_decl_inlining_decision.ml, [make_decision0]). At a
+   call Simplify reads that decision
+   (simplify/inlining/call_site_inlining_decision.ml, [might_inline]) only where
+   no attribute of the call, no unrolling that has begun and no replayed
+   decision has settled the call before. A call of such code that none of those
+   settles is one that Simplify leaves, as it leaves a call of recursive code.
+
+   The mark is read here from the code of the two terms and from the code of
+   other units that the prefix binds. Code of the term before has the number of
+   its newer version where [convert_both] gives the two one number, so the mark
+   that Simplify gives the newer version is then on both. Nothing is believed of
+   the mark: a list of calls to leave is a guess, and the validator is asked as
+   it is with any list. Its statement is of every list, so no mark, right or
+   wrong, makes it accept a pair that it should refuse. What a mark changes is
+   the search. One that is wrong may lose a verdict, by leaving a call that had
+   to be inlined; a list with more code may also give a verdict that the list
+   without it does not give, or give it at an earlier asking; a mark that is
+   missing leaves the lists as [recursive_code] makes them.
+
+   [Code_ids.find] makes no new number here: a code id noted in a term is given
+   its number just after the note, and one noted in the prefix had it before. *)
+let recursive_by_mark_alone (before : Model.expr) (after : Model.expr) :
+    Model.code_id list =
+  let by_calls = recursive_code before @ recursive_code after in
+  List.filter
+    (fun id -> not (List.mem id by_calls))
+    (List.sort_uniq compare (List.map Code_ids.find !recursive_marked))
 
 (* The code that an expression calls directly, in the code it binds too. *)
 let called_directly (e : Model.expr) : Model.code_id list =
@@ -4687,6 +4759,10 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
           then (
             code_bindings := Model.Bind_code (id, converted) :: !code_bindings;
             bodies := body :: !bodies;
+            (match Code0.recursive code with
+            | Recursive.Recursive ->
+              recursive_marked := Code0.code_id code :: !recursive_marked
+            | Recursive.Non_recursive -> ());
             use unit)
           else not_bound ()))
   in
@@ -6114,7 +6190,10 @@ let inlining_guess (before : Model.expr) (after : Model.expr) : inlining_guess =
             (List.sort_uniq compare callees))
       (places_of before)
   in
-  let recursive = recursive_code before @ recursive_code after in
+  let recursive =
+    recursive_code before @ recursive_code after
+    @ recursive_by_mark_alone before after
+  in
   let free =
     List.filter
       (fun id ->
@@ -6273,6 +6352,12 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   Format.printf
     "  calls outside code once those of known code are inlined: %d@."
     (calls_outside_code inlined);
+  (* The count above is made with the list by direct calls, as it was, and not
+     with the lists that the askings are given: it is of one pass, which cannot
+     unroll. From here the recursive code is that of the list with the code that
+     has the compiler's mark alone ([recursive_by_mark_alone]). *)
+  let marked_alone = recursive_by_mark_alone before.body after.body in
+  let recursive = recursive @ marked_alone in
   let rounds = nat_of_int 50 in
   let nothing_lifted : Lift.lifting =
     { lifting_unit = interface before;
@@ -7274,7 +7359,14 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      that is the case that the guess is for. The third is tried only where some
      code of the first list is not in it. It is asked once: the second asking
      normalises the term before as it is given, before its loops are made, and
-     each of its rounds would inline such code into itself once more. *)
+     each of its rounds would inline such code into itself once more. The code
+     that has the compiler's mark alone ([recursive_by_mark_alone]) is in the
+     three lists. Were it in the first and not in the third, the third could be
+     tried for that code alone, and the rounds of its asking would unroll such
+     code, as those of the second did without the mark. A loop may be made of
+     such code all the same (FlambdaLoopifySpec.is_self_tail_call reads the
+     callee of a call and not its kind); the third list then leaves calls that
+     the guess is there to inline, and a verdict may be lost so. *)
   let called_after = called_directly after.body in
   let first_guess = recursive @ called_after in
   let recursive_once_looped =
@@ -7282,7 +7374,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       (Loopify.loopify_unit loops
          (Never_returns.cut_returns []
             (Stub_calls.demote_full_stub_calls before.body)))
-    @ recursive_code after.body
+    @ recursive_code after.body @ marked_alone
   in
   let once_looped_guess = recursive_once_looped @ called_after in
   let another_guess =
