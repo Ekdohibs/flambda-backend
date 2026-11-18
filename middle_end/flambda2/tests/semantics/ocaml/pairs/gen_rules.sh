@@ -58,13 +58,7 @@ for name in $units; do
   if [ -n "$flags" ]; then flags="$flags "; fi
   needs=
   against=
-  # from_ocaml.sh reads the list of the units that may have the test of
-  # being an integer that is for any value, and looks whether the unit has
-  # an expected file.
-  made_needs="../generic_is_int.txt"
-  case "$checked" in
-  *" $name "*) made_needs="$made_needs ../$name.expected" ;;
-  esac
+  made_needs=
   if [ -n "$first" ]; then
     # The tool is given the directory of the build as its load path, where
     # it finds the .cmx of the first unit, and of the first unit of that one
@@ -78,7 +72,7 @@ for name in $units; do
     done
     needs="$needs)"
     against=" $first"
-    made_needs="$made_needs $first.cmi $first.cmx"
+    made_needs=" $first.cmi $first.cmx"
   fi
   tool="(run ../../../../tools/flsemantics.exe $flags-I . %{dep:../$name.fl})"
   if [ -n "$first" ] && [ "$(alone_of "$name")" != 0 ]; then
@@ -91,7 +85,7 @@ for name in $units; do
   cat <<RULES
 (rule
  (targets $name.fl.made $name.cmi $name.cmx)
- (deps %{ocamlopt} $made_needs)
+ (deps %{ocamlopt}$made_needs)
  (action
   (run sh %{dep:../from_ocaml.sh} %{ocamlopt} %{dep:../$name.ml}
    $name$against)))

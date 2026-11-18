@@ -24,8 +24,8 @@ with the directory of the standard library as the last argument. The
 script then compiles the unit with that directory in the place of the
 compiler's own standard library (`-nostdlib -I <directory>`, and not
 `-nopervasives`), as far as the middle end, and with `X.mli` if it is
-beside `X.ml`. It refuses what it refuses of a unit of the directory
-above, and one thing more: a unit whose term names a symbol of
+beside `X.ml`. It refuses one thing, which it does not refuse of a
+unit of the directory above: a unit whose term names a symbol of
 another unit, which the text writes with the name of that unit before
 it. The script looks for that in the text of the term and does not
 parse it: it may refuse a unit for a string constant that reads as

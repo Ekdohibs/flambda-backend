@@ -57,7 +57,7 @@ for name in $examples; do
   cat <<RULES
 (rule
  (targets $name.fl.made)
- (deps %{ocamlopt} %{dep:../generic_is_int.txt}$interface)
+ (deps %{ocamlopt}$interface)
  (action
   (run sh %{dep:../from_ocaml.sh} %{ocamlopt} %{dep:../$name.ml}
    $name.fl.made)))

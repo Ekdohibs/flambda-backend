@@ -50,8 +50,12 @@ copied first for the second unit,
     ocamlopt -nopervasives -nostdlib -stop-after middle_end -c \
       X.ml -drawfexpr-to X.fl
 
-which writes `X.cmi` and `X.cmx` beside `X.fl`; the three are kept in
-the directory of the build. Then, in that directory,
+for `X.fl`, and then the same command without `-drawfexpr-to X.fl`,
+which writes `X.cmi` and `X.cmx` as the compiler writes them where it
+prints nothing: the compilation that prints the text gives other
+numbers to the names that it makes afterwards, and a symbol that
+Simplify lifts would have another name in the `.cmx`. The three are
+kept in the directory of the build. Then, in that directory,
 
     flsemantics.exe -I . X.fl
 
@@ -263,8 +267,9 @@ from the others.
 Thirty-four sources. Five are the units that are here for their
 first line and their controls, which the last section is about. Of
 the other twenty-nine, eleven are first units and use no other unit;
-eight of them have an expected file: five are validated, as a unit
-of the directory above is, `phantom.ml` is not checked, and two that
+nine of them have an expected file: five are validated, as a unit
+of the directory above is, `phantom.ml` and `probed.ml` are not
+checked, and two that
 no unit uses are here for the lists of calls of known arity:
 `known_arity_lists_older_code.ml` has the same two runs and is not
 validated, and `known_arity_lists_undefined_elsewhere.ml` is
@@ -398,16 +403,14 @@ with no region, where the parser asks for one after `ccall`
 text writes the region now, `apply ccall &toplevel`.) The `.cmx` of that
 unit says nothing of its two fields, which hold what the calls returned.
 
-`probed.ml` has no expected file: its term has a call that is a
-probe, which the conversion refuses, so the tool would say of it
-that it is not checked. (When the unit came in, the text of a term
-did not say that a call is a probe, and a verdict of the tool on it
-would have been of a term that is not the compiler's; the text says
-so now, and `probed.fl` has the mark.) `from_ocaml.sh` here refuses what
-that of the directory above refuses, and what it refuses for a probe
-only where the unit has an expected file: so `probed.ml` is
-compiled for its second units, and would be refused if it were given
-an expected file. Its `.cmx` has the body of `bump`,
+`probed.ml` is not checked: its term has a call that is a probe,
+which the conversion refuses, and its expected file has that one
+line. (When the unit came in, the text of a term did not say that a
+call is a probe, and a verdict of the tool on it would have been of
+a term that is not the compiler's: the unit had no expected file,
+and `from_ocaml.sh` here refused a unit with a probe that had one.
+The text says so now, `probed.fl` has the mark, and the script
+refuses no unit.) Its `.cmx` has the body of `bump`,
 in which the call of the handler of the probe is marked as one. The
 program runs that handler only while the probe is enabled, and the
 model has nothing of that, so the conversion refuses a call that is

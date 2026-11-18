@@ -67,22 +67,21 @@ and its two exceptions).
   that.
 - A function whose inlining an example is about has `[@inline]`: with
   the default flags Simplify inlines only the smallest functions.
-- `from_ocaml.sh` refuses a unit for two things, each of which the
-  text of a term lost when the refusal was written and writes now. It
-  compiles the unit once more, for what `-drawflambda` prints of the
-  term before Simplify, and fails on them. The test of being an
-  integer that is for any value (`Is_int_generic`), which the text
-  wrote as the test for variants (label C2-26), unless
-  `generic_is_int.txt` names the unit: the text now writes it apart
-  and the reader takes it, and the script still refuses. A call that
-  is a probe: the program runs the handler of a probe only while the
-  probe is enabled, the model has nothing of that, and the tool does
-  not check a unit that has one; the text did not say that a call is
-  one (label C2-17), and says so now.
-  `script/` has a unit that is refused for a
-  probe and the same unit without the probe, with what the script
-  says of each, and two more for the refusal that is of `library/`
-  only. It has seven more: six of an unboxed product among the arguments
+- `from_ocaml.sh` refuses no unit of this directory for what its term
+  has. It refused a unit for two things while the text of a term lost
+  them: the test of being an integer that is for any value, which the
+  text wrote as the test for variants (label C2-26), and a call that
+  is a probe, of which the text did not say that it is one (label
+  C2-17). The text writes both now, and the reader takes both. No
+  unit of this directory has either. Of a unit that has a call that
+  is a probe the tool says that it is not checked: the program runs
+  the handler of a probe only while the probe is enabled, the model
+  has nothing of that, and the conversion refuses the call
+  (`pairs/probed.ml`).
+  `script/` has a unit with a probe and the same unit without the
+  probe, with what the script says of each, and two more for the
+  refusal that is of `library/` only. It has seven more: six of an
+  unboxed product among the arguments
   of a call or the parameters of code, the product of nothing included,
   and one that is one of the six with two ordinary parameters in the
   place of the product. The script refused four of the six, those that
@@ -1446,8 +1445,8 @@ elements are values (`iarray_in_function.ml` and
 the arguments of a function that is not inlined); it is a value with no
 identity, where a mutable one is a cell.
 The conversion refuses a call that is a probe as well; no unit of
-this directory has one (`pairs/README.md`), and `from_ocaml.sh`
-refuses a unit that has one.
+this directory has one, and of `pairs/probed.ml`, which has one, the
+tool says that it is not checked (`pairs/README.md`).
 
 What was on this list and is not any more, with the rewrite that
 removed it:
@@ -3295,9 +3294,9 @@ directory sets the variable; one of `../regions/` does.
   where the program answers 0 (discrepancy C2-26). The tool did
   not put that right, and has no step for it. The text now writes
   the test that is for any value apart (`%is_int.generic`), and the
-  reader takes it. No unit of this directory has that test, and
-  `from_ocaml.sh` still fails on a unit that has it
-  and that `generic_is_int.txt` does not name; that list is empty.
+  reader takes it. No unit of this directory has that test;
+  `from_ocaml.sh` failed on a unit that had it while the text wrote
+  the two alike, and no longer does.
 - Of a call the text lost the arity of its arguments, where the
   call is direct or of unknown arity, and the reader gave such a
   call one value for each argument: a unit that gives a function an
@@ -3349,8 +3348,9 @@ directory sets the variable; one of `../regions/` does.
   group is not one value for each argument, and the step of the tool
   leaves such a call alone. The text did not say that a call is a
   probe (discrepancy C2-17); it says so now, and the reader takes
-  it. The conversion refuses such a call, and `from_ocaml.sh` still
-  fails on a unit that has one.
+  it. The conversion refuses such a call, so the tool does not check
+  a unit that has one (`pairs/probed.ml`); `from_ocaml.sh` failed on
+  such a unit while the text did not say so, and no longer does.
 - Two things that the tool refuses, to stay clear of two ways in
   which the term of the model may not be the program. Neither
   refusal shows that it is not: each refuses more than it need. A
