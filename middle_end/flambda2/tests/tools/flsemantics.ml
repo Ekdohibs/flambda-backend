@@ -7529,6 +7529,10 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      callee of a call and not its kind); the third list then leaves calls that
      the guess is there to inline, and a verdict may be lost so. *)
   let called_after = called_directly after.body in
+  (* [first_guess], [once_looped_guess] and [another_guess] are read by the
+     second check alone, below, where it asks of each list in turn. The attempts
+     of the validation read those made after them, with the older versions of
+     the code that the term after calls, and [recursive] alone as it is. *)
   let first_guess = recursive @ called_after in
   let recursive_once_looped =
     recursive_code
@@ -7543,11 +7547,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       (fun code_id -> not (List.mem code_id once_looped_guess))
       first_guess
   in
-  (* The same three lists with, beside the code that the term after calls, the
-     code that it is a newer version of ([code_versions]), and what that is a
-     newer version of, eight times at most: the term before may call the older
-     code where the term after calls the newer. They are for the attempts of the
-     fourth kind, below ([copied]). *)
+  (* The same with, beside the code that the term after calls, the code that it
+     is a newer version of ([code_versions]), and what that is a newer version
+     of, eight times at most: the term before may call the older code where the
+     term after calls the newer. Every kind of attempt of the validation reads
+     them ([attempts_of]) for its first and third lists; its second list is the
+     recursive code alone. Those above are of the second check alone.
+
+     The case. Simplify inlines a functor at its application and gives the
+     closures of the inlined body new code, by which the term after calls a
+     member that it does not inline. The term before has those closures with the
+     old code until a lifting copies the code under the new code ids
+     ([code_copied]), and the rounds that follow the lifting before that one
+     make the call of the member direct. With the new code id alone in the list
+     those rounds inline the call, which the term after keeps
+     (tests/semantics/ocaml/functor_member_kept_before_copy.ml). The lists are
+     guesses, as the three above are: the validator is asked as it is with any,
+     and nothing rests on them. *)
   let called_after_older =
     let rec older depth id =
       if depth = 0
@@ -7572,14 +7588,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      without or with what [my_closure] is known to be from its code used in
      those rounds ([own]). The rounds are
      FlambdaValidateSpec.normalise_lifted_own of the two, which the liftings of
-     every asking then ask for. The lists of calls to leave are the three above,
-     or, where [older], the three with the older versions of the code that the
-     term after calls. *)
-  let attempts_of ~older ~calling ~own ~inlining ~reading =
+     every asking then ask for. Of the lists of calls to leave, the first and
+     the third have the older versions of the code that the term after calls. *)
+  let attempts_of ~calling ~own ~inlining ~reading =
     let first_guess, once_looped_guess, another_guess =
-      if older
-      then first_guess_older, once_looped_guess_older, another_guess_older
-      else first_guess, once_looped_guess, another_guess
+      first_guess_older, once_looped_guess_older, another_guess_older
     in
     let attempt = attempt ~calling ~own ~inlining in
     let first = attempt ~reading first_guess in
@@ -7702,14 +7715,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     let in_turn ~inlining ~reading =
       let with_neither () =
         own_closures_to_know := false;
-        attempts_of ~older:false ~calling:false ~own:false ~inlining ~reading
+        attempts_of ~calling:false ~own:false ~inlining ~reading
       in
       let with_calls_made_direct =
         after with_neither
           ~asked:(fun () -> closures_to_call)
           ~accepted:(fun () -> closures_were_called := true)
-          (fun () ->
-            attempts_of ~older:false ~calling:true ~own:false ~inlining ~reading)
+          (fun () -> attempts_of ~calling:true ~own:false ~inlining ~reading)
       in
       let with_my_closure_known =
         after with_calls_made_direct
@@ -7718,8 +7730,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             closures_were_called := closures_to_call;
             own_closures_were_known := true)
           (fun () ->
-            attempts_of ~older:false ~calling:closures_to_call ~own:true
-              ~inlining ~reading)
+            attempts_of ~calling:closures_to_call ~own:true ~inlining ~reading)
       in
       with_my_closure_known ()
     in
@@ -7731,14 +7742,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
        [let_copies_asked]), with what [my_closure] is known to be from its code
        used in the rounds that follow each lifting, with the calls made direct
        in them where the term before has a closure for that
-       ([closures_to_call]), and with the calls of the older versions of the
-       code that the term after calls left too ([older]). They are asked once,
-       and not without those rounds first, as the attempts of the kinds before
-       them are. Where they validate, [lets_were_copied] says so for a line
-       under the verdict, with [closures_were_called] and
-       [own_closures_were_known]. Where they refuse the unit too, what the last
-       asking before them left is put back, the answer is the one that there
-       was, and their pairs of terms are shown after the others. *)
+       ([closures_to_call]). They are asked once, and not without those rounds
+       first, as the attempts of the kinds before them are. Where they validate,
+       [lets_were_copied] says so for a line under the verdict, with
+       [closures_were_called] and [own_closures_were_known]. Where they refuse
+       the unit too, what the last asking before them left is put back, the
+       answer is the one that there was, and their pairs of terms are shown
+       after the others. *)
     let copied (attempts, refused) =
       if not (Lazy.force let_copies_to_make)
       then attempts, refused
@@ -7751,8 +7761,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             ~finally:(fun () -> let_copies_asked := false)
             (fun () ->
               own_closures_to_know := false;
-              attempts_of ~older:true ~calling:closures_to_call ~own:true
-                ~inlining:None ~reading:false)
+              attempts_of ~calling:closures_to_call ~own:true ~inlining:None
+                ~reading:false)
         in
         match answer with
         | Not_validated, _, _, _, _ ->
