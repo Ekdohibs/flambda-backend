@@ -1,0 +1,91 @@
+let $camlRecursion_through_given_closure_two_calls__first_const_0 =
+  Block 0 ()
+in
+(let code size(13)
+       memo_0 (table/83 : val, key/84, compute/85 : val)
+         my_closure/86 &my_alloc_region/87 my_depth/88
+         -> k/28 * k/29 =
+   let next_depth/89 = rec_info (succ my_depth/88) in
+   let Pfield/90 = %block_load.mut.[`0`] (table/83) in
+   let int_add/91 = %int_barith.add (Pfield/90, 1) in
+   let Psetfield/92 = %block_set.`imm`.[`0`] (table/83, int_add/91) in
+   apply &my_alloc_region/87 compute/85 (key/84) -> k/28 * k/29
+ in
+ let code size(17)
+       `fn[recursion_through_given_closure_two_calls.ml:31,20--68]_2`
+         (n/93 : imm tagged)
+         my_closure/94 &my_alloc_region/95 my_depth/96
+         -> k/30 * k/31
+         : imm tagged =
+   let next_depth/97 = rec_info (succ my_depth/96) in
+   let fib/98 =
+     %project_value_slot.[`fn[recursion_through_given_closure_two_calls.ml:31,20--68]`].[my_closure]
+       (my_closure/94)
+   in
+   let table/99 =
+     %project_value_slot.[`fn[recursion_through_given_closure_two_calls.ml:31,20--68]`].[table]
+       (my_closure/94)
+   in
+   (let int_sub/104 = %int_barith.sub (n/93, 2) in
+    apply direct(fib_1 &my_alloc_region/95)
+      (fib/98 : val * imm tagged -> imm tagged)
+        (table/99, int_sub/104)
+        -> k/32 * k/31)
+     where k/32 (apply_result/100 : imm tagged) =
+       ((let int_sub/103 = %int_barith.sub (n/93, 1) in
+         apply direct(fib_1 &my_alloc_region/95)
+           (fib/98 : val * imm tagged -> imm tagged)
+             (table/99, int_sub/103)
+             -> k/33 * k/31)
+          where k/33 (apply_result/101 : imm tagged) =
+            let int_add/102 =
+              %int_barith.add (apply_result/101, apply_result/100)
+            in
+            cont k/30 (int_add/102))
+ and code rec size(47)
+       fib_1 (table/105 : val, n/106 : imm tagged)
+         my_closure/107 &my_alloc_region/108 my_depth/109
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/110 = rec_info (succ my_depth/109) in
+   let memo/111 = %project_value_slot.[fib].[memo] (my_closure/107) in
+   (let prim/113 = %int_comp.lt (n/106, 2) in
+    let int_lessthan/114 = %tag_imm (prim/113) in
+    (let untagged/115 = %untag_imm (int_lessthan/114) in
+     switch untagged/115
+       | 0 -> k/37
+       | 1 -> k/34 (n/106))
+      where k/37 =
+        cont k/36)
+     where k/36 =
+       let `fn[recursion_through_given_closure_two_calls.ml:31,20--68]/112` =
+         closure
+           `fn[recursion_through_given_closure_two_calls.ml:31,20--68]_2`
+           @`fn[recursion_through_given_closure_two_calls.ml:31,20--68]`
+           &my_alloc_region/108
+       with {
+         my_closure = my_closure/107 ~ depth my_depth/109 -> next_depth/110;
+         table = table/105
+       }
+       in
+       apply direct(memo_0 &my_alloc_region/108)
+         (memo/111 : val * imm tagged * val? -> imm tagged)
+           (table/105,
+            n/106,
+            `fn[recursion_through_given_closure_two_calls.ml:31,20--68]/112`)
+           -> k/34 * k/35
+ in
+ let memo/116 = closure memo_0 @memo &toplevel in
+ let fib/117 = closure fib_1 @fib &toplevel with { memo = memo/116 } in
+ (let t/120 = %block.mut.[`0`].`toplevel` (0 : imm tagged) in
+  apply direct(fib_1 &toplevel)
+    (fib/117 : val * imm tagged -> imm tagged) (t/120, 10) -> k/38 * error)
+   where k/38 (result/118 : imm tagged) =
+     let Pmakeblock/119 = %block.[`0`].`toplevel` (result/118) in
+     cont k/27 (Pmakeblock/119))
+  where k/27 define_root_symbol (module_block/81) =
+    let field_0/82 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/81)
+    in
+    let $camlRecursion_through_given_closure_two_calls = Block 0 (field_0/82)
+    in
+    cont done ($camlRecursion_through_given_closure_two_calls)
