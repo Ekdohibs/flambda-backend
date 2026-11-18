@@ -116,7 +116,8 @@
      that keep or delete each parameter and result ([Decided]), keeps its
      [my_closure] ([my_closure_decision_u] is [None]), which is not
      unboxed, and has plain parameters, as many as its decisions.
-   - Calls ([repr_call]): direct, of the code they are known to call, at
+   - Calls ([repr_call]): direct, of the code they are known to call, or
+     of known arity, at
      the arities of that code, with plain arguments and no extra argument
      for the exception continuation, by a variable that is plain if the
      [my_closure] of the code is, and changed with the same
@@ -406,9 +407,9 @@ Definition returns_ok (C : finite_map (list decision * bool))
 
 Definition repr_call (C : finite_map (list decision * bool))
     (ap : apply_expr) : bool :=
-  match ap_call_kind ap, ap_callee ap, code_id_actually_called F sol ap with
-  | Direct id, Var f, Some id' =>
-    Pos.eqb id id'
+  match ap_callee ap, code_id_actually_called F sol ap with
+  | Var f, Some id =>
+    kind_calls (ap_call_kind ap) id
     && match lookup id codes, lookup id my_closures with
        | Some metadata, Some mc =>
          match
@@ -433,7 +434,7 @@ Definition repr_call (C : finite_map (list decision * bool))
          end
        | _, _ => false
        end
-  | _, _, _ => false
+  | _, _ => false
   end.
 
 Fixpoint repr_expr (kinds : finite_map flambda_kind)

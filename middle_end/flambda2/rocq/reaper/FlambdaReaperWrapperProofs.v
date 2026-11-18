@@ -887,8 +887,8 @@ Proof.
     try discriminate; intros H; exists ids; split; auto.
 Qed.
 
-Lemma called_none (ap : apply_expr) (id0 : code_id) :
-  ap_call_kind ap = Direct id0 ->
+Lemma called_none (ap : apply_expr) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
   code_id_actually_called F sol ap = None ->
   (∃ c, ap_callee ap = Const c)
   ∨ code_id_actually_directly_called F sol (node_of_simple (ap_callee ap))
@@ -898,11 +898,13 @@ Lemma called_none (ap : apply_expr) (id0 : code_id) :
       = Some ids
       ∧ Keyed.get_singleton Pos.eqb ids = None.
 Proof.
-  intros Hk. unfold code_id_actually_called. rewrite Hk.
-  destruct (ap_callee ap) as [x | sym | c]; [ | | left; exists c; reflexivity ];
-    destruct (code_id_actually_directly_called F sol _) as [ids | ];
-    intros H; right; [ right; exists ids; auto | left; reflexivity
-                     | right; exists ids; auto | left; reflexivity ].
+  intros Hk. unfold code_id_actually_called.
+  destruct (ap_call_kind ap); [ | exfalso; apply Hk; reflexivity | ];
+    (destruct (ap_callee ap) as [x | sym | c];
+       [ | | left; exists c; reflexivity ];
+     destruct (code_id_actually_directly_called F sol _) as [ids | ];
+     intros H; right; [ right; exists ids; auto | left; reflexivity
+                      | right; exists ids; auto | left; reflexivity ]).
 Qed.
 
 Lemma directly_member (f : node) (ids : list code_id) (a s : node)
@@ -1355,8 +1357,8 @@ Definition live (ctx : option code_id) : Prop :=
   ∀ c, ctx = Some c -> s_any_usage S (Node_code_id c) = true.
 
 Definition call_ok (ads : list decision) (ap : apply_expr) : Prop :=
-  ∀ id i fd kind,
-    ap_call_kind ap = Direct id ->
+  ∀ i fd kind,
+    ap_call_kind ap <> Indirect_unknown_arity ->
     nth_error (unit_callee_decisions F T cannot_change cds unboxed e0 ap) i
     = Some (fd, kind) ->
     arm_pair (apply_decision_at ads i kind) fd = true ->
@@ -1431,14 +1433,15 @@ Lemma apply_ok (ctx : option code_id) (ce : finite_map (list node))
            end) ap.
 Proof.
   intros (_ & _ & _ & returns & exn & Hret & _ & Hcall) Hcount Hlive Hagree
-    id i fd kind Hdirect Hfd Harm.
+    i fd kind Hdirect Hfd Harm.
   cbn [conts_counted] in Hcount. apply andb_true_iff in Hcount as [Hcount _].
   unfold count_ok in Hcount. rewrite lookup_counts in Hcount.
   destruct (lookup (ap_continuation ap) ce) as [ns | ] eqn:Hk;
     cbn [option_map] in Hcount; [ | discriminate ].
   apply Nat.eqb_eq in Hcount.
   rewrite (Hret ns eq_refl) in Hcall.
-  unfold FlambdaReaperFlowProofs.call_edges in Hcall. rewrite Hdirect in Hcall.
+  apply FlambdaReaperFlowProofs.known_call_edges_of in Hcall;
+    [ | exact Hdirect ].
   destruct Hcall as (w & a & called & _ & Hres & _ & Hcalled & Hcalled_any
                      & Hcond & Hread).
   set (f := node_of_simple (ap_callee ap)) in *.
@@ -1555,7 +1558,7 @@ Proof.
         apply FlambdaMapProofs.lookup_none_not_in in Emd. apply Emd.
         rewrite (proj1 bound_code_metadata_codes e0), map_map.
         apply in_map_iff. exists (id_s, c). split; [ reflexivity | exact Hc_s ].
-    + destruct (called_none F S ap id Hdirect Ecall)
+    + destruct (called_none F S ap Hdirect Ecall)
         as [(c0 & Hc0) | [Enone | (ids & Eids & Esing)]].
       * unfold f in Hread. rewrite Hc0 in Hread. cbn [node_of_simple] in Hread.
         pose proof (any_source_input _ _ _ closedU _ Hconsts) as Hac.
@@ -2108,13 +2111,13 @@ Theorem arm_needs_no_source : arm_needs_no_source_statement.
 Proof.
   intros flag is_local u e T cannot_change max_unbox_size lambda_lifting
     dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
-    Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap id i fd kind Hin
+    Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap i fd kind Hin
     Hdirect Hfd Harm.
   exact (proj2 (proj1 (arm_unit flag is_local u e T cannot_change
                          max_unbox_size lambda_lifting dominated to_unbox Hloc
                          Hslots Hfrag Hleast Hcc Hdom Hunbox Hwidgets Hcodes
                          Hargs Hknown Hcount Hkinds ads ap Hin)
-                  id i fd kind Hdirect Hfd Harm)).
+                  i fd kind Hdirect Hfd Harm)).
 Qed.
 
 Theorem arm_needs_no_source_auto : arm_needs_no_source_auto_statement.
@@ -2134,7 +2137,7 @@ Theorem kept_result_never_unboxed : kept_result_never_unboxed_statement.
 Proof.
   intros flag is_local u e T cannot_change max_unbox_size lambda_lifting
     dominated to_unbox F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom
-    Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap id i fields kind
+    Hunbox Hwidgets Hcodes Hargs Hknown Hcount Hkinds ads ap i fields kind
     Hin Hdirect Hfd.
   destruct (arm_pair (apply_decision_at ads i kind) (Unbox fields)) eqn:Harm;
     [ exfalso | reflexivity ].
@@ -2143,7 +2146,7 @@ Proof.
                             max_unbox_size lambda_lifting dominated to_unbox
                             Hloc Hslots Hfrag Hleast Hcc Hdom Hunbox Hwidgets
                             Hcodes Hargs Hknown Hcount Hkinds ads ap Hin)
-                     id i (Unbox fields) kind Hdirect Hfd Harm))).
+                     i (Unbox fields) kind Hdirect Hfd Harm))).
 Qed.
 
 Theorem indirect_arm_needs_no_source : indirect_arm_needs_no_source_statement.

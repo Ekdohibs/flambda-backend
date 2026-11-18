@@ -105,16 +105,19 @@
    ([region_value]), given by a simple, by the identity or by a call,
    the same in the two runs ([region_rel], [rel_region_argument]).
 
-   A direct call is answered by the call of the rebuilt code
-   ([direct_answered], [call_entered]), after the binding of the wrapper
-   if the rebuild gives the call one: the code of the callee is bound in
-   the second run, rebuilt, as its code id has a use (the call reads it);
+   A direct call, or one of known arity, is answered by the call of the
+   rebuilt code ([direct_answered], [call_entered]), after the binding of
+   the wrapper if the rebuild gives the call one: the code of the callee
+   is bound in the second run, rebuilt, as its code id has a use (the call
+   reads it);
    the arguments kept are those at the parameters of the code that have a
    use, and have a use themselves ([known_mask_used], [known_mask_kept]);
-   the call kind of the rebuild is the code of the callee or indirect
-   ([rewrite_call_kind_cases]); the parameters and [my_closure] are
-   related in the two runs, and the continuations of the code are the
-   ways out or the handler that the call returns to, at the nodes of the
+   the call kind of the rebuild is the direct call of the code of the
+   callee, or a call of known arity that allows it, with a group of
+   arguments ([rewrite_call_kind_cases], [calls_as_direct]); the
+   parameters and [my_closure] are related in the two runs, and the
+   continuations of the code are the ways out or the handler that the call
+   returns to, at the nodes of the
    code ([way_out_transport], [read_transports]). A return to a handler
    through the wrapper is answered by two steps, the wrapper's and the
    handler's ([apply_cont_answered]). The exception continuation of the
@@ -10577,12 +10580,38 @@ Proof.
   destruct Ha as [-> | []]. reflexivity.
 Qed.
 
-(* The call kind of the rebuilt call of a direct call with a group of
-   arguments: the direct call of the code that the callee is a closure
-   of, or a call of known arity that allows that code. *)
+(* The call that a direct call, or one of known arity, is known to call:
+   [code_id_actually_called] reads it as it reads a direct call. *)
+Lemma code_id_actually_called_known (ap : apply_expr) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  code_id_actually_called F sol ap
+  = match ap_callee ap with
+    | Const _ => None
+    | Var _ | Symbol _ =>
+      match
+        code_id_actually_directly_called F sol (node_of_simple (ap_callee ap))
+      with
+      | Some ids => Keyed.get_singleton Pos.eqb ids
+      | None => None
+      end
+    end.
+Proof.
+  intros Hnu. unfold code_id_actually_called.
+  destruct (ap_call_kind ap);
+    [ reflexivity | exfalso; apply Hnu; reflexivity | reflexivity ].
+Qed.
+
+Lemma direct_like_known (kind : call_kind) (id : code_id) :
+  direct_like kind id -> kind <> Indirect_unknown_arity.
+Proof. intros [-> | (code_ids & -> & _)]; discriminate. Qed.
+
+(* The call kind of the rebuilt call of a direct call, or of a call of
+   known arity, with a group of arguments: the direct call of the code
+   that the callee is a closure of, or a call of known arity that allows
+   that code. *)
 Lemma rewrite_call_kind_cases (ap : apply_expr) (id : code_id)
     (b w apply_node : node) :
-  ap_call_kind ap = Direct id ->
+  direct_like (ap_call_kind ap) id ->
   ap_args_arity ap <> [] ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
@@ -10596,29 +10625,35 @@ Lemma rewrite_call_kind_cases (ap : apply_expr) (id : code_id)
 Proof.
   intros Hk Hne Happly Hb Hcw Hcode Hww.
   pose proof (directly_called_in _ _ _ _ id Happly Hb Hcw Hcode Hww) as Hin.
-  unfold rewrite_call_kind, called_call_kind. rewrite Hk.
   assert (Hdirect : calls_as_direct (Direct id) id (ap_args_arity ap))
     by (right; left; reflexivity).
-  assert (Hunknown :
-    calls_as_direct
-      (if preserve_direct_calls || negb (among id unit_code_ids)
-       then Direct id else Indirect_known_arity None) id (ap_args_arity ap))
-    by (destruct (_ || _);
-        [ exact Hdirect
-        | right; right; split; [ exists None; split; reflexivity
-                               | exact Hne ] ]).
-  revert Hin.
-  destruct (ap_callee ap) as [x | sym | c]; intros Hin; [ | | exact Hunknown ];
-    destruct (code_id_actually_directly_called F sol _) as [ids | ];
-    try exact Hunknown;
-    specialize (Hin ids eq_refl);
-    (destruct (Keyed.get_singleton Pos.eqb ids) as [id' | ] eqn:Hs;
-     [ rewrite (singleton_in ids id id' Hs Hin); exact Hdirect
-     | destruct (Keyed.is_empty ids);
-       [ exact Hdirect
-       | right; right; split; [ | exact Hne ];
-         exists (Some ids); split; [ reflexivity | ];
-         exact (proj2 (among_In id ids) Hin) ] ]).
+  assert (Hknown :
+    calls_as_direct (Indirect_known_arity None) id (ap_args_arity ap))
+    by (right; right; split; [ exists None; split; reflexivity | exact Hne ]).
+  assert (Hself : calls_as_direct (ap_call_kind ap) id (ap_args_arity ap)).
+  { destruct Hk as [-> | (code_ids & -> & Hallow)]; [ exact Hdirect | ].
+    right; right; split; [ | exact Hne ].
+    exists code_ids. split; [ reflexivity | exact Hallow ]. }
+  assert (Hcalled :
+    ∀ kind : call_kind,
+      calls_as_direct kind id (ap_args_arity ap) ->
+      calls_as_direct (called_call_kind F sol ap kind) id (ap_args_arity ap)).
+  { intros kind Hkind. unfold called_call_kind. revert Hin.
+    destruct (ap_callee ap) as [x | sym | c]; intros Hin;
+      [ | | exact Hkind ];
+      destruct (code_id_actually_directly_called F sol _) as [ids | ];
+      try exact Hkind;
+      specialize (Hin ids eq_refl);
+      (destruct (Keyed.get_singleton Pos.eqb ids) as [id' | ] eqn:Hs;
+       [ rewrite (singleton_in ids id id' Hs Hin); exact Hdirect
+       | destruct (Keyed.is_empty ids);
+         [ exact Hself
+         | right; right; split; [ | exact Hne ];
+           exists (Some ids); split; [ reflexivity | ];
+           exact (proj2 (among_In id ids) Hin) ] ]). }
+  unfold rewrite_call_kind.
+  destruct Hk as [Hk | (code_ids & Hk & _)]; rewrite Hk; apply Hcalled;
+    [ destruct (_ || _); [ exact Hdirect | exact Hknown ] | exact Hknown ].
 Qed.
 
 (* A call known to call code is rebuilt as the direct call of it. *)
@@ -10651,7 +10686,7 @@ Qed.
 (* A direct call known to call code calls the code of its callee. *)
 Lemma code_id_actually_called_eq (ap : apply_expr) (id id' : code_id)
     (b w apply_node : node) :
-  ap_call_kind ap = Direct id ->
+  direct_like (ap_call_kind ap) id ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
   may_come_from sol b (node_of_simple (ap_callee ap)) ->
@@ -10662,7 +10697,8 @@ Lemma code_id_actually_called_eq (ap : apply_expr) (id id' : code_id)
 Proof.
   intros Hk Happly Hb Hcw Hcode Hww.
   pose proof (directly_called_in _ _ _ _ id Happly Hb Hcw Hcode Hww) as Hin.
-  revert Hin. unfold code_id_actually_called. rewrite Hk.
+  revert Hin.
+  rewrite (code_id_actually_called_known ap (direct_like_known _ _ Hk)).
   destruct (ap_callee ap) as [x | sym | c0]; intros Hin;
     [ | | intros H; discriminate H ];
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
@@ -10675,7 +10711,7 @@ Qed.
    is that of FlambdaReaperRebuild.v. *)
 Lemma rebuild_apply_unchanged_code (ap : apply_expr) (id : code_id)
     (md : code_metadata) (en : rebuild_env) (b w apply_node : node) :
-  ap_call_kind ap = Direct id ->
+  direct_like (ap_call_kind ap) id ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
   may_come_from sol b (node_of_simple (ap_callee ap)) ->
@@ -10702,7 +10738,7 @@ Qed.
 
 Lemma apply_cc_unchanged_code (ap : apply_expr) (id : code_id)
     (md : code_metadata) (b w apply_node : node) :
-  ap_call_kind ap = Direct id ->
+  direct_like (ap_call_kind ap) id ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
   may_come_from sol b (node_of_simple (ap_callee ap)) ->
@@ -10756,7 +10792,7 @@ Qed.
    callee ([Hwidgets]). *)
 Lemma direct_call_recognized (ap : apply_expr) (id : code_id)
     (b w apply_node witness called_node : node) :
-  ap_call_kind ap = Direct id ->
+  direct_like (ap_call_kind ap) id ->
   (∀ c0 : const, ap_callee ap <> Const c0) ->
   g_accessor G apply_node (Field_call_witness Known_arity_code_pointer)
     (node_of_simple (ap_callee ap)) ->
@@ -10895,7 +10931,8 @@ Proof.
     subst base f.
     rewrite (proj1 (Hwid a' Hx)) in Has'. discriminate Has'. }
   destruct Hsome as (ids & Hids).
-  revert Hids Hin Hall. unfold code_id_actually_called. rewrite Hk.
+  revert Hids Hin Hall.
+  rewrite (code_id_actually_called_known ap (direct_like_known _ _ Hk)).
   destruct (ap_callee ap) as [x | sym | c0];
     [ | | intros; exfalso; exact (Hnc c0 eq_refl) ];
     intros Hids Hin Hall; cbv iota beta; rewrite Hids;
@@ -13880,11 +13917,11 @@ Qed.
    callee, and the second the rebuilt body, with the parameters kept
    related, and [my_closure]; the continuations of the code are those of
    the call, or the wrapper that the rebuild gives it. *)
-Lemma direct_answered (ap : apply_expr) (id : code_id) (vars vars' : env)
+Lemma direct_answered (ap : apply_expr) (vars vars' : env)
     (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
     (rcd rcd' : read_record)
     (e' : expr) :
-  ap_call_kind ap = Direct id ->
+  ap_call_kind ap <> Indirect_unknown_arity ->
   related (State (Apply ap) vars conts statics hp rcd)
     (State e' vars' conts' statics' hp' rcd') ->
   answered_r related
@@ -13930,19 +13967,19 @@ Proof.
     apply among_In. cbn [continuations_of continuations_in_apply].
     right. left. exact E. }
   apply negb_true_iff in Hcf as Hexf0.
-  unfold call_edges in Hcall. rewrite Hkind in Hcall.
+  apply known_call_edges_of in Hcall; [ | exact Hkind ].
   destruct Hcall as (witness & apply_node & called_node & Hargs & Hretacc
                      & Hexnacc & Hcalled & Hused & Hcond & Happly).
   pose proof Hflow as (ctx0 & ce0 & _ & _ & _ & _ & _ & _ & Hcodes & _).
-  pose proof (call_step G noted deps cds keep codes symbols heap_prims
+  pose proof (full_call_step G noted deps cds keep codes symbols heap_prims
                 slots_read ap vars
-                conts statics hp rcd id Hkind Hfrag_ap Hcodes) as Hcs.
+                conts statics hp rcd Hkind Hfrag_ap Hcodes) as Hcs.
   unfold answered_h. revert Hflow' Hcs.
   destruct (step (State (Apply ap) vars conts statics hp rcd))
     as [s' | k vs0 hp0 rcd0 | ]; [ | intros _ [] | intros; exact I ].
-  intros Hflow' (callee & vs & extra & slots & c & callee_vars & Hcallee
-                 & Hvs & Hextra & Hclosure & Hcode & Hk1 & Hk2 & Hk3 & Hbind
-                 & ->).
+  intros Hflow' (id & callee & vs & extra & slots & c & callee_vars & Hlike
+                 & Hcallee & Hvs & Hextra & Hclosure & Hcode & Htupled & Hfull
+                 & Hgroup & Hk1 & Hk2 & Hk3 & Hbind & ->).
   (* The extra arguments of the exception, in the second run. *)
   destruct (rewrite_simples_kinds en vars vars' Henv _ extra Hextra)
     as (extra' & Hextra' & Hkx).
@@ -14000,16 +14037,7 @@ Proof.
     - rewrite H, Hcode. reflexivity.
     - exfalso. exact (H (au_hu _ _ _ Hc _ Hlive')). }
   subst e'. cbn [rebuild_expr_cc] in Hconts |- *.
-  (* The code is of the fragment, and as the unit asks. *)
-  pose proof Hfrag_ap as Hall. unfold apply_in_flow_fragment in Hall.
-  rewrite Hkind in Hall. apply andb_true_iff in Hall as [Hall Hne_args].
-  assert (Hgroup : ap_args_arity ap <> []).
-  { intros E. rewrite E in Hne_args. simpl in Hne_args.
-    discriminate Hne_args. }
-  rewrite forallb_forall in Hall. specialize (Hall (id, c) Hin_codes).
-  simpl in Hall. rewrite Pos.eqb_refl in Hall. simpl in Hall.
-  apply andb_true_iff in Hall as [Htupled Hfull].
-  apply negb_true_iff in Htupled. apply Nat.eqb_eq in Hfull.
+  (* The code is as the unit asks. *)
   destruct (Hcode_checks id c Hin_codes)
     as (Hscr_c & Hcf_c & Hraises_c & Hclosed_c & Hkinded_c & Hfresh_c).
   pose proof (Hcodes id c Hcode) as [_ Hedges_c].
@@ -14020,7 +14048,7 @@ Proof.
   assert (Hnc : ∀ c0 : const, ap_callee ap <> Const c0).
   { intros c0 E. rewrite E in Hcallee. injection Hcallee as <-.
     discriminate Hclosure. }
-  pose proof (rewrite_call_kind_cases ap id b w apply_node Hkind Hgroup Happly
+  pose proof (rewrite_call_kind_cases ap id b w apply_node Hlike Hgroup Happly
                 Hb Hcw Hcodeid Hw_self) as Hkind'.
   assert (Hl_exn : is_local (Field_return_of_call Exn) = false)
     by (apply (not_local is_local Hlocal); intros; discriminate).
@@ -14047,7 +14075,7 @@ Proof.
       destruct (cannot_change (Node_code_id id));
         [ rewrite orb_true_r in Hun; discriminate Hun | reflexivity ]. }
     pose proof (direct_call_recognized ap id b w apply_node witness
-                  called_node Hkind Hnc Happly Hal_wa Hcalled
+                  called_node Hlike Hnc Happly Hal_wa Hcalled
                   (any_usage_input _ _ _ Hc _ Hused) Hb Hcw Hcodeid Hw_self
                   Hcc_id) as Hcalled_ap.
     pose proof (Hmetadatas id c Hin_codes Hcc_id) as Hmeta.
@@ -14238,10 +14266,10 @@ Proof.
   (* The code keeps its calling convention, and the call is rebuilt as in
      FlambdaReaperRebuild.v. *)
   rewrite (rebuild_apply_unchanged_code ap id (metadata_of_code c) en b w
-             apply_node Hkind Happly Hb Hcw Hcodeid Hw_self Hun)
+             apply_node Hlike Happly Hb Hcw Hcodeid Hw_self Hun)
     in Hconts |- *.
   pose proof (apply_cc_unchanged_code ap id (metadata_of_code c) b w
-                apply_node Hkind Happly Hb Hcw Hcodeid Hw_self Hun) as Hacc0.
+                apply_node Hlike Happly Hb Hcw Hcodeid Hw_self Hun) as Hacc0.
   assert (Hnr_plain :
     ∀ (r : continuation) (K : list flambda_kind),
       lookup r rets = Some K ->
@@ -14263,9 +14291,11 @@ Proof.
         (arguments_used_by_known_arity_call F sol
            (node_of_simple (ap_callee ap)) (ap_args ap))
         (ap_args ap)).
-  { unfold rebuild_arguments. rewrite Hkind.
+  { unfold rebuild_arguments.
     destruct (ap_callee ap) as [x | sym | c0];
-      [ reflexivity | reflexivity | destruct (Hnc c0 eq_refl) ]. }
+      [ | | destruct (Hnc c0 eq_refl) ];
+      (destruct (ap_call_kind ap);
+       [ reflexivity | exfalso; apply Hkind; reflexivity | reflexivity ]). }
   set (mask := arguments_used_by_known_arity_call F sol
                  (node_of_simple (ap_callee ap)) (ap_args ap)) in *.
   assert (Hmlen : length mask = length (ap_args ap)).
@@ -17428,25 +17458,6 @@ Proof.
         reflexivity.
 Qed.
 
-(* A call of known arity is not in the fragment. *)
-Lemma known_arity_answered (ap : apply_expr)
-    (code_ids : option (list code_id)) (vars vars' : env)
-    (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
-    (rcd rcd' : read_record)
-    (e' : expr) :
-  ap_call_kind ap = Indirect_known_arity code_ids ->
-  related (State (Apply ap) vars conts statics hp rcd)
-    (State e' vars' conts' statics' hp' rcd') ->
-  answered_r related
-    (State (Apply ap) vars conts statics hp rcd)
-    (State e' vars' conts' statics' hp' rcd').
-Proof.
-  intros Hkind. related_intro.
-  destruct He as (Hfrag_ap & _).
-  unfold apply_in_flow_fragment in Hfrag_ap. rewrite Hkind in Hfrag_ap.
-  discriminate Hfrag_ap.
-Qed.
-
 (* A call: direct, of unknown arity, or of known arity. *)
 Lemma apply_answered (ap : apply_expr) (vars vars' : env)
     (conts conts' : cont_env) (statics statics' : static_env) (hp hp' : heap)
@@ -17459,14 +17470,10 @@ Lemma apply_answered (ap : apply_expr) (vars vars' : env)
     (State e' vars' conts' statics' hp' rcd').
 Proof.
   destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind.
-  - exact (direct_answered ap id vars vars' conts conts' statics statics' hp hp'
-    rcd rcd'
-             e' Hkind).
-  - exact (indirect_answered ap vars vars' conts conts' statics statics' hp hp'
-    rcd rcd'
-             e' Hkind).
-  - exact (known_arity_answered ap code_ids vars vars' conts conts' statics
-             statics' hp hp' rcd rcd' e' Hkind).
+  2: exact (indirect_answered ap vars vars' conts conts' statics statics' hp
+              hp' rcd rcd' e' Hkind).
+  all: apply (direct_answered ap vars vars' conts conts' statics statics' hp
+                hp' rcd rcd' e'); rewrite Hkind; discriminate.
 Qed.
 
 Lemma related_answered (s t : state) :
@@ -20091,10 +20098,10 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin _ (Hhs _ Hin)).
   - intros ap bound H. unfold direct_tail_call in H. unfold direct_call.
-    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
-    apply andb_true_iff in H as [H Hk]. apply andb_true_iff in H as [H _].
-    apply andb_true_iff in H as [H Hx]. apply andb_true_iff in H as [_ He].
-    rewrite He, Hx, Hk. reflexivity.
+    destruct (ap_call_kind ap); [ | discriminate H | ];
+      apply andb_true_iff in H as [H Hk]; apply andb_true_iff in H as [H _];
+      apply andb_true_iff in H as [H Hx]; apply andb_true_iff in H as [_ He];
+      rewrite He, Hx, Hk; reflexivity.
   - reflexivity.
   - reflexivity.
   - reflexivity.
@@ -20129,8 +20136,8 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin _ (Hhs _ Hin)).
   - intros ap bound H. unfold direct_call in H. unfold only_direct_call.
-    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
-    apply andb_true_iff in H as [_ Hk]. exact Hk.
+    destruct (ap_call_kind ap); [ | discriminate H | ];
+      apply andb_true_iff in H as [_ Hk]; exact Hk.
   - reflexivity.
   - reflexivity.
   - reflexivity.
@@ -20165,8 +20172,8 @@ Proof.
     rewrite forallb_forall in Hhs |- *. intros [k h] Hin.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold only_direct_call in H. unfold full_call.
-    destruct (ap_call_kind ap); [ | discriminate H | discriminate H ].
-    rewrite H. reflexivity.
+    destruct (ap_call_kind ap); [ | discriminate H | ];
+      rewrite H; reflexivity.
   - reflexivity.
   - reflexivity.
   - reflexivity.
@@ -20201,7 +20208,7 @@ Proof.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold full_call in H. unfold generic_call.
     apply andb_true_iff in H as [Hk Hcs]. rewrite Hk. cbn [andb].
-    destruct (ap_call_kind ap); [ reflexivity | | discriminate Hcs ].
+    destruct (ap_call_kind ap); [ reflexivity | | reflexivity ].
     rewrite forallb_forall in Hcs |- *. intros [id c] Hin.
     specialize (Hcs (id, c) Hin). cbv beta iota in Hcs |- *.
     apply andb_true_iff in Hcs as [Hcs _]. exact Hcs.
@@ -20239,7 +20246,7 @@ Proof.
     exact (IHh k h Hin (Hhs _ Hin)).
   - intros ap H. unfold generic_call in H. unfold tupled_call.
     apply andb_true_iff in H as [Hk Hcs]. rewrite Hk. cbn [andb].
-    destruct (ap_call_kind ap); [ reflexivity | | discriminate Hcs ].
+    destruct (ap_call_kind ap); [ reflexivity | | reflexivity ].
     rewrite forallb_forall in Hcs |- *. intros [id c] Hin.
     specialize (Hcs (id, c) Hin). cbv beta iota in Hcs |- *.
     rewrite Hcs. reflexivity.
@@ -20460,6 +20467,27 @@ Proof.
          empty_heap no_reads)
       Goes_wrong).
   { exists 6; try exists no_reads. vm_compute. reflexivity. }
+  pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
+  discriminate Heq.
+Qed.
+
+Theorem direct_no_group_counterexample :
+  direct_no_group_counterexample_statement.
+Proof.
+  do 9 (split; [ vm_compute; reflexivity | ]).
+  intros [Hexits _].
+  assert (Hsource :
+    behaves
+      (State NoGroupExample.unit_expr [] [] empty_static_env empty_heap
+         no_reads)
+      (Exits 1%positive [Value_const (Tagged_immediate 7)] empty_heap)).
+  { exists 8; try exists no_reads. vm_compute. reflexivity. }
+  assert (Htarget :
+    behaves
+      (State NoGroupExample.rebuilt [] [] empty_static_env empty_heap
+         no_reads)
+      Goes_wrong).
+  { exists 8; try exists no_reads. vm_compute. reflexivity. }
   pose proof (behaviour_unique _ _ _ (Hexits _ _ _ Hsource) Htarget) as Heq.
   discriminate Heq.
 Qed.

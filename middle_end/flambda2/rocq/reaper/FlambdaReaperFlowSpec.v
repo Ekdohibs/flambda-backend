@@ -132,10 +132,10 @@
    ([Closure_of_set]) and of projections from them
    ([Project_value_slot_from], [Project_function_slot]), [Let_cont]s,
    recursive or not, [Apply_cont]s (raises among them), [Switch]es,
-   [Invalid], calls, direct or of unknown arity, with extra arguments
-   for their exception continuations or not, and [Let_static]s of code,
-   of blocks, of boxed numbers, of strings, of immutable arrays of
-   values and of closures of static sets. Every primitive is in it,
+   [Invalid], calls of the three kinds, with extra arguments for their
+   exception continuations or not, and [Let_static]s of code, of blocks,
+   of boxed numbers, of strings, of immutable arrays of values and of
+   closures of static sets. Every primitive is in it,
    those of the heap ([prim_of_heap]) among them, and so are partial
    applications and over-applications, which calls of unknown arity
    make.
@@ -147,17 +147,21 @@
    the machine gives none of them a value, so a run that reaches one
    goes wrong there, and what they do (FlambdaRegionsSpec.v) is not
    looked at. A direct call has a group of arguments at least, and the
-   code that it names, if the unit binds it, is not tupled and has as
-   many parameters as the call has arguments (S7's hypothesis): the
-   rebuild may make it a call of known arity, which is undefined with no
-   group of arguments; in a unit with a call of unknown arity, code that
-   is not tupled has parameters, and tupled code has parameters of one
-   component each. Calls of known arity are not in it. The body of code
-   binds nothing static, its two continuations differ, and it applies only
-   continuations in scope, each to as many values as it has parameters,
-   the return continuation of the code to as many as the code has results,
-   and its exception continuation, or that of a call, to one and the extra
-   arguments of the call ([conts_counted]); the closure symbols of a
+   code that it names, if the unit binds it, is not tupled and has as many
+   parameters as the call has arguments (S7's hypothesis): the rebuild may
+   make it a call of known arity, which is undefined with no group of
+   arguments
+   (FlambdaReaperRebuildSpec.direct_no_group_counterexample_statement); in
+   a unit with a call of unknown arity, code that is not tupled has
+   parameters, and tupled code has parameters of one component each. A
+   call of known arity is in it whatever it calls: the machine finds
+   undefined one that is not a full call of code that is not tupled. The
+   body of code binds nothing static, its two continuations
+   differ, and it applies only continuations in scope, each to as many
+   values as it has parameters, the return continuation of the code to as
+   many as the code has results, and its exception continuation, or that
+   of a call, to one and the extra arguments of the call
+   ([conts_counted]); the closure symbols of a
    static set are symbols that the unit binds, and its slot is among its
    function slots; the code ids that the unit binds are distinct. Not in
    it: the older forms of sets of closures ([Set_of_closures],
@@ -409,9 +413,10 @@ Definition singleton_params (a : arity) : bool :=
 
 (* A direct call with one group of arguments at least, of code that, if
    the unit binds it, is not tupled and has as many parameters as the
-   call has arguments; a call of unknown arity in a unit whose code, if
-   not tupled, has parameters, and if tupled, has parameters of one
-   component each. No call of known arity. *)
+   call has arguments; any call of known arity, which is undefined where
+   it is not such a call; a call of unknown arity in a unit whose code,
+   if not tupled, has parameters, and if tupled, has parameters of one
+   component each. *)
 Definition apply_in_flow_fragment (codes : list (code_id * code))
     (ap : apply_expr) : bool :=
   match ap_call_kind ap with
@@ -424,7 +429,7 @@ Definition apply_in_flow_fragment (codes : list (code_id * code))
                   (length (code_params_arity c))))
       codes
     && negb (Nat.eqb (length (ap_args_arity ap)) 0)
-  | Indirect_known_arity _ => false
+  | Indirect_known_arity _ => true
   | Indirect_unknown_arity =>
     forallb
       (fun '(_, c) =>

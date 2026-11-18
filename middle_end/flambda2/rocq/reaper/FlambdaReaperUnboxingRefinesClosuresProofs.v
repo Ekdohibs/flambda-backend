@@ -979,15 +979,14 @@ Proof.
 Qed.
 
 Lemma rewrite_call_kind_c (ap : apply_expr) (id : code_id) :
-  ap_call_kind ap = Direct id ->
   code_id_actually_called F sol ap = Some id ->
   rewrite_call_kind F sol pdc unit_code_ids ap = Direct id.
 Proof.
-  intros Hk Hc. unfold code_id_actually_called in Hc.
-  unfold rewrite_call_kind. rewrite Hk in Hc |- *. unfold called_call_kind.
-  destruct (ap_callee ap); try discriminate Hc;
+  unfold code_id_actually_called, rewrite_call_kind, called_call_kind.
+  destruct (ap_call_kind ap); [ | intros H; discriminate H | ];
+    destruct (ap_callee ap); try (intros H; discriminate H);
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
-    try discriminate Hc; rewrite Hc; reflexivity.
+    try (intros H; discriminate H); intros Hs; rewrite Hs; reflexivity.
 Qed.
 
 (* A call of the fragment is rebuilt alike, with no wrapper. *)
@@ -1001,13 +1000,10 @@ Lemma call_rebuilt (C : finite_map (list decision * bool))
   rr MM CH CSf (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hcall Hz. unfold repr_call in Hcall.
-  destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind;
-    [ | discriminate Hcall | discriminate Hcall ].
   destruct (ap_callee ap) as [f | | ] eqn:Hcallee; try discriminate Hcall.
-  destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
+  destruct (code_id_actually_called F sol ap) as [id | ] eqn:Hcalled;
     [ | discriminate Hcall ].
-  apply andb_true_iff in Hcall as [Hid Hcall]. apply Pos.eqb_eq in Hid.
-  subst id'.
+  apply andb_true_iff in Hcall as [_ Hcall].
   destruct (lookup id codes) as [md | ] eqn:Hmd; [ | discriminate Hcall ].
   destruct (lookup id my_closures) as [mc | ] eqn:Hmc;
     [ | discriminate Hcall ].
@@ -1121,7 +1117,7 @@ Proof.
          exact Hret. }
   apply (rr_call MM CH CSf ap' id
            (Code_info (CH mc) (length (cm_params_arity md)))).
-  - exact (rewrite_call_kind_c ap id Hkind Hcalled).
+  - exact (rewrite_call_kind_c ap id Hcalled).
   - unfold CSf. rewrite Hmd, Hmc. reflexivity.
   - unfold callee_ok. cbn [ci_my_closure ap_callee ap'].
     apply repr_option_eqb_eq in Hcl. unfold changed_name in Hcl.

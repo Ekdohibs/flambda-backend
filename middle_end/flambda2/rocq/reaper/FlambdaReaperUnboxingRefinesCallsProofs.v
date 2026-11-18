@@ -1782,15 +1782,26 @@ Proof.
 Qed.
 
 Lemma rewrite_call_kind_direct (ap : apply_expr) (id : code_id) :
-  ap_call_kind ap = Direct id ->
   code_id_actually_called F sol ap = Some id ->
   rewrite_call_kind F sol pdc unit_code_ids ap = Direct id.
 Proof.
-  intros Hk Hc. unfold code_id_actually_called in Hc.
-  unfold rewrite_call_kind. rewrite Hk in Hc |- *. unfold called_call_kind.
-  destruct (ap_callee ap); try discriminate Hc;
+  unfold code_id_actually_called, rewrite_call_kind, called_call_kind.
+  destruct (ap_call_kind ap); [ | intros H; discriminate H | ];
+    destruct (ap_callee ap); try (intros H; discriminate H);
     destruct (code_id_actually_directly_called F sol _) as [ids | ];
-    try discriminate Hc; rewrite Hc; reflexivity.
+    try (intros H; discriminate H); intros Hs; rewrite Hs; reflexivity.
+Qed.
+
+(* The arm of a direct call, or one of known arity. *)
+Lemma known_kind_match {A : Type} (kind : call_kind) (x y : A) :
+  kind <> Indirect_unknown_arity ->
+  match kind with
+  | Direct _ | Indirect_known_arity _ => x
+  | Indirect_unknown_arity => y
+  end = x.
+Proof.
+  destruct kind; [ reflexivity | intros H; exfalso; apply H; reflexivity
+                 | reflexivity ].
 Qed.
 
 Lemma simple_is_dead_kinds (en1 en2 : rebuild_env) (s : simple) :
@@ -4499,18 +4510,14 @@ Proof.
   unfold call_ok in Hok. cbn [ap_call_kind ap_callee ap ap_args
     ap_continuation ap_exn_continuation ap_exn_extra_args ap_args_arity
     ap_return_arity] in Hok.
-  destruct ckind as [id | | code_ids];
-    [ | exfalso; apply Hsome; reflexivity
-      | exfalso; destruct callee; try discriminate Hok;
-        destruct (code_id_actually_called F sol ap);
-        [ discriminate Hok | exact (Hsome eq_refl) ] ].
+  assert (Hck : ckind <> Indirect_unknown_arity)
+    by (intros ->; apply Hsome; reflexivity).
   destruct callee as [f | sym | cst]; try discriminate Hok.
-  destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
+  destruct (code_id_actually_called F sol ap) as [id | ] eqn:Hcalled;
     [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hfused].
-  apply andb_true_iff in Hok as [Hid Hfplain].
-  apply Pos.eqb_eq in Hid. subst id'.
+  apply andb_true_iff in Hok as [_ Hfplain].
   destruct (lookup id codes) as [md | ] eqn:Hcodes; [ | discriminate Hrest ].
   assert (Hnc : code_change_u sol cannot_change code_deps unit_code_ids
                   unboxed id md
@@ -4590,16 +4597,17 @@ Proof.
   change (unboxed_of unboxed (Var f)) with (fields_of unboxed f).
   rewrite Hfx.
   rewrite (rewrite_call_kind_direct
-             {| ap_callee := Var f; ap_call_kind := Direct id;
+             {| ap_callee := Var f; ap_call_kind := ckind;
                 ap_args := args; ap_continuation := k;
                 ap_exn_continuation := exn; ap_exn_extra_args := extra;
                 ap_args_arity := cm_params_arity md;
                 ap_return_arity := cm_result_arity md |}
-             id eq_refl Hcalled).
+             id Hcalled).
   rewrite Hxu. cbn beta iota zeta.
   (* The arguments, the same in both runs. *)
   unfold rebuild_arguments.
   cbn [ap_callee ap_call_kind ap_args node_of_simple].
+  rewrite !(known_kind_match ckind _ _ Hck).
   unfold kept_args_ok, masked_args_ok in Hkept.
   apply andb_true_iff in Hkept as [Hmeq Hmused].
   apply forallb2_eqb_eq in Hmeq. rewrite <- Hmeq.
@@ -4657,7 +4665,7 @@ Proof.
   rewrite Hlen_kr in Happ.
   destruct (nc_rds (cd_return cd) kinds_r Hnu Hrlen) as [Hcomb Hfresh_eq].
   fold rd rds in Hcomb, Hfresh_eq.
-  set (ap0 := Apply_expr (Var f) (Direct id) args k exn extra
+  set (ap0 := Apply_expr (Var f) ckind args k exn extra
                 (cm_params_arity md) (cm_result_arity md)).
   rewrite (make_apply_wrapper_as_cc en ap1).
   2: { destruct Hmask as [Hm | [Hm _]];
@@ -5111,18 +5119,14 @@ Proof.
   unfold call_ok in Hok. cbn [ap_call_kind ap_callee ap ap_args
     ap_continuation ap_exn_continuation ap_exn_extra_args ap_args_arity
     ap_return_arity] in Hok.
-  destruct ckind as [id | | code_ids];
-    [ | exfalso; apply Hsome; reflexivity
-      | exfalso; destruct callee; try discriminate Hok;
-        destruct (code_id_actually_called F sol ap);
-        [ discriminate Hok | exact (Hsome eq_refl) ] ].
+  assert (Hck : ckind <> Indirect_unknown_arity)
+    by (intros ->; apply Hsome; reflexivity).
   destruct callee as [f | sym | cst]; try discriminate Hok.
-  destruct (code_id_actually_called F sol ap) as [id' | ] eqn:Hcalled;
+  destruct (code_id_actually_called F sol ap) as [id | ] eqn:Hcalled;
     [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hfused].
-  apply andb_true_iff in Hok as [Hid Hfplain].
-  apply Pos.eqb_eq in Hid. subst id'.
+  apply andb_true_iff in Hok as [_ Hfplain].
   destruct (lookup id codes) as [md | ] eqn:Hcodes; [ | discriminate Hrest ].
   unfold apply_change_u in Hac. rewrite Hcalled, Hcodes in Hac.
   destruct (code_pdescs sol cannot_change code_deps unit_code_ids unboxed id
@@ -5211,12 +5215,12 @@ Proof.
               unboxed id);
     [ discriminate Hmcd | ].
   rewrite (rewrite_call_kind_direct
-             {| ap_callee := Var f; ap_call_kind := Direct id;
+             {| ap_callee := Var f; ap_call_kind := ckind;
                 ap_args := args; ap_continuation := k;
                 ap_exn_continuation := exn; ap_exn_extra_args := extra;
                 ap_args_arity := cm_params_arity md;
                 ap_return_arity := cm_result_arity md |}
-             id eq_refl Hcalled).
+             id Hcalled).
   rewrite Hxu. cbn beta iota zeta.
   assert (Hkok : ∀ x, kind_ok (kind_of_variable en x) = true)
     by exact (ci_kinds_ok _ _ _ Hci).
@@ -5310,7 +5314,7 @@ Proof.
   destruct (apply_decisions_kps C en enu k kps true Hci HCk)
     as [Happ _].
   rewrite Hlen_kr in Happ.
-  set (ap0 := Apply_expr (Var f) (Direct id) args k exn extra
+  set (ap0 := Apply_expr (Var f) ckind args k exn extra
                 (cm_params_arity md) (cm_result_arity md)).
   apply (uc_result_results (K_of C) ap0 ap_cc ap_u cs k kps rds en enu);
     try reflexivity; try assumption.

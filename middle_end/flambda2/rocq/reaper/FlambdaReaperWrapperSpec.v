@@ -47,12 +47,13 @@
    that position has no source, so restoring the test [has_any_source]
    would never stop the compiler, but an unconditional fatal error
    would.
-   - [arm_needs_no_source_statement]: for every direct call of the unit
-     that the rebuild with the fix makes (code that changes its calling
-     convention, code that keeps it, and code that is not known), at
-     every position, the decisions are the arm only where no node that
-     the call reads off its callee with the field of known arity has any
-     source, or a source whose result of that rank has a source
+   - [arm_needs_no_source_statement]: for every direct call, or call of
+     known arity, of the unit that the rebuild with the fix makes (code
+     that changes its calling convention, code that keeps it, and code
+     that is not known), at every position, the decisions are the arm
+     only where no node that the call reads off its callee with the
+     field of known arity has any source, or a source whose result of
+     that rank has a source
      ([callee_result_has_source]: [not_local_field_has_source] of
      points_to_analysis.ml at that node and field). As a result of the
      callee that the callee unboxes has a source, [Keep _, Unbox _] is
@@ -319,7 +320,8 @@ Definition result_has_source_at (F : facts) (T : tables) (entry : field)
                 (t_sources T)))
     (f_accessor F).
 
-(* For a direct call, the field of known arity. *)
+(* For a direct call, or one of known arity, the field of known
+   arity. *)
 Definition callee_result_has_source (F : facts) (T : tables) (callee : node)
     (i : nat) : bool :=
   result_has_source_at F T known callee i.
@@ -513,10 +515,10 @@ Definition arm_needs_no_source_statement : Prop :=
     check_known_witnesses F T code_deps = true ->
     conts_counted (unit_counts u) e = true ->
     plain_kinds e = true ->
-    ∀ (ads : list decision) (ap : apply_expr) (id : code_id) (i : nat)
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
       (fd : decision) (kind : flambda_kind),
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
-      ap_call_kind ap = Direct id ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
       nth_error
         (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
       = Some (fd, kind) ->
@@ -547,10 +549,10 @@ Definition arm_needs_no_source_auto_statement : Prop :=
     check_known_witnesses F T code_deps = true ->
     conts_counted (unit_counts u) e = true ->
     plain_kinds e = true ->
-    ∀ (ads : list decision) (ap : apply_expr) (id : code_id) (i : nat)
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
       (fd : decision) (kind : flambda_kind),
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
-      ap_call_kind ap = Direct id ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
       nth_error
         (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
       = Some (fd, kind) ->
@@ -624,10 +626,10 @@ Definition kept_result_never_unboxed_statement : Prop :=
     check_known_witnesses F T code_deps = true ->
     conts_counted (unit_counts u) e = true ->
     plain_kinds e = true ->
-    ∀ (ads : list decision) (ap : apply_expr) (id : code_id) (i : nat)
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
       (fields : unboxed_fields) (kind : flambda_kind),
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
-      ap_call_kind ap = Direct id ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
       nth_error
         (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
       = Some (Unbox fields, kind) ->

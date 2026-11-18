@@ -165,7 +165,7 @@
      ([code_exn_decision]): kept, with a use or with none, so that the
      code raises poison where the exception has no use; not unboxed.
    - Calls ([call_ok]) of code that is known: direct, of the code they
-     are known to call ([code_id_actually_called]), at
+     are known to call ([code_id_actually_called]), or of known arity, at
      the arities of that code (any number of groups of parameters and of
      results), by a variable that is used and not unboxed, returning to a
      handler of the term or, in tail position, to the return continuation
@@ -615,9 +615,10 @@ Definition ind_call_ok (kinds : finite_map flambda_kind)
 
 Definition call_ok (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) : bool :=
-  match ap_call_kind ap, ap_callee ap, code_id_actually_called F sol ap with
-  | Direct id, Var f, Some id' =>
-    Pos.eqb id id' && plain_simple unboxed (Var f) && is_var_used sol f Value
+  match ap_callee ap, code_id_actually_called F sol ap with
+  | Var f, Some id =>
+    kind_calls (ap_call_kind ap) id && plain_simple unboxed (Var f)
+    && is_var_used sol f Value
     && match lookup id codes with
        | Some metadata =>
          match code_pdescs id metadata with
@@ -661,8 +662,8 @@ Definition call_ok (kinds : finite_map flambda_kind)
          end
        | None => false
        end
-  | _, Var f, None => ind_call_ok kinds C ap f
-  | _, _, _ => false
+  | Var f, None => ind_call_ok kinds C ap f
+  | _, _ => false
   end.
 
 (* The [Let] of a closure, not unboxed: of a set with no value slot,

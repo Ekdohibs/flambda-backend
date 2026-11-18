@@ -562,26 +562,36 @@ Definition no_code_no_call_statement : Prop :=
    argument with the exception, returns one value, and gives arguments
    of kinds other than [Region] and [Rec_info]. The bodies of code are
    checked with no handler in scope. What else a direct call is asked,
-   [in_flow_fragment] asks: it has a group of arguments at least, and
-   the code it names, if the unit binds it, is not tupled and has as many
-   parameters as the call has arguments. No check of this file lets a
-   call be of known arity. *)
+   [in_flow_fragment] asks: it has a group of arguments at least
+   ([direct_no_group_counterexample_statement]), and the code it names, if
+   the unit binds it, is not tupled and has as many parameters as the call
+   has arguments. A call of known arity is asked what a direct call is,
+   here and below. *)
 Definition argument_kind_ok (kind : flambda_kind) : bool :=
   match kind with
   | Region | Rec_info => false
   | Value | Naked_number _ => true
   end.
 
+(* For the checks of the unboxing: a direct call names the code that it
+   is known to call; a call of known arity may call any. *)
+Definition kind_calls (kind : call_kind) (id : code_id) : bool :=
+  match kind with
+  | Direct named => Pos.eqb named id
+  | Indirect_known_arity _ => true
+  | Indirect_unknown_arity => false
+  end.
+
 Definition direct_tail_call (bound : list continuation) (ap : apply_expr)
     : bool :=
   match ap_call_kind ap with
-  | Direct _ =>
+  | Direct _ | Indirect_known_arity _ =>
     negb (among (ap_continuation ap) bound)
     && negb (among (ap_exn_continuation ap) bound)
     && Nat.eqb (length (ap_exn_extra_args ap)) 0
     && Nat.eqb (length (unarize (ap_return_arity ap))) 1
     && forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect_unknown_arity | Indirect_known_arity _ => false
+  | Indirect_unknown_arity => false
   end.
 
 Fixpoint direct_tail_calls (bound : list continuation) (e : expr) : bool :=
@@ -634,11 +644,11 @@ Definition no_call_direct_tail_calls_statement : Prop :=
 Definition direct_call (bound : list continuation) (ap : apply_expr)
     : bool :=
   match ap_call_kind ap with
-  | Direct _ =>
+  | Direct _ | Indirect_known_arity _ =>
     negb (among (ap_exn_continuation ap) bound)
     && Nat.eqb (length (ap_exn_extra_args ap)) 0
     && forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect_unknown_arity | Indirect_known_arity _ => false
+  | Indirect_unknown_arity => false
   end.
 
 Fixpoint direct_calls (bound : list continuation) (e : expr) : bool :=
@@ -679,16 +689,18 @@ Definition direct_tail_calls_direct_calls_statement : Prop :=
 
 (* Only direct calls: [direct_calls], but the exception continuation of a
    call may be a handler in scope, to which the call may pass extra
-   arguments. A call is asked only to be direct and to give arguments of
-   kinds other than [Region] and [Rec_info]. Where a call raises,
-   [well_formed_unit] says the rest ([unit_exn_handlers_well_formed]): a
-   handler that a call raises to is an exception handler of a
-   non-recursive [Let_cont], and a call gives extra arguments to no
-   continuation that the unit, or the code it is in, does not bind. *)
+   arguments. A call is asked only to be direct, or of known arity, and
+   to give arguments of kinds other than [Region] and [Rec_info]. Where
+   a call raises, [well_formed_unit] says the rest
+   ([unit_exn_handlers_well_formed]): a handler that a call raises to is
+   an exception handler of a non-recursive [Let_cont], and a call gives
+   extra arguments to no continuation that the unit, or the code it is
+   in, does not bind. *)
 Definition only_direct_call (ap : apply_expr) : bool :=
   match ap_call_kind ap with
-  | Direct _ => forallb argument_kind_ok (unarize (ap_args_arity ap))
-  | Indirect_unknown_arity | Indirect_known_arity _ => false
+  | Direct _ | Indirect_known_arity _ =>
+    forallb argument_kind_ok (unarize (ap_args_arity ap))
+  | Indirect_unknown_arity => false
   end.
 
 Fixpoint only_direct_calls (e : expr) : bool :=
@@ -724,9 +736,10 @@ Definition direct_calls_only_direct_calls_statement : Prop :=
   ∀ (bound : list continuation) (e : expr),
     direct_calls bound e = true -> only_direct_calls e = true.
 
-(* Full calls: [only_direct_calls], but a call may also be indirect, if
-   every code that the unit binds ([codes]) is not tupled and has as
-   many parameters as the call has arguments, counted by parameter. The
+(* Full calls: [only_direct_calls], but a call may also be of unknown
+   arity, if every code that the unit binds ([codes]) is not tupled and
+   has as many parameters as the call has arguments, counted by
+   parameter. The
    machine tells the shapes of a call apart by that number
    (FlambdaSemanticsSpec.shape_of_code_call), and a call can only reach
    code that the unit binds: so such a call is a full call of whatever
@@ -736,8 +749,7 @@ Definition full_call (codes : list (code_id * code)) (ap : apply_expr)
     : bool :=
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
-     | Direct _ => true
-     | Indirect_known_arity _ => false
+     | Direct _ | Indirect_known_arity _ => true
      | Indirect_unknown_arity =>
        forallb
          (fun '(_, c) =>
@@ -794,8 +806,7 @@ Definition generic_call (codes : list (code_id * code)) (ap : apply_expr)
     : bool :=
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
-     | Direct _ => true
-     | Indirect_known_arity _ => false
+     | Direct _ | Indirect_known_arity _ => true
      | Indirect_unknown_arity =>
        forallb (fun '(_, c) => negb (code_is_tupled c)) codes
      end.
@@ -850,8 +861,7 @@ Definition tupled_call (codes : list (code_id * code)) (ap : apply_expr)
     : bool :=
   forallb argument_kind_ok (unarize (ap_args_arity ap))
   && match ap_call_kind ap with
-     | Direct _ => true
-     | Indirect_known_arity _ => false
+     | Direct _ | Indirect_known_arity _ => true
      | Indirect_unknown_arity =>
        forallb
          (fun '(_, c) =>
@@ -1565,6 +1575,147 @@ Definition wrapper_kinds_counterexample_statement : Prop :=
     = Undefined
   ∧ ~ program_refines WrapperKindsExample.unit_expr
         WrapperKindsExample.rebuilt.
+
+(* A direct call with no group of arguments, which [in_flow_fragment]
+   leaves out, of code with no parameter, whose callee may be a closure
+   of two codes:
+
+     let code f50 () my_closure x41 return k3 exn k4 = k3 7 in
+     let code f51 () my_closure x41 return k3 exn k4 = k3 8 in
+     let x10 = closure at 70 of { 70 = f50 } in
+     let x11 = closure at 71 of { 71 = f51 } in
+     let k5 x12 = x12 () return k1 exn k2 in   (direct, of f50)
+     switch 0 with 0 -> k5 x10 | 1 -> k5 x11
+
+   The rest of the fragment, and every other premise of the statements
+   of the rebuild, hold. With the flag [Auto] and the least solution,
+   the callee may come from the two closures, so the rebuild makes the
+   call one of known arity of [f51] and [f50], as the compiler does
+   ([decide_whether_apply_needs_calling_convention_change]). The machine
+   runs the direct call, of the closure of [f50], and the unit exits
+   with 7; it finds the call of known arity undefined, as it has no
+   group of arguments (FlambdaSemanticsSpec.known_arity_full), where the
+   compiler's backend stops. So the group that [in_flow_fragment] asks
+   of a direct call is needed. The compiler makes no direct call with no
+   group of arguments. *)
+Module NoGroupExample.
+
+Local Open Scope positive_scope.
+
+Definition code_of (result : Z) : code :=
+  Code [] 41 3 4 (make_code_metadata [] [Singleton Value])
+    (FlowExample.return_to 3 [Const (Tagged_immediate result)]).
+
+Definition unit_with (kind : call_kind) : expr :=
+  Let_static [Bind_code 50 (code_of 7); Bind_code 51 (code_of 8)]
+    (Let 10 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let 11 Value (Closure_of_set 71 [(71, 51)] [])
+          (Let_cont_non_recursive 5
+             (Handler [12] (make_handler_metadata [Value])
+                (Apply
+                   {| ap_callee := Var 12; ap_call_kind := kind;
+                      ap_args := []; ap_continuation := 1;
+                      ap_exn_continuation := 2; ap_exn_extra_args := [];
+                      ap_args_arity := [];
+                      ap_return_arity := [Singleton Value] |}))
+             (Switch (Const (Naked_immediate 0))
+                [(0%Z, {| ac_continuation := 5; ac_args := [Var 10];
+                          ac_trap_action := None |});
+                 (1%Z, {| ac_continuation := 5; ac_args := [Var 11];
+                          ac_trap_action := None |})])))).
+
+Definition unit_expr : expr := unit_with (Direct 50).
+
+Definition solution : tables :=
+  {| t_alias :=
+       [(Node_made 10, Node_variable 11); (Node_made 5, Node_variable 10);
+        (Node_made 14, Node_code_id 50); (Node_made 2, Node_made 4);
+        (Node_made 1, Node_made 3); (Node_made 14, Node_code_id 51);
+        (Node_made 2, Node_made 9); (Node_made 1, Node_made 8);
+        (Node_made 15, Node_made 11); (Node_made 15, Node_made 6);
+        (Node_variable 41, Node_made 5); (Node_made 3, Node_all_constants);
+        (Node_variable 41, Node_made 10); (Node_made 8, Node_all_constants);
+        (Node_made 13, Node_made 15); (Node_variable 12, Node_variable 10);
+        (Node_variable 12, Node_variable 11); (Node_made 5, Node_made 16);
+        (Node_made 17, Node_made 6)];
+     t_any_usage :=
+       [Node_made 8; Node_made 9; Node_code_id 51; Node_made 3; Node_made 4;
+        Node_code_id 50; Node_made 2; Node_made 14; Node_all_constants;
+        Node_made 1];
+     t_any_source :=
+       [Node_made 1; Node_made 14; Node_made 8; Node_made 3;
+        Node_all_constants; Node_code_id 50; Node_code_id 51];
+     t_has_usage :=
+       [Node_variable 11; Node_variable 10; Node_made 8; Node_made 9;
+        Node_code_id 51; Node_made 3; Node_made 4; Node_code_id 50;
+        Node_variable 12; Node_made 6; Node_made 11; Node_made 15;
+        Node_made 13; Node_made 1; Node_all_constants; Node_made 14;
+        Node_made 2];
+     t_has_source :=
+       [Node_variable 41; Node_made 5; Node_made 10; Node_made 1;
+        Node_made 14; Node_made 13; Node_made 17; Node_made 15; Node_made 6;
+        Node_made 7; Node_made 11; Node_made 12; Node_made 3; Node_made 8;
+        Node_variable 12; Node_code_id 51; Node_code_id 50;
+        Node_all_constants; Node_variable 10; Node_variable 11];
+     t_usages :=
+       [(Node_made 6, Node_made 13); (Node_made 11, Node_made 13);
+        (Node_variable 11, Node_variable 12);
+        (Node_variable 10, Node_variable 12); (Node_made 15, Node_made 13);
+        (Node_made 13, Node_made 13); (Node_variable 12, Node_variable 12)];
+     t_sources :=
+       [(Node_variable 41, Node_variable 11);
+        (Node_variable 41, Node_variable 10);
+        (Node_made 5, Node_variable 10); (Node_made 10, Node_variable 11);
+        (Node_made 13, Node_made 6); (Node_made 13, Node_made 11);
+        (Node_made 15, Node_made 11); (Node_made 15, Node_made 6);
+        (Node_variable 12, Node_variable 10);
+        (Node_variable 12, Node_variable 11); (Node_made 17, Node_made 6);
+        (Node_made 6, Node_made 6); (Node_made 7, Node_made 7);
+        (Node_made 11, Node_made 11); (Node_made 12, Node_made 12);
+        (Node_variable 11, Node_variable 11);
+        (Node_variable 10, Node_variable 10)];
+     t_reading_field := [];
+     t_escaping_field := [];
+     t_field_used :=
+       [(Node_made 6, Field_code_id_of_call_witness);
+        (Node_made 6, Field_return_of_call Exn);
+        (Node_made 6, Field_return_of_call (Normal 0%nat));
+        (Node_made 11, Field_code_id_of_call_witness);
+        (Node_made 11, Field_return_of_call Exn);
+        (Node_made 11, Field_return_of_call (Normal 0%nat));
+        (Node_variable 11, Field_call_witness Known_arity_code_pointer);
+        (Node_variable 10, Field_call_witness Known_arity_code_pointer)] |}.
+
+Definition rebuilt : expr := unit_with (Indirect_known_arity (Some [51; 50])).
+
+End NoGroupExample.
+
+Definition direct_no_group_counterexample_statement : Prop :=
+  in_flow_fragment NoGroupExample.unit_expr = false
+  ∧ projection_free NoGroupExample.unit_expr = true
+  ∧ well_formed_unit FlowExample.interface NoGroupExample.unit_expr = true
+  ∧ exits_one_value FlowExample.interface NoGroupExample.unit_expr = true
+  ∧ check_closed FlowExample.is_local
+      (traverse_unit Auto FlowExample.interface NoGroupExample.unit_expr)
+      NoGroupExample.solution
+    = true
+  ∧ check_field_used_exact FlowExample.is_local
+      (traverse_unit Auto FlowExample.interface NoGroupExample.unit_expr)
+      NoGroupExample.solution
+    = true
+  ∧ rebuild_unit_from_tables
+      (traverse_unit Auto FlowExample.interface NoGroupExample.unit_expr)
+      NoGroupExample.solution true NoGroupExample.unit_expr
+    = NoGroupExample.rebuilt
+  ∧ run 8
+      (State NoGroupExample.unit_expr [] [] empty_static_env empty_heap
+         no_reads)
+    = Exit 1%positive [Value_const (Tagged_immediate 7)] empty_heap no_reads
+  ∧ run 8
+      (State NoGroupExample.rebuilt [] [] empty_static_env empty_heap
+         no_reads)
+    = Undefined
+  ∧ ~ program_refines NoGroupExample.unit_expr NoGroupExample.rebuilt.
 
 (* ======================================================================== *)
 (* Refinement up to observation                                             *)

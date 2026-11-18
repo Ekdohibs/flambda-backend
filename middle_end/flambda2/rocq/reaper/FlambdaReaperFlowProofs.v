@@ -75,7 +75,10 @@
      ([located_exists]). A direct call reads the witness of the
      code through the closure, which gives the parameters their
      arguments and the continuations of the call the results
-     ([direct_call_ok]). A call of unknown arity has a witness for each
+     ([direct_call_ok]). So does a call of known arity, which has the
+     edges of a direct call ([known_call_edges]) and, where it has a
+     step, is the full call of the code of its callee
+     ([full_call_step]). A call of unknown arity has a witness for each
      group of arguments, each read from what the one before returns;
      group by group, they stand for the witnesses of unknown arity of
      the code of the closure ([chain_cover]), which the closure dep gives
@@ -736,29 +739,34 @@ Definition tupled_witness_edges (id : code_id) (cd : code_dep) : Prop :=
         nth_error (cd_params cd) i = Some p ->
         g_accessor G p (Field_block i Value) untuple.
 
-(* A call, with the nodes of its results ([returns]) and of its
-   exception ([exn]): a direct call, or one of known arity, reads them
-   off its witness, which reads the call witness of known arity of the
-   callee; one of unknown arity off its chain of witnesses, the first of
-   which reads the call witness of unknown arity of the callee. *)
+(* What a direct call, or one of known arity, reads: the nodes of its
+   results ([returns]) and of its exception ([exn]) off its witness,
+   which reads the call witness of known arity of the callee. *)
+Definition known_call_edges (ctx : option code_id) (ap : apply_expr)
+    (returns : list node) (exn : node) : Prop :=
+  ∃ witness apply_node called_node : node,
+    (∀ (i : nat) (s : simple),
+       nth_error (ap_args ap) i = Some s ->
+       g_argument G (node_of_simple s) i witness)
+    ∧ (∀ (i : nat) (r : node),
+         nth_error returns i = Some r ->
+         g_accessor G r (Field_return_of_call (Normal i)) witness)
+    ∧ g_accessor G exn (Field_return_of_call Exn) witness
+    ∧ g_accessor G called_node Field_code_id_of_call_witness witness
+    ∧ g_any_usage G called_node
+    ∧ cond_alias_edge ctx witness apply_node
+    ∧ g_accessor G apply_node
+        (Field_call_witness Known_arity_code_pointer)
+        (node_of_simple (ap_callee ap)).
+
+(* A call: a direct call, or one of known arity, as above; one of unknown
+   arity reads its results and its exception off its chain of witnesses,
+   the first of which reads the call witness of unknown arity of the
+   callee. *)
 Definition call_edges (ctx : option code_id) (ap : apply_expr)
     (returns : list node) (exn : node) : Prop :=
   match ap_call_kind ap with
-  | Direct _ | Indirect_known_arity _ =>
-    ∃ witness apply_node called_node : node,
-      (∀ (i : nat) (s : simple),
-         nth_error (ap_args ap) i = Some s ->
-         g_argument G (node_of_simple s) i witness)
-      ∧ (∀ (i : nat) (r : node),
-           nth_error returns i = Some r ->
-           g_accessor G r (Field_return_of_call (Normal i)) witness)
-      ∧ g_accessor G exn (Field_return_of_call Exn) witness
-      ∧ g_accessor G called_node Field_code_id_of_call_witness witness
-      ∧ g_any_usage G called_node
-      ∧ cond_alias_edge ctx witness apply_node
-      ∧ g_accessor G apply_node
-          (Field_call_witness Known_arity_code_pointer)
-          (node_of_simple (ap_callee ap))
+  | Direct _ | Indirect_known_arity _ => known_call_edges ctx ap returns exn
   | Indirect_unknown_arity =>
     ∃ (ws : list node) (apply_node called_node : node),
       length ws = length (call_groups ap)
@@ -769,6 +777,16 @@ Definition call_edges (ctx : option code_id) (ap : apply_expr)
           (Field_call_witness Unknown_arity_code_pointer)
           (node_of_simple (ap_callee ap))
   end.
+
+Lemma known_call_edges_of (ctx : option code_id) (ap : apply_expr)
+    (returns : list node) (exn : node) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  call_edges ctx ap returns exn -> known_call_edges ctx ap returns exn.
+Proof.
+  unfold call_edges. destruct (ap_call_kind ap);
+    [ intros _ H; exact H | intros H; exfalso; apply H; reflexivity
+    | intros _ H; exact H ].
+Qed.
 
 (* A call: its continuations, as found under [ce], the first parameter
    of the exception continuation being the exception and the others
@@ -4235,6 +4253,14 @@ Definition calls_as_direct (kind : call_kind) (id : code_id) (a : arity)
        ∧ code_ids_allow code_ids id = true)
     ∧ a <> [].
 
+(* The call kind of a direct call of the code [id], or of a call of
+   known arity that allows it. *)
+Definition direct_like (kind : call_kind) (id : code_id) : Prop :=
+  kind = Direct id
+  ∨ ∃ code_ids : option (list code_id),
+      kind = Indirect_known_arity code_ids
+      ∧ code_ids_allow code_ids id = true.
+
 (* Such a call of a closure of code that is not tupled, with as many
    groups of arguments as the code has parameters, is a full call. *)
 Lemma shape_of_closure_call_as_direct (statics : static_env)
@@ -5948,6 +5974,123 @@ Proof.
   exists callee, vs, extra, slots, c, callee_vars. auto 12.
 Qed.
 
+(* A direct call of the fragment, or a call of known arity, goes wrong,
+   or runs the body of the code of its callee, which the unit binds, in
+   a full call: the code is not tupled, the call has a group of
+   arguments at least, and as many as the code has parameters; it
+   calls the code as a direct call of it does. *)
+Lemma full_call_step (ap : apply_expr) (vars : env) (K : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  apply_in_flow_fragment codes ap = true -> codes_ok statics ->
+  match step (State (Apply ap) vars K statics hp rd) with
+  | Step s' =>
+    ∃ (id : code_id) (callee : value) (vs extra : list value)
+      (slots : list (value_slot * value)) (c : code) (callee_vars : env),
+      direct_like (ap_call_kind ap) id
+      ∧ eval_simple vars (ap_callee ap) = Some callee
+      ∧ eval_simples vars (ap_args ap) = Some vs
+      ∧ eval_simples vars (exn_extra_simples ap) = Some extra
+      ∧ closure_of statics callee = Some (id, slots)
+      ∧ lookup id (static_code statics) = Some c
+      ∧ code_is_tupled c = false
+      ∧ length (ap_args_arity ap) = length (code_params_arity c)
+      ∧ ap_args_arity ap <> []
+      ∧ kinds_eqb (map kind_of_value vs) (unarize (ap_args_arity ap)) = true
+      ∧ kinds_per_parameter_eqb (unarize_per_parameter (ap_args_arity ap))
+          (unarize_per_parameter (code_params_arity c)) = true
+      ∧ arity_eqb (ap_return_arity ap) (code_result_arity c) = true
+      ∧ bind_params (code_params c) vs [(code_my_closure c, callee)]
+        = Some callee_vars
+      ∧ s' = State (code_body c) callee_vars
+               [(code_return_continuation c, resolve (ap_continuation ap) K);
+                (code_exn_continuation c,
+                 with_extra_args (resolve (ap_exn_continuation ap) K) extra)]
+               statics hp rd
+  | Exit _ _ _ _ => False
+  | Undefined => True
+  end.
+Proof.
+  intros Hnu Hfrag Hcodes.
+  destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind;
+    [ | exfalso; apply Hnu; reflexivity | ].
+  - pose proof (call_step ap vars K statics hp rd id Hkind Hfrag Hcodes)
+      as Hs.
+    destruct (step _) as [s' | | ]; [ | exact Hs | exact I ].
+    destruct Hs as (callee & vs & extra & slots & c & callee_vars & Hcallee
+                    & Hvs & Hextra & Hclosure & Hcode & Hk1 & Hk2 & Hk3
+                    & Hbind & ->).
+    pose proof Hfrag as Hall. unfold apply_in_flow_fragment in Hall.
+    rewrite Hkind in Hall. apply andb_true_iff in Hall as [Hall Hne].
+    destruct (Hcodes id c Hcode) as [Hin _].
+    rewrite forallb_forall in Hall. specialize (Hall (id, c) Hin).
+    simpl in Hall. rewrite Pos.eqb_refl in Hall. simpl in Hall.
+    apply andb_true_iff in Hall as [Htupled Hfull].
+    apply negb_true_iff in Htupled. apply Nat.eqb_eq in Hfull.
+    exists id, callee, vs, extra, slots, c, callee_vars.
+    split; [ left; reflexivity | ].
+    do 7 (split; [ assumption | ]).
+    split; [ intros E; rewrite E in Hne; simpl in Hne; discriminate Hne | ].
+    auto 6.
+  - rewrite step_apply.
+    destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hcallee;
+      [ | exact I ].
+    destruct (eval_simples vars (ap_args ap)) as [vs | ] eqn:Hvs;
+      [ | exact I ].
+    destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ]
+      eqn:Hextra; [ | exact I ].
+    unfold call_function. rewrite Hkind.
+    destruct (closure_of statics callee) as [[called slots] | ] eqn:Hclosure;
+      [ | unfold shape_of_call, shape_of_closure_call; rewrite Hclosure;
+          exact I ].
+    destruct (code_ids_allow code_ids called
+              && known_arity_full statics called (ap_args_arity ap))
+      eqn:Hexp;
+      [ | unfold shape_of_call, shape_of_closure_call; rewrite Hclosure;
+          cbv beta iota zeta; rewrite Hexp; exact I ].
+    apply andb_true_iff in Hexp as [Hallow Hkf].
+    assert (Hfacts :
+      ∃ c : code,
+        lookup called (static_code statics) = Some c
+        ∧ code_is_tupled c = false
+        ∧ length (ap_args_arity ap) = length (code_params_arity c)
+        ∧ ap_args_arity ap <> []).
+    { unfold known_arity_full in Hkf.
+      destruct (ap_args_arity ap) as [ | a0 rest]; [ discriminate Hkf | ].
+      destruct (lookup called (static_code statics)) as [c | ];
+        [ | discriminate Hkf ].
+      apply andb_true_iff in Hkf as [Ht Hl]. apply negb_true_iff in Ht.
+      apply Nat.eqb_eq in Hl. exists c.
+      split; [ reflexivity | split; [ exact Ht | split; [ exact Hl | ] ] ].
+      discriminate. }
+    destruct Hfacts as (c & Hcode & Htupled & Hfull & Hne).
+    assert (Hcad : calls_as_direct (Indirect_known_arity code_ids) called
+                     (ap_args_arity ap))
+      by (right; right; split; [ exists code_ids; split;
+                                 [ reflexivity | exact Hallow ]
+                               | exact Hne ]).
+    rewrite (shape_of_call_as_direct _ _ _ _ _ _ _ _ Hclosure Hcad).
+    rewrite (shape_of_closure_call_as_direct _ _ _ _ _ _ _ _ _ Hclosure Hcad
+               Hcode Htupled Hfull).
+    simpl. unfold call_code.
+    destruct (binds_statics (code_body c)); [ exact I | ].
+    destruct (kinds_eqb (map kind_of_value vs) (unarize (ap_args_arity ap)))
+      eqn:Hk1; [ | exact I ].
+    destruct (kinds_per_parameter_eqb
+                (unarize_per_parameter (ap_args_arity ap))
+                (unarize_per_parameter (code_params_arity c))) eqn:Hk2;
+      [ | exact I ].
+    destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
+      [ | exact I ].
+    simpl.
+    destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
+      as [callee_vars | ] eqn:Hbind; [ | exact I ].
+    exists called, callee, vs, extra, slots, c, callee_vars.
+    split; [ right; exists code_ids; split; [ reflexivity | exact Hallow ]
+           | ].
+    auto 14.
+Qed.
+
 (* The state that a direct call runs keeps the invariant. *)
 Lemma direct_call_ok (ctx : option code_id) (ap : apply_expr) (vars : env)
     (statics : static_env) (hp : heap) (rd : read_record) (id : code_id)
@@ -5955,7 +6098,7 @@ Lemma direct_call_ok (ctx : option code_id) (ap : apply_expr) (vars : env)
     (vs : list value) (slots : list (value_slot * value)) (c : code)
     (callee_vars : env) (returns : list node) (exn : node)
     (return_to exn_to : cont_value) :
-  ap_call_kind ap = Direct id ->
+  ap_call_kind ap <> Indirect_unknown_arity ->
   call_edges G ctx ap returns exn ->
   simple_noted noted (ap_callee ap) -> simples_noted noted (ap_args ap) ->
   live ctx -> env_flows_ vars -> env_pa_ok statics vars ->
@@ -5983,7 +6126,7 @@ Proof.
   intros Hk Hedges Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst Hcodes
     Hspa Hret Hfits Hret_pa Hexn Hexn_pa Hcallee Hvs Hclosure Hcode Hkinds
     Hparams Hresult Hbind.
-  unfold call_edges in Hedges. rewrite Hk in Hedges.
+  apply known_call_edges_of in Hedges; [ | exact Hk ].
   destruct Hedges as (witness & apply_node & called_node & Hargs & Hretacc
                       & Hexnacc & Hcalled & Hused & Hcond & Happly).
   destruct (code_facts _ _ _ Hcodes Hcode)
@@ -7955,26 +8098,25 @@ Proof.
   - (* [Apply] *)
     destruct He as (Hfrag & Hnoted_callee & Hnoted_args & returns & exn & Hret
                     & Hexn & Hcall).
-    destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind;
-      [ | | (* Not in the fragment. *)
-            unfold apply_in_flow_fragment in Hfrag; rewrite Hkind in Hfrag;
-            discriminate Hfrag ].
+    destruct (ap_call_kind ap) as [id | | code_ids] eqn:Hkind.
     + (* A direct call. *)
-      pose proof (call_step ap (state_vars s) (state_conts s) (state_statics s)
-                    (state_heap s) (state_reads s) id Hkind Hfrag Hcodes) as
-                      Hstep.
+      assert (Hnu : ap_call_kind ap <> Indirect_unknown_arity)
+        by (rewrite Hkind; discriminate).
+      pose proof (full_call_step ap (state_vars s) (state_conts s)
+                    (state_statics s) (state_heap s) (state_reads s) Hnu
+                    Hfrag Hcodes) as Hstep.
       destruct (step _) as [s' | | ]; [ | contradiction | exact I ].
-      destruct Hstep as (callee & vs & extra & slots & c & callee_vars
-                         & Hcallee & Hvs & Hextra & Hclosure & Hcode & Hkinds
-                         & Hparams & Hresult & Hbind & ->).
+      destruct Hstep as (id' & callee & vs & extra & slots & c & callee_vars
+                         & _ & Hcallee & Hvs & Hextra & Hclosure & Hcode & _
+                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & ->).
       destruct (apply_conts ctx ce ap (state_vars s) (state_conts s)
                   (state_statics s) extra returns exn Hcount Hvars Hvars_pa
                   Hconts HK_pa Hret Hexn Hextra)
         as ((Hret_ok & Hret_fits & Hret_pa) & Hexn_ok & Hexn_pa).
       exact (direct_call_ok ctx ap (state_vars s) (state_statics s)
-               (state_heap s) (state_reads s) id callee vs slots c callee_vars
-                 returns exn _ _
-               Hkind Hcall Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst
+               (state_heap s) (state_reads s) id' callee vs slots c
+               callee_vars returns exn _ _
+               Hnu Hcall Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst
                Hcodes Hspa Hret_ok Hret_fits Hret_pa Hexn_ok Hexn_pa Hcallee
                Hvs Hclosure Hcode Hkinds Hparams Hresult Hbind).
     + (* An indirect call. *)
@@ -8026,6 +8168,27 @@ Proof.
         -- split; [ exact Hv_pa | exact I ].
         -- destruct Hret_fits as [Hf | Hf]; [ left | right; exact Hf ].
            rewrite <- Hf, Hone. reflexivity.
+    + (* A call of known arity: where it has a step, the full call of the
+         code of its callee, as a direct call. *)
+      assert (Hnu : ap_call_kind ap <> Indirect_unknown_arity)
+        by (rewrite Hkind; discriminate).
+      pose proof (full_call_step ap (state_vars s) (state_conts s)
+                    (state_statics s) (state_heap s) (state_reads s) Hnu
+                    Hfrag Hcodes) as Hstep.
+      destruct (step _) as [s' | | ]; [ | contradiction | exact I ].
+      destruct Hstep as (id' & callee & vs & extra & slots & c & callee_vars
+                         & _ & Hcallee & Hvs & Hextra & Hclosure & Hcode & _
+                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & ->).
+      destruct (apply_conts ctx ce ap (state_vars s) (state_conts s)
+                  (state_statics s) extra returns exn Hcount Hvars Hvars_pa
+                  Hconts HK_pa Hret Hexn Hextra)
+        as ((Hret_ok & Hret_fits & Hret_pa) & Hexn_ok & Hexn_pa).
+      exact (direct_call_ok ctx ap (state_vars s) (state_statics s)
+               (state_heap s) (state_reads s) id' callee vs slots c
+               callee_vars returns exn _ _
+               Hnu Hcall Hnoted_callee Hnoted_args Hlive Hvars Hvars_pa Hst
+               Hcodes Hspa Hret_ok Hret_fits Hret_pa Hexn_ok Hexn_pa Hcallee
+               Hvs Hclosure Hcode Hkinds Hparams Hresult Hbind).
   - (* [Apply_cont] *)
     rewrite step_apply_cont.
     destruct (eval_simples (state_vars s) (ac_args ac)) as [vs | ] eqn:Hvs;
@@ -8508,6 +8671,9 @@ Definition call_ok :=
     heap_prims located slots Hc Hlocal Hnd Hcds.
 Definition call_step :=
   @WithLocal.call_step G noted deps cds keep codes symbols heap_prims slots.
+Definition full_call_step :=
+  @WithLocal.full_call_step G noted deps cds keep codes symbols heap_prims
+    slots.
 Definition closure_call_ok :=
   @WithLocal.closure_call_ok is_local G sol noted deps cds keep codes symbols u
     heap_prims located slots Hc Hnd Hcds.

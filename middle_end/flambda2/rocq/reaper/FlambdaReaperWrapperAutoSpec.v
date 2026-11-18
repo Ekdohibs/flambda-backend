@@ -108,10 +108,10 @@ Definition arm_needs_no_source_auto_end_to_end_statement : Prop :=
     = true ->
     conts_counted (unit_counts u) e = true ->
     plain_kinds e = true ->
-    ∀ (ads : list decision) (ap : apply_expr) (id : code_id) (i : nat)
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
       (fd : decision) (kind : flambda_kind),
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
-      ap_call_kind ap = Direct id ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
       nth_error
         (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
       = Some (fd, kind) ->
@@ -134,10 +134,10 @@ Definition kept_result_never_unboxed_auto_end_to_end_statement : Prop :=
     = true ->
     conts_counted (unit_counts u) e = true ->
     plain_kinds e = true ->
-    ∀ (ads : list decision) (ap : apply_expr) (id : code_id) (i : nat)
+    ∀ (ads : list decision) (ap : apply_expr) (i : nat)
       (fields : unboxed_fields) (kind : flambda_kind),
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
-      ap_call_kind ap = Direct id ->
+      ap_call_kind ap <> Indirect_unknown_arity ->
       nth_error
         (unit_callee_decisions F T cannot_change code_deps unboxed e ap) i
       = Some (Unbox fields, kind) ->
