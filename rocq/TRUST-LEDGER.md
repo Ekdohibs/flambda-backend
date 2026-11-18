@@ -606,23 +606,29 @@ it gave back.
     tool converts a term that is read from its text. The text keeps
     the mark of a `Block_set` (`init`), and the refusal of a
     `Block_set` so marked stands of a term read from its text. Of an
-    `Array_set` the text that the compiler prints keeps the set
-    kind, and with it the mark, only where the array is one of
-    unboxed products; of any other the parser gives the set kind
-    that goes with the array kind, which at the array kind `Values`
-    is an assignment on the heap (the paragraph "The round trip"
-    below; discrepancy P1-9). So this refusal does not keep outside
-    the conversion the store that the compiler makes for a function
-    whose recursion is in the tail of a constructor, which is an
+    `Array_set` the printer writes the set kind, and with it the
+    mark, wherever the set kind is not the one that goes with the
+    array kind, which at the array kind `Values` is an assignment
+    on the heap; the reader takes a set kind that is written
+    (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`). So
+    the store that the compiler makes for a function whose
+    recursion is in the tail of a constructor, which is an
     `Array_set` at the array kind `Values`, marked
-    `Initialization`, whose destination is a block. Read from the
-    text that the compiler prints, that store has lost its mark: it
-    is converted as an assignment, and a run that comes to it is
-    undefined (the end of this bullet). Where the run before is
-    undefined the tool says so, and the validation says nothing of
-    the unit. An `Array_set` is refused for its mark only where a
-    text has the set kind written out, as that of one control has
-    (`heap_array_set_initialising.fl`).
+    `Initialization`, whose destination is a block, has its mark in
+    the text that the printer makes of it
+    (`tests/semantics/text_is_term/first_write_of_a_cell.ml` is of
+    such a function), and a unit read from that text is refused
+    for the store. An `Array_set` is refused for its mark only
+    where the text has the set kind written out, as that of one
+    control has (`heap_array_set_initialising.fl`). In a text in
+    which the set kind of a store is not written (one made before
+    the printer wrote it, or one written by hand) the parser gives
+    the store the set kind that goes with its array kind (the
+    paragraph "The round trip" below; discrepancy P1-9): the store
+    of such a function is then read as an assignment and
+    converted, and a run that comes to it is undefined (the end of
+    this bullet). Where the run before is undefined the tool says
+    so, and the validation says nothing of the unit.
     The set kinds of immediates and of values that the collector may
     ignore carry no such mark, and a store at one of them is
     converted where the array kind of the primitive is that of
@@ -758,22 +764,34 @@ it gave back.
   *The round trip* covers the cases of the four primitives that the
   conversion admits: `flmodel_to_fexpr.ml` writes each back as the
   compiler's (`heap_primitive`), every allocation on the heap and
-  every assignment with the mode of the heap. One thing of a store
-  into an array the text does not keep. For the three array kinds
-  of values, which are the array kinds of the stores that the
-  conversion admits, the text of fexpr writes the array kind of a
-  store and not its set kind, and the parser gives a store whose
-  set kind is not written the one that goes with its array kind
-  (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`;
-  discrepancy P1-9). The parser reads a set kind that is written,
-  for an array of any kind; the printer writes one only for an
-  array of unboxed products, which the conversion refuses. Simplify
+  every assignment with the mode of the heap. Of a store into an
+  array the text has the array kind and, where it is needed, the
+  set kind. For the three array kinds of values, which are the
+  array kinds of the stores that the conversion admits, the
+  printer writes the array kind of a store, unless it is `Values`
+  and no set kind follows it, and writes its set kind wherever
+  that is not the one that goes with the array kind; the parser
+  reads a set kind that is written, for an array of any kind,
+  gives a store whose set kind is not written the one that goes
+  with its array kind, and one whose array kind is not written
+  the array kind `Values`
+  (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`). Simplify
   gives a store the array kind of immediates where the type of the
   array proves it and leaves the set kind as it was, that of values
   or of values that the collector may ignore; the conversion admits
-  such a store, and of a term that has one, where the whole term is
-  converted, the round trip says that the two terms differ and that
-  they are printed the same. A unit that the
+  such a store, its text has both kinds, and of the two units of
+  the tree in which one was found the tool says "round trip the
+  same", of the unit and of the unit after Simplify
+  (`middle_end/flambda2/tests/semantics/roundtrip/README.md` names
+  them; the rules of that directory accept that answer and "not
+  converted" alike where an example has no expected file, so a
+  rule that passes does not show which was given). A text in
+  which the set kind of such a store is not
+  written (one made before the printer wrote it, or one written by
+  hand) is read with the set kind that goes with the array kind,
+  which may not be the one that the term had (discrepancy P1-9);
+  the round trip starts from the term as read, and says nothing
+  of that. A unit that the
   conversion refuses, as one with a store marked `Initialization`,
   is "not converted" there too. So the round trip checks the term of the
   model that the conversion makes, and not that the modes of the
@@ -999,11 +1017,12 @@ it gave back.
   probe whose mark the text has lost: a unit that has a probe of its
   own is read, from such a text, as a unit with a plain call, and is
   checked as one. The scripts that make the texts of
-  `tests/semantics/ocaml` refuse a unit whose term has a call that is
-  a probe, by the mark that `-drawflambda` prints of such a call,
-  where the tool is to be run on the unit (`from_ocaml.sh` there and
-  in `pairs/`; `script/` there has a unit that is refused and the
-  same unit without the probe); the tool reads any text that it is
+  `tests/semantics/ocaml` make the text of a unit that has a probe
+  as they make any other (`from_ocaml.sh` there and in `pairs/`;
+  `script/` there has a unit with a probe and the same unit
+  without, and of each the script says "made"), and the tool says
+  of such a unit that it is not checked, as the expected file of
+  `pairs/probed.ml` has it; the tool reads any text that it is
   given. The mark is met in a body taken from the `.cmx` of
   another unit, which is then left out of the prefix, as code whose
   body the model has not got (the entry on what those files say), the
