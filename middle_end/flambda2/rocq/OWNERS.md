@@ -102,9 +102,10 @@ design out; that is the request, not the change.
     and `requests/C1-int-ops.py` beside it (the generator of the
     examples that compare the integer primitives with a reference)
   - `middle_end/flambda2/rocq/**/FlambdaPrimitive*` (the primitives, what
-    they compute and the laws they obey; adding a primitive changes
-    these files and no other `.v` file; see C0's section for what of
-    them is the core's)
+    they compute and the laws they obey; a primitive is added in
+    these files, and it adds a case to the definitions and the proofs
+    that go by cases on the primitives in other `.v` files, each with
+    its owner's word; see C0's section for what of them is the core's)
   - the conversion of primitives and of constants in
     `middle_end/flambda2/tests/tools/flsemantics.ml`, until V3 has an
     owner

@@ -11,6 +11,29 @@ tool changes with it. What is measured is measured with the tool as
 it is, on units written for the purpose (section 4), and on counts
 over real units, which are not in this tree.
 
+Added on 18 November 2026. The request is kept as it was written, on
+12 November 2026, and is not kept current. Since then:
+
+- The human accepted decision 1 of section 8 on 18 November 2026,
+  for now: a verdict may rest on what the `.cmx` files of other
+  units say (decision D75 of `DECISIONS.md`). "For now" is his word.
+  A verdict that rests on a prefix is still counted apart.
+- What sections 3 and 6 and decisions 3 and 4 say is to be stated,
+  or is to be agreed, is in the tree: the third class of import
+  (`Import_unknown`, in `semantics/FlambdaValueSpec.v`); the
+  statement that relates a prefix to the environment that it makes
+  (`FlambdaImportsSpec.prefix_refines_statement`); and the general
+  law, from any static environment and any heap in which the names
+  removed do not occur
+  (`FlambdaValidateImportsSpec.validate_unit_sound_from_statement`,
+  with the premises `statics_free_of` and `heap_free_of`). "The
+  three verdicts" that hold from the imports are of the day: every
+  verdict now has a statement from the imports, under a test of its
+  own (`validate_unit_sound_verdict_imports_statement`, with
+  `verdict_holds_from`).
+- What is trusted of a prefix is in `rocq/TRUST-LEDGER.md`, the
+  entry "What the `.cmx` files of other units say".
+
 Paths of the model are in `middle_end/flambda2/rocq/`, and those of
 the compiler in `middle_end/flambda2/`, unless they say otherwise.
 
@@ -627,7 +650,8 @@ a proof.
 1. **Is "validated given what the `.cmx` say" an acceptable
    verdict**, counted apart, with the assumption in the trust ledger
    for each `.cmx` by digest? Recommended: yes. It is what the
-   compiler itself assumes when it reads a `.cmx`.
+   compiler itself assumes when it reads a `.cmx`. *Accepted by the
+   human on 18 November 2026, for now (decision D75).*
 2. **The prefix from what the run loaded, or from the files.**
    Recommended: from what was loaded, as X5 advises. In the
    compiler's own process that means the units the compilation has

@@ -1633,12 +1633,14 @@ it gave back.
   "What neither check says"), as where no handler is around the call.
 - **What the `.cmx` files of other units say**, in the same file
   (`make_prefix`, `units_read`, `prefix_fault`, `with_prefix`, and
-  `check`, which puts the prefix in front of the two units). This
-  entry awaits the human's confirmation (decision 1 of
+  `check`, which puts the prefix in front of the two units). The
+  human accepted on 18 November 2026, for now, that a verdict may
+  rest on what these files say (decision D75, which is decision 1 of
   `middle_end/flambda2/rocq/requests/C5-imports-with-contents.md`).
-  Until it is given, a verdict that rests on a prefix is counted
-  apart, and is not a verdict of the kind that the lines "validated"
-  and "validated with its imports" give.
+  "For now" is his word: he may come back to it. A verdict that
+  rests on a prefix is still counted apart, and is not a verdict of
+  the kind that the lines "validated" and "validated with its
+  imports" give.
   Where the tool is given directories of `.cmx` files and its run of
   Simplify read the file of another unit, the two units of a check
   are given one prefix of static bindings, the same in front of
