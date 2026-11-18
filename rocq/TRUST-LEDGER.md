@@ -265,16 +265,24 @@ it gave back.
   conversion see it (`with_lost_kinds`, called in `check_file`; the
   round trip of the conversion applies it to the unit of the file and
   to each unit that it reads back): every `Opaque_identity` whose
-  kind as read is not the kind of its argument is given the kind of
-  its argument as the reader has it, whether the text wrote a kind
-  for it or not, which is the kind of
+  kind as read is the kind of values, and is not the kind of its
+  argument, is given the kind of its argument as the reader has it.
+  A kind as read that is not the kind of values was written by the
+  text, and is kept whatever the kind of the argument: the
+  primitive keeps the kind that the text wrote, and where the two
+  kinds differ the machine has no step for it. The kind of values
+  as read is treated the same whether the text wrote it, left it
+  out because the printer writes none for it, or lost another
+  kind: the three are one term as read. The kind of the argument
+  is the kind of
   a constant, that of values for a symbol, and for a variable the
   kind that the reader made it with, from the kind written at a
   parameter or from the defining expression of its `Let`. A `Let`
   whose variable the reader made at the kind of values for want of
   that kind binds a new variable of the kind given; the bodies of
   code are gone into; a unit that has neither an `Opaque_identity` at
-  another kind than its argument's, nor a call that the same pass
+  the kind of values whose argument is of another kind, nor a call
+  that the same pass
   gives an arity or refuses the unit for (below), is not gone through
   and is the unit as read. The compiler takes the argument of the
   primitive to have the

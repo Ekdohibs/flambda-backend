@@ -3354,9 +3354,11 @@ directory sets the variable; one of `../regions/` does.
   primitive is for the middle end only, and the reader takes both.
   The step that the tool has for it stays: before anything else is
   done with a unit read from a text, the tool gives each
-  `Opaque_identity` whose kind as read is not the kind of its
-  argument the kind of its argument, as the reader has it, whether
-  the text wrote a kind for it or not (`with_lost_kinds` in
+  `Opaque_identity` whose kind as read is the kind of values, which
+  is what the reader gives where the text writes none, and whose
+  argument is of another kind the kind of its argument, as the
+  reader has it; any other kind as read was written by the text,
+  and is kept (`with_lost_kinds` in
   `middle_end/flambda2/tests/tools/flsemantics.ml`). Where the text
   wrote none, that is the kind which the compiler's term had on two
   conditions: the kind that the reader has for the argument is the

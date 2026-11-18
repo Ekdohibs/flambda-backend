@@ -1,0 +1,12 @@
+(* An opaque identity at the kind of naked floats, written in the text, on a
+   naked immediate. The tool keeps a kind as read that is not the kind of
+   values, so the primitive has the kind that the text wrote, on an argument
+   of another kind, and the machine has no step for it. The text then tags
+   the result as an immediate, which fits the kind of the argument and not
+   the kind written. A tool that gives the primitive the kind of its argument
+   whatever the text wrote runs this unit to a block of 1 and says that it is
+   validated, which is not what the expected file says. *)
+let x = %opaque.`float` (1i) in
+let y = %tag_imm (x) in
+let $camlKinds_opaque_written_bad = Block 0 (y) in
+cont done ($camlKinds_opaque_written_bad)

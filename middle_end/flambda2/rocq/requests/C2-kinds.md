@@ -572,10 +572,13 @@ the fragment is the repair; it is not in this request.
   (`example_opaque_undefined`, `example_is_int_undefined`) and in
   `tests/semantics/` (`kinds_opaque_bad.fl`, `kinds_is_int_bad.fl`):
   both pass the check and are undefined before Simplify. (Later: the
-  test tool gives each `Opaque_identity` of a unit read from a text
-  the kind of its argument, as the text does not write its kind, so a
-  text can no longer say an opaque identity at another kind than its
-  argument's.
+  test tool gave each `Opaque_identity` of a unit read from a text
+  the kind of its argument, as the text did not write its kind, so a
+  text could not say an opaque identity at another kind than its
+  argument's. The text writes the kind since, unless it is the kind
+  of values, and the tool keeps a kind as read that is not the kind
+  of values: a text can say one again, at such a kind, and
+  `kinds_opaque_written_bad.fl` does.
   `kinds_opaque_bad.fl` is since then a block made of the naked
   result of one, still a primitive on an argument of another kind,
   executed; the negative case of the primitive itself is the example

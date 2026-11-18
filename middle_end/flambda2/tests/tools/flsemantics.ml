@@ -131,11 +131,11 @@
    the conversion ([convert_apply]), as the program runs its handler only while
    the probe is enabled. The printer writes the mark and the reader takes it, so
    a unit read from such a text has it and is not checked; the scripts of
-   tests/semantics/ocaml refuse a unit whose term has one. A text made before
-   the printer wrote the mark never has it, whatever the source had: such a unit
-   is read as one with a plain call, and nothing here finds that out. A body
-   taken from the .cmx of another unit may have the mark, and is then left out
-   of the prefix, so that a call of it is undefined.
+   tests/semantics/ocaml make the text of such a unit as of any other. A text
+   made before the printer wrote the mark never has it, whatever the source had:
+   such a unit is read as one with a plain call, and nothing here finds that
+   out. A body taken from the .cmx of another unit may have the mark, and is
+   then left out of the prefix, so that a call of it is undefined.
 
    What a text may lose of a primitive. The printer writes the kind of an
    [Opaque_identity] unless it is the kind of values, and whether it is for the
@@ -143,21 +143,25 @@
    kind the kind of values. A text made before the printer wrote the kind has
    none, whatever the kind was, and a text written by hand may leave it out. A
    unit read from a text is normalised before anything else is done with it:
-   each [Opaque_identity] whose kind as read is not the kind of its argument is
-   given the kind of its argument ([with_lost_kinds], which says what is done to
-   the variables bound to one), whether the text wrote a kind for it or not.
-   Where the text wrote none, the kind so given is the one that the text lost
-   where the kind obtained for the argument is its kind in the compiler's term
-   and the primitive there had that kind ([with_lost_kinds] says where the first
-   may fail). Those two conditions suffice; where either fails no recovery of
-   the compiler's kind is claimed, the term read may not be the compiler's, and
+   each [Opaque_identity] whose kind as read is the kind of values, which is
+   what the reader gives where the text writes none, and whose argument is of
+   another kind is given the kind of its argument ([with_lost_kinds], which says
+   what is done to the variables bound to one). A kind as read that is not the
+   kind of values was written by the text, and is kept whatever the kind of the
+   argument is: the primitive keeps the kind that the text wrote. Where the text
+   wrote none, the kind so given is the one that the text lost where the kind
+   obtained for the argument is its kind in the compiler's term and the
+   primitive there had that kind ([with_lost_kinds] says where the first may
+   fail). Those two conditions suffice; where either fails no recovery of the
+   compiler's kind is claimed, the term read may not be the compiler's, and
    nothing here finds that out: the step is not a check of the kinds of the
    compiler's terms. The printer writes the form of [Is_int] that works on any
    value apart from the one that is for variants, and the reader takes it. A
    text made before it did writes the two alike, and its reader gives the form
    that is for variants; that is not put right here. The scripts of
-   tests/semantics/ocaml refuse a unit whose term has the form that works on any
-   value; a text from elsewhere is checked as it is read (label C2-26).
+   tests/semantics/ocaml make the text of a unit whose term has the form that
+   works on any value as of any other; a text from elsewhere is checked as it is
+   read (label C2-26).
 
    Phantom bindings. A binding whose variables are phantom is refused by the
    conversion ([convert_let]): the program runs nothing for it, and the model
@@ -9506,14 +9510,19 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    of that component ([Lambda_to_flambda_primitives]). The compiler takes the
    argument of the primitive to have the kind that the primitive carries
    ([Flambda_primitive.arg_kind_of_unary_primitive]), so in a unit read from a
-   text every [Opaque_identity] whose kind is not the kind of its argument is
-   given here the kind of its argument, as the reader has it: the kind of a
-   constant, that of values for a symbol, and for a variable the kind that the
-   reader made it with, which is the kind written at a parameter or the kind of
-   the defining expression of a [Let] ([Fexpr_to_flambda]:
-   [Flambda.Named.kind]). That is done whether the text wrote a kind for the
-   primitive or not: a kind that the text wrote and that is not the kind of the
-   argument is replaced.
+   text every [Opaque_identity] whose kind as read is the kind of values, and is
+   not the kind of its argument, is given here the kind of its argument, as the
+   reader has it: the kind of a constant, that of values for a symbol, and for a
+   variable the kind that the reader made it with, which is the kind written at
+   a parameter or the kind of the defining expression of a [Let]
+   ([Fexpr_to_flambda]: [Flambda.Named.kind]). A kind as read that is not the
+   kind of values was written by the text ([opaque_kind_was_written]), and is
+   kept, whatever kind the reader has for the argument: the primitive keeps the
+   kind that the text wrote, and where it is not the kind of its argument the
+   term is one that the machine has no step for at that primitive. The kind of
+   values as read is given the same treatment whether the text wrote it out,
+   left it out because the printer writes none for it, or lost another kind: the
+   three are one term as read.
 
    Where the text had no kind for it, the primitive is not all that the reader
    got wrong for want of that kind: the variable that the [Let] of such a
@@ -9778,6 +9787,13 @@ let arity_of_arguments ~code_params (apply : Flambda.Apply.t) :
   | Method _ | C_call _ | Effect _ ->
     As_read
 
+(* Whether the kind as read of an [Opaque_identity] shows that the text wrote
+   one: a kind that is not the kind of values does, as the reader gives the kind
+   of values where the text writes none. It is not a test of whether the text
+   wrote a kind: the kind of values written out is read as none written is. *)
+let opaque_kind_was_written (kind : Flambda_kind.t) : bool =
+  not (Flambda_kind.equal kind Flambda_kind.value)
+
 let rec with_lost_kinds_of_expr ~code_params (e : Flambda.Expr.t) :
     Flambda.Expr.t =
   match Flambda.Expr.descr e with
@@ -9844,7 +9860,7 @@ and with_lost_kinds_of_named ~code_params (named : Flambda.Named.t) :
   match named with
   | Prim (Unary (Opaque_identity { middle_end_only; kind }, arg), dbg) ->
     let kind_of_arg = Simple.kind arg in
-    if Flambda_kind.equal kind kind_of_arg
+    if Flambda_kind.equal kind kind_of_arg || opaque_kind_was_written kind
     then named
     else
       Flambda.Named.create_prim
@@ -9893,21 +9909,21 @@ and with_lost_kinds_of_code ~code_params (code : Code.t) : Code.t =
     ~free_names_of_params_and_body:(Code.free_names_of_params_and_body code)
     ~code_metadata:(Code.code_metadata code)
 
-(* Whether a unit has an [Opaque_identity] whose kind is not the kind of its
-   argument, or a call that is not to keep the arity of its arguments, as the
-   reader has them: whether the pass above has anything to do. The first such
-   primitive or call from the top is one that this finds, as nothing above it is
-   changed. The unit is looked at as a term is for printing
-   ([pattern_match_for_printing]) and nothing is built, so a unit that has
-   neither is left as it was read. Opened so, the bound names of a term are not
-   made fresh, unless the tool is given the flag that makes them fresh where a
-   term is printed ([Flambda_features.freshen_when_printing]), which the tests
-   do not give. So with the flags of the tests looking at a unit uses up no
-   name, and the names which the tool prints of a unit that has neither are
-   those that it printed before this step was there. The tests that this look
-   makes, whether an [Opaque_identity] and its argument have different kinds and
-   what [arity_of_arguments] says of a call, are the same with either setting of
-   the flag. *)
+(* Whether a unit has an [Opaque_identity] whose kind as read is the kind of
+   values and is not the kind of its argument, or a call that is not to keep the
+   arity of its arguments, as the reader has them: whether the pass above has
+   anything to do. The first such primitive or call from the top is one that
+   this finds, as nothing above it is changed. The unit is looked at as a term
+   is for printing ([pattern_match_for_printing]) and nothing is built, so a
+   unit that has neither is left as it was read. Opened so, the bound names of a
+   term are not made fresh, unless the tool is given the flag that makes them
+   fresh where a term is printed ([Flambda_features.freshen_when_printing]),
+   which the tests do not give. So with the flags of the tests looking at a unit
+   uses up no name, and the names which the tool prints of a unit that has
+   neither are those that it printed before this step was there. The tests that
+   this look makes, whether an [Opaque_identity] at the kind of values has an
+   argument of another kind and what [arity_of_arguments] says of a call, are
+   the same with either setting of the flag. *)
 let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
   match Flambda.Expr.descr e with
   | Let let_expr ->
@@ -9936,7 +9952,8 @@ let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
 and kind_lost_in_named ~code_params (named : Flambda.Named.t) : bool =
   match named with
   | Prim (Unary (Opaque_identity { middle_end_only = _; kind }, arg), _) ->
-    not (Flambda_kind.equal kind (Simple.kind arg))
+    (not (opaque_kind_was_written kind))
+    && not (Flambda_kind.equal kind (Simple.kind arg))
   | Static_consts group ->
     List.exists
       (fun const ->

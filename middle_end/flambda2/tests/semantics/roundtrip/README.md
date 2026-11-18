@@ -12,8 +12,11 @@ answers are checked.
 A unit read from a text, the unit of the file and each unit read
 back, is first normalised as the check of a unit normalises it
 (`with_lost_kinds` in `../../tools/flsemantics.ml`). An
-`Opaque_identity` whose kind as read is not the kind of its argument is
-given the kind of its argument. A direct call or a call of unknown
+`Opaque_identity` whose kind as read is the kind of values, which is
+what the reader gives where the text writes none, and whose argument
+is of another kind is given the kind of its argument; a kind as read
+that is not the kind of values, which the text must have written, is
+kept. A direct call or a call of unknown
 arity whose arity as read is one value for each argument is looked at
 again, and every other call is left as it is read. Such a call of
 unknown arity is given the kinds of its arguments. Such a direct call

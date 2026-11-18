@@ -1,0 +1,9 @@
+(* An opaque identity at the kind of values, written out, on a naked
+   immediate. The reader gives the kind of values where the text writes no
+   kind, so the term as read is the one of an opaque identity with no kind
+   written: the tool gives the primitive the kind of its argument, as it
+   does in kinds_opaque_naked.fl, and the unit returns. *)
+let x = %opaque.`value` (1i) in
+let y = %tag_imm (x) in
+let $camlKinds_opaque_written_value = Block 0 (y) in
+cont done ($camlKinds_opaque_written_value)
