@@ -207,7 +207,10 @@ then "after the prefix".
 - What the prefix leaves out is not said to be absent. Code that has
   no body in the file is declared deleted and bound to nothing, and
   a call of it is undefined when it runs. A module block with a field
-  of which the file says nothing is not bound: its symbol stays an
+  of which the file says nothing is bound with a symbol of its own in
+  that field ("The pairs"), but for one case: where such a field is
+  loaded in the body of code or in the handler of a recursive
+  continuation, the block is not bound. Its symbol then stays an
   import, a load from it has no value, and where nothing of the file
   can be bound or declared there is no prefix and the tool prints
 
@@ -221,7 +224,7 @@ then "after the prefix".
   `statics_in_scope` asks that the code of a closure, and of a
   direct call, be bound or declared deleted, and the prefix declares
   deleted the code that it has from the file of the code's own unit
-  and does not bind. Of 12 of the 14 units here for which a prefix
+  and does not bind. Of 23 of the 25 units here for which a prefix
   is made the guard passes, and the line "the check of static names"
   says "passes" of both terms and ends ", each with the prefix in
   front of it". Of `never_called_unread` and of `maker_kept_unread`
@@ -255,33 +258,46 @@ from the others.
 | `never_called_unread.ml` | `never_called.ml` | the same unit; the tool is given the `.cmx` of `never_called.ml` alone | a control: the prefix binds the code of `add_two`, which names the code of `add_one`, of a unit that was not read and of which nothing is declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
 | `maker_kept_unread.ml` | `maker_kept.ml` | a toplevel reads a field of the second unit that is a constant | a control: the tool reads the `.cmx` of `maker_kept.ml` and not that of `maker.ml`; the prefix binds the module block and the closure that is a field of it, whose code is of `maker.ml`, a unit that was not read, and is not declared; not checked: with the prefix in front of it the term before mentions a code id where it is not in scope (the guard, above) |
 | `maker_kept_read.ml` | `maker_kept.ml` | a toplevel keeps the function of `maker.ml`, which the second unit gives again | the tool reads the `.cmx` of both units: a prefix of five bindings, the same module block and closure, the closure of `make`, and the code of both, bound from the file of `maker.ml`; the check of static names passes; both runs return the module block; the same; validated with its imports, given the `.cmx` of both |
-| `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows | no prefix; undefined before and after; nothing to validate |
+| `hidden_read.ml` | `hidden.ml` | a toplevel reads a field of which the `.cmx` says nothing, beside one that it knows, and adds the two | a prefix of one binding, the module block with a symbol of which nothing is known in that field; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
 | `hidden_known_read.ml` | `hidden.ml` | a toplevel reads the field that the `.cmx` knows, and not the one of which it says nothing | a prefix of one binding, the module block with a symbol of which nothing is known in the other field, which is the one import left; both runs return the module block; the same; validated with its imports, given the `.cmx` |
+| `hidden_included.ml` | `hidden.ml` | a toplevel reads the two fields and keeps them (`include`) | the same prefix; both runs return a block of the number and of the symbol of which nothing is known; the same; validated with its imports, given the `.cmx` |
+| `hidden_kept.ml` | `hidden.ml` | a toplevel puts the two fields in a block that it makes | the same prefix; both runs return the module block, whose field is the block of the symbol and of the number; the same; validated with its imports, given the `.cmx` |
+| `hidden_in_function.ml` | `hidden.ml` | a function that nothing calls loads the field of which the `.cmx` says nothing | a control: the load is in the body of code, so the block is not bound and there is no prefix; both runs return the module block; the same; validated with its imports |
+| `hidden_in_loop.ml` | `hidden.ml` | a loop at toplevel loads that field each time round | a control: the load is in the handler of a recursive continuation, so the block is not bound and there is no prefix; undefined before and after; validated with its imports, with the line that says the validation says nothing |
+| `hidden_tested.ml` | `hidden.ml` | a toplevel tests that field (`match`) | the prefix of one binding; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `hidden_same.ml` | `hidden.ml` | a toplevel compares that field with itself | the prefix of one binding; undefined before; the run after returns the answer that the two are the same; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `hidden_joined.ml` | `hidden.ml` | a toplevel takes that field down one arm of a test and a number down the other, and adds to what it has | the prefix of one binding; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `several_included.ml` | `several.ml` | a toplevel reads the four fields, of each of which the `.cmx` says nothing, and keeps them (`include`) | a prefix of one binding, the module block with four symbols of which nothing is known, the four imports left; both runs return a block of the four; the same; validated with its imports, given the `.cmx` |
+| `several_compared.ml` | `several.ml` | a toplevel compares two of the fields | the same prefix; undefined before and after; nothing to validate |
+| `several_loaded.ml` | `several.ml` | a toplevel loads a field of one of the fields | the same prefix; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
+| `several_called.ml` | `several.ml` | a toplevel calls one of the fields | the same prefix; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
 | `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
 | `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of five bindings; undefined before and after; validated, with the line that says the validation says nothing |
-| `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime | no prefix; undefined before and after; validated with its imports, with the line that says the validation says nothing |
+| `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime, and tests it | a prefix of one binding, the module block with two symbols of which nothing is known; undefined before and after; validated with its imports, given the `.cmx`, with the line that says the validation says nothing |
 | `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of five bindings without the body, which the conversion refuses; the run is undefined before and after, and the validation says nothing of it |
 | `probed_inlined.ml` | `probed.ml` | calls the same function and lets Simplify inline it | not checked: the term after Simplify has the call that is a probe, which the conversion refuses |
 | `phantom_called.ml` | `phantom.ml` | calls a function of the first unit whose body, in the `.cmx`, has a phantom binding | a prefix of three bindings without the body, which the conversion refuses; the run before is undefined, the run after returns; nothing to validate |
 
-Thirty-four sources. Five are the units that are here for their
+Forty-six sources. Five are the units that are here for their
 first line and their controls, which the last section is about. Of
-the other twenty-nine, eleven are first units and use no other unit;
-nine of them have an expected file: five are validated, as a unit
+the other forty-one, twelve are first units and use no other unit;
+ten of them have an expected file: six are validated, as a unit
 of the directory above is, `phantom.ml` and `probed.ml` are not
 checked, and two that
 no unit uses are here for the lists of calls of known arity:
 `known_arity_lists_older_code.ml` has the same two runs and is not
 validated, and `known_arity_lists_undefined_elsewhere.ml` is
-undefined before and after. Of the eighteen second units, one has no
-expected file (`maker_kept.ml`, which is compiled for the two units
-that use it); five are validated given a `.cmx`, two of them with an
-import left; nine are undefined in the model, seven of them with a
-prefix, and one of the seven, `phantom_called.ml`, before Simplify
-only; and three are not checked: the two controls that the guard
-stops, and `probed_inlined.ml`, which the conversion refuses.
-`never_called.ml` and `maker_kept.ml` are each the first unit of two
-of the eighteen.
+undefined before and after. Of the twenty-nine second units, one has
+no expected file (`maker_kept.ml`, which is compiled for the two
+units that use it); eight are validated given a `.cmx`, five of them
+with an import left; one is validated with its imports and has no
+prefix (`hidden_in_function.ml`); sixteen are undefined in the model,
+fifteen of them with a prefix, and two of the fifteen,
+`phantom_called.ml` and `hidden_same.ml`, before Simplify only; and
+three are not checked: the two controls that the guard stops, and
+`probed_inlined.ml`, which the conversion refuses. `never_called.ml`
+and `maker_kept.ml` are each the first unit of two of the
+twenty-nine.
 
 The prefix of the four units that use `lengths.ml` is the same: the
 module block, the closures of `length_from` and of `length`, and the
@@ -365,16 +381,53 @@ which a unit binds, or declares deleted itself, is refused. No
 source and no text makes such a unit, so that control is of
 prefixes and units made by hand.
 
-In `hidden_read.ml` the module block of the first unit has a field of
-which the `.cmx` says nothing, and the unit loads that field: the
-block is not bound, the unit has no prefix, and the load from the
-block has no value: the unit is as it was when the model was told
-nothing of a `.cmx`. `hidden_known_read.ml` loads only the other
-field of the same block. There the block is bound, with a symbol of
-its own in the field of which the `.cmx` says nothing: an import of
-which nothing is known, that a run can pass on and cannot inspect.
-The load has the value that the `.cmx` gives, and the unit is
-validated with that one import left.
+The module block of `hidden.ml` has a field of which the `.cmx` says
+nothing. The prefix binds the block with a symbol of its own in that
+field: an import of which nothing is known, that a run can pass on
+and cannot inspect. `hidden_known_read.ml` loads only the other
+field: the load has the value that the `.cmx` gives, and the unit is
+validated with that one import left. `hidden_included.ml` and
+`hidden_kept.ml` load the field of which the `.cmx` says nothing and
+pass it on, the first as a field of its own module block and the
+second in a block that it makes: the load has the symbol for its
+value, both runs are defined and return it, and the units are
+validated with that import left. `several_included.ml` is the same
+of a first unit all of whose fields are such.
+
+The block is bound in those units because the load is outside code
+and outside the handler of a recursive continuation: there the
+validation reads the term after, as it reads the term before, with
+what the unit binds its symbols to. Where such a load is in the body
+of code or in such a handler the block is not bound (`make_prefix`
+has the rule and what it is for). `hidden_in_function.ml` and
+`hidden_in_loop.ml` are the controls of that: neither has a prefix.
+The first only makes its closure when it runs, and is validated with
+its imports; the run of the second is undefined before and after,
+as the load from an import has no value.
+
+A unit whose run inspects such a symbol is undefined in the model
+before Simplify, and of such a unit no line is a validation:
+whatever the tool prints of the comparison of the two terms, it
+prints under it that the validation says nothing of the unit, or it
+prints "nothing to validate". Where the tool prints "validated with
+its imports" above the line "the term before is undefined in the
+model, so the validation says nothing of this unit", that is not a
+meaningful validation of the unit: the run before goes wrong in the
+model, and the refinement then asks nothing of the term after.
+`hidden_read.ml` adds to the field,
+`hidden_tested.ml` tests it, `hidden_joined.ml` adds to what is the
+field down one arm of a test and a number down the other,
+`several_loaded.ml` loads a field of it and `several_called.ml`
+calls it. The two others compare. `hidden_same.ml` compares the
+field with itself: the model has no value for that comparison
+(decision D41 of `middle_end/flambda2/rocq/DECISIONS.md`), Simplify
+makes the comparison of a variable with itself its answer, so the
+run after returns, and the validation makes it that answer in the
+term before too
+(`middle_end/flambda2/rocq/rewrites/lets/FlambdaSameComparisonSpec.v`,
+a rewrite of the term before only, which refines), and accepts the
+pair. `several_compared.ml` compares two such fields: both runs are
+undefined, and the validator does not accept the pair.
 
 `partly_tested.ml` shows that such a symbol is not a value that the
 model computes with. The load of the field is in a function, from
@@ -383,15 +436,16 @@ from the record: the record is bound, the function gets the symbol
 of the field, and the addition has no value on it, so the run is
 undefined before and after.
 
-Of `cycle.ml` the `.cmx` says nothing that Simplify can use, and
-nothing that the prefix can bind: the term after of `cycle_read.ml`
-is the term before simplified as a unit of the directory above is,
-and the validator accepts the pair; the unit is undefined all the
-same, as it loads from an import.
+Of `cycle.ml` the `.cmx` says nothing of the two fields of the
+module block, and nothing that Simplify can use. The prefix of
+`cycle_read.ml` binds that block with a symbol of which nothing is
+known in each field. The unit loads one of the two and tests it,
+which has no value on such a symbol: the run is undefined before
+and after, and the validator accepts the pair.
 
-The first units `lengths.ml`, `never.ml`, `hidden.ml`, `partly.ml`
-and `parity.ml` use no other unit; the tool says of each what it says
-of a unit of the directory above, and each is validated.
+The first units `lengths.ml`, `never.ml`, `hidden.ml`, `several.ml`,
+`partly.ml` and `parity.ml` use no other unit; the tool says of each
+what it says of a unit of the directory above, and each is validated.
 
 `cycle.ml` is compiled and the tool is not run on it. Its two blocks
 name each other, and the compiler makes them by four calls of C

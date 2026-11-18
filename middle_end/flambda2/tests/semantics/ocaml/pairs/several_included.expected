@@ -1,0 +1,21 @@
+several_included.fl:
+  given the .cmx of Several, a prefix of 1 static binding:
+    camlSeveral = Block 0 ($4, $5, $6, $7)
+  before Simplify, after the prefix, with its 4 imports (14 steps): returns
+                                                                    [0:
+                                                                    <imported 4>;
+                                                                    <imported 5>;
+                                                                    <imported 6>;
+                                                                    <imported 7>]
+  after Simplify, after the prefix, with its 4 imports (6 steps): returns
+                                                                    [0:
+                                                                    <imported 4>;
+                                                                    <imported 5>;
+                                                                    <imported 6>;
+                                                                    <imported 7>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too

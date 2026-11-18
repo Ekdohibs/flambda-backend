@@ -1,0 +1,18 @@
+let $camlHidden_in_function__first_const_0 = Block 0 () in
+(let code inline(never) size(2)
+       get_0 (param/24 : imm tagged)
+         my_closure/25 &my_alloc_region/26 my_depth/27
+         -> k/10 * k/11
+         : imm tagged =
+   let next_depth/28 = rec_info (succ my_depth/27) in
+   let Pfield/29 = %block_load.[`1`] ($Hidden.camlHidden) in
+   cont k/10 (Pfield/29)
+ in
+ let get/30 = closure get_0 @get &toplevel in
+ let Pmakeblock/31 = %block.[`0`].`toplevel` (get/30) in
+ cont k/9 (Pmakeblock/31))
+  where k/9 define_root_symbol (module_block/22) =
+    let field_0/23 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/22)
+    in
+    let $camlHidden_in_function = Block 0 (field_0/23) in
+    cont done ($camlHidden_in_function)

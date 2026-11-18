@@ -1,0 +1,12 @@
+several_called.fl:
+  given the .cmx of Several, a prefix of 1 static binding:
+    camlSeveral = Block 0 ($4, $5, $6, $7)
+  before Simplify, after the prefix, with its 4 imports (5 steps): undefined
+  after Simplify, after the prefix, with its 4 imports (3 steps): undefined
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 1 before, 1 after
+  anything goes, as the run before is undefined
+  calls outside code once those of known code are inlined: 1
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too
+  the term before is undefined in the model, so the validation says nothing of this unit

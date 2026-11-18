@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 11 of the 79 files, and "What a
+At this commit the driver validates 12 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -221,18 +221,18 @@ from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 6;
-- validated with its imports: 5;
+- validated with its imports: 6;
 - compared, not validated: 8, of which `camlinternalAtomic.ml` has a line
   under the verdict, "related once lifted";
-- undefined in the model: 1, `bytesLabels.ml`;
+- undefined in the model: none;
 - not checked: 59. The first thing that the driver names is a C function
   for 42 of them, a primitive that the model has not got for 15, a call
   with no callee for `effect.ml`, and for `moreLabels.ml` a test that the
   tool makes of the code that the `.cmx` files of the other units give
   it.
 
-The 79 sources have 29,925 lines; the eleven that are validated, with or
-without their imports, have 1,085.
+The 79 sources have 29,925 lines; the twelve that are validated, with or
+without their imports, have 1,109.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
@@ -251,7 +251,7 @@ prints a line under the verdict. The verdicts are in the words of
 | `bool.ml` | `stdlib__Bool` | 49 | not checked | a C function: `caml_hash_exn` |
 | `buffer.ml` | `stdlib__Buffer` | 419 | not checked | a C function: `caml_create_bytes` |
 | `bytes.ml` | `stdlib__Bytes` | 865 | not checked | a C function: `caml_fill_bytes` |
-| `bytesLabels.ml` | `stdlib__BytesLabels` | 24 | undefined in the model | the run of the term before is undefined in the model |
+| `bytesLabels.ml` | `stdlib__BytesLabels` | 24 | validated with its imports |  |
 | `callback.ml` | `stdlib__Callback` | 36 | not checked | a C function: `caml_register_named_value` |
 | `camlinternalAtomic.ml` | `camlinternalAtomic` | 62 | compared, not validated | the line under the verdict says "related once lifted" |
 | `camlinternalComprehension.ml` | `camlinternalComprehension` | 34 | validated |  |

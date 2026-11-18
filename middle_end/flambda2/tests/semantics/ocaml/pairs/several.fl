@@ -1,0 +1,33 @@
+(let code size(1)
+       `fn[several.ml:12,19--39]_0` (x/38 : imm tagged)
+         my_closure/39 &my_alloc_region/40 my_depth/41
+         -> k/10 * k/11
+         : imm tagged =
+   let next_depth/42 = rec_info (succ my_depth/41) in
+   cont k/10 (x/38)
+ in
+ let $camlSeveral__const_block_0 = Block 0 (1, 2) in
+ let first/43 = %opaque (7) in
+ let second/44 = %opaque (8) in
+ let pair/45 = %opaque ($camlSeveral__const_block_0) in
+ let `fn[several.ml:12,19--39]/46` =
+   closure `fn[several.ml:12,19--39]_0` @`fn[several.ml:12,19--39]` &toplevel
+ in
+ let apply/47 = %opaque (`fn[several.ml:12,19--39]/46`) in
+ let Pmakeblock/48 =
+   %block.[`0`].`toplevel` (first/43, second/44, pair/45, apply/47)
+ in
+ cont k/9 (Pmakeblock/48))
+  where k/9 define_root_symbol (module_block/33) =
+    let field_0/34 = %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/33)
+    in
+    let field_1/35 = %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/33)
+    in
+    let field_2/36 = %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/33)
+    in
+    let field_3/37 = %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/33)
+    in
+    let $camlSeveral =
+      Block 0 (field_0/34, field_1/35, field_2/36, field_3/37)
+    in
+    cont done ($camlSeveral)

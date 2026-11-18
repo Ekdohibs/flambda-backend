@@ -1,97 +1,87 @@
 stdlib__BytesLabels.fl:
-  given the .cmx of Stdlib__Bytes, a prefix of 168 static bindings:
-    camlStdlib__Bytes__make_0_123_code deleted
-    camlStdlib__Bytes__init_1_124_code deleted
-    camlStdlib__Bytes__copy_2_125_code deleted
-    camlStdlib__Bytes__of_string_4_127_code deleted
-    camlStdlib__Bytes__to_string_3_126_code deleted
-    camlStdlib__Bytes__sub_5_128_code deleted
-    camlStdlib__Bytes__sub_string_6_129_code deleted
-    camlStdlib__Bytes__extend_8_131_code deleted
-    camlStdlib__Bytes__fill_9_132_code deleted
-    camlStdlib__Bytes__blit_10_133_code deleted
-    camlStdlib__Bytes__blit_string_11_134_code deleted
-    camlStdlib__Bytes__concat_17_140_code deleted
-    camlStdlib__Bytes__cat_18_141_code deleted
-    camlStdlib__Bytes__iter_12_135_code deleted
-    camlStdlib__Bytes__iteri_13_136_code deleted
-    camlStdlib__Bytes__map_23_146_code deleted
-    camlStdlib__Bytes__mapi_24_147_code deleted
-    camlStdlib__Bytes__fold_left_25_148_code deleted
-    camlStdlib__Bytes__fold_right_26_149_code deleted
-    camlStdlib__Bytes__for_all_29_152_code deleted
-    camlStdlib__Bytes__exists_27_150_code deleted
-    camlStdlib__Bytes__trim_20_143_code deleted
-    camlStdlib__Bytes__escaped_22_145_code deleted
-    camlStdlib__Bytes__index_41_164_code deleted
-    camlStdlib__Bytes__index_opt_43_166_code deleted
-    camlStdlib__Bytes__rindex_47_170_code deleted
-    camlStdlib__Bytes__rindex_opt_50_173_code deleted
-    camlStdlib__Bytes__index_from_44_167_code deleted
-    camlStdlib__Bytes__index_from_opt_45_168_code deleted
-    camlStdlib__Bytes__rindex_from_48_171_code deleted
-    camlStdlib__Bytes__rindex_from_opt_51_174_code deleted
-    camlStdlib__Bytes__contains_53_176_code deleted
-    camlStdlib__Bytes__contains_from_52_175_code deleted
-    camlStdlib__Bytes__rcontains_from_54_177_code deleted
-    camlStdlib__Bytes__uppercase_ascii_31_154_code deleted
-    camlStdlib__Bytes__lowercase_ascii_32_155_code deleted
-    camlStdlib__Bytes__capitalize_ascii_34_157_code deleted
-    camlStdlib__Bytes__uncapitalize_ascii_35_158_code deleted
-    camlStdlib__Bytes__compare_55_178_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:412,0--76]_122_122_code deleted
-    camlStdlib__Bytes__starts_with_36_159_code deleted
-    camlStdlib__Bytes__ends_with_38_161_code deleted
-    camlStdlib__Bytes__split_on_char_56_179_code deleted
-    camlStdlib__Bytes__of_seq_65_184_code deleted
-    camlStdlib__Bytes__get_utf_8_uchar_99_216_code deleted
-    camlStdlib__Bytes__set_utf_8_uchar_101_217_code deleted
-    camlStdlib__Bytes__is_valid_utf_8_103_218_code deleted
-    camlStdlib__Bytes__get_utf_16be_uchar_106_220_code deleted
-    camlStdlib__Bytes__set_utf_16be_uchar_107_221_code deleted
-    camlStdlib__Bytes__is_valid_utf_16be_108_222_code deleted
-    camlStdlib__Bytes__get_utf_16le_uchar_110_224_code deleted
-    camlStdlib__Bytes__set_utf_16le_uchar_111_225_code deleted
-    camlStdlib__Bytes__is_valid_utf_16le_112_226_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:471,0--72]_121_121_code deleted
-    camlStdlib__Bytes__get_int8_70_189_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:472,0--78]_120_120_code deleted
-    camlStdlib__Bytes__get_uint16_be_72_191_code deleted
-    camlStdlib__Bytes__get_uint16_le_71_190_code deleted
-    camlStdlib__Bytes__get_int16_ne_73_192_code deleted
-    camlStdlib__Bytes__get_int16_be_75_194_code deleted
-    camlStdlib__Bytes__get_int16_le_74_193_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:473,0--79]_119_119_code deleted
-    camlStdlib__Bytes__get_int32_be_77_196_code deleted
-    camlStdlib__Bytes__get_int32_le_76_195_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:474,0--79]_118_118_code deleted
-    camlStdlib__Bytes__get_int64_be_79_198_code deleted
-    camlStdlib__Bytes__get_int64_le_78_197_code deleted
-    camlStdlib__Bytes__set_uint8_88_88_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:479,0--79]_117_117_code deleted
-    camlStdlib__Bytes__set_uint16_ne_89_89_code deleted
-    camlStdlib__Bytes__set_int16_be_83_202_code deleted
-    camlStdlib__Bytes__set_int16_le_82_201_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:480,0--85]_116_116_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:481,0--87]_115_115_code deleted
-    camlStdlib__Bytes__set_int32_be_85_204_code deleted
-    camlStdlib__Bytes__set_int32_le_84_203_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:482,0--87]_114_114_code deleted
-    camlStdlib__Bytes__set_int64_be_87_206_code deleted
-    camlStdlib__Bytes__set_int64_le_86_205_code deleted
+  given the .cmx of Stdlib__Bytes, a prefix of 169 static bindings:
     camlStdlib__Bytes__unsafe_escape_21_144_code deleted
-    camlStdlib__Bytes__aux_58_181_code deleted
+    camlStdlib__Bytes__set_int64_le_86_205_code deleted
+    camlStdlib__Bytes__set_int64_be_87_206_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:482,0--87]_114_114_code deleted
+    camlStdlib__Bytes__set_int32_le_84_203_code deleted
+    camlStdlib__Bytes__set_int32_be_85_204_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:481,0--87]_115_115_code deleted
+    camlStdlib__Bytes__set_int16_le_82_201_code deleted
+    camlStdlib__Bytes__set_int16_be_83_202_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:480,0--85]_116_116_code deleted
+    camlStdlib__Bytes__set_uint16_ne_89_89_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:479,0--79]_117_117_code deleted
+    camlStdlib__Bytes__set_uint8_88_88_code deleted
+    camlStdlib__Bytes__get_int64_le_78_197_code deleted
+    camlStdlib__Bytes__get_int64_be_79_198_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:474,0--79]_118_118_code deleted
+    camlStdlib__Bytes__get_int32_le_76_195_code deleted
+    camlStdlib__Bytes__get_int32_be_77_196_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:473,0--79]_119_119_code deleted
+    camlStdlib__Bytes__get_int16_le_74_193_code deleted
+    camlStdlib__Bytes__get_int16_be_75_194_code deleted
+    camlStdlib__Bytes__get_int16_ne_73_192_code deleted
+    camlStdlib__Bytes__get_uint16_le_71_190_code deleted
+    camlStdlib__Bytes__get_uint16_be_72_191_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:472,0--78]_120_120_code deleted
+    camlStdlib__Bytes__get_int8_70_189_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:471,0--72]_121_121_code deleted
+    camlStdlib__Bytes__is_valid_utf_16le_112_226_code deleted
+    camlStdlib__Bytes__set_utf_16le_uchar_111_225_code deleted
+    camlStdlib__Bytes__get_utf_16le_uchar_110_224_code deleted
+    camlStdlib__Bytes__is_valid_utf_16be_108_222_code deleted
+    camlStdlib__Bytes__set_utf_16be_uchar_107_221_code deleted
+    camlStdlib__Bytes__get_utf_16be_uchar_106_220_code deleted
+    camlStdlib__Bytes__is_valid_utf_8_103_218_code deleted
+    camlStdlib__Bytes__set_utf_8_uchar_101_217_code deleted
+    camlStdlib__Bytes__get_utf_8_uchar_99_216_code deleted
+    camlStdlib__Bytes__of_seq_65_184_code deleted
+    camlStdlib__Bytes__split_on_char_56_179_code deleted
+    camlStdlib__Bytes__ends_with_38_161_code deleted
+    camlStdlib__Bytes__starts_with_36_159_code deleted
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:412,0--76]_122_122_code deleted
+    camlStdlib__Bytes__compare_55_178_code deleted
+    camlStdlib__Bytes__uncapitalize_ascii_35_158_code deleted
+    camlStdlib__Bytes__capitalize_ascii_34_157_code deleted
+    camlStdlib__Bytes__lowercase_ascii_32_155_code deleted
+    camlStdlib__Bytes__uppercase_ascii_31_154_code deleted
+    camlStdlib__Bytes__rcontains_from_54_177_code deleted
+    camlStdlib__Bytes__contains_from_52_175_code deleted
+    camlStdlib__Bytes__contains_53_176_code deleted
+    camlStdlib__Bytes__rindex_from_opt_51_174_code deleted
+    camlStdlib__Bytes__rindex_from_48_171_code deleted
+    camlStdlib__Bytes__index_from_opt_45_168_code deleted
+    camlStdlib__Bytes__index_from_44_167_code deleted
+    camlStdlib__Bytes__rindex_opt_50_173_code deleted
+    camlStdlib__Bytes__rindex_47_170_code deleted
+    camlStdlib__Bytes__index_opt_43_166_code deleted
+    camlStdlib__Bytes__index_41_164_code deleted
+    camlStdlib__Bytes__escaped_22_145_code deleted
+    camlStdlib__Bytes__trim_20_143_code deleted
+    camlStdlib__Bytes__exists_27_150_code deleted
+    camlStdlib__Bytes__for_all_29_152_code deleted
+    camlStdlib__Bytes__fold_right_26_149_code deleted
+    camlStdlib__Bytes__fold_left_25_148_code deleted
+    camlStdlib__Bytes__mapi_24_147_code deleted
+    camlStdlib__Bytes__map_23_146_code deleted
+    camlStdlib__Bytes__iteri_13_136_code deleted
+    camlStdlib__Bytes__iter_12_135_code deleted
+    camlStdlib__Bytes__cat_18_141_code deleted
+    camlStdlib__Bytes__concat_17_140_code deleted
+    camlStdlib__Bytes__blit_string_11_134_code deleted
+    camlStdlib__Bytes__blit_10_133_code deleted
+    camlStdlib__Bytes__fill_9_132_code deleted
+    camlStdlib__Bytes__extend_8_131_code deleted
+    camlStdlib__Bytes__sub_string_6_129_code deleted
+    camlStdlib__Bytes__sub_5_128_code deleted
+    camlStdlib__Bytes__to_string_3_126_code deleted
+    camlStdlib__Bytes__of_string_4_127_code deleted
+    camlStdlib__Bytes__copy_2_125_code deleted
+    camlStdlib__Bytes__init_1_124_code deleted
+    camlStdlib__Bytes__make_0_123_code deleted
     camlStdlib__Bytes__aux_62_183_code deleted
-    camlStdlib__Bytes__to_seq_57_180_code (v1) v2 -> k1 * k2 =
-      let v3 =
-        closure Stdlib__Bytes.aux_58 of
-          {Stdlib__Bytes.aux_58 = camlStdlib__Bytes__aux_58_181_code}
-          {Stdlib__Bytes.s_43 = v1} in
-      let v4 =
-        closure Stdlib__Bytes.partial_aux_60 of
-          {Stdlib__Bytes.partial_aux_60 = camlStdlib__Bytes__partial_aux_60_60_code}
-          {Stdlib__Bytes.aux_46 = v3} in
-      cont k1 (v4)
+    camlStdlib__Bytes__aux_58_181_code deleted
     camlStdlib__Bytes__to_seqi_61_182_code (v1) v2 -> k1 * k2 =
       let v3 =
         closure Stdlib__Bytes.aux_62 of
@@ -102,11 +92,21 @@ stdlib__BytesLabels.fl:
           {Stdlib__Bytes.partial_aux_64 = camlStdlib__Bytes__partial_aux_64_64_code}
           {Stdlib__Bytes.aux_50 = v3} in
       cont k1 (v4)
-    camlStdlib__Bytes__partial_aux_60_60_code stub (v1) v2 -> k1 * k2 =
-      let v3 = v2.(Stdlib__Bytes.partial_aux_60).Stdlib__Bytes.aux_46 in
-      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__Bytes__to_seq_57_180_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Bytes.aux_58 of
+          {Stdlib__Bytes.aux_58 = camlStdlib__Bytes__aux_58_181_code}
+          {Stdlib__Bytes.s_43 = v1} in
+      let v4 =
+        closure Stdlib__Bytes.partial_aux_60 of
+          {Stdlib__Bytes.partial_aux_60 = camlStdlib__Bytes__partial_aux_60_60_code}
+          {Stdlib__Bytes.aux_46 = v3} in
+      cont k1 (v4)
     camlStdlib__Bytes__partial_aux_64_64_code stub (v1) v2 -> k1 * k2 =
       let v3 = v2.(Stdlib__Bytes.partial_aux_64).Stdlib__Bytes.aux_50 in
+      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__Bytes__partial_aux_60_60_code stub (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Stdlib__Bytes.partial_aux_60).Stdlib__Bytes.aux_46 in
       apply known_arity v3 (0, v1) -> k1 * k2
     camlStdlib__Bytes__make_0_28 = closure Stdlib__Bytes.make_0 of
       {Stdlib__Bytes.make_0 = camlStdlib__Bytes__make_0_123_code}
@@ -405,13 +405,255 @@ stdlib__BytesLabels.fl:
       {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_144_code}
       at {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_55}
       {}
-  before Simplify, after the prefix, with its import (5 steps): undefined
-  after Simplify, after the prefix, with its import (1 steps): undefined
+    camlStdlib__Bytes = Block 0 (camlStdlib__Bytes__make_0_28,
+      camlStdlib__Bytes__init_1_29, $86, camlStdlib__Bytes__copy_2_30,
+      camlStdlib__Bytes__of_string_4_32, camlStdlib__Bytes__to_string_3_31,
+      camlStdlib__Bytes__sub_5_33, camlStdlib__Bytes__sub_string_6_35,
+      camlStdlib__Bytes__extend_8_38, camlStdlib__Bytes__fill_9_39,
+      camlStdlib__Bytes__blit_10_41, camlStdlib__Bytes__blit_string_11_43,
+      camlStdlib__Bytes__concat_17_51, camlStdlib__Bytes__cat_18_52,
+      camlStdlib__Bytes__iter_12_45, camlStdlib__Bytes__iteri_13_46,
+      camlStdlib__Bytes__map_23_57, camlStdlib__Bytes__mapi_24_58,
+      camlStdlib__Bytes__fold_left_25_59,
+      camlStdlib__Bytes__fold_right_26_60, camlStdlib__Bytes__for_all_29_62,
+      camlStdlib__Bytes__exists_27_61, camlStdlib__Bytes__trim_20_54,
+      camlStdlib__Bytes__escaped_22_56, camlStdlib__Bytes__index_41_71,
+      camlStdlib__Bytes__index_opt_43_73, camlStdlib__Bytes__rindex_47_79,
+      camlStdlib__Bytes__rindex_opt_50_83,
+      camlStdlib__Bytes__index_from_44_74,
+      camlStdlib__Bytes__index_from_opt_45_76,
+      camlStdlib__Bytes__rindex_from_48_80,
+      camlStdlib__Bytes__rindex_from_opt_51_84,
+      camlStdlib__Bytes__contains_53_88,
+      camlStdlib__Bytes__contains_from_52_86,
+      camlStdlib__Bytes__rcontains_from_54_89,
+      camlStdlib__Bytes__uppercase_ascii_31_63,
+      camlStdlib__Bytes__lowercase_ascii_32_64,
+      camlStdlib__Bytes__capitalize_ascii_34_66,
+      camlStdlib__Bytes__uncapitalize_ascii_35_67,
+      camlStdlib__Bytes__compare_55_91,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:412,0--76]_122_155,
+      camlStdlib__Bytes__starts_with_36_68,
+      camlStdlib__Bytes__ends_with_38_69,
+      camlStdlib__Bytes__split_on_char_56_92,
+      camlStdlib__Bytes__to_seq_57_93, camlStdlib__Bytes__to_seqi_61_94,
+      camlStdlib__Bytes__of_seq_65_95,
+      camlStdlib__Bytes__get_utf_8_uchar_99_128,
+      camlStdlib__Bytes__set_utf_8_uchar_101_130,
+      camlStdlib__Bytes__is_valid_utf_8_103_132,
+      camlStdlib__Bytes__get_utf_16be_uchar_106_135,
+      camlStdlib__Bytes__set_utf_16be_uchar_107_137,
+      camlStdlib__Bytes__is_valid_utf_16be_108_139,
+      camlStdlib__Bytes__get_utf_16le_uchar_110_141,
+      camlStdlib__Bytes__set_utf_16le_uchar_111_143,
+      camlStdlib__Bytes__is_valid_utf_16le_112_145,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:471,0--72]_121_154,
+      camlStdlib__Bytes__get_int8_70_99,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:472,0--78]_120_153,
+      camlStdlib__Bytes__get_uint16_be_72_101,
+      camlStdlib__Bytes__get_uint16_le_71_100,
+      camlStdlib__Bytes__get_int16_ne_73_102,
+      camlStdlib__Bytes__get_int16_be_75_104,
+      camlStdlib__Bytes__get_int16_le_74_103,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:473,0--79]_119_152,
+      camlStdlib__Bytes__get_int32_be_77_106,
+      camlStdlib__Bytes__get_int32_le_76_105,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:474,0--79]_118_151,
+      camlStdlib__Bytes__get_int64_be_79_108,
+      camlStdlib__Bytes__get_int64_le_78_107,
+      camlStdlib__Bytes__set_uint8_88_117,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:479,0--79]_117_150,
+      camlStdlib__Bytes__set_uint16_ne_89_118,
+      camlStdlib__Bytes__set_int16_be_83_112,
+      camlStdlib__Bytes__set_int16_le_82_111,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:480,0--85]_116_149,
+      camlStdlib__Bytes__set_int16_be_83_112,
+      camlStdlib__Bytes__set_int16_le_82_111,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:481,0--87]_115_148,
+      camlStdlib__Bytes__set_int32_be_85_114,
+      camlStdlib__Bytes__set_int32_le_84_113,
+      camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:482,0--87]_114_147,
+      camlStdlib__Bytes__set_int64_be_87_116,
+      camlStdlib__Bytes__set_int64_le_86_115,
+      camlStdlib__Bytes__unsafe_escape_21_55)
+  before Simplify, after the prefix, with its import (178 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <imported 86>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  after Simplify, after the prefix, with its import (3 steps): returns
+                                                                 [0: <fun>;
+                                                                  <fun>;
+                                                                  <imported 86>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>;
+                                                                  <fun>]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after, each with the prefix in front of it
   calls outside code: 0 before, 0 after
-  anything goes, as the run before is undefined
+  the same
   calls outside code once those of known code are inlined: 0
-  nothing to validate, as the term before is undefined
-  the check of regions: not run (the run is undefined for another reason) before, not run (the run is undefined for another reason) after
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too
+  the check of regions: passes before, passes after
   the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

@@ -1,0 +1,38 @@
+(let $camlHidden_in_loop__empty_block_0 = Block 0 () in
+ (let prim/56 = %int_comp.le (1, 2) in
+  let int_lessequal/57 = %tag_imm (prim/56) in
+  (let untagged/58 = %untag_imm (int_lessequal/57) in
+   switch untagged/58
+     | 0 -> k/16 (0)
+     | 1 -> k/20)
+    where k/20 =
+      cont k/17)
+   where k/17 =
+     let prim/43 = %untag_imm (1) in
+     let for_start_naked/44 = %num_conv.[`imm`].[`int64`] (prim/43) in
+     let prim/45 = %untag_imm (2) in
+     let for_stop_naked/46 = %num_conv.[`imm`].[`int64`] (prim/45) in
+     (cont k/18 (for_start_naked/44)
+        where rec k/18 (for_counter_naked/47 : int64) =
+          let prim/48 = %num_conv.[`int64`].[`imm`] (for_counter_naked/47) in
+          let _i/49 = %tag_imm (prim/48) in
+          let Pfield/50 = %block_load.[`1`] ($Hidden.camlHidden) in
+          let Popaque/51 = %opaque (Pfield/50) in
+          let for_next_naked/52 =
+            %int_barith.`int64`.add (for_counter_naked/47, 1L)
+          in
+          let prim/53 =
+            %int_comp.`int64`.le (for_next_naked/52, for_stop_naked/46)
+          in
+          let `int64#_lessequal/54` = %tag_imm (prim/53) in
+          ((let untagged/55 = %untag_imm (`int64#_lessequal/54`) in
+            switch untagged/55
+              | 0 -> k/16 (0)
+              | 1 -> k/19)
+             where k/19 =
+               cont k/18 (for_next_naked/52)))
+   where k/16 (`*match*/42` : imm tagged) =
+     cont k/15 ($camlHidden_in_loop__empty_block_0))
+  where k/15 define_root_symbol (module_block/41) =
+    let $camlHidden_in_loop = Block 0 () in
+    cont done ($camlHidden_in_loop)

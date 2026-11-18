@@ -4488,16 +4488,30 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
    the file says nothing is a symbol of its own, which no name of the compiler
    has: one for each such field of each block, made when the block is bound, and
    declared as an import of which nothing is known ([imports]). A block one of
-   whose such fields is loaded, by either term or by a body that the prefix
-   binds, from something that stands for the block (below) is not bound. Nor is
-   a block with any other field (an approximation given in place of a symbol, a
-   constant that the model has not got), or with a field that is a symbol which
-   its own file says is another symbol or a constant. So the prefix says less
-   than the file and never more: a block that is not bound stays an import, and
-   a field that is given a symbol is one of which the file says nothing. The
-   test of the loads decides only which blocks are bound, which is what a
-   validation can find, and is trusted for nothing: a load that it misses leaves
-   a block bound, with what the file says of it and no more.
+   whose such fields is loaded from something that stands for the block (below),
+   in the body of code of either term, in a body that the prefix binds, or in
+   the handler of a recursive continuation, is not bound. A load of such a field
+   anywhere else does not keep the block from being bound: the load then reads
+   the symbol of the field, which a run may pass on, store and return and may
+   not inspect. Nor is a block bound that has any other field (an approximation
+   given in place of a symbol, a constant that the model has not got), or a
+   field that is a symbol which its own file says is another symbol or a
+   constant. So the prefix says less than the file and never more: a block that
+   is not bound stays an import, and a field that is given a symbol is one of
+   which the file says nothing. The test of the loads decides only which blocks
+   are bound, which is what a validation can find, and is trusted for nothing: a
+   load that it misses leaves a block bound, with what the file says of it and
+   no more.
+
+   Why the test is of those places. The validation reads the term before with
+   what the unit binds its symbols to wherever the load is
+   (FlambdaKnownSymbolsSpec.fold_known_unit), and the term after only outside
+   the bodies of code and the handlers of recursive continuations
+   (FlambdaReadsAfterSpec.load_known_blocks_surely). So of a load in one of
+   those places from a block that is bound, the term before can have the symbol
+   of the field where the term after has the load, and a unit that is validated
+   with the block left an import may then not be. Outside them the term after is
+   read as the term before is, where the load is one that it reads.
 
    A symbol that is a closure, where it is asked for or is a field of a block
    that is bound: the closure, at its function slot, of a set that has this one
@@ -4623,8 +4637,9 @@ type approximation = Code_or_metadata.t Value_approximation.t
 (* The prefix made with some blocks refused: [refused] are the blocks, by the
    numbers of their symbols, that are not to be bound with a symbol for a field
    of which the file says nothing. [found] is given the blocks not refused one
-   of whose such fields a term loads; if there is one, the prefix returned is
-   not to be used ([make_prefix]). *)
+   of whose such fields is loaded in the body of code or in the handler of a
+   recursive continuation; if there is one, the prefix returned is not to be
+   used ([make_prefix]). *)
 let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
     ~(units : (Compilation_unit.t * Digest.t) list)
     ~(loader : Flambda_cmx.loader Lazy.t) ~units_have_tupled_code
@@ -4812,11 +4827,20 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
   let blocks_to_bind = Queue.create () in
   let blocks_seen : (int, unit) Hashtbl.t = Hashtbl.create 16 in
   (* The symbols made for the fields of which the files say nothing, each with
-     the block that it is a field of, and the blocks one of whose such fields a
-     term loads. *)
+     the block that it is a field of, and the blocks one of whose such fields is
+     loaded where the term after is not read with what the unit binds its
+     symbols to: in the body of code, or in the handler of a recursive
+     continuation. [unread] says whether the walk is in such a place. *)
   let hidden = ref [] in
   let hidden_of : (int, int) Hashtbl.t = Hashtbl.create 16 in
   let read_hidden = ref [] in
+  let unread = ref false in
+  let in_unread f =
+    let outside = !unread in
+    unread := true;
+    f ();
+    unread := outside
+  in
   let bind_one_block unit sym tag (fields : approximation list) =
     let n = int_of_positive sym in
     (* Whether a field is given a symbol of its own. *)
@@ -4949,7 +4973,7 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
           | Some (Symbol sym) ->
             (match Hashtbl.find_opt hidden_of (int_of_positive sym) with
             | Some block ->
-              if not (List.mem block !read_hidden)
+              if !unread && not (List.mem block !read_hidden)
               then read_hidden := block :: !read_hidden
             | None -> ());
             ask_symbol sym;
@@ -4972,7 +4996,8 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
       List.iter
         (fun (binding : Model.static_binding) ->
           match binding with
-          | Bind_code (_, Code (_, _, _, _, _, body)) -> in_expr body
+          | Bind_code (_, Code (_, _, _, _, _, body)) ->
+            in_unread (fun () -> in_expr body)
           | Bind_deleted_code _ -> ()
           | Bind_symbol (_, Static_const_set_of_closures (code, slots)) ->
             ask_code code;
@@ -4996,9 +5021,10 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
       in_expr handler;
       in_expr body
     | Let_cont_recursive (handlers, body) ->
-      List.iter
-        (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
-        handlers;
+      in_unread (fun () ->
+          List.iter
+            (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
+            handlers);
       in_expr body
     | Apply ap -> (
       in_simple ap.ap_callee;
@@ -5019,11 +5045,19 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
      against are those bound so far. *)
   let rec settle () =
     changed := false;
+    let bodies_so_far = List.rev !bodies in
     List.iter
       (fun e ->
         Hashtbl.reset stands_for;
+        unread := false;
         in_expr e)
-      (terms @ List.rev !bodies);
+      terms;
+    List.iter
+      (fun body ->
+        Hashtbl.reset stands_for;
+        unread := true;
+        in_expr body)
+      bodies_so_far;
     if !changed then settle ()
   in
   match units with
@@ -5186,8 +5220,9 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
    found added to those refused until none is found. Both terms are gone through
    each time, and one prefix goes in front of both, so a block is refused for
    both or for neither; a block once refused stays so; and in the prefix
-   returned no block that is bound has such a field that a term loads from
-   something that stands for the block. *)
+   returned no block that is bound has such a field that is loaded, in the body
+   of code or in the handler of a recursive continuation, from something that
+   stands for the block. *)
 let make_prefix ~units ~loader ~units_have_tupled_code terms =
   let rec again refused =
     let found = ref [] in

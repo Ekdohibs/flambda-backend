@@ -1697,22 +1697,41 @@ it gave back.
     field, and the one answer that a run gets which the file does
     not give is a value that says nothing.
     One block with such a field is still not bound: a block one of
-    whose fields of that sort is loaded, by either unit or by a body
-    that the prefix binds, from something that the making of the
-    prefix sees to stand for the block; the prefix is made again
+    whose fields of that sort is loaded, in the body of code of
+    either unit, in a body that the prefix binds or in the handler
+    of a recursive continuation, from something that the making of
+    the prefix sees to stand for the block; the prefix is made again
     without it until no such block is left, and one prefix goes in
-    front of both units. That test decides only which blocks are
-    bound, and is trusted for nothing: binding fewer blocks is the
-    prefix saying less, and a load that the test misses leaves a
-    block bound with what the file says of it and no more. Which
-    blocks are bound can change whether a unit is validated, one
-    way or the other; a load that is missed adds no fact to what
-    the file says, and nothing is claimed of the linked program on
-    the strength of the test. It is there because the term
-    after is not read with what the unit binds its symbols to inside
-    code: the normalisation of the term before reads the load as the
-    symbol of the field, the term after keeps the load, and the two
-    are then not the same.
+    front of both units. A load of such a field anywhere else leaves
+    the block bound, and reads the symbol of the field. That test
+    decides only which blocks are bound, and is trusted for nothing:
+    binding fewer blocks is the prefix saying less, and a load that
+    the test misses leaves a block bound with what the file says of
+    it and no more. Which blocks are bound can change whether a unit
+    is validated, one way or the other; a load that is missed adds
+    no fact to what the file says, and nothing is claimed of the
+    linked program on the strength of the test. It is there because
+    the term after is not read with what the unit binds its symbols
+    to inside code or inside the handler of a recursive
+    continuation: the normalisation of the term before can read a
+    load there as the symbol of the field where the term after keeps
+    the load, and the two are then not the same. Outside those
+    places the term after is read as the term before is, where the
+    load is one that it reads
+    (`FlambdaReadsAfterSpec.load_known_blocks_surely`), and the test
+    does not look there.
+    What is trusted of a block that is bound and one of whose fields
+    of that sort a unit loads is what was trusted of one whose load
+    the test missed, and no more: that the field holds one value of
+    kind `Value`, which the other unit put there before this unit
+    runs and which is the same at every load; and that a run of the
+    model which only carries the symbol of the field says what the
+    program does with that value. No statement is of an import of
+    that class with a value in its place. A run that inspects the
+    symbol is undefined, and of a unit whose run before Simplify is
+    undefined no line of the tool is a validation: the tool prints
+    "nothing to validate", or prints under what the validator
+    answered that the validation says nothing of the unit.
     A block with a field that is an approximation given in place of
     a symbol, or a constant that the model has not got, is not
     bound. Neither is a block bound that has a field which is a
@@ -1720,11 +1739,23 @@ it gave back.
     Simplify puts that symbol or constant where the load was, and a
     symbol of which nothing is known in the field would make the two
     runs differ where Simplify is right.
-    `pairs/hidden_known_read.ml` is a unit that the rule turns,
-    `pairs/hidden_read.ml` one whose block stays unbound, and
-    `pairs/partly_tested.ml` one in which a function inspects such a
-    field through its argument, which the test does not see as a
-    load of the block: the block is bound and the run has no value.
+    `pairs/hidden_known_read.ml` is a unit that the rule turns.
+    `pairs/hidden_included.ml`, `pairs/hidden_kept.ml` and
+    `pairs/several_included.ml` load such a field outside code and
+    pass it on: both runs return the symbol of the field, and the
+    units are validated with that symbol an import left.
+    `pairs/hidden_in_function.ml` and `pairs/hidden_in_loop.ml` are
+    units whose block stays unbound, for a load in the body of code
+    and for one in the handler of a recursive continuation. The run
+    before Simplify is undefined of each unit whose run inspects
+    such a field: `pairs/hidden_read.ml`, `pairs/hidden_tested.ml`,
+    `pairs/hidden_same.ml`, `pairs/hidden_joined.ml`,
+    `pairs/several_compared.ml`, `pairs/several_loaded.ml`,
+    `pairs/several_called.ml` and `pairs/cycle_read.ml`, which load
+    it outside code, and `pairs/partly_tested.ml`, in which a
+    function inspects such a field through its argument, which the
+    test does not see as a load of the block: the block is bound
+    and the run has no value.
     Measured outside this tree, on units that use another unit, at
     the default settings and at `-O3` (190 runs): seven runs come to
     "validated with its imports, given the .cmx", two of them from a
@@ -1732,7 +1763,21 @@ it gave back.
     to "DIFFERENT"; and no expected file of this tree moves. Every
     field that is given a symbol there is one of which the file says
     nothing; the measure has no field of the other sorts, so nothing
-    is known from it of how often a block stays unbound for them;
+    is known from it of how often a block stays unbound for them.
+    That measure was of the test as it was first, which looked at a
+    load wherever it was. With the test as it is now, of the bodies
+    of code and the handlers of recursive continuations only: two
+    expected files of this tree move, `pairs/hidden_read.expected`
+    and `pairs/cycle_read.expected`, each to a prefix that binds the
+    block and a run before that is undefined as it was; and,
+    measured outside this tree on the 79 units of the standard
+    library, each compiled as the build of the library compiles it
+    and with `-O3` besides (158 runs of the compiler's own two
+    terms), one unit moves, at both settings: `BytesLabels`
+    (`stdlib/bytesLabels.ml`, which includes `Bytes`, one of whose
+    fields is computed when `Bytes` is initialised), from a run
+    before that is undefined to "validated with its imports, given
+    the .cmx"; the 156 other outputs are the same bytes;
   - a symbol of which the file says nothing stays an import;
   - a symbol that is asked for (one that either unit names, that a
     body which the prefix binds names, or that is at a field which
