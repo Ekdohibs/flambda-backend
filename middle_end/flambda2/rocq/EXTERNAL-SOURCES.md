@@ -381,11 +381,27 @@ Arith/PeanoNat.v beginning "From Stdlib Require Import" (C0's row). Readings of 
 generated files already in this repository are outside this inventory's scope. The licence
 of the library is as said above.
 
-**[R2] The other tools, run and not read:** OCaml 5.4.1, dune 3.24.2, menhir 20231231,
-ocamlformat 0.29.0, Python 3.6.8, git, GNU Make, perl, bash, the GNU coreutils, gcc and ld.
-No manual or source of any is recorded as read. Python's own integers and its struct and
-fractions modules gave the expected answers of some tests (`requests/C1-int-ops.py`; and
-test programs of X5 that are not in the tree).
+**[R2] The other tools, run and not read:** OCaml 5.4.1, menhir 20231231, ocamlformat
+0.29.0, Python 3.6.8, git, GNU Make, perl, bash, the GNU coreutils, gcc and ld. No manual or
+source of any is recorded as read. dune 3.24.2 is run with them; parts of its source were
+read, and are under [R3]. Python's own integers and its struct and fractions modules gave
+the expected answers of some tests (`requests/C1-int-ops.py`; and test programs of X5 that
+are not in the tree).
+
+**[R3] dune 3.24.2**, its source as opam keeps it in the switch that builds Rocq and the
+tools (.opam-switch/sources/dune.3.24.2). Licence: MIT; its LICENSE.md has "The MIT License"
+and "Copyright (c) 2016 Jane Street Group, LLC <opensource@janestreet.com>" (read whole by
+P1 and by R5 on 18 November). The name of that directory is the evidence of the version.
+Which commit of dune's repository the directory is, whether it is as opam unpacked it, and
+whether the dune that is run was built from it, are not established: opam's record of the
+package names an archive of the release and a commit, and neither was fetched or compared.
+What was read of it:
+
+| Reader, when | What was read | What for; bears on | Owed; taken |
+|---|---|---|---|
+| P1, 18 November: the source between 20:20 and 20:22; its licence at 20:57; opam's record between 20:58 and 21:00 | text displayed, by ranges of lines and by the lines that searches printed, from five files, none of them whole: src/dune_trace/event.ml (23,845 bytes, sha256 6fefff3cd4532b13259f7b6eb51e2db0025a7a81b5f25e36c90b51f4ff6c3519) lines 160 to 180, 226 to 246 and 330 to 490, and twenty single lines; src/dune_trace/category.ml (2,166 bytes, sha256 13dbde8f18619dcc77c62bc558378e49eddeb5dcbb7aae8dcd8c09de1d13c420) five lines; src/dune_scheduler/scheduler.ml (20,252 bytes, sha256 e837efa429bf18393f406d8f6ec5d34e7c64b41363862a2e74f1a455443f0e47) lines 126 to 154; src/dune_scheduler/process_watcher.ml (6,662 bytes, sha256 642fc3efa30fcf0ccb772e70586c542f4af14c7fa12cf6c83704b076f2ed5c82) lines 155 to 170; src/dune_engine/process.ml (36,512 bytes, sha256 4ac47e0a633b15eea3b7c295c1064604129a7508d14ac7b0d073bdb827289b99) ten single lines. Searched by a tool, with nothing displayed but such lines and the names of two files: every file named *.ml of the directory, for those that have the word signal_received (src/dune_trace/event.ml and src/dune_scheduler/signal_watcher.ml were named; the second was not opened); and the sources under src and bin, for the callers of the functions that write the events. At 20:57 LICENSE.md (1,111 bytes, sha256 7a9971a9f7b19a18568a7a2758573a989830947969506f5a59b657bbfc17abca) whole. For its account, lines 75 to 84 of opam's record of the package (.opam-switch/packages/dune.3.24.2/opam, sha256 50414c51712c16340bc28f07fb385472c08a1f8430db0fa9be16ade0a2a7f4b0): the addresses of an archive of the release and of dune's repository, and a field for a commit, none of them verified or followed. Not of the source, and before it: the trace that dune writes of its own invocations, read as data; and the strings of the program dune, searched for eight names of fields | version 11 of the scripts of a helper of a line of the stage of the test tool: the script that reads dune's trace of each build of the helper and lists the programs that dune started; for it, the kinds of event of the category of processes and the names of the fields of a start and of a finish. Bears on those scripts, which are not in the tree, and through them on the record of that line; no implementation of the compiler, of the model or of a proof is derived from this reading | copied, as literal strings, into those scripts, their generators, their controls and their records, none of which is in the tree: the names of eight kinds of event (start, finish, signal_received, unknown_process, signal_sent, process-cleanup-start, process-cleanup-sigkill, process-cleanup-finish), of seventeen fields (process_args, pid, categories, queued, prog, dir, target_files, target_dirs, name, timeout, exit, error, stdout, stderr, rusage, signal, end_time) and, in a comment, of two functions (process_start, process); with them the facts of when each kind is written. Nothing went into the repository but this list. By P1's account no code of dune was copied or adapted: the reader is Python whose logic was written before the source was opened and changed after it only in its tests of the kind and of the names of fields; that no line of 20 characters or more, without its leading and trailing spaces, of the five files is a substring of any of its twenty files is a bounded comparison and not a proof |
+| R6, 18 November, between 20:43 and 20:53 | src/dune_trace/event.ml, the file of P1's row with the same sha256, hashed whole; text displayed: lines 1 to 110, 155 to 190, 225 to 247 and 305 to 493, and the results of a search of the file for the writers of process events; not its 905 lines whole. No other file of dune's source, not its LICENSE.md, no manual and no page of the web | its review of the source of those scripts of P1, version 11: the kinds of event, the names of their fields and the framing of their times, against the scripts' reader of dune's trace. Its own checker of what a run leaves does not read dune's trace and was not derived from this source. Bears on that review and through it on the record of that line; no implementation of the compiler, of the model or of a proof is derived from this reading | no code and no block of prose of dune copied or adapted by R6 into the repository, the scripts or its checker; what it took is the format. The identity of the file, the ranges and those facts stand in its review, which is not in the tree |
+| R5, 18 November, about 20:55 | the three files below hashed whole; text displayed, by ranges of lines, not the two source files whole: src/dune_trace/event.ml (as above) lines 1 to 105, 115 to 175, 226 to 245 and 310 to 490; src/dune_engine/process.ml (as above) lines 810 to 865 and 945 to 1010. Two searches, of those two files and of the first alone, for names of process events and for the resource-usage field and its helper, which displayed the matching lines. LICENSE.md (as above) whole | its independent review of the source of the same scripts for the same line: to compare the forms of process events that the scripts' reader of dune's trace supports and refuses with the event schema, and to look at the callers that emit the start and the finish of a process. Bears on that review and on this entry; no implementation of the compiler, of the model or of a proof is derived from this reading | no source implementation copied or adapted into the repository by R5. Names of the schema, paths, hashes and ranges are reported in its review and account, which are not in the tree; this entry quotes in its head the licence line and the copyright line of the notice, not the source's implementation |
 
 ## 6. Web searches
 
@@ -418,12 +434,16 @@ test programs of X5 that are not in the tree).
 
 The accounts supplied identify no paper, book, web page, tracker page or other project's
 source read, no web search made, and no source file of upstream OCaml read, beyond the
-entries above, for: C0, C1 with C5, C2, C3, C4, N3, R1, R2, R4, R5, T2, T4, T6 (X3), V2, V3,
-V4, X1, X2, X4; and the same for the helper of C4, the two of R2 and the three of R4, by their
+entries above, for: C0, C1 with C5, C2, C3, C4, N3, R1, R2, R4, T2, T4, T6 (X3), V2, V3, V4,
+X1, X2, X4; and the same for the helper of C4, the two of R2 and the three of R4, by their
 final reports and not by lists of their own (point 7 above). These sessions used Rocq and
 the other tools as installed (section 5). No account says more than "none by my records":
 each has its own section on what its records cannot settle, and point 1 above stands for
 all of them.
+
+R5 was in that list until 18 November. R5's confirmed technical reading of the installed
+Dune 3.24.2 source package on 18 November is recorded under [R3]; the earlier qualifications
+about unavailable history remain unchanged.
 
 ## Appendix. The searches of the OxCaml tracker, 16 November
 
