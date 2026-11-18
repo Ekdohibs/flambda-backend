@@ -1,0 +1,1138 @@
+stdlib__StringLabels.fl:
+  given the .cmx of Stdlib, Stdlib__Bytes, Stdlib__String, a prefix of 146 static bindings:
+    camlStdlib__String__get_int64_le_62_142_code deleted
+    camlStdlib__String__get_int64_be_63_143_code deleted
+    camlStdlib__String__get_int32_le_60_140_code deleted
+    camlStdlib__String__get_int32_be_61_141_code deleted
+    camlStdlib__String__hash_43_121_code deleted
+    camlStdlib__String__get_int16_le_58_138_code deleted
+    camlStdlib__String__get_int16_be_59_139_code deleted
+    camlStdlib__String__get_int16_ne_57_137_code deleted
+    camlStdlib__String__get_uint16_le_55_135_code deleted
+    camlStdlib__String__get_uint16_be_56_136_code deleted
+    camlStdlib__String__get_int8_54_134_code deleted
+    camlStdlib__String__edit_distance_70_150_code deleted
+    camlStdlib__String__is_valid_utf_16le_53_133_code deleted
+    camlStdlib__String__is_valid_utf_16be_51_131_code deleted
+    camlStdlib__String__is_valid_utf_8_49_129_code deleted
+    camlStdlib__String__uncapitalize_ascii_38_116_code deleted
+    camlStdlib__String__capitalize_ascii_37_115_code deleted
+    camlStdlib__String__lowercase_ascii_36_114_code deleted
+    camlStdlib__String__uppercase_ascii_35_113_code deleted
+    camlStdlib__String__trim_18_96_code deleted
+    camlStdlib__String__exists_15_93_code deleted
+    camlStdlib__String__for_all_16_94_code deleted
+    camlStdlib__String__fold_right_13_91_code deleted
+    camlStdlib__String__fold_left_14_92_code deleted
+    camlStdlib__String__mapi_12_90_code deleted
+    camlStdlib__String__map_11_89_code deleted
+    camlStdlib__String__split_on_char_44_122_code deleted
+    camlStdlib__String__sub_4_82_code deleted
+    camlStdlib__^_6_99_code deleted
+    camlStdlib__String__concat_8_86_code deleted
+    camlStdlib__Bytes__blit_string_11_134_code deleted
+    camlStdlib__Bytes__of_string_4_127_code deleted
+    camlStdlib__Bytes__to_string_3_126_code deleted
+    camlStdlib__String__init_3_81_code deleted
+    camlStdlib__String__make_2_80_code deleted
+    camlStdlib__Bytes__get_utf_16le_uchar_110_224_code deleted
+    camlStdlib__Bytes__get_utf_16be_uchar_106_220_code deleted
+    camlStdlib__Bytes__get_utf_8_uchar_99_216_code deleted
+    camlStdlib__Bytes__of_seq_65_184_code deleted
+    camlStdlib__Bytes__aux_62_183_code deleted
+    camlStdlib__Bytes__aux_58_181_code deleted
+    camlStdlib__Bytes__unsafe_escape_21_144_code deleted
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_76_code stub (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 () =
+        cont k2 pop(regular k2) (camlStdlib__String__block_9)
+      in
+      let_cont k4 (v4) =
+        let v5 = v4 in
+        let v6 = String_load 64 (v1, v5) in
+        let v7 = Box_number (v6) in
+        cont k1 (v7)
+      in
+      let v8 = String_length (v1) in
+      let v9 = Num_conv imm nativeint (v8) in
+      let v10 = Int_arith nativeint sub (v9, <const>) in
+      let v11 = Int_shift nativeint asr (v10, #63) in
+      let v12 = Int_arith nativeint not (v11) in
+      let v13 = Int_arith nativeint and (v12, v10) in
+      let v14 = Num_conv tagged_imm nativeint (v2) in
+      let v15 = Int_comp nativeint unsigned_lt (v14, v13) in
+      switch v15
+        | 0 -> cont k3 ()
+        | 1 -> cont k4 (v14)
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_77_code stub (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 () =
+        cont k2 pop(regular k2) (camlStdlib__String__block_9)
+      in
+      let_cont k4 (v4) =
+        let v5 = v4 in
+        let v6 = String_load 32 (v1, v5) in
+        let v7 = Box_number (v6) in
+        cont k1 (v7)
+      in
+      let v8 = String_length (v1) in
+      let v9 = Num_conv imm nativeint (v8) in
+      let v10 = Int_arith nativeint sub (v9, <const>) in
+      let v11 = Int_shift nativeint asr (v10, #63) in
+      let v12 = Int_arith nativeint not (v11) in
+      let v13 = Int_arith nativeint and (v12, v10) in
+      let v14 = Num_conv tagged_imm nativeint (v2) in
+      let v15 = Int_comp nativeint unsigned_lt (v14, v13) in
+      switch v15
+        | 0 -> cont k3 ()
+        | 1 -> cont k4 (v14)
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78_78_code stub (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 () =
+        cont k2 pop(regular k2) (camlStdlib__String__block_9)
+      in
+      let_cont k4 (v4) =
+        let v5 = v4 in
+        let v6 = String_load 16 (v1, v5) in
+        let v7 = Tag_immediate (v6) in
+        cont k1 (v7)
+      in
+      let v8 = String_length (v1) in
+      let v9 = Num_conv imm nativeint (v8) in
+      let v10 = Int_arith nativeint sub (v9, <const>) in
+      let v11 = Int_shift nativeint asr (v10, #63) in
+      let v12 = Int_arith nativeint not (v11) in
+      let v13 = Int_arith nativeint and (v12, v10) in
+      let v14 = Num_conv tagged_imm nativeint (v2) in
+      let v15 = Int_comp nativeint unsigned_lt (v14, v13) in
+      switch v15
+        | 0 -> cont k3 ()
+        | 1 -> cont k4 (v14)
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79_79_code stub (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 () =
+        cont k2 pop(regular k2) (camlStdlib__String__block_9)
+      in
+      let_cont k4 (v4) =
+        let v5 = v4 in
+        let v6 = String_load 8 (v1, v5) in
+        let v7 = Tag_immediate (v6) in
+        cont k1 (v7)
+      in
+      let v8 = String_length (v1) in
+      let v9 = Num_conv imm nativeint (v8) in
+      let v10 = Num_conv tagged_imm nativeint (v2) in
+      let v11 = Int_comp nativeint unsigned_lt (v10, v9) in
+      switch v11
+        | 0 -> cont k3 ()
+        | 1 -> cont k4 (v10)
+    camlStdlib__String__spellcheck_72_75_code stub (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 =
+        v4.(Stdlib__String.spellcheck_72).Stdlib__String.default_max_dist_81 in
+      let v6 =
+        v4.(Stdlib__String.spellcheck_72).Stdlib__String.spellcheck_inner_82 in
+      let_cont k3 (v7) =
+        apply known_arity v6 (v7, v2, v3) -> k1 * k2
+      in
+      let v8 = Is_int (v1) in
+      let_cont k4 () =
+        let v9 = Block_load 0 (v1) in
+        cont k3 (v9)
+      in
+      switch v8
+        | 0 -> cont k4 ()
+        | 1 -> cont k3 (v5)
+    camlStdlib__String__get_utf_16le_uchar_52_132_code (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(camlStdlib__Bytes__get_utf_16le_uchar_110_224_code) camlStdlib__Bytes__get_utf_16le_uchar_110_141
+        (v1, v2) -> k1 * k2
+    camlStdlib__String__get_utf_16be_uchar_50_130_code (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(camlStdlib__Bytes__get_utf_16be_uchar_106_220_code) camlStdlib__Bytes__get_utf_16be_uchar_106_135
+        (v1, v2) -> k1 * k2
+    camlStdlib__String__get_utf_8_uchar_48_128_code (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(camlStdlib__Bytes__get_utf_8_uchar_99_216_code) camlStdlib__Bytes__get_utf_8_uchar_99_128
+        (v1, v2) -> k1 * k2
+    camlStdlib__String__of_seq_47_127_code (v1) v2 -> k1 * k2 =
+      apply direct(camlStdlib__Bytes__of_seq_65_184_code) camlStdlib__Bytes__of_seq_65_95
+        (v1) -> k1 * k2
+    camlStdlib__String__to_seqi_46_125_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Bytes.aux_62 of
+          {Stdlib__Bytes.aux_62 = camlStdlib__Bytes__aux_62_183_code}
+          {Stdlib__Bytes.s_47 = v1} in
+      let v4 =
+        closure Stdlib__Bytes.partial_aux_64 of
+          {Stdlib__Bytes.partial_aux_64 = camlStdlib__Bytes__partial_aux_64_64_code}
+          {Stdlib__Bytes.aux_50 = v3} in
+      cont k1 (v4)
+    camlStdlib__String__to_seq_45_123_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Bytes.aux_58 of
+          {Stdlib__Bytes.aux_58 = camlStdlib__Bytes__aux_58_181_code}
+          {Stdlib__Bytes.s_43 = v1} in
+      let v4 =
+        closure Stdlib__Bytes.partial_aux_60 of
+          {Stdlib__Bytes.partial_aux_60 = camlStdlib__Bytes__partial_aux_60_60_code}
+          {Stdlib__Bytes.aux_46 = v3} in
+      cont k1 (v4)
+    camlStdlib__String__rindex_opt_30_108_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = Int_arith tagged_imm sub (v5, 1) in
+      let_cont rec
+        k3 (v7) =
+        let v8 = Int_comp tagged_imm lt (v7, 0) in
+        let_cont k4 () =
+          let v9 = Num_conv tagged_imm nativeint (v7) in
+          let v10 = String_load 8 (v1, v9) in
+          let v11 = Tag_immediate (v10) in
+          let v12 = Phys_equal eq (v11, v2) in
+          let_cont k5 () =
+            let v13 = Int_arith tagged_imm sub (v7, 1) in
+            cont k3 (v13)
+          in
+          let_cont k6 () =
+            let v14 = Make_block 0 (v7) in
+            cont k1 (v14)
+          in
+          switch v12
+            | 0 -> cont k5 ()
+            | 1 -> cont k6 ()
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (0)
+      in
+      cont k3 (v6)
+    camlStdlib__String__rindex_27_105_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = Int_arith tagged_imm sub (v5, 1) in
+      let_cont rec
+        k3 (v7) =
+        let v8 = Int_comp tagged_imm lt (v7, 0) in
+        let_cont k4 () =
+          let v9 = Num_conv tagged_imm nativeint (v7) in
+          let v10 = String_load 8 (v1, v9) in
+          let v11 = Tag_immediate (v10) in
+          let v12 = Phys_equal eq (v11, v2) in
+          let_cont k5 () =
+            let v13 = Int_arith tagged_imm sub (v7, 1) in
+            cont k3 (v13)
+          in
+          switch v12
+            | 0 -> cont k5 ()
+            | 1 -> cont k1 (v7)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2) (caml_exn_Not_found)
+      in
+      cont k3 (v6)
+    camlStdlib__String__index_opt_23_101_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let_cont rec
+        k3 (v6) =
+        let v7 = Int_comp tagged_imm ge (v6, v5) in
+        let_cont k4 () =
+          let v8 = Num_conv tagged_imm nativeint (v6) in
+          let v9 = String_load 8 (v1, v8) in
+          let v10 = Tag_immediate (v9) in
+          let v11 = Phys_equal eq (v10, v2) in
+          let_cont k5 () =
+            let v12 = Int_arith tagged_imm add (v6, 1) in
+            cont k3 (v12)
+          in
+          let_cont k6 () =
+            let v13 = Make_block 0 (v6) in
+            cont k1 (v13)
+          in
+          switch v11
+            | 0 -> cont k5 ()
+            | 1 -> cont k6 ()
+        in
+        switch v7
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (0)
+      in
+      cont k3 (0)
+    camlStdlib__String__index_21_99_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let_cont rec
+        k3 (v6) =
+        let v7 = Int_comp tagged_imm ge (v6, v5) in
+        let_cont k4 () =
+          let v8 = Num_conv tagged_imm nativeint (v6) in
+          let v9 = String_load 8 (v1, v8) in
+          let v10 = Tag_immediate (v9) in
+          let v11 = Phys_equal eq (v10, v2) in
+          let_cont k5 () =
+            let v12 = Int_arith tagged_imm add (v6, 1) in
+            cont k3 (v12)
+          in
+          switch v11
+            | 0 -> cont k5 ()
+            | 1 -> cont k1 (v6)
+        in
+        switch v7
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2) (caml_exn_Not_found)
+      in
+      cont k3 (0)
+    camlStdlib__String__rindex_from_opt_31_109_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = Int_comp tagged_imm lt (v2, -1) in
+      let_cont k3 () =
+        let v6 = String_length (v1) in
+        let v7 = Tag_immediate (v6) in
+        let v8 = Int_comp tagged_imm ge (v2, v7) in
+        let_cont k4 () =
+          let_cont rec
+            k5 (v9) =
+            let v10 = Int_comp tagged_imm lt (v9, 0) in
+            let_cont k6 () =
+              let v11 = Num_conv tagged_imm nativeint (v9) in
+              let v12 = String_load 8 (v1, v11) in
+              let v13 = Tag_immediate (v12) in
+              let v14 = Phys_equal eq (v13, v3) in
+              let_cont k7 () =
+                let v15 = Int_arith tagged_imm sub (v9, 1) in
+                cont k5 (v15)
+              in
+              let_cont k8 () =
+                let v16 = Make_block 0 (v9) in
+                cont k1 (v16)
+              in
+              switch v14
+                | 0 -> cont k7 ()
+                | 1 -> cont k8 ()
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (0)
+          in
+          cont k5 (v2)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock3110_46)
+      in
+      switch v5
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock3110_46)
+    camlStdlib__String__rindex_from_28_106_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = Int_comp tagged_imm lt (v2, -1) in
+      let_cont k3 () =
+        let v6 = String_length (v1) in
+        let v7 = Tag_immediate (v6) in
+        let v8 = Int_comp tagged_imm ge (v2, v7) in
+        let_cont k4 () =
+          let_cont rec
+            k5 (v9) =
+            let v10 = Int_comp tagged_imm lt (v9, 0) in
+            let_cont k6 () =
+              let v11 = Num_conv tagged_imm nativeint (v9) in
+              let v12 = String_load 8 (v1, v11) in
+              let v13 = Tag_immediate (v12) in
+              let v14 = Phys_equal eq (v13, v3) in
+              let_cont k7 () =
+                let v15 = Int_arith tagged_imm sub (v9, 1) in
+                cont k5 (v15)
+              in
+              switch v14
+                | 0 -> cont k7 ()
+                | 1 -> cont k1 (v9)
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k2 pop(reraise k2) (caml_exn_Not_found)
+          in
+          cont k5 (v2)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock2992_42)
+      in
+      switch v5
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock2992_42)
+    camlStdlib__String__index_from_opt_25_103_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = String_length (v1) in
+      let v6 = Tag_immediate (v5) in
+      let v7 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v8 = Int_comp tagged_imm gt (v2, v6) in
+        let_cont k4 () =
+          let_cont rec
+            k5 (v9) =
+            let v10 = Int_comp tagged_imm ge (v9, v6) in
+            let_cont k6 () =
+              let v11 = Num_conv tagged_imm nativeint (v9) in
+              let v12 = String_load 8 (v1, v11) in
+              let v13 = Tag_immediate (v12) in
+              let v14 = Phys_equal eq (v13, v3) in
+              let_cont k7 () =
+                let v15 = Int_arith tagged_imm add (v9, 1) in
+                cont k5 (v15)
+              in
+              let_cont k8 () =
+                let v16 = Make_block 0 (v9) in
+                cont k1 (v16)
+              in
+              switch v14
+                | 0 -> cont k7 ()
+                | 1 -> cont k8 ()
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (0)
+          in
+          cont k5 (v2)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock2876_38)
+      in
+      switch v7
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock2876_38)
+    camlStdlib__String__index_from_24_102_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = String_length (v1) in
+      let v6 = Tag_immediate (v5) in
+      let v7 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v8 = Int_comp tagged_imm gt (v2, v6) in
+        let_cont k4 () =
+          let_cont rec
+            k5 (v9) =
+            let v10 = Int_comp tagged_imm ge (v9, v6) in
+            let_cont k6 () =
+              let v11 = Num_conv tagged_imm nativeint (v9) in
+              let v12 = String_load 8 (v1, v11) in
+              let v13 = Tag_immediate (v12) in
+              let v14 = Phys_equal eq (v13, v3) in
+              let_cont k7 () =
+                let v15 = Int_arith tagged_imm add (v9, 1) in
+                cont k5 (v15)
+              in
+              switch v14
+                | 0 -> cont k7 ()
+                | 1 -> cont k1 (v9)
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k2 pop(reraise k2) (caml_exn_Not_found)
+          in
+          cont k5 (v2)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock2819_36)
+      in
+      switch v7
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock2819_36)
+    camlStdlib__String__iteri_10_88_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v2) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = Int_arith tagged_imm sub (v5, 1) in
+      let v7 = Int_comp tagged_imm le (0, v6) in
+      let_cont k3 () =
+        let v8 = Untag_immediate (v6) in
+        let v9 = Num_conv imm int64 (v8) in
+        let_cont rec
+          k4 (v10) =
+          let v11 = Num_conv int64 imm (v10) in
+          let v12 = Tag_immediate (v11) in
+          let_cont k5 () =
+            let v13 = Int_arith int64 add (v10, <const>) in
+            let v14 = Int_comp int64 le (v13, v9) in
+            switch v14
+              | 0 -> cont k1 (0)
+              | 1 -> cont k4 (v13)
+          in
+          let v15 = Num_conv tagged_imm nativeint (v12) in
+          let v16 = String_load 8 (v2, v15) in
+          let v17 = Tag_immediate (v16) in
+          let_cont k6 (v18) =
+            cont k5 ()
+          in
+          apply v1 (v12, v17) -> k6 * k2
+        in
+        cont k4 (<const>)
+      in
+      switch v7
+        | 0 -> cont k1 (0)
+        | 1 -> cont k3 ()
+    camlStdlib__String__iter_9_87_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v2) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = Int_arith tagged_imm sub (v5, 1) in
+      let v7 = Int_comp tagged_imm le (0, v6) in
+      let_cont k3 () =
+        let v8 = Untag_immediate (v6) in
+        let v9 = Num_conv imm int64 (v8) in
+        let_cont rec
+          k4 (v10) =
+          let v11 = Num_conv int64 imm (v10) in
+          let v12 = Tag_immediate (v11) in
+          let_cont k5 () =
+            let v13 = Int_arith int64 add (v10, <const>) in
+            let v14 = Int_comp int64 le (v13, v9) in
+            switch v14
+              | 0 -> cont k1 (0)
+              | 1 -> cont k4 (v13)
+          in
+          let v15 = Num_conv tagged_imm nativeint (v12) in
+          let v16 = String_load 8 (v2, v15) in
+          let v17 = Tag_immediate (v16) in
+          let_cont k6 (v18) =
+            cont k5 ()
+          in
+          apply v1 (v17) -> k6 * k2
+        in
+        cont k4 (<const>)
+      in
+      switch v7
+        | 0 -> cont k1 (0)
+        | 1 -> cont k3 ()
+    camlStdlib__String__escaped_19_97_code (v1) v2 -> k1 * k2 =
+      let_cont k3 (v3) =
+        let v4 = Phys_equal eq (v1, v3) in
+        switch v4
+          | 0 -> cont k1 (v3)
+          | 1 -> cont k1 (v1)
+      in
+      apply direct(camlStdlib__Bytes__unsafe_escape_21_144_code) camlStdlib__Bytes__unsafe_escape_21_55
+        (v1) -> k3 * k2
+    camlStdlib__String__contains_33_111_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = Int_comp tagged_imm gt (0, v5) in
+      let_cont k3 () =
+        let_cont k4 exn (v7) =
+          let v8 = Opaque_identity (0) in
+          let v9 = 0 in
+          cont k1 (0)
+        in
+        let_cont k5 () =
+          let_cont rec
+            k6 (v10) =
+            let v11 = Int_comp tagged_imm ge (v10, v5) in
+            let_cont k7 () =
+              let v12 = Num_conv tagged_imm nativeint (v10) in
+              let v13 = String_load 8 (v1, v12) in
+              let v14 = Tag_immediate (v13) in
+              let v15 = Phys_equal eq (v14, v2) in
+              let_cont k8 () =
+                let v16 = Int_arith tagged_imm add (v10, 1) in
+                cont k6 (v16)
+              in
+              switch v15
+                | 0 -> cont k8 ()
+                | 1 -> cont k1 pop(k4) (1)
+            in
+            switch v11
+              | 0 -> cont k7 ()
+              | 1 -> cont k4 pop(reraise k4) (caml_exn_Not_found)
+          in
+          cont k6 (0)
+        in
+        cont k5 push(k4) ()
+      in
+      switch v6
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock3179_48)
+    camlStdlib__String__rcontains_from_34_112_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v6 = String_length (v1) in
+        let v7 = Tag_immediate (v6) in
+        let v8 = Int_comp tagged_imm ge (v2, v7) in
+        let_cont k4 () =
+          let_cont k5 exn (v9) =
+            let v10 = Opaque_identity (0) in
+            let v11 = 0 in
+            cont k1 (0)
+          in
+          let_cont k6 () =
+            let_cont rec
+              k7 (v12) =
+              let v13 = Int_comp tagged_imm lt (v12, 0) in
+              let_cont k8 () =
+                let v14 = Num_conv tagged_imm nativeint (v12) in
+                let v15 = String_load 8 (v1, v14) in
+                let v16 = Tag_immediate (v15) in
+                let v17 = Phys_equal eq (v16, v3) in
+                let_cont k9 () =
+                  let v18 = Int_arith tagged_imm sub (v12, 1) in
+                  cont k7 (v18)
+                in
+                switch v17
+                  | 0 -> cont k9 ()
+                  | 1 -> cont k1 pop(k5) (1)
+              in
+              switch v13
+                | 0 -> cont k8 ()
+                | 1 -> cont k5 pop(reraise k5) (caml_exn_Not_found)
+            in
+            cont k7 (v2)
+          in
+          cont k6 push(k5) ()
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock3283_51)
+      in
+      switch v5
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock3283_51)
+    camlStdlib__String__contains_from_32_110_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = String_length (v1) in
+      let v6 = Tag_immediate (v5) in
+      let v7 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v8 = Int_comp tagged_imm gt (v2, v6) in
+        let_cont k4 () =
+          let_cont k5 exn (v9) =
+            let v10 = Opaque_identity (0) in
+            let v11 = 0 in
+            cont k1 (0)
+          in
+          let_cont k6 () =
+            let_cont rec
+              k7 (v12) =
+              let v13 = Int_comp tagged_imm ge (v12, v6) in
+              let_cont k8 () =
+                let v14 = Num_conv tagged_imm nativeint (v12) in
+                let v15 = String_load 8 (v1, v14) in
+                let v16 = Tag_immediate (v15) in
+                let v17 = Phys_equal eq (v16, v3) in
+                let_cont k9 () =
+                  let v18 = Int_arith tagged_imm add (v12, 1) in
+                  cont k7 (v18)
+                in
+                switch v17
+                  | 0 -> cont k9 ()
+                  | 1 -> cont k1 pop(k5) (1)
+              in
+              switch v13
+                | 0 -> cont k8 ()
+                | 1 -> cont k5 pop(reraise k5) (caml_exn_Not_found)
+            in
+            cont k7 (v2)
+          in
+          cont k6 push(k5) ()
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__String__Pmakeblock3179_48)
+      in
+      switch v7
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2)
+                 (camlStdlib__String__Pmakeblock3179_48)
+    camlStdlib__String__ends_with_41_119_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v2) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = String_length (v1) in
+      let v7 = Tag_immediate (v6) in
+      let v8 = Int_arith tagged_imm sub (v5, v7) in
+      let v9 = Int_comp tagged_imm ge (v8, 0) in
+      let_cont k3 () =
+        let_cont rec
+          k4 (v10) =
+          let v11 = Phys_equal eq (v10, v7) in
+          let_cont k5 () =
+            let v12 = Num_conv tagged_imm nativeint (v10) in
+            let v13 = String_load 8 (v1, v12) in
+            let v14 = Tag_immediate (v13) in
+            let v15 = Int_arith tagged_imm add (v8, v10) in
+            let v16 = Num_conv tagged_imm nativeint (v15) in
+            let v17 = String_load 8 (v2, v16) in
+            let v18 = Tag_immediate (v17) in
+            let v19 = Phys_equal neq (v18, v14) in
+            let_cont k6 () =
+              let v20 = Int_arith tagged_imm add (v10, 1) in
+              cont k4 (v20)
+            in
+            switch v19
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (0)
+          in
+          switch v11
+            | 0 -> cont k5 ()
+            | 1 -> cont k1 (1)
+        in
+        cont k4 (0)
+      in
+      switch v9
+        | 0 -> cont k1 (0)
+        | 1 -> cont k3 ()
+    camlStdlib__String__starts_with_39_117_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v2) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = String_length (v1) in
+      let v7 = Tag_immediate (v6) in
+      let v8 = Int_comp tagged_imm ge (v5, v7) in
+      let_cont k3 () =
+        let_cont rec
+          k4 (v9) =
+          let v10 = Phys_equal eq (v9, v7) in
+          let_cont k5 () =
+            let v11 = Num_conv tagged_imm nativeint (v9) in
+            let v12 = String_load 8 (v1, v11) in
+            let v13 = Tag_immediate (v12) in
+            let v14 = String_load 8 (v2, v11) in
+            let v15 = Tag_immediate (v14) in
+            let v16 = Phys_equal neq (v15, v13) in
+            let_cont k6 () =
+              let v17 = Int_arith tagged_imm add (v9, 1) in
+              cont k4 (v17)
+            in
+            switch v16
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (0)
+          in
+          switch v10
+            | 0 -> cont k5 ()
+            | 1 -> cont k1 (1)
+        in
+        cont k4 (0)
+      in
+      switch v8
+        | 0 -> cont k1 (0)
+        | 1 -> cont k3 ()
+    camlStdlib__Bytes__partial_aux_64_64_code stub (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Stdlib__Bytes.partial_aux_64).Stdlib__Bytes.aux_50 in
+      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__Bytes__partial_aux_60_60_code stub (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Stdlib__Bytes.partial_aux_60).Stdlib__Bytes.aux_46 in
+      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__String__make_2_12 = closure Stdlib__String.make_2 of
+      {Stdlib__String.make_2 = camlStdlib__String__make_2_80_code}
+      at {Stdlib__String.make_2 = camlStdlib__String__make_2_12} {}
+    camlStdlib__String__init_3_13 = closure Stdlib__String.init_3 of
+      {Stdlib__String.init_3 = camlStdlib__String__init_3_81_code}
+      at {Stdlib__String.init_3 = camlStdlib__String__init_3_13} {}
+    camlStdlib__Bytes__to_string_3_31 = closure Stdlib__Bytes.to_string_3 of
+      {Stdlib__Bytes.to_string_3 = camlStdlib__Bytes__to_string_3_126_code}
+      at {Stdlib__Bytes.to_string_3 = camlStdlib__Bytes__to_string_3_31} {}
+    camlStdlib__Bytes__of_string_4_32 = closure Stdlib__Bytes.of_string_4 of
+      {Stdlib__Bytes.of_string_4 = camlStdlib__Bytes__of_string_4_127_code}
+      at {Stdlib__Bytes.of_string_4 = camlStdlib__Bytes__of_string_4_32} {}
+    camlStdlib__Bytes__blit_string_11_43 = closure Stdlib__Bytes.blit_string_11 of
+      {Stdlib__Bytes.blit_string_11 = camlStdlib__Bytes__blit_string_11_134_code}
+      at {Stdlib__Bytes.blit_string_11 = camlStdlib__Bytes__blit_string_11_43}
+      {}
+    camlStdlib__String__concat_8_19 = closure Stdlib__String.concat_8 of
+      {Stdlib__String.concat_8 = camlStdlib__String__concat_8_86_code}
+      at {Stdlib__String.concat_8 = camlStdlib__String__concat_8_19} {}
+    camlStdlib__^_6_53 = closure Stdlib.^_6 of
+      {Stdlib.^_6 = camlStdlib__^_6_99_code}
+      at {Stdlib.^_6 = camlStdlib__^_6_53} {}
+    camlStdlib__String__starts_with_39_56 = closure Stdlib__String.starts_with_39 of
+      {Stdlib__String.starts_with_39 = camlStdlib__String__starts_with_39_117_code}
+      at {Stdlib__String.starts_with_39 = camlStdlib__String__starts_with_39_56}
+      {}
+    camlStdlib__String__ends_with_41_57 = closure Stdlib__String.ends_with_41 of
+      {Stdlib__String.ends_with_41 = camlStdlib__String__ends_with_41_119_code}
+      at {Stdlib__String.ends_with_41 = camlStdlib__String__ends_with_41_57}
+      {}
+    camlStdlib__String__contains_from_32_47 = closure Stdlib__String.contains_from_32 of
+      {Stdlib__String.contains_from_32 = camlStdlib__String__contains_from_32_110_code}
+      at {Stdlib__String.contains_from_32 = camlStdlib__String__contains_from_32_47}
+      {}
+    camlStdlib__String__rcontains_from_34_50 = closure Stdlib__String.rcontains_from_34 of
+      {Stdlib__String.rcontains_from_34 = camlStdlib__String__rcontains_from_34_112_code}
+      at {Stdlib__String.rcontains_from_34 = camlStdlib__String__rcontains_from_34_50}
+      {}
+    camlStdlib__String__contains_33_49 = closure Stdlib__String.contains_33 of
+      {Stdlib__String.contains_33 = camlStdlib__String__contains_33_111_code}
+      at {Stdlib__String.contains_33 = camlStdlib__String__contains_33_49} {}
+    camlStdlib__String__sub_4_14 = closure Stdlib__String.sub_4 of
+      {Stdlib__String.sub_4 = camlStdlib__String__sub_4_82_code}
+      at {Stdlib__String.sub_4 = camlStdlib__String__sub_4_14} {}
+    camlStdlib__String__split_on_char_44_59 = closure Stdlib__String.split_on_char_44 of
+      {Stdlib__String.split_on_char_44 = camlStdlib__String__split_on_char_44_122_code}
+      at {Stdlib__String.split_on_char_44 = camlStdlib__String__split_on_char_44_59}
+      {}
+    camlStdlib__String__map_11_22 = closure Stdlib__String.map_11 of
+      {Stdlib__String.map_11 = camlStdlib__String__map_11_89_code}
+      at {Stdlib__String.map_11 = camlStdlib__String__map_11_22} {}
+    camlStdlib__String__mapi_12_23 = closure Stdlib__String.mapi_12 of
+      {Stdlib__String.mapi_12 = camlStdlib__String__mapi_12_90_code}
+      at {Stdlib__String.mapi_12 = camlStdlib__String__mapi_12_23} {}
+    camlStdlib__String__fold_left_14_25 = closure Stdlib__String.fold_left_14 of
+      {Stdlib__String.fold_left_14 = camlStdlib__String__fold_left_14_92_code}
+      at {Stdlib__String.fold_left_14 = camlStdlib__String__fold_left_14_25}
+      {}
+    camlStdlib__String__fold_right_13_24 = closure Stdlib__String.fold_right_13 of
+      {Stdlib__String.fold_right_13 = camlStdlib__String__fold_right_13_91_code}
+      at {Stdlib__String.fold_right_13 = camlStdlib__String__fold_right_13_24}
+      {}
+    camlStdlib__String__for_all_16_27 = closure Stdlib__String.for_all_16 of
+      {Stdlib__String.for_all_16 = camlStdlib__String__for_all_16_94_code}
+      at {Stdlib__String.for_all_16 = camlStdlib__String__for_all_16_27} {}
+    camlStdlib__String__exists_15_26 = closure Stdlib__String.exists_15 of
+      {Stdlib__String.exists_15 = camlStdlib__String__exists_15_93_code}
+      at {Stdlib__String.exists_15 = camlStdlib__String__exists_15_26} {}
+    camlStdlib__String__trim_18_29 = closure Stdlib__String.trim_18 of
+      {Stdlib__String.trim_18 = camlStdlib__String__trim_18_96_code}
+      at {Stdlib__String.trim_18 = camlStdlib__String__trim_18_29} {}
+    camlStdlib__String__escaped_19_30 = closure Stdlib__String.escaped_19 of
+      {Stdlib__String.escaped_19 = camlStdlib__String__escaped_19_97_code}
+      at {Stdlib__String.escaped_19 = camlStdlib__String__escaped_19_30} {}
+    camlStdlib__String__uppercase_ascii_35_52 = closure Stdlib__String.uppercase_ascii_35 of
+      {Stdlib__String.uppercase_ascii_35 = camlStdlib__String__uppercase_ascii_35_113_code}
+      at {Stdlib__String.uppercase_ascii_35 = camlStdlib__String__uppercase_ascii_35_52}
+      {}
+    camlStdlib__String__lowercase_ascii_36_53 = closure Stdlib__String.lowercase_ascii_36 of
+      {Stdlib__String.lowercase_ascii_36 = camlStdlib__String__lowercase_ascii_36_114_code}
+      at {Stdlib__String.lowercase_ascii_36 = camlStdlib__String__lowercase_ascii_36_53}
+      {}
+    camlStdlib__String__capitalize_ascii_37_54 = closure Stdlib__String.capitalize_ascii_37 of
+      {Stdlib__String.capitalize_ascii_37 = camlStdlib__String__capitalize_ascii_37_115_code}
+      at {Stdlib__String.capitalize_ascii_37 = camlStdlib__String__capitalize_ascii_37_54}
+      {}
+    camlStdlib__String__uncapitalize_ascii_38_55 = closure Stdlib__String.uncapitalize_ascii_38 of
+      {Stdlib__String.uncapitalize_ascii_38 = camlStdlib__String__uncapitalize_ascii_38_116_code}
+      at {Stdlib__String.uncapitalize_ascii_38 = camlStdlib__String__uncapitalize_ascii_38_55}
+      {}
+    camlStdlib__String__iter_9_20 = closure Stdlib__String.iter_9 of
+      {Stdlib__String.iter_9 = camlStdlib__String__iter_9_87_code}
+      at {Stdlib__String.iter_9 = camlStdlib__String__iter_9_20} {}
+    camlStdlib__String__iteri_10_21 = closure Stdlib__String.iteri_10 of
+      {Stdlib__String.iteri_10 = camlStdlib__String__iteri_10_88_code}
+      at {Stdlib__String.iteri_10 = camlStdlib__String__iteri_10_21} {}
+    camlStdlib__String__index_from_24_35 = closure Stdlib__String.index_from_24 of
+      {Stdlib__String.index_from_24 = camlStdlib__String__index_from_24_102_code}
+      at {Stdlib__String.index_from_24 = camlStdlib__String__index_from_24_35}
+      {}
+    camlStdlib__String__index_from_opt_25_37 = closure Stdlib__String.index_from_opt_25 of
+      {Stdlib__String.index_from_opt_25 = camlStdlib__String__index_from_opt_25_103_code}
+      at {Stdlib__String.index_from_opt_25 = camlStdlib__String__index_from_opt_25_37}
+      {}
+    camlStdlib__String__rindex_from_28_41 = closure Stdlib__String.rindex_from_28 of
+      {Stdlib__String.rindex_from_28 = camlStdlib__String__rindex_from_28_106_code}
+      at {Stdlib__String.rindex_from_28 = camlStdlib__String__rindex_from_28_41}
+      {}
+    camlStdlib__String__rindex_from_opt_31_45 = closure Stdlib__String.rindex_from_opt_31 of
+      {Stdlib__String.rindex_from_opt_31 = camlStdlib__String__rindex_from_opt_31_109_code}
+      at {Stdlib__String.rindex_from_opt_31 = camlStdlib__String__rindex_from_opt_31_45}
+      {}
+    camlStdlib__String__index_21_32 = closure Stdlib__String.index_21 of
+      {Stdlib__String.index_21 = camlStdlib__String__index_21_99_code}
+      at {Stdlib__String.index_21 = camlStdlib__String__index_21_32} {}
+    camlStdlib__String__index_opt_23_34 = closure Stdlib__String.index_opt_23 of
+      {Stdlib__String.index_opt_23 = camlStdlib__String__index_opt_23_101_code}
+      at {Stdlib__String.index_opt_23 = camlStdlib__String__index_opt_23_34}
+      {}
+    camlStdlib__String__rindex_27_40 = closure Stdlib__String.rindex_27 of
+      {Stdlib__String.rindex_27 = camlStdlib__String__rindex_27_105_code}
+      at {Stdlib__String.rindex_27 = camlStdlib__String__rindex_27_40} {}
+    camlStdlib__String__rindex_opt_30_44 = closure Stdlib__String.rindex_opt_30 of
+      {Stdlib__String.rindex_opt_30 = camlStdlib__String__rindex_opt_30_108_code}
+      at {Stdlib__String.rindex_opt_30 = camlStdlib__String__rindex_opt_30_44}
+      {}
+    camlStdlib__String__to_seq_45_60 = closure Stdlib__String.to_seq_45 of
+      {Stdlib__String.to_seq_45 = camlStdlib__String__to_seq_45_123_code}
+      at {Stdlib__String.to_seq_45 = camlStdlib__String__to_seq_45_60} {}
+    camlStdlib__String__to_seqi_46_61 = closure Stdlib__String.to_seqi_46 of
+      {Stdlib__String.to_seqi_46 = camlStdlib__String__to_seqi_46_125_code}
+      at {Stdlib__String.to_seqi_46 = camlStdlib__String__to_seqi_46_61} {}
+    camlStdlib__String__of_seq_47_62 = closure Stdlib__String.of_seq_47 of
+      {Stdlib__String.of_seq_47 = camlStdlib__String__of_seq_47_127_code}
+      at {Stdlib__String.of_seq_47 = camlStdlib__String__of_seq_47_62} {}
+    camlStdlib__String__get_utf_8_uchar_48_63 = closure Stdlib__String.get_utf_8_uchar_48 of
+      {Stdlib__String.get_utf_8_uchar_48 = camlStdlib__String__get_utf_8_uchar_48_128_code}
+      at {Stdlib__String.get_utf_8_uchar_48 = camlStdlib__String__get_utf_8_uchar_48_63}
+      {}
+    camlStdlib__String__is_valid_utf_8_49_64 = closure Stdlib__String.is_valid_utf_8_49 of
+      {Stdlib__String.is_valid_utf_8_49 = camlStdlib__String__is_valid_utf_8_49_129_code}
+      at {Stdlib__String.is_valid_utf_8_49 = camlStdlib__String__is_valid_utf_8_49_64}
+      {}
+    camlStdlib__String__get_utf_16be_uchar_50_65 = closure Stdlib__String.get_utf_16be_uchar_50 of
+      {Stdlib__String.get_utf_16be_uchar_50 = camlStdlib__String__get_utf_16be_uchar_50_130_code}
+      at {Stdlib__String.get_utf_16be_uchar_50 = camlStdlib__String__get_utf_16be_uchar_50_65}
+      {}
+    camlStdlib__String__is_valid_utf_16be_51_66 = closure Stdlib__String.is_valid_utf_16be_51 of
+      {Stdlib__String.is_valid_utf_16be_51 = camlStdlib__String__is_valid_utf_16be_51_131_code}
+      at {Stdlib__String.is_valid_utf_16be_51 = camlStdlib__String__is_valid_utf_16be_51_66}
+      {}
+    camlStdlib__String__get_utf_16le_uchar_52_67 = closure Stdlib__String.get_utf_16le_uchar_52 of
+      {Stdlib__String.get_utf_16le_uchar_52 = camlStdlib__String__get_utf_16le_uchar_52_132_code}
+      at {Stdlib__String.get_utf_16le_uchar_52 = camlStdlib__String__get_utf_16le_uchar_52_67}
+      {}
+    camlStdlib__String__is_valid_utf_16le_53_68 = closure Stdlib__String.is_valid_utf_16le_53 of
+      {Stdlib__String.is_valid_utf_16le_53 = camlStdlib__String__is_valid_utf_16le_53_133_code}
+      at {Stdlib__String.is_valid_utf_16le_53 = camlStdlib__String__is_valid_utf_16le_53_68}
+      {}
+    camlStdlib__String__edit_distance_70_85 = closure Stdlib__String.edit_distance_70 of
+      {Stdlib__String.edit_distance_70 = camlStdlib__String__edit_distance_70_150_code}
+      at {Stdlib__String.edit_distance_70 = camlStdlib__String__edit_distance_70_85}
+      {}
+    camlStdlib__String__spellcheck_72_88 = closure Stdlib__String.spellcheck_72 of
+      {Stdlib__String.spellcheck_72 = camlStdlib__String__spellcheck_72_75_code}
+      at {Stdlib__String.spellcheck_72 = camlStdlib__String__spellcheck_72_88}
+      {}
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79_92 = closure Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79 of
+      {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79_79_code}
+      at {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79_92}
+      {}
+    camlStdlib__String__get_int8_54_69 = closure Stdlib__String.get_int8_54 of
+      {Stdlib__String.get_int8_54 = camlStdlib__String__get_int8_54_134_code}
+      at {Stdlib__String.get_int8_54 = camlStdlib__String__get_int8_54_69} {}
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78_91 = closure Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78 of
+      {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78_78_code}
+      at {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78_91}
+      {}
+    camlStdlib__String__get_uint16_be_56_71 = closure Stdlib__String.get_uint16_be_56 of
+      {Stdlib__String.get_uint16_be_56 = camlStdlib__String__get_uint16_be_56_136_code}
+      at {Stdlib__String.get_uint16_be_56 = camlStdlib__String__get_uint16_be_56_71}
+      {}
+    camlStdlib__String__get_uint16_le_55_70 = closure Stdlib__String.get_uint16_le_55 of
+      {Stdlib__String.get_uint16_le_55 = camlStdlib__String__get_uint16_le_55_135_code}
+      at {Stdlib__String.get_uint16_le_55 = camlStdlib__String__get_uint16_le_55_70}
+      {}
+    camlStdlib__String__get_int16_ne_57_72 = closure Stdlib__String.get_int16_ne_57 of
+      {Stdlib__String.get_int16_ne_57 = camlStdlib__String__get_int16_ne_57_137_code}
+      at {Stdlib__String.get_int16_ne_57 = camlStdlib__String__get_int16_ne_57_72}
+      {}
+    camlStdlib__String__get_int16_be_59_74 = closure Stdlib__String.get_int16_be_59 of
+      {Stdlib__String.get_int16_be_59 = camlStdlib__String__get_int16_be_59_139_code}
+      at {Stdlib__String.get_int16_be_59 = camlStdlib__String__get_int16_be_59_74}
+      {}
+    camlStdlib__String__get_int16_le_58_73 = closure Stdlib__String.get_int16_le_58 of
+      {Stdlib__String.get_int16_le_58 = camlStdlib__String__get_int16_le_58_138_code}
+      at {Stdlib__String.get_int16_le_58 = camlStdlib__String__get_int16_le_58_73}
+      {}
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_90 = closure Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77 of
+      {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_77_code}
+      at {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_90}
+      {}
+    camlStdlib__String__hash_43_58 = closure Stdlib__String.hash_43 of
+      {Stdlib__String.hash_43 = camlStdlib__String__hash_43_121_code}
+      at {Stdlib__String.hash_43 = camlStdlib__String__hash_43_58} {}
+    camlStdlib__String__get_int32_be_61_76 = closure Stdlib__String.get_int32_be_61 of
+      {Stdlib__String.get_int32_be_61 = camlStdlib__String__get_int32_be_61_141_code}
+      at {Stdlib__String.get_int32_be_61 = camlStdlib__String__get_int32_be_61_76}
+      {}
+    camlStdlib__String__get_int32_le_60_75 = closure Stdlib__String.get_int32_le_60 of
+      {Stdlib__String.get_int32_le_60 = camlStdlib__String__get_int32_le_60_140_code}
+      at {Stdlib__String.get_int32_le_60 = camlStdlib__String__get_int32_le_60_75}
+      {}
+    camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_89 = closure Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76 of
+      {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_76_code}
+      at {Stdlib__String.fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76 = camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_89}
+      {}
+    camlStdlib__String__get_int64_be_63_78 = closure Stdlib__String.get_int64_be_63 of
+      {Stdlib__String.get_int64_be_63 = camlStdlib__String__get_int64_be_63_143_code}
+      at {Stdlib__String.get_int64_be_63 = camlStdlib__String__get_int64_be_63_78}
+      {}
+    camlStdlib__String__get_int64_le_62_77 = closure Stdlib__String.get_int64_le_62 of
+      {Stdlib__String.get_int64_le_62 = camlStdlib__String__get_int64_le_62_142_code}
+      at {Stdlib__String.get_int64_le_62 = camlStdlib__String__get_int64_le_62_77}
+      {}
+    camlStdlib__Bytes__get_utf_16le_uchar_110_141 = closure Stdlib__Bytes.get_utf_16le_uchar_110 of
+      {Stdlib__Bytes.get_utf_16le_uchar_110 = camlStdlib__Bytes__get_utf_16le_uchar_110_224_code}
+      at {Stdlib__Bytes.get_utf_16le_uchar_110 = camlStdlib__Bytes__get_utf_16le_uchar_110_141}
+      {}
+    camlStdlib__Bytes__get_utf_16be_uchar_106_135 = closure Stdlib__Bytes.get_utf_16be_uchar_106 of
+      {Stdlib__Bytes.get_utf_16be_uchar_106 = camlStdlib__Bytes__get_utf_16be_uchar_106_220_code}
+      at {Stdlib__Bytes.get_utf_16be_uchar_106 = camlStdlib__Bytes__get_utf_16be_uchar_106_135}
+      {}
+    camlStdlib__Bytes__get_utf_8_uchar_99_128 = closure Stdlib__Bytes.get_utf_8_uchar_99 of
+      {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_216_code}
+      at {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_128}
+      {}
+    camlStdlib__Bytes__of_seq_65_95 = closure Stdlib__Bytes.of_seq_65 of
+      {Stdlib__Bytes.of_seq_65 = camlStdlib__Bytes__of_seq_65_184_code}
+      at {Stdlib__Bytes.of_seq_65 = camlStdlib__Bytes__of_seq_65_95} {}
+    camlStdlib__Bytes__unsafe_escape_21_55 = closure Stdlib__Bytes.unsafe_escape_21 of
+      {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_144_code}
+      at {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_55}
+      {}
+    camlStdlib__String = Block 0 (camlStdlib__String__make_2_12,
+      camlStdlib__String__init_3_13, camlStdlib__String__immstring_0,
+      camlStdlib__Bytes__to_string_3_31, camlStdlib__Bytes__of_string_4_32,
+      camlStdlib__Bytes__blit_string_11_43, camlStdlib__String__concat_8_19,
+      camlStdlib__^_6_53, camlStdlib__String__starts_with_39_56,
+      camlStdlib__String__ends_with_41_57,
+      camlStdlib__String__contains_from_32_47,
+      camlStdlib__String__rcontains_from_34_50,
+      camlStdlib__String__contains_33_49, camlStdlib__String__sub_4_14,
+      camlStdlib__String__split_on_char_44_59, camlStdlib__String__map_11_22,
+      camlStdlib__String__mapi_12_23, camlStdlib__String__fold_left_14_25,
+      camlStdlib__String__fold_right_13_24,
+      camlStdlib__String__for_all_16_27, camlStdlib__String__exists_15_26,
+      camlStdlib__String__trim_18_29, camlStdlib__String__escaped_19_30,
+      camlStdlib__String__uppercase_ascii_35_52,
+      camlStdlib__String__lowercase_ascii_36_53,
+      camlStdlib__String__capitalize_ascii_37_54,
+      camlStdlib__String__uncapitalize_ascii_38_55,
+      camlStdlib__String__iter_9_20, camlStdlib__String__iteri_10_21,
+      camlStdlib__String__index_from_24_35,
+      camlStdlib__String__index_from_opt_25_37,
+      camlStdlib__String__rindex_from_28_41,
+      camlStdlib__String__rindex_from_opt_31_45,
+      camlStdlib__String__index_21_32, camlStdlib__String__index_opt_23_34,
+      camlStdlib__String__rindex_27_40, camlStdlib__String__rindex_opt_30_44,
+      camlStdlib__String__to_seq_45_60, camlStdlib__String__to_seqi_46_61,
+      camlStdlib__String__of_seq_47_62,
+      camlStdlib__String__get_utf_8_uchar_48_63,
+      camlStdlib__String__is_valid_utf_8_49_64,
+      camlStdlib__String__get_utf_16be_uchar_50_65,
+      camlStdlib__String__is_valid_utf_16be_51_66,
+      camlStdlib__String__get_utf_16le_uchar_52_67,
+      camlStdlib__String__is_valid_utf_16le_53_68,
+      camlStdlib__String__edit_distance_70_85,
+      camlStdlib__String__spellcheck_72_88,
+      camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:278,0--74]_79_92,
+      camlStdlib__String__get_int8_54_69,
+      camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:279,0--80]_78_91,
+      camlStdlib__String__get_uint16_be_56_71,
+      camlStdlib__String__get_uint16_le_55_70,
+      camlStdlib__String__get_int16_ne_57_72,
+      camlStdlib__String__get_int16_be_59_74,
+      camlStdlib__String__get_int16_le_58_73,
+      camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_90,
+      camlStdlib__String__hash_43_58, camlStdlib__String__get_int32_be_61_76,
+      camlStdlib__String__get_int32_le_60_75,
+      camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_89,
+      camlStdlib__String__get_int64_be_63_78,
+      camlStdlib__String__get_int64_le_62_77)
+    camlStdlib__String__block_9 = Block 0 (caml_exn_Invalid_argument,
+      camlStdlib__String__string_8)
+    camlStdlib__String__Pmakeblock3110_46 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_5)
+    camlStdlib__String__Pmakeblock2992_42 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_4)
+    camlStdlib__String__Pmakeblock2876_38 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_3)
+    camlStdlib__String__Pmakeblock2819_36 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_2)
+    camlStdlib__String__Pmakeblock3179_48 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_6)
+    camlStdlib__String__Pmakeblock3283_51 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_7)
+  before Simplify, after the prefix, with its 10 imports (134 steps): 
+returns
+  [0: <fun>; <fun>; <imported camlStdlib__String__immstring_0>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
+  after Simplify, after the prefix, with its 10 imports (2 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <imported camlStdlib__String__immstring_0>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

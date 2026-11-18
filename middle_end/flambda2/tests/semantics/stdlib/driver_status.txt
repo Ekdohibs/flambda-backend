@@ -1,0 +1,9 @@
+# The units of this directory of which the driver exits with a status that is
+# not 0, each with that status: the rule of such a unit takes that status and
+# no other (stdlib_run.sh), and the rule of any other unit takes 0. One name
+# and one status a line, the name without .ml. A line that begins with # is a
+# comment.
+#
+# A name is added only with a line here that says why the driver exits so.
+#
+# No unit is named at present.

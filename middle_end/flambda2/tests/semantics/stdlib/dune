@@ -1,0 +1,82 @@
+;; The files of the standard library, each compiled by the driver that checks
+;; the compiler's own run as the build of the tree compiles it (README.md).
+;; No source is here: the rules give the driver the real files of stdlib/.
+;;
+;; For each X.ml that the build of the library compiles, X.own_expected is
+;; what the driver prints of it. The rules are in run/dune.inc, a file of the
+;; tree that gen_rules.exe wrote from the rules of the build; they are for
+;; the context main, where the driver is built and where the compiler that
+;; dune runs is the one that built the library. Two aliases run them, and
+;; neither is runtest: runtest-stdlib, and runtest-stdlib-long for the units
+;; that long.txt names.
+;;
+;; A BUILD OF THE COMPILER, AND make runtest, BUILD AND RUN NOTHING HERE. The
+;; rules of run/ are a file of the tree, so that dune builds nothing to load
+;; them; the rules below, which read the build of the library and run the
+;; generator, are attached to no alias but the two, each of which makes the
+;; rules again and compares them with run/dune.inc (run/dune). So a build
+;; of the compiler, or of the alias runtest, does not read the library's
+;; rules, cannot stop here, and compiles no program of this directory.
+;; (dune's own aliases all, default and check, and a file of this directory
+;; asked of dune by its name, do build here: README.md, "What a rule does".)
+
+;; The rules by which the build compiles the library, made again here by the
+;; build's own generator from the build's own two files, as
+;; stdlib/dune_rules/dune makes them in the context that builds the library
+;; (in this context that file makes them empty, so that the library is not
+;; built twice). The commands of the rules of this directory are read from
+;; this text, by gen_rules.exe.
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (with-stdout-to
+   build_rules.txt
+   (run %{dep:../../../../../stdlib/dune_rules/gen.exe}
+    %{dep:../../../../../stdlib/dune_rules/build_settings.txt} stdlib
+    %{dep:../../../../../stdlib/dune_rules/stdlib_module_deps.txt}))))
+
+(executable
+ (name gen_rules)
+ (modes native)
+ (enabled_if
+  (= %{context_name} "main")))
+
+;; The rules of this directory as gen_rules.exe writes them now, for the
+;; comparison with run/dune.inc. The generator stops, and says why, at a
+;; rule of the build that has not the shape that it knows, at a file that
+;; the build compiles and that has no stored file here, and at a stored file
+;; or a name of a list that is of no unit: that fails the alias that asked
+;; for the comparison, and no build of the compiler.
+(rule
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps
+  (glob_files *.own_expected))
+ (action
+  (with-stdout-to
+   dune.inc.gen
+   (run %{dep:gen_rules.exe} %{dep:build_rules.txt} %{dep:long.txt}
+    %{dep:not_run.txt} %{dep:driver_status.txt} %{deps}))))
+
+;; stdlib/sys.ml is written by configure, with the version of the compiler
+;; in it. What the driver prints of that unit must not hold the version, or
+;; the stored file would move whenever the version does (README.md, "What a
+;; stored file holds, and what moves it"). The rule fails if the stored file
+;; has the first line of VERSION, and also if that line or the stored file
+;; cannot be read: grep's status 1 alone is "not there".
+(rule
+ (alias runtest-stdlib)
+ (enabled_if
+  (= %{context_name} "main"))
+ (deps sys.own_expected ../../../../../VERSION)
+ (action
+  (system
+    "v=$(head -n 1 ../../../../../VERSION) || exit 1; \
+     if [ -z \"$v\" ]; then echo 'VERSION has no first line' >&2; exit 1; fi; \
+     grep -qF -- \"$v\" sys.own_expected; s=$?; \
+     if [ $s = 0 ]; then \
+     echo 'sys.own_expected has the version of the compiler' >&2; exit 1; \
+     elif [ $s != 1 ]; then \
+     echo 'sys.own_expected could not be searched for the version' >&2; \
+     exit 1; fi")))

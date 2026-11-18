@@ -1,0 +1,8 @@
+# The units of this directory that are in the second alias,
+# runtest-stdlib-long, and not in the first: those of which the rule takes
+# more than 10 seconds of processor time (README.md, "What it costs"). One
+# name a line, without .ml; what follows the name on its line is the time
+# that was measured, and gen_rules.exe does not read it. A line that begins
+# with # is a comment.
+map 298 seconds (18 November 2026, a tree built at f5591bb185, one job)
+set 284 seconds (the same measure)

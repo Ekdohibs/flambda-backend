@@ -1,0 +1,782 @@
+stdlib__Quote.fl:
+  given the .cmx of CamlinternalQuote, Stdlib__Format, a prefix of 684 static bindings:
+    camlCamlinternalQuote__of_exp_600_1248_code deleted
+    camlCamlinternalQuote__mk_723_1369_code deleted
+    camlCamlinternalQuote__construct_641_1288_code deleted
+    camlCamlinternalQuote__builtin_151_977_code deleted
+    camlCamlinternalQuote__constant_614_1261_code deleted
+    camlCamlinternalQuote__print_725_1371_code deleted
+    camlCamlinternalQuote__map_61_899_code deleted
+    camlStdlib__Format__ksprintf_284_496_code deleted
+    camlStdlib__Format__kfprintf_267_482_code deleted
+    camlStdlib__Format__kasprintf_287_499_code deleted
+    camlCamlinternalQuote__known_1_727_code deleted
+    camlCamlinternalQuote__mk_7_733_code deleted
+    camlCamlinternalQuote__name_32_872_code deleted
+    camlCamlinternalQuote__untagged_char_404_1060_code deleted
+    camlCamlinternalQuote__float32_407_1063_code deleted
+    camlCamlinternalQuote__unboxed_float_408_1064_code deleted
+    camlCamlinternalQuote__unboxed_float32_409_1065_code deleted
+    camlCamlinternalQuote__int8_410_1066_code deleted
+    camlCamlinternalQuote__int16_411_1067_code deleted
+    camlCamlinternalQuote__untagged_int_415_1071_code deleted
+    camlCamlinternalQuote__untagged_int8_416_1072_code deleted
+    camlCamlinternalQuote__untagged_int16_417_1073_code deleted
+    camlCamlinternalQuote__unboxed_int32_418_1074_code deleted
+    camlCamlinternalQuote__unboxed_int64_419_1075_code deleted
+    camlCamlinternalQuote__unboxed_nativeint_420_1076_code deleted
+    camlCamlinternalQuote__labelled_398_1054_code deleted
+    camlCamlinternalQuote__optional_399_1055_code deleted
+    camlCamlinternalQuote__of_string_155_981_code deleted
+    camlCamlinternalQuote__of_string_157_983_code deleted
+    camlCamlinternalQuote__name_400_1056_code deleted
+    camlCamlinternalQuote__dot_401_1057_code deleted
+    camlCamlinternalQuote__ident_531_1187_code deleted
+    camlCamlinternalQuote__apply_533_1189_code deleted
+    camlCamlinternalQuote__apply_unit_535_1191_code deleted
+    camlCamlinternalQuote__of_string_434_1090_code deleted
+    camlCamlinternalQuote__ident_436_1092_code deleted
+    camlCamlinternalQuote__of_string_438_1094_code deleted
+    camlCamlinternalQuote__ident_428_1084_code deleted
+    camlCamlinternalQuote__of_string_430_1086_code deleted
+    camlCamlinternalQuote__of_string_list_439_1095_code deleted
+    camlCamlinternalQuote__of_object_fields_list_490_1146_code deleted
+    camlCamlinternalQuote__of_row_fields_list_498_1154_code deleted
+    camlCamlinternalQuote__var_500_1156_code deleted
+    camlCamlinternalQuote__arrow_501_1157_code deleted
+    camlCamlinternalQuote__tuple_503_1159_code deleted
+    camlCamlinternalQuote__unboxed_tuple_507_1163_code deleted
+    camlCamlinternalQuote__constr_511_1167_code deleted
+    camlCamlinternalQuote__object__513_1169_code deleted
+    camlCamlinternalQuote__class__515_1171_code deleted
+    camlCamlinternalQuote__alias_517_1173_code deleted
+    camlCamlinternalQuote__variant_519_1175_code deleted
+    camlCamlinternalQuote__poly_521_1177_code deleted
+    camlCamlinternalQuote__package_524_1180_code deleted
+    camlCamlinternalQuote__quote_528_1184_code deleted
+    camlCamlinternalQuote__var_445_1101_code deleted
+    camlCamlinternalQuote__alias_447_1103_code deleted
+    camlCamlinternalQuote__constant_449_1105_code deleted
+    camlCamlinternalQuote__unboxed_bool_450_1106_code deleted
+    camlCamlinternalQuote__tuple_451_1107_code deleted
+    camlCamlinternalQuote__unboxed_tuple_455_1111_code deleted
+    camlCamlinternalQuote__construct_459_1115_code deleted
+    camlCamlinternalQuote__variant_461_1117_code deleted
+    camlCamlinternalQuote__record_463_1119_code deleted
+    camlCamlinternalQuote__unboxed_record_467_1123_code deleted
+    camlCamlinternalQuote__array_471_1127_code deleted
+    camlCamlinternalQuote__or__473_1129_code deleted
+    camlCamlinternalQuote__lazy__475_1131_code deleted
+    camlCamlinternalQuote__unpack_477_1133_code deleted
+    camlCamlinternalQuote__exception__479_1135_code deleted
+    camlCamlinternalQuote__constraint__481_1137_code deleted
+    camlCamlinternalQuote__mk_483_1139_code deleted
+    camlCamlinternalQuote__nonbinding_539_1195_code deleted
+    camlCamlinternalQuote__simple_542_1197_code deleted
+    camlCamlinternalQuote__pattern_545_1200_code deleted
+    camlCamlinternalQuote__guarded_548_1202_code deleted
+    camlCamlinternalQuote__refutation_552_1205_code deleted
+    camlCamlinternalQuote__constraint__557_1209_code deleted
+    camlCamlinternalQuote__coercion_559_1211_code deleted
+    camlCamlinternalQuote__body_563_1215_code deleted
+    camlCamlinternalQuote__cases_565_1217_code deleted
+    camlCamlinternalQuote__param_567_1219_code deleted
+    camlCamlinternalQuote__param_module_nonbinding_571_1222_code deleted
+    camlCamlinternalQuote__param_module_574_1224_code deleted
+    camlCamlinternalQuote__newtype_578_1227_code deleted
+    camlCamlinternalQuote__body_589_1237_code deleted
+    camlCamlinternalQuote__when__591_1239_code deleted
+    camlCamlinternalQuote__for__593_1241_code deleted
+    camlCamlinternalQuote__ident_612_1259_code deleted
+    camlCamlinternalQuote__let_rec_simple_615_1262_code deleted
+    camlCamlinternalQuote__let__623_1270_code deleted
+    camlCamlinternalQuote__function__627_1274_code deleted
+    camlCamlinternalQuote__apply_629_1276_code deleted
+    camlCamlinternalQuote__match__633_1280_code deleted
+    camlCamlinternalQuote__try__635_1282_code deleted
+    camlCamlinternalQuote__tuple_637_1284_code deleted
+    camlCamlinternalQuote__variant_643_1290_code deleted
+    camlCamlinternalQuote__record_645_1292_code deleted
+    camlCamlinternalQuote__field_649_1296_code deleted
+    camlCamlinternalQuote__setfield_651_1298_code deleted
+    camlCamlinternalQuote__array_653_1300_code deleted
+    camlCamlinternalQuote__ifthenelse_655_1302_code deleted
+    camlCamlinternalQuote__sequence_657_1304_code deleted
+    camlCamlinternalQuote__while__659_1306_code deleted
+    camlCamlinternalQuote__for_nonbinding_661_1308_code deleted
+    camlCamlinternalQuote__for_simple_664_1310_code deleted
+    camlCamlinternalQuote__send_668_1314_code deleted
+    camlCamlinternalQuote__assert__670_1316_code deleted
+    camlCamlinternalQuote__lazy__672_1318_code deleted
+    camlCamlinternalQuote__letmodule_nonbinding_674_1320_code deleted
+    camlCamlinternalQuote__letmodule_676_1322_code deleted
+    camlCamlinternalQuote__constraint__680_1326_code deleted
+    camlCamlinternalQuote__new__682_1328_code deleted
+    camlCamlinternalQuote__pack_684_1330_code deleted
+    camlCamlinternalQuote__stack_712_1358_code deleted
+    camlCamlinternalQuote__borrow_714_1360_code deleted
+    camlCamlinternalQuote__extension_constructor_705_1351_code deleted
+    camlCamlinternalQuote__let_exception_706_1352_code deleted
+    camlCamlinternalQuote__let_op_708_1354_code deleted
+    camlCamlinternalQuote__let_open_710_1356_code deleted
+    camlCamlinternalQuote__exclave_686_1332_code deleted
+    camlCamlinternalQuote__list_comprehension_688_1334_code deleted
+    camlCamlinternalQuote__array_comprehension_690_1336_code deleted
+    camlCamlinternalQuote__immutable_array_comprehension_692_1338_code deleted
+    camlCamlinternalQuote__unboxed_bool_694_1340_code deleted
+    camlCamlinternalQuote__unboxed_tuple_695_1341_code deleted
+    camlCamlinternalQuote__unboxed_record_product_699_1345_code deleted
+    camlCamlinternalQuote__unboxed_field_703_1349_code deleted
+    camlCamlinternalQuote__quote_716_1362_code deleted
+    camlCamlinternalQuote__splice_718_1364_code deleted
+    camlCamlinternalQuote__unquote_720_1366_code deleted
+    camlCamlinternalQuote__of_exp_with_type_vars_602_1250_code deleted
+    camlCamlinternalQuote__print_608_1255_code deleted
+    camlCamlinternalQuote__global_module_129_955_code deleted
+    camlCamlinternalQuote__dot_130_956_code deleted
+    camlCamlinternalQuote__var_132_958_code deleted
+    camlCamlinternalQuote__dot_135_961_code deleted
+    camlCamlinternalQuote__var_137_963_code deleted
+    camlCamlinternalQuote__dot_140_966_code deleted
+    camlCamlinternalQuote__var_142_968_code deleted
+    camlCamlinternalQuote__builtin_143_969_code deleted
+    camlCamlinternalQuote__dot_145_971_code deleted
+    camlCamlinternalQuote__dot_149_975_code deleted
+    camlCamlinternalQuote__dot_153_979_code deleted
+    camlCamlinternalQuote__labelled_397_1053_code deleted
+    camlCamlinternalQuote__inherit__486_1142_code deleted
+    camlCamlinternalQuote__tag_488_1144_code deleted
+    camlCamlinternalQuote__closed_491_1147_code deleted
+    camlCamlinternalQuote__inherit__494_1150_code deleted
+    camlCamlinternalQuote__tag_496_1152_code deleted
+    camlCamlinternalQuote__range_582_1231_code deleted
+    camlCamlinternalQuote__in__584_1233_code deleted
+    camlCamlinternalQuote__to_exp_605_1253_code deleted
+    camlCamlinternalQuote__close_604_1252_code deleted
+    camlCamlinternalQuote__return_60_898_code deleted
+    camlCamlinternalQuote__print_606_1254_code deleted
+    camlStdlib__Format__pp_open_box_61_358_code deleted
+    camlStdlib__Format__partial_apply1_185_185_code deleted
+    camlStdlib__Format__pp_close_box_32_329_code deleted
+    camlStdlib__Format__partial_apply1_186_186_code deleted
+    camlStdlib__Format__pp_open_hbox_57_354_code deleted
+    camlStdlib__Format__partial_apply1_181_181_code deleted
+    camlStdlib__Format__pp_open_vbox_58_355_code deleted
+    camlStdlib__Format__partial_apply1_182_182_code deleted
+    camlStdlib__Format__pp_open_hvbox_59_356_code deleted
+    camlStdlib__Format__partial_apply1_183_183_code deleted
+    camlStdlib__Format__pp_open_hovbox_60_357_code deleted
+    camlStdlib__Format__partial_apply1_184_184_code deleted
+    camlStdlib__Format__pp_print_string_48_345_code deleted
+    camlStdlib__Format__partial_apply1_190_190_code deleted
+    camlStdlib__Format__pp_print_substring_50_347_code deleted
+    camlStdlib__Format__print_substring_191_451_code deleted
+    camlStdlib__Format__pp_print_bytes_51_348_code deleted
+    camlStdlib__Format__print_bytes_197_453_code deleted
+    camlStdlib__Format__pp_print_as_47_344_code deleted
+    camlStdlib__Format__partial_apply2_189_189_code deleted
+    camlStdlib__Format__pp_print_substring_as_49_346_code deleted
+    camlStdlib__Format__print_substring_as_194_452_code deleted
+    camlStdlib__Format__pp_print_int_52_349_code deleted
+    camlStdlib__Format__partial_apply1_198_198_code deleted
+    camlStdlib__Format__pp_print_float_53_350_code deleted
+    camlStdlib__Format__partial_apply1_199_199_code deleted
+    camlStdlib__Format__pp_print_char_55_352_code deleted
+    camlStdlib__Format__partial_apply1_200_200_code deleted
+    camlStdlib__Format__pp_print_bool_54_351_code deleted
+    camlStdlib__Format__partial_apply1_201_201_code deleted
+    camlStdlib__Format__pp_print_nothing_56_353_code deleted
+    camlStdlib__Format__pp_print_space_68_365_code deleted
+    camlStdlib__Format__partial_apply1_204_204_code deleted
+    camlStdlib__Format__pp_print_cut_69_366_code deleted
+    camlStdlib__Format__partial_apply1_203_203_code deleted
+    camlStdlib__Format__pp_print_break_67_364_code deleted
+    camlStdlib__Format__partial_apply2_202_202_code deleted
+    camlStdlib__Format__pp_print_custom_break_66_363_code deleted
+    camlStdlib__Format__pp_force_newline_64_361_code deleted
+    camlStdlib__Format__partial_apply1_205_205_code deleted
+    camlStdlib__Format__pp_print_if_newline_65_362_code deleted
+    camlStdlib__Format__partial_apply1_208_208_code deleted
+    camlStdlib__Format__pp_print_flush_63_360_code deleted
+    camlStdlib__Format__partial_apply1_206_206_code deleted
+    camlStdlib__Format__pp_print_newline_62_359_code deleted
+    camlStdlib__Format__partial_apply1_207_207_code deleted
+    camlStdlib__Format__pp_set_margin_84_381_code deleted
+    camlStdlib__Format__partial_apply1_214_214_code deleted
+    camlStdlib__Format__pp_get_margin_87_384_code deleted
+    camlStdlib__Format__partial_apply1_215_215_code deleted
+    camlStdlib__Format__pp_set_max_indent_82_379_code deleted
+    camlStdlib__Format__partial_apply1_216_216_code deleted
+    camlStdlib__Format__pp_get_max_indent_83_380_code deleted
+    camlStdlib__Format__partial_apply1_217_217_code deleted
+    camlStdlib__Format__check_geometry_86_383_code deleted
+    camlStdlib__Format__pp_set_geometry_89_386_code deleted
+    camlStdlib__Format__set_geometry_218_454_code deleted
+    camlStdlib__Format__pp_safe_set_geometry_90_387_code deleted
+    camlStdlib__Format__safe_set_geometry_219_455_code deleted
+    camlStdlib__Format__pp_update_geometry_92_389_code deleted
+    camlStdlib__Format__update_geometry_221_456_code deleted
+    camlStdlib__Format__pp_get_geometry_91_388_code deleted
+    camlStdlib__Format__partial_apply1_220_220_code deleted
+    camlStdlib__Format__pp_set_max_boxes_75_372_code deleted
+    camlStdlib__Format__partial_apply1_222_222_code deleted
+    camlStdlib__Format__pp_get_max_boxes_76_373_code deleted
+    camlStdlib__Format__partial_apply1_223_223_code deleted
+    camlStdlib__Format__pp_over_max_boxes_77_374_code deleted
+    camlStdlib__Format__partial_apply1_224_224_code deleted
+    camlStdlib__Format__pp_open_tbox_70_367_code deleted
+    camlStdlib__Format__partial_apply1_209_209_code deleted
+    camlStdlib__Format__pp_close_tbox_71_368_code deleted
+    camlStdlib__Format__partial_apply1_210_210_code deleted
+    camlStdlib__Format__pp_set_tab_74_371_code deleted
+    camlStdlib__Format__partial_apply1_212_212_code deleted
+    camlStdlib__Format__pp_print_tab_73_370_code deleted
+    camlStdlib__Format__partial_apply1_213_213_code deleted
+    camlStdlib__Format__pp_print_tbreak_72_369_code deleted
+    camlStdlib__Format__partial_apply2_211_211_code deleted
+    camlStdlib__Format__pp_set_ellipsis_text_78_375_code deleted
+    camlStdlib__Format__partial_apply1_225_225_code deleted
+    camlStdlib__Format__pp_get_ellipsis_text_79_376_code deleted
+    camlStdlib__Format__partial_apply1_226_226_code deleted
+    camlStdlib__Format__pp_open_stag_33_330_code deleted
+    camlStdlib__Format__partial_apply1_187_187_code deleted
+    camlStdlib__Format__pp_close_stag_34_331_code deleted
+    camlStdlib__Format__partial_apply1_188_188_code deleted
+    camlStdlib__Format__pp_set_tags_39_336_code deleted
+    camlStdlib__Format__partial_apply1_238_238_code deleted
+    camlStdlib__Format__pp_set_print_tags_35_332_code deleted
+    camlStdlib__Format__partial_apply1_234_234_code deleted
+    camlStdlib__Format__pp_set_mark_tags_36_333_code deleted
+    camlStdlib__Format__partial_apply1_236_236_code deleted
+    camlStdlib__Format__pp_get_print_tags_37_334_code deleted
+    camlStdlib__Format__partial_apply1_235_235_code deleted
+    camlStdlib__Format__pp_get_mark_tags_38_335_code deleted
+    camlStdlib__Format__partial_apply1_237_237_code deleted
+    camlStdlib__Format__pp_set_formatter_out_channel_99_396_code deleted
+    camlStdlib__Format__partial_apply1_227_227_code deleted
+    camlStdlib__Format__pp_set_formatter_output_functions_95_392_code deleted
+    camlStdlib__Format__partial_apply2_230_230_code deleted
+    camlStdlib__Format__pp_get_formatter_output_functions_96_393_code deleted
+    camlStdlib__Format__partial_apply1_231_231_code deleted
+    camlStdlib__Format__pp_set_formatter_out_functions_93_390_code deleted
+    camlStdlib__Format__partial_apply1_228_228_code deleted
+    camlStdlib__Format__pp_get_formatter_out_functions_94_391_code deleted
+    camlStdlib__Format__partial_apply1_229_229_code deleted
+    camlStdlib__Format__utf_8_scalar_width_108_401_code deleted
+    camlStdlib__Format__ascii_width_110_403_code deleted
+    camlStdlib__Format__pp_set_formatter_stag_functions_41_338_code deleted
+    camlStdlib__Format__partial_apply1_232_232_code deleted
+    camlStdlib__Format__pp_get_formatter_stag_functions_40_337_code deleted
+    camlStdlib__Format__partial_apply1_233_233_code deleted
+    camlStdlib__Format__formatter_of_out_channel_120_407_code deleted
+    camlStdlib__Format__synchronized_formatter_of_out_channel_160_433_code deleted
+    camlStdlib__Format__get_std_formatter_150_422_code deleted
+    camlStdlib__Format__get_err_formatter_151_423_code deleted
+    camlStdlib__Format__formatter_of_buffer_122_410_code deleted
+    camlStdlib__Format__get_stdbuf_153_425_code deleted
+    camlStdlib__Format__get_str_formatter_152_424_code deleted
+    camlStdlib__Format__flush_str_formatter_155_427_code deleted
+    camlStdlib__Format__make_formatter_113_406_code deleted
+    camlStdlib__Format__make_synchronized_formatter_unsafe_159_432_code deleted
+    camlStdlib__Format__formatter_of_out_functions_112_405_code deleted
+    camlStdlib__Format__make_symbolic_output_buffer_163_438_code deleted
+    camlStdlib__Format__clear_symbolic_output_buffer_164_439_code deleted
+    camlStdlib__Format__get_symbolic_output_buffer_165_440_code deleted
+    camlStdlib__Format__flush_symbolic_output_buffer_166_441_code deleted
+    camlStdlib__Format__add_symbolic_output_item_167_442_code deleted
+    camlStdlib__Format__formatter_of_symbolic_output_buffer_168_443_code deleted
+    camlStdlib__Format__pp_print_iter_239_241_code deleted
+    camlStdlib__Format__pp_print_list_242_243_code deleted
+    camlStdlib__Format__pp_print_array_244_245_code deleted
+    camlStdlib__Format__pp_print_seq_246_247_code deleted
+    camlStdlib__Format__pp_print_text_248_465_code deleted
+    camlStdlib__Format__format_text_250_467_code deleted
+    camlStdlib__Format__pp_print_option_258_259_code deleted
+    camlStdlib__Format__pp_print_result_261_476_code deleted
+    camlStdlib__Format__pp_print_either_262_477_code deleted
+    camlStdlib__Format__printf_275_487_code deleted
+    camlStdlib__Format__eprintf_277_489_code deleted
+    camlStdlib__Format__dprintf_282_494_code deleted
+    camlStdlib__Format__ifprintf_270_485_code deleted
+    camlStdlib__Format__kdprintf_279_491_code deleted
+    camlStdlib__Format__ikfprintf_269_484_code deleted
+    camlStdlib__Format__make_synchronized_formatter_safe_156_428_code deleted
+    camlCamlinternalQuote__ident_432_1088_code (v1) v2 -> k1 * k2 =
+      apply direct(camlCamlinternalQuote__map_61_899_code) camlCamlinternalQuote__map_61_1157
+        (camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433_1347,
+        v1) -> k1 * k2
+    camlCamlinternalQuote__int_402_1058_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 0 (v1) in
+      cont k1 (v3)
+    camlCamlinternalQuote__int32_412_1068_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 10 (v1) in
+      cont k1 (v3)
+    camlCamlinternalQuote__int64_413_1069_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 11 (v1) in
+      cont k1 (v3)
+    camlCamlinternalQuote__nativeint_414_1070_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 12 (v1) in
+      cont k1 (v3)
+    camlCamlinternalQuote__float_406_1062_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 4 (v1) in
+      cont k1 (v3)
+    camlStdlib__Format__sprintf_286_498_code (v1) v2 -> k1 * k2 =
+      apply direct(camlStdlib__Format__ksprintf_284_496_code) camlStdlib__Format__ksprintf_284_302
+        (camlStdlib__Format__id_0_22, v1) -> k1 * k2
+    camlCamlinternalQuote__char_403_1059_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 1 (v1) in
+      cont k1 (v3)
+    camlCamlinternalQuote__string_405_1061_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = Make_block 3 (v1, v2) in
+      cont k1 (v4)
+    camlStdlib__Format__fprintf_272_486_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Format.partial_kfprintf_274 of
+          {Stdlib__Format.partial_kfprintf_274 = camlStdlib__Format__partial_kfprintf_274_274_code}
+          {Stdlib__Format.kfprintf_429 = camlStdlib__Format__kfprintf_267_289,
+          Stdlib__Format.ppf_430 = v1,
+          Stdlib__Format.fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_431 = camlStdlib__Format__fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273_294} in
+      cont k1 (v3)
+    camlCamlinternalQuote__to_exp_598_1246_code (v1) v2 -> k1 * k2 =
+      apply direct(camlCamlinternalQuote__map_61_899_code) camlCamlinternalQuote__map_61_1157
+        (camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599_1492,
+        v1) -> k1 * k2
+    camlStdlib__Format__asprintf_289_501_code (v1) v2 -> k1 * k2 =
+      apply direct(camlStdlib__Format__kasprintf_287_499_code) camlStdlib__Format__kasprintf_287_304
+        (camlStdlib__Format__id_0_22, v1) -> k1 * k2
+    camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433_1089_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 0 (v1) in
+      cont k1 (v3)
+    camlStdlib__Format__id_0_297_code (v1) v2 -> k1 * k2 =
+      cont k1 (v1)
+    camlStdlib__Format__fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273_273_code stub (v1) v2 -> k1 * k2 =
+      cont k1 (0)
+    camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599_1247_code (v1) v2 -> k1 * k2 =
+      let v3 = Block_load 0 (v1) in
+      cont k1 (v3)
+    camlStdlib__Format__partial_kfprintf_274_274_code stub (v1) v2 -> k1 * k2 =
+      let v3 =
+        v2.(Stdlib__Format.partial_kfprintf_274).Stdlib__Format.kfprintf_429 in
+      let v4 =
+        v2.(Stdlib__Format.partial_kfprintf_274).Stdlib__Format.ppf_430 in
+      let v5 =
+        v2.(Stdlib__Format.partial_kfprintf_274).Stdlib__Format.fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_431 in
+      apply known_arity v3 (v5, v4, v1) -> k1 * k2
+    camlCamlinternalQuote__int_402_1313 = closure CamlinternalQuote.int_402 of
+      {CamlinternalQuote.int_402 = camlCamlinternalQuote__int_402_1058_code}
+      at {CamlinternalQuote.int_402 = camlCamlinternalQuote__int_402_1313} {}
+    camlCamlinternalQuote__char_403_1314 = closure CamlinternalQuote.char_403 of
+      {CamlinternalQuote.char_403 = camlCamlinternalQuote__char_403_1059_code}
+      at {CamlinternalQuote.char_403 = camlCamlinternalQuote__char_403_1314}
+      {}
+    camlCamlinternalQuote__string_405_1316 = closure CamlinternalQuote.string_405 of
+      {CamlinternalQuote.string_405 = camlCamlinternalQuote__string_405_1061_code}
+      at {CamlinternalQuote.string_405 = camlCamlinternalQuote__string_405_1316}
+      {}
+    camlCamlinternalQuote__float_406_1317 = closure CamlinternalQuote.float_406 of
+      {CamlinternalQuote.float_406 = camlCamlinternalQuote__float_406_1062_code}
+      at {CamlinternalQuote.float_406 = camlCamlinternalQuote__float_406_1317}
+      {}
+    camlCamlinternalQuote__int32_412_1323 = closure CamlinternalQuote.int32_412 of
+      {CamlinternalQuote.int32_412 = camlCamlinternalQuote__int32_412_1068_code}
+      at {CamlinternalQuote.int32_412 = camlCamlinternalQuote__int32_412_1323}
+      {}
+    camlCamlinternalQuote__int64_413_1324 = closure CamlinternalQuote.int64_413 of
+      {CamlinternalQuote.int64_413 = camlCamlinternalQuote__int64_413_1069_code}
+      at {CamlinternalQuote.int64_413 = camlCamlinternalQuote__int64_413_1324}
+      {}
+    camlCamlinternalQuote__nativeint_414_1325 = closure CamlinternalQuote.nativeint_414 of
+      {CamlinternalQuote.nativeint_414 = camlCamlinternalQuote__nativeint_414_1070_code}
+      at {CamlinternalQuote.nativeint_414 = camlCamlinternalQuote__nativeint_414_1325}
+      {}
+    camlCamlinternalQuote__ident_432_1346 = closure CamlinternalQuote.ident_432 of
+      {CamlinternalQuote.ident_432 = camlCamlinternalQuote__ident_432_1088_code}
+      at {CamlinternalQuote.ident_432 = camlCamlinternalQuote__ident_432_1346}
+      {}
+    camlCamlinternalQuote__constant_614_1506 = closure CamlinternalQuote.constant_614 of
+      {CamlinternalQuote.constant_614 = camlCamlinternalQuote__constant_614_1261_code}
+      at {CamlinternalQuote.constant_614 = camlCamlinternalQuote__constant_614_1506}
+      {}
+    camlCamlinternalQuote__construct_641_1531 = closure CamlinternalQuote.construct_641 of
+      {CamlinternalQuote.construct_641 = camlCamlinternalQuote__construct_641_1288_code}
+      at {CamlinternalQuote.construct_641 = camlCamlinternalQuote__construct_641_1531}
+      {}
+    camlCamlinternalQuote__mk_723_1606 = closure CamlinternalQuote.mk_723 of
+      {CamlinternalQuote.mk_723 = camlCamlinternalQuote__mk_723_1369_code}
+      at {CamlinternalQuote.mk_723 = camlCamlinternalQuote__mk_723_1606} {}
+    camlCamlinternalQuote__print_725_1607 = closure CamlinternalQuote.print_725 of
+      {CamlinternalQuote.print_725 = camlCamlinternalQuote__print_725_1371_code}
+      at {CamlinternalQuote.print_725 = camlCamlinternalQuote__print_725_1607}
+      {}
+    camlCamlinternalQuote__to_exp_598_1491 = closure CamlinternalQuote.to_exp_598 of
+      {CamlinternalQuote.to_exp_598 = camlCamlinternalQuote__to_exp_598_1246_code}
+      at {CamlinternalQuote.to_exp_598 = camlCamlinternalQuote__to_exp_598_1491}
+      {}
+    camlCamlinternalQuote__of_exp_600_1493 = closure CamlinternalQuote.of_exp_600 of
+      {CamlinternalQuote.of_exp_600 = camlCamlinternalQuote__of_exp_600_1248_code}
+      at {CamlinternalQuote.of_exp_600 = camlCamlinternalQuote__of_exp_600_1493}
+      {}
+    camlCamlinternalQuote__builtin_151_1225 = closure CamlinternalQuote.builtin_151 of
+      {CamlinternalQuote.builtin_151 = camlCamlinternalQuote__builtin_151_977_code}
+      at {CamlinternalQuote.builtin_151 = camlCamlinternalQuote__builtin_151_1225}
+      {}
+    camlStdlib__Format__fprintf_272_293 = closure Stdlib__Format.fprintf_272 of
+      {Stdlib__Format.fprintf_272 = camlStdlib__Format__fprintf_272_486_code}
+      at {Stdlib__Format.fprintf_272 = camlStdlib__Format__fprintf_272_293}
+      {}
+    camlStdlib__Format__sprintf_286_303 = closure Stdlib__Format.sprintf_286 of
+      {Stdlib__Format.sprintf_286 = camlStdlib__Format__sprintf_286_498_code}
+      at {Stdlib__Format.sprintf_286 = camlStdlib__Format__sprintf_286_303}
+      {}
+    camlStdlib__Format__asprintf_289_305 = closure Stdlib__Format.asprintf_289 of
+      {Stdlib__Format.asprintf_289 = camlStdlib__Format__asprintf_289_501_code}
+      at {Stdlib__Format.asprintf_289 = camlStdlib__Format__asprintf_289_305}
+      {}
+    camlStdlib__Format__kfprintf_267_289 = closure Stdlib__Format.kfprintf_267 of
+      {Stdlib__Format.kfprintf_267 = camlStdlib__Format__kfprintf_267_482_code}
+      at {Stdlib__Format.kfprintf_267 = camlStdlib__Format__kfprintf_267_289}
+      {}
+    camlStdlib__Format__ksprintf_284_302 = closure Stdlib__Format.ksprintf_284 of
+      {Stdlib__Format.ksprintf_284 = camlStdlib__Format__ksprintf_284_496_code}
+      at {Stdlib__Format.ksprintf_284 = camlStdlib__Format__ksprintf_284_302}
+      {}
+    camlStdlib__Format__kasprintf_287_304 = closure Stdlib__Format.kasprintf_287 of
+      {Stdlib__Format.kasprintf_287 = camlStdlib__Format__kasprintf_287_499_code}
+      at {Stdlib__Format.kasprintf_287 = camlStdlib__Format__kasprintf_287_304}
+      {}
+    camlCamlinternalQuote__map_61_1157 = closure CamlinternalQuote.map_61 of
+      {CamlinternalQuote.map_61 = camlCamlinternalQuote__map_61_899_code}
+      at {CamlinternalQuote.map_61 = camlCamlinternalQuote__map_61_1157} {}
+    camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433_1347 = closure CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433 of
+      {CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433 = camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433_1089_code}
+      at {CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433 = camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2150,4--17]_433_1347}
+      {}
+    camlStdlib__Format__id_0_22 = closure Stdlib__Format.id_0 of
+      {Stdlib__Format.id_0 = camlStdlib__Format__id_0_297_code}
+      at {Stdlib__Format.id_0 = camlStdlib__Format__id_0_22} {}
+    camlStdlib__Format__fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273_294 = closure Stdlib__Format.fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273 of
+      {Stdlib__Format.fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273 = camlStdlib__Format__fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273_273_code}
+      at {Stdlib__Format.fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273 = camlStdlib__Format__fn[/workspace_root/stdlib/build/format.ml:1549,27--33]_273_294}
+      {}
+    camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599_1492 = closure CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599 of
+      {CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599 = camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599_1247_code}
+      at {CamlinternalQuote.fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599 = camlCamlinternalQuote__fn[/workspace_root/stdlib/build/camlinternalQuote.ml:2690,4--7]_599_1492}
+      {}
+    camlCamlinternalQuote__Pmakeblock45775_1642 = Block 0 (0,
+      camlCamlinternalQuote__known_1_987)
+    camlCamlinternalQuote__Pmakeblock39306_1332 = Block 0
+      (camlCamlinternalQuote__int_402_1313,
+      camlCamlinternalQuote__char_403_1314,
+      camlCamlinternalQuote__untagged_char_404_1315,
+      camlCamlinternalQuote__string_405_1316,
+      camlCamlinternalQuote__float_406_1317,
+      camlCamlinternalQuote__float32_407_1318,
+      camlCamlinternalQuote__unboxed_float_408_1319,
+      camlCamlinternalQuote__unboxed_float32_409_1320,
+      camlCamlinternalQuote__int8_410_1321,
+      camlCamlinternalQuote__int16_411_1322,
+      camlCamlinternalQuote__int32_412_1323,
+      camlCamlinternalQuote__int64_413_1324,
+      camlCamlinternalQuote__nativeint_414_1325,
+      camlCamlinternalQuote__untagged_int_415_1326,
+      camlCamlinternalQuote__untagged_int8_416_1327,
+      camlCamlinternalQuote__untagged_int16_417_1328,
+      camlCamlinternalQuote__unboxed_int32_418_1329,
+      camlCamlinternalQuote__unboxed_int64_419_1330,
+      camlCamlinternalQuote__unboxed_nativeint_420_1331)
+    camlCamlinternalQuote__Pmakeblock45739_1633 = Block 0
+      (camlCamlinternalQuote__dot_149_1224,
+      camlCamlinternalQuote__builtin_151_1225)
+    camlCamlinternalQuote__Pmakeblock45757_1638 = Block 0
+      (camlCamlinternalQuote__Pmakeblock45756_1637,
+      camlCamlinternalQuote__Pmakeblock45751_1636,
+      camlCamlinternalQuote__Pmakeblock45747_1635,
+      camlCamlinternalQuote__Pmakeblock45742_1634,
+      camlCamlinternalQuote__Pmakeblock45739_1633,
+      camlCamlinternalQuote__Pmakeblock45735_1632)
+    camlCamlinternalQuote__Pmakeblock45724_1628 = Block 0
+      (camlCamlinternalQuote__ident_432_1346,
+      camlCamlinternalQuote__of_string_434_1348)
+    camlCamlinternalQuote__Pmakeblock45641_1613 = Block 0
+      (camlCamlinternalQuote__ident_612_1504,
+      camlCamlinternalQuote__constant_614_1506,
+      camlCamlinternalQuote__let_rec_simple_615_1507,
+      camlCamlinternalQuote__let__623_1514,
+      camlCamlinternalQuote__function__627_1519,
+      camlCamlinternalQuote__apply_629_1521,
+      camlCamlinternalQuote__match__633_1524,
+      camlCamlinternalQuote__try__635_1526,
+      camlCamlinternalQuote__tuple_637_1528,
+      camlCamlinternalQuote__construct_641_1531,
+      camlCamlinternalQuote__variant_643_1533,
+      camlCamlinternalQuote__record_645_1534,
+      camlCamlinternalQuote__field_649_1538,
+      camlCamlinternalQuote__setfield_651_1540,
+      camlCamlinternalQuote__array_653_1542,
+      camlCamlinternalQuote__ifthenelse_655_1544,
+      camlCamlinternalQuote__sequence_657_1546,
+      camlCamlinternalQuote__while__659_1548,
+      camlCamlinternalQuote__for_nonbinding_661_1550,
+      camlCamlinternalQuote__for_simple_664_1551,
+      camlCamlinternalQuote__send_668_1552,
+      camlCamlinternalQuote__assert__670_1553,
+      camlCamlinternalQuote__lazy__672_1555,
+      camlCamlinternalQuote__letmodule_nonbinding_674_1557,
+      camlCamlinternalQuote__letmodule_676_1559,
+      camlCamlinternalQuote__constraint__680_1561,
+      camlCamlinternalQuote__new__682_1563,
+      camlCamlinternalQuote__pack_684_1565,
+      camlCamlinternalQuote__Pmakeblock44885_1567,
+      camlCamlinternalQuote__Pmakeblock44894_1568,
+      camlCamlinternalQuote__stack_712_1594,
+      camlCamlinternalQuote__borrow_714_1596,
+      camlCamlinternalQuote__extension_constructor_705_1588,
+      camlCamlinternalQuote__let_exception_706_1589,
+      camlCamlinternalQuote__let_op_708_1590,
+      camlCamlinternalQuote__let_open_710_1592,
+      camlCamlinternalQuote__exclave_686_1569,
+      camlCamlinternalQuote__list_comprehension_688_1571,
+      camlCamlinternalQuote__array_comprehension_690_1573,
+      camlCamlinternalQuote__immutable_array_comprehension_692_1575,
+      camlCamlinternalQuote__Pmakeblock45003_1577,
+      camlCamlinternalQuote__unboxed_bool_694_1578,
+      camlCamlinternalQuote__unboxed_tuple_695_1579,
+      camlCamlinternalQuote__unboxed_record_product_699_1582,
+      camlCamlinternalQuote__unboxed_field_703_1586,
+      camlCamlinternalQuote__quote_716_1598,
+      camlCamlinternalQuote__splice_718_1600,
+      camlCamlinternalQuote__unquote_720_1602)
+    camlCamlinternalQuote__Pmakeblock45592_1612 = Block 0
+      (camlCamlinternalQuote__mk_723_1606,
+      camlCamlinternalQuote__print_725_1607)
+    camlCamlinternalQuote__Pmakeblock45589_1611 = Block 0
+      (camlCamlinternalQuote__to_exp_598_1491,
+      camlCamlinternalQuote__of_exp_600_1493,
+      camlCamlinternalQuote__of_exp_with_type_vars_602_1494,
+      camlCamlinternalQuote__Pmakeblock45585_1610,
+      camlCamlinternalQuote__print_608_1499)
+    camlCamlinternalQuote = Block 0
+      (camlCamlinternalQuote__Pmakeblock45775_1642,
+      camlCamlinternalQuote__Pmakeblock45773_1641,
+      camlCamlinternalQuote__Pmakeblock45771_1640,
+      camlCamlinternalQuote__Pmakeblock39306_1332,
+      camlCamlinternalQuote__Pmakeblock45757_1638,
+      camlCamlinternalQuote__Pmakeblock39132_1309,
+      camlCamlinternalQuote__Pmakeblock45732_1631,
+      camlCamlinternalQuote__Pmakeblock45730_1630,
+      camlCamlinternalQuote__Pmakeblock39151_1312,
+      camlCamlinternalQuote__Pmakeblock45728_1629,
+      camlCamlinternalQuote__Pmakeblock45724_1628,
+      camlCamlinternalQuote__Pmakeblock45721_1627,
+      camlCamlinternalQuote__Pmakeblock45718_1626,
+      camlCamlinternalQuote__Pmakeblock39758_1357,
+      camlCamlinternalQuote__Pmakeblock45715_1625,
+      camlCamlinternalQuote__Pmakeblock45708_1623,
+      camlCamlinternalQuote__Pmakeblock45699_1620,
+      camlCamlinternalQuote__Pmakeblock45685_1619,
+      camlCamlinternalQuote__Pmakeblock_973,
+      camlCamlinternalQuote__Pmakeblock40606_1396,
+      camlCamlinternalQuote__Pmakeblock45665_1618,
+      camlCamlinternalQuote__Pmakeblock45659_1617,
+      camlCamlinternalQuote__Pmakeblock45656_1616,
+      camlCamlinternalQuote__Pmakeblock45649_1615,
+      camlCamlinternalQuote__Pmakeblock45641_1613,
+      camlCamlinternalQuote__Pmakeblock45592_1612,
+      camlCamlinternalQuote__Pmakeblock45589_1611)
+    camlStdlib__Format = Block 0 (camlStdlib__Format__pp_open_box_61_87,
+      camlStdlib__Format__partial_apply1_185_212,
+      camlStdlib__Format__pp_close_box_32_57,
+      camlStdlib__Format__partial_apply1_186_213,
+      camlStdlib__Format__pp_open_hbox_57_82,
+      camlStdlib__Format__partial_apply1_181_208,
+      camlStdlib__Format__pp_open_vbox_58_84,
+      camlStdlib__Format__partial_apply1_182_209,
+      camlStdlib__Format__pp_open_hvbox_59_85,
+      camlStdlib__Format__partial_apply1_183_210,
+      camlStdlib__Format__pp_open_hovbox_60_86,
+      camlStdlib__Format__partial_apply1_184_211,
+      camlStdlib__Format__pp_print_string_48_73,
+      camlStdlib__Format__partial_apply1_190_217,
+      camlStdlib__Format__pp_print_substring_50_75,
+      camlStdlib__Format__print_substring_191_218,
+      camlStdlib__Format__pp_print_bytes_51_76,
+      camlStdlib__Format__print_bytes_197_220,
+      camlStdlib__Format__pp_print_as_47_72,
+      camlStdlib__Format__partial_apply2_189_216,
+      camlStdlib__Format__pp_print_substring_as_49_74,
+      camlStdlib__Format__print_substring_as_194_219,
+      camlStdlib__Format__pp_print_int_52_77,
+      camlStdlib__Format__partial_apply1_198_221,
+      camlStdlib__Format__pp_print_float_53_78,
+      camlStdlib__Format__partial_apply1_199_222,
+      camlStdlib__Format__pp_print_char_55_80,
+      camlStdlib__Format__partial_apply1_200_223,
+      camlStdlib__Format__pp_print_bool_54_79,
+      camlStdlib__Format__partial_apply1_201_224,
+      camlStdlib__Format__pp_print_nothing_56_81,
+      camlStdlib__Format__pp_print_space_68_94,
+      camlStdlib__Format__partial_apply1_204_227,
+      camlStdlib__Format__pp_print_cut_69_99,
+      camlStdlib__Format__partial_apply1_203_226,
+      camlStdlib__Format__pp_print_break_67_93,
+      camlStdlib__Format__partial_apply2_202_225,
+      camlStdlib__Format__pp_print_custom_break_66_92,
+      camlStdlib__Format__pp_force_newline_64_90,
+      camlStdlib__Format__partial_apply1_205_228,
+      camlStdlib__Format__pp_print_if_newline_65_91,
+      camlStdlib__Format__partial_apply1_208_231,
+      camlStdlib__Format__pp_print_flush_63_89,
+      camlStdlib__Format__partial_apply1_206_229,
+      camlStdlib__Format__pp_print_newline_62_88,
+      camlStdlib__Format__partial_apply1_207_230, 1000000010,
+      camlStdlib__Format__pp_set_margin_84_120,
+      camlStdlib__Format__partial_apply1_214_237,
+      camlStdlib__Format__pp_get_margin_87_123,
+      camlStdlib__Format__partial_apply1_215_238,
+      camlStdlib__Format__pp_set_max_indent_82_118,
+      camlStdlib__Format__partial_apply1_216_239,
+      camlStdlib__Format__pp_get_max_indent_83_119,
+      camlStdlib__Format__partial_apply1_217_240,
+      camlStdlib__Format__check_geometry_86_122,
+      camlStdlib__Format__pp_set_geometry_89_125,
+      camlStdlib__Format__set_geometry_218_241,
+      camlStdlib__Format__pp_safe_set_geometry_90_126,
+      camlStdlib__Format__safe_set_geometry_219_242,
+      camlStdlib__Format__pp_update_geometry_92_128,
+      camlStdlib__Format__update_geometry_221_244,
+      camlStdlib__Format__pp_get_geometry_91_127,
+      camlStdlib__Format__partial_apply1_220_243,
+      camlStdlib__Format__pp_set_max_boxes_75_111,
+      camlStdlib__Format__partial_apply1_222_245,
+      camlStdlib__Format__pp_get_max_boxes_76_112,
+      camlStdlib__Format__partial_apply1_223_246,
+      camlStdlib__Format__pp_over_max_boxes_77_113,
+      camlStdlib__Format__partial_apply1_224_247,
+      camlStdlib__Format__pp_open_tbox_70_104,
+      camlStdlib__Format__partial_apply1_209_232,
+      camlStdlib__Format__pp_close_tbox_71_105,
+      camlStdlib__Format__partial_apply1_210_233,
+      camlStdlib__Format__pp_set_tab_74_110,
+      camlStdlib__Format__partial_apply1_212_235,
+      camlStdlib__Format__pp_print_tab_73_107,
+      camlStdlib__Format__partial_apply1_213_236,
+      camlStdlib__Format__pp_print_tbreak_72_106,
+      camlStdlib__Format__partial_apply2_211_234,
+      camlStdlib__Format__pp_set_ellipsis_text_78_114,
+      camlStdlib__Format__partial_apply1_225_248,
+      camlStdlib__Format__pp_get_ellipsis_text_79_115,
+      camlStdlib__Format__partial_apply1_226_249,
+      camlStdlib__Format__String_tag5386_25,
+      camlStdlib__Format__pp_open_stag_33_58,
+      camlStdlib__Format__partial_apply1_187_214,
+      camlStdlib__Format__pp_close_stag_34_59,
+      camlStdlib__Format__partial_apply1_188_215,
+      camlStdlib__Format__pp_set_tags_39_64,
+      camlStdlib__Format__partial_apply1_238_261,
+      camlStdlib__Format__pp_set_print_tags_35_60,
+      camlStdlib__Format__partial_apply1_234_257,
+      camlStdlib__Format__pp_set_mark_tags_36_61,
+      camlStdlib__Format__partial_apply1_236_259,
+      camlStdlib__Format__pp_get_print_tags_37_62,
+      camlStdlib__Format__partial_apply1_235_258,
+      camlStdlib__Format__pp_get_mark_tags_38_63,
+      camlStdlib__Format__partial_apply1_237_260,
+      camlStdlib__Format__pp_set_formatter_out_channel_99_135,
+      camlStdlib__Format__partial_apply1_227_250,
+      camlStdlib__Format__pp_set_formatter_output_functions_95_131,
+      camlStdlib__Format__partial_apply2_230_253,
+      camlStdlib__Format__pp_get_formatter_output_functions_96_132,
+      camlStdlib__Format__partial_apply1_231_254,
+      camlStdlib__Format__pp_set_formatter_out_functions_93_129,
+      camlStdlib__Format__partial_apply1_228_251,
+      camlStdlib__Format__pp_get_formatter_out_functions_94_130,
+      camlStdlib__Format__partial_apply1_229_252,
+      camlStdlib__Format__utf_8_scalar_width_108_140,
+      camlStdlib__Format__ascii_width_110_142,
+      camlStdlib__Format__pp_set_formatter_stag_functions_41_66,
+      camlStdlib__Format__partial_apply1_232_255,
+      camlStdlib__Format__pp_get_formatter_stag_functions_40_65,
+      camlStdlib__Format__partial_apply1_233_256,
+      camlStdlib__Format__formatter_of_out_channel_120_149,
+      camlStdlib__Format__synchronized_formatter_of_out_channel_160_194,
+      $359, camlStdlib__Format__get_std_formatter_150_186, $361,
+      camlStdlib__Format__get_err_formatter_151_187,
+      camlStdlib__Format__formatter_of_buffer_122_150, $364,
+      camlStdlib__Format__get_stdbuf_153_189, $366,
+      camlStdlib__Format__get_str_formatter_152_188,
+      camlStdlib__Format__flush_str_formatter_155_191,
+      camlStdlib__Format__make_formatter_113_145,
+      camlStdlib__Format__make_synchronized_formatter_unsafe_159_193,
+      camlStdlib__Format__formatter_of_out_functions_112_144,
+      camlStdlib__Format__make_symbolic_output_buffer_163_195,
+      camlStdlib__Format__clear_symbolic_output_buffer_164_196,
+      camlStdlib__Format__get_symbolic_output_buffer_165_197,
+      camlStdlib__Format__flush_symbolic_output_buffer_166_198,
+      camlStdlib__Format__add_symbolic_output_item_167_199,
+      camlStdlib__Format__formatter_of_symbolic_output_buffer_168_200,
+      camlStdlib__Format__pp_print_iter_239_263,
+      camlStdlib__Format__pp_print_list_242_265,
+      camlStdlib__Format__pp_print_array_244_267,
+      camlStdlib__Format__pp_print_seq_246_269,
+      camlStdlib__Format__pp_print_text_248_270,
+      camlStdlib__Format__format_text_250_271,
+      camlStdlib__Format__pp_print_option_258_282,
+      camlStdlib__Format__pp_print_result_261_283,
+      camlStdlib__Format__pp_print_either_262_284,
+      camlStdlib__Format__fprintf_272_293,
+      camlStdlib__Format__printf_275_295,
+      camlStdlib__Format__eprintf_277_297,
+      camlStdlib__Format__sprintf_286_303,
+      camlStdlib__Format__asprintf_289_305,
+      camlStdlib__Format__dprintf_282_300,
+      camlStdlib__Format__ifprintf_270_291,
+      camlStdlib__Format__kfprintf_267_289,
+      camlStdlib__Format__kdprintf_279_299,
+      camlStdlib__Format__ikfprintf_269_290,
+      camlStdlib__Format__ksprintf_284_302,
+      camlStdlib__Format__kasprintf_287_304,
+      camlStdlib__Format__Safe24453_306)
+    and 1 closure of camlCamlinternalQuote__Pmakeblock45775_1642 that nothing asks for
+    and 71 closures and 28 blocks of camlCamlinternalQuote that nothing asks for
+    and 12 closures of camlCamlinternalQuote__Pmakeblock39306_1332 that nothing asks for
+    and 1 closure of camlCamlinternalQuote__Pmakeblock45724_1628 that nothing asks for
+    and 43 closures and 3 blocks of camlCamlinternalQuote__Pmakeblock45641_1613 that nothing asks for
+    and 6 closures and 1 block of camlCamlinternalQuote__Pmakeblock45589_1611 that nothing asks for
+    and 10 closures and 5 blocks of camlCamlinternalQuote__Pmakeblock45757_1638 that nothing asks for
+    and 1 closure of camlCamlinternalQuote__Pmakeblock45739_1633 that nothing asks for
+    and 146 closures and 2 blocks of camlStdlib__Format that nothing asks for
+  before Simplify, after the prefix, with its 9 imports (56 steps): returns
+                                                                    [0:
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>];
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  after Simplify, after the prefix, with its 9 imports (51 steps): returns
+                                                                    [0:
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>];
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 2 of them: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed

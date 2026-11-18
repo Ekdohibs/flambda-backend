@@ -1,0 +1,23 @@
+;; The rules of ../, one unit of the library after the other: a file of the
+;; tree, which ../gen_rules.exe wrote (see ../dune). It is not made when
+;; dune loads this directory, so that nothing is built or run for it.
+
+(include dune.inc)
+
+;; Each of the two aliases makes the rules again from the rules by which the
+;; build compiles the library, and compares them with dune.inc. Where they
+;; differ (a file added to stdlib/, a change of the build's command) the
+;; alias fails, and `dune promote` takes the new rules.
+(rule
+ (alias runtest-stdlib)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff dune.inc ../dune.inc.gen)))
+
+(rule
+ (alias runtest-stdlib-long)
+ (enabled_if
+  (= %{context_name} "main"))
+ (action
+  (diff dune.inc ../dune.inc.gen)))

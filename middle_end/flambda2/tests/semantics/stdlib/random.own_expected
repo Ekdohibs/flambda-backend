@@ -1,0 +1,10 @@
+stdlib__Random.fl: not checked: the model has not got the call (((Some *extern*.caml_ba_set_1)〈k1440〉《k1439》(s/4562UV 3
+           switch_result/4584N)) (args_arity 𝕍? ⨯ 𝕍? ⨯ 𝕍?) (return_arity 𝕍?)
+          (call_kind
+           (C (needs_caml_c_call true) (is_c_builtin false)
+            (effects Arbitrary_effects) (coeffects Has_coeffects)))
+          (return_mode (Not_alloc_stack (alloc my_alloc_region/4568N)))
+          (dbg /workspace_root/stdlib/build/random.ml:43,4--55)
+          (inline Default_inlined)
+          (inlining_state ((depth 0) (stub_depth 0) (arguments O3)))
+          (probe ()) (position Normal))

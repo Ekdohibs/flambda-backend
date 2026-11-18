@@ -1,0 +1,81 @@
+stdlib__Oo.fl:
+  given the .cmx of CamlinternalOO, a prefix of 57 static bindings:
+    camlCamlinternalOO__copy_4_120_code deleted
+    camlCamlinternalOO__public_method_label_5_121_code deleted
+    camlCamlinternalOO__new_method_13_243_code deleted
+    camlCamlinternalOO__new_variable_31_258_code deleted
+    camlCamlinternalOO__new_methods_variables_33_260_code deleted
+    camlCamlinternalOO__get_variable_34_261_code deleted
+    camlCamlinternalOO__get_variables_35_262_code deleted
+    camlCamlinternalOO__get_method_label_14_244_code deleted
+    camlCamlinternalOO__get_method_labels_15_245_code deleted
+    camlCamlinternalOO__get_method_18_247_code deleted
+    camlCamlinternalOO__set_method_17_246_code deleted
+    camlCamlinternalOO__set_methods_114_339_code deleted
+    camlCamlinternalOO__narrow_20_249_code deleted
+    camlCamlinternalOO__widen_27_254_code deleted
+    camlCamlinternalOO__add_initializer_37_263_code deleted
+    camlCamlinternalOO__create_table_38_264_code deleted
+    camlCamlinternalOO__init_class_40_266_code deleted
+    camlCamlinternalOO__inherits_41_267_code deleted
+    camlCamlinternalOO__make_class_44_269_code deleted
+    camlCamlinternalOO__make_class_store_45_270_code deleted
+    camlCamlinternalOO__dummy_class_46_271_code deleted
+    camlCamlinternalOO__create_object_48_273_code deleted
+    camlCamlinternalOO__create_object_opt_49_274_code deleted
+    camlCamlinternalOO__run_initializers_51_276_code deleted
+    camlCamlinternalOO__run_initializers_opt_52_277_code deleted
+    camlCamlinternalOO__create_object_and_run_initializers_53_278_code deleted
+    camlCamlinternalOO__lookup_tables_62_287_code deleted
+    camlCamlinternalOO__stats_115_340_code deleted
+    camlCamlinternalOO__public_method_label_5_24 = closure CamlinternalOO.public_method_label_5 of
+      {CamlinternalOO.public_method_label_5 = camlCamlinternalOO__public_method_label_5_121_code}
+      at {CamlinternalOO.public_method_label_5 = camlCamlinternalOO__public_method_label_5_24}
+      {}
+    camlCamlinternalOO__copy_4_23 = closure CamlinternalOO.copy_4 of
+      {CamlinternalOO.copy_4 = camlCamlinternalOO__copy_4_120_code}
+      at {CamlinternalOO.copy_4 = camlCamlinternalOO__copy_4_23} {}
+    camlCamlinternalOO = Block 0
+      (camlCamlinternalOO__public_method_label_5_24,
+      camlCamlinternalOO__new_method_13_140,
+      camlCamlinternalOO__new_variable_31_149,
+      camlCamlinternalOO__new_methods_variables_33_151,
+      camlCamlinternalOO__get_variable_34_152,
+      camlCamlinternalOO__get_variables_35_153,
+      camlCamlinternalOO__get_method_label_14_141,
+      camlCamlinternalOO__get_method_labels_15_142,
+      camlCamlinternalOO__get_method_18_144,
+      camlCamlinternalOO__set_method_17_143,
+      camlCamlinternalOO__set_methods_114_201,
+      camlCamlinternalOO__narrow_20_146, camlCamlinternalOO__widen_27_147,
+      camlCamlinternalOO__add_initializer_37_154, $19,
+      camlCamlinternalOO__create_table_38_155,
+      camlCamlinternalOO__init_class_40_156,
+      camlCamlinternalOO__inherits_41_157,
+      camlCamlinternalOO__make_class_44_158,
+      camlCamlinternalOO__make_class_store_45_159,
+      camlCamlinternalOO__dummy_class_46_160, camlCamlinternalOO__copy_4_23,
+      camlCamlinternalOO__create_object_48_161,
+      camlCamlinternalOO__create_object_opt_49_162,
+      camlCamlinternalOO__run_initializers_51_164,
+      camlCamlinternalOO__run_initializers_opt_52_165,
+      camlCamlinternalOO__create_object_and_run_initializers_53_166,
+      camlCamlinternalOO__lookup_tables_62_174, $32,
+      camlCamlinternalOO__stats_115_202)
+    and 26 closures of camlCamlinternalOO that nothing asks for
+  before Simplify, after the prefix, with its 2 imports (12 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  after Simplify, after the prefix, with its 2 imports (2 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too

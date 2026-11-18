@@ -1,0 +1,10 @@
+stdlib__Arg.fl: not checked: the model has not got the call (((Some *extern*.caml_equal)〈k2281〉《k2276》(Pmixedfield/6534N
+           x/6524UV)) (args_arity 𝕍? ⨯ 𝕍?) (return_arity 𝕍?)
+          (call_kind
+           (C (needs_caml_c_call true) (is_c_builtin false)
+            (effects Arbitrary_effects) (coeffects Has_coeffects)))
+          (return_mode (Not_alloc_stack (alloc my_alloc_region/6527N)))
+          (dbg /workspace_root/stdlib/build/arg.ml:71,26--32)
+          (inline Default_inlined)
+          (inlining_state ((depth 0) (stub_depth 0) (arguments O3)))
+          (probe ()) (position Normal))

@@ -3784,6 +3784,12 @@ again.
   first way; nothing there is run by the tests.
 - Flags other than the default ones.
 
+The files of the standard library are not units of this directory
+either. `../stdlib/` has rules that give each of them to the program as
+the build of the tree compiles it, with the build's flags, and its
+`README.md` says what those rules compare and what a verdict means
+there.
+
 The program checks one unit in a process, as the tool does. Given a
 second, it says of it "not checked: a second unit in one process",
 checks nothing from then on, and exits with 2; `../own_run/` has a

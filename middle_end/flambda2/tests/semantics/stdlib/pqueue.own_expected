@@ -1,0 +1,346 @@
+stdlib__Pqueue.fl:
+  given the .cmx of Stdlib, Stdlib__Dynarray, a prefix of 293 static bindings:
+    camlStdlib__Dynarray__set_33_154_code deleted
+    camlStdlib__Dynarray__get_32_153_code deleted
+    camlStdlib__Dynarray__add_last_52_173_code deleted
+    camlStdlib__Dynarray__pop_last_39_160_code deleted
+    camlStdlib__Dynarray__of_array_102_223_code deleted
+    camlStdlib__Dynarray__of_list_105_226_code deleted
+    camlStdlib__Dynarray__create_29_150_code deleted
+    camlStdlib__Dynarray__copy_36_157_code deleted
+    camlStdlib__Dynarray__fold_left_72_193_code deleted
+    camlStdlib__Dynarray__truncate_42_163_code deleted
+    camlStdlib__Dynarray__iter__67_188_code deleted
+    camlStdlib__Dynarray__make_30_151_code deleted
+    camlStdlib__Dynarray__init_31_152_code deleted
+    camlStdlib__Dynarray__get_last_37_158_code deleted
+    camlStdlib__Dynarray__find_last_38_159_code deleted
+    camlStdlib__Dynarray__append_array_62_183_code deleted
+    camlStdlib__Dynarray__append_list_54_175_code deleted
+    camlStdlib__Dynarray__append_65_186_code deleted
+    camlStdlib__Dynarray__append_seq_57_178_code deleted
+    camlStdlib__Dynarray__append_iter_55_176_code deleted
+    camlStdlib__Dynarray__blit_60_181_code deleted
+    camlStdlib__Dynarray__pop_last_opt_40_161_code deleted
+    camlStdlib__Dynarray__remove_last_41_162_code deleted
+    camlStdlib__Dynarray__iteri_69_190_code deleted
+    camlStdlib__Dynarray__map_70_191_code deleted
+    camlStdlib__Dynarray__mapi_71_192_code deleted
+    camlStdlib__Dynarray__fold_right_73_194_code deleted
+    camlStdlib__Dynarray__filter_82_203_code deleted
+    camlStdlib__Dynarray__filter_map_84_205_code deleted
+    camlStdlib__Dynarray__exists_74_195_code deleted
+    camlStdlib__Dynarray__for_all_76_197_code deleted
+    camlStdlib__Dynarray__exists2_78_199_code deleted
+    camlStdlib__Dynarray__for_all2_80_201_code deleted
+    camlStdlib__Dynarray__mem_86_207_code deleted
+    camlStdlib__Dynarray__memq_88_209_code deleted
+    camlStdlib__Dynarray__find_opt_90_211_code deleted
+    camlStdlib__Dynarray__find_index_92_213_code deleted
+    camlStdlib__Dynarray__find_map_94_215_code deleted
+    camlStdlib__Dynarray__find_mapi_96_217_code deleted
+    camlStdlib__Dynarray__equal_98_219_code deleted
+    camlStdlib__Dynarray__compare_100_221_code deleted
+    camlStdlib__Dynarray__to_array_103_224_code deleted
+    camlStdlib__Dynarray__to_list_106_227_code deleted
+    camlStdlib__Dynarray__of_seq_107_228_code deleted
+    camlStdlib__Dynarray__to_seq_108_229_code deleted
+    camlStdlib__Dynarray__to_seq_reentrant_111_232_code deleted
+    camlStdlib__Dynarray__to_seq_rev_114_235_code deleted
+    camlStdlib__Dynarray__to_seq_rev_reentrant_117_238_code deleted
+    camlStdlib__Dynarray__capacity_44_165_code deleted
+    camlStdlib__Dynarray__ensure_capacity_46_167_code deleted
+    camlStdlib__Dynarray__ensure_extra_capacity_47_168_code deleted
+    camlStdlib__Dynarray__fit_capacity_48_169_code deleted
+    camlStdlib__Dynarray__set_capacity_49_170_code deleted
+    camlStdlib__Dynarray__reset_50_171_code deleted
+    camlStdlib__Dynarray__unsafe_to_iarray_120_241_code deleted
+    camlStdlib__failwith_0_93_code deleted
+    camlStdlib__min_2_95_code deleted
+    camlStdlib__max_3_96_code deleted
+    camlStdlib__abs_4_97_code deleted
+    camlStdlib__lnot_5_98_code deleted
+    camlStdlib__^_6_99_code deleted
+    camlStdlib__char_of_int_7_100_code deleted
+    camlStdlib__string_of_bool_8_101_code deleted
+    camlStdlib__bool_of_string_opt_10_103_code deleted
+    camlStdlib__bool_of_string_9_102_code deleted
+    camlStdlib__string_of_int_11_104_code deleted
+    camlStdlib__int_of_string_opt_12_105_code deleted
+    camlStdlib__string_of_float_15_108_code deleted
+    camlStdlib__float_of_string_opt_16_109_code deleted
+    camlStdlib__@_17_110_code deleted
+    camlStdlib__print_char_42_135_code deleted
+    camlStdlib__print_string_43_136_code deleted
+    camlStdlib__print_bytes_44_137_code deleted
+    camlStdlib__print_int_45_138_code deleted
+    camlStdlib__print_float_46_139_code deleted
+    camlStdlib__print_endline_47_140_code deleted
+    camlStdlib__print_newline_48_141_code deleted
+    camlStdlib__prerr_char_49_142_code deleted
+    camlStdlib__prerr_string_50_143_code deleted
+    camlStdlib__prerr_bytes_51_144_code deleted
+    camlStdlib__prerr_int_52_145_code deleted
+    camlStdlib__prerr_float_53_146_code deleted
+    camlStdlib__prerr_endline_54_147_code deleted
+    camlStdlib__prerr_newline_55_148_code deleted
+    camlStdlib__read_line_56_149_code deleted
+    camlStdlib__read_int_opt_58_151_code deleted
+    camlStdlib__read_int_57_150_code deleted
+    camlStdlib__read_float_opt_60_153_code deleted
+    camlStdlib__read_float_59_152_code deleted
+    camlStdlib__open_out_20_113_code deleted
+    camlStdlib__open_out_bin_21_114_code deleted
+    camlStdlib__open_out_gen_19_112_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:362,0--66]_92_92_code deleted
+    camlStdlib__flush_all_22_115_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:387,0--86]_91_91_code deleted
+    camlStdlib__output_string_25_118_code deleted
+    camlStdlib__output_bytes_24_117_code deleted
+    camlStdlib__output_26_119_code deleted
+    camlStdlib__output_substring_27_120_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:405,0--85]_90_90_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:406,0--90]_89_89_code deleted
+    camlStdlib__output_value_28_121_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:412,0--79]_88_88_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:413,0--69]_87_87_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:414,0--85]_86_86_code deleted
+    camlStdlib__close_out_29_122_code deleted
+    camlStdlib__close_out_noerr_30_123_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:420,0--127]_85_85_code deleted
+    camlStdlib__open_in_32_125_code deleted
+    camlStdlib__open_in_bin_33_126_code deleted
+    camlStdlib__open_in_gen_31_124_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:439,0--75]_84_84_code deleted
+    camlStdlib__input_line_38_131_code deleted
+    camlStdlib__input_34_127_code deleted
+    camlStdlib__really_input_36_129_code deleted
+    camlStdlib__really_input_string_37_130_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:497,0--74]_83_83_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:498,0--79]_82_82_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:499,0--95]_81_81_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:500,0--76]_80_80_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:501,0--66]_79_79_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:502,0--83]_78_78_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:503,0--76]_77_77_code deleted
+    camlStdlib__close_in_noerr_41_134_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:505,0--124]_76_76_code deleted
+    camlStdlib__string_of_format_61_154_code deleted
+    camlStdlib__^^_62_155_code deleted
+    camlStdlib__exit_68_162_code deleted
+    camlStdlib__at_exit_65_158_code deleted
+    camlStdlib__valid_float_lexem_13_106_code deleted
+    camlStdlib__unsafe_really_input_35_128_code deleted
+    camlStdlib__do_at_exit_67_161_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_75_75_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_74_74_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_73_73_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_72_72_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_71_71_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_70_70_code deleted
+    camlStdlib__at_exit_safe_63_156_code deleted
+    camlStdlib__Dynarray__length_34_155_code (v1) v2 -> k1 * k2 =
+      let v3 = Block_load mut 0 (v1) in
+      cont k1 (v3)
+    camlStdlib__Dynarray__is_empty_35_156_code (v1) v2 -> k1 * k2 =
+      let v3 = Block_load mut 0 (v1) in
+      let v4 = Phys_equal eq (v3, 0) in
+      let v5 = Tag_immediate (v4) in
+      cont k1 (v5)
+    camlStdlib__invalid_arg_1_94_code (v1) v2 -> k1 * k2 =
+      let v3 = Make_block 0 (caml_exn_Invalid_argument, v1) in
+      cont k2 pop(reraise k2) (v3)
+    camlStdlib__Dynarray__clear_43_164_code (v1) v2 -> k1 * k2 =
+      apply direct(camlStdlib__Dynarray__truncate_42_163_code) camlStdlib__Dynarray__truncate_42_207
+        (v1, 0) -> k1 * k2
+    camlStdlib__Dynarray__iter_68_189_code (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(camlStdlib__Dynarray__iter__67_188_code) camlStdlib__Dynarray__iter__67_230
+        (camlStdlib__Dynarray__immstring_138, v1, v2) -> k1 * k2
+    camlStdlib__Dynarray__create_29_194 = closure Stdlib__Dynarray.create_29 of
+      {Stdlib__Dynarray.create_29 = camlStdlib__Dynarray__create_29_150_code}
+      at {Stdlib__Dynarray.create_29 = camlStdlib__Dynarray__create_29_194}
+      {}
+    camlStdlib__Dynarray__get_32_197 = closure Stdlib__Dynarray.get_32 of
+      {Stdlib__Dynarray.get_32 = camlStdlib__Dynarray__get_32_153_code}
+      at {Stdlib__Dynarray.get_32 = camlStdlib__Dynarray__get_32_197} {}
+    camlStdlib__Dynarray__set_33_198 = closure Stdlib__Dynarray.set_33 of
+      {Stdlib__Dynarray.set_33 = camlStdlib__Dynarray__set_33_154_code}
+      at {Stdlib__Dynarray.set_33 = camlStdlib__Dynarray__set_33_198} {}
+    camlStdlib__Dynarray__length_34_199 = closure Stdlib__Dynarray.length_34 of
+      {Stdlib__Dynarray.length_34 = camlStdlib__Dynarray__length_34_155_code}
+      at {Stdlib__Dynarray.length_34 = camlStdlib__Dynarray__length_34_199}
+      {}
+    camlStdlib__Dynarray__is_empty_35_200 = closure Stdlib__Dynarray.is_empty_35 of
+      {Stdlib__Dynarray.is_empty_35 = camlStdlib__Dynarray__is_empty_35_156_code}
+      at {Stdlib__Dynarray.is_empty_35 = camlStdlib__Dynarray__is_empty_35_200}
+      {}
+    camlStdlib__Dynarray__copy_36_201 = closure Stdlib__Dynarray.copy_36 of
+      {Stdlib__Dynarray.copy_36 = camlStdlib__Dynarray__copy_36_157_code}
+      at {Stdlib__Dynarray.copy_36 = camlStdlib__Dynarray__copy_36_201} {}
+    camlStdlib__Dynarray__add_last_52_217 = closure Stdlib__Dynarray.add_last_52 of
+      {Stdlib__Dynarray.add_last_52 = camlStdlib__Dynarray__add_last_52_173_code}
+      at {Stdlib__Dynarray.add_last_52 = camlStdlib__Dynarray__add_last_52_217}
+      {}
+    camlStdlib__Dynarray__pop_last_39_204 = closure Stdlib__Dynarray.pop_last_39 of
+      {Stdlib__Dynarray.pop_last_39 = camlStdlib__Dynarray__pop_last_39_160_code}
+      at {Stdlib__Dynarray.pop_last_39 = camlStdlib__Dynarray__pop_last_39_204}
+      {}
+    camlStdlib__Dynarray__truncate_42_207 = closure Stdlib__Dynarray.truncate_42 of
+      {Stdlib__Dynarray.truncate_42 = camlStdlib__Dynarray__truncate_42_163_code}
+      at {Stdlib__Dynarray.truncate_42 = camlStdlib__Dynarray__truncate_42_207}
+      {}
+    camlStdlib__Dynarray__clear_43_208 = closure Stdlib__Dynarray.clear_43 of
+      {Stdlib__Dynarray.clear_43 = camlStdlib__Dynarray__clear_43_164_code}
+      at {Stdlib__Dynarray.clear_43 = camlStdlib__Dynarray__clear_43_208} {}
+    camlStdlib__Dynarray__iter_68_231 = closure Stdlib__Dynarray.iter_68 of
+      {Stdlib__Dynarray.iter_68 = camlStdlib__Dynarray__iter_68_189_code}
+      at {Stdlib__Dynarray.iter_68 = camlStdlib__Dynarray__iter_68_231} {}
+    camlStdlib__Dynarray__fold_left_72_235 = closure Stdlib__Dynarray.fold_left_72 of
+      {Stdlib__Dynarray.fold_left_72 = camlStdlib__Dynarray__fold_left_72_193_code}
+      at {Stdlib__Dynarray.fold_left_72 = camlStdlib__Dynarray__fold_left_72_235}
+      {}
+    camlStdlib__Dynarray__of_array_102_255 = closure Stdlib__Dynarray.of_array_102 of
+      {Stdlib__Dynarray.of_array_102 = camlStdlib__Dynarray__of_array_102_223_code}
+      at {Stdlib__Dynarray.of_array_102 = camlStdlib__Dynarray__of_array_102_255}
+      {}
+    camlStdlib__Dynarray__of_list_105_257 = closure Stdlib__Dynarray.of_list_105 of
+      {Stdlib__Dynarray.of_list_105 = camlStdlib__Dynarray__of_list_105_226_code}
+      at {Stdlib__Dynarray.of_list_105 = camlStdlib__Dynarray__of_list_105_257}
+      {}
+    camlStdlib__invalid_arg_1_41 = closure Stdlib.invalid_arg_1 of
+      {Stdlib.invalid_arg_1 = camlStdlib__invalid_arg_1_94_code}
+      at {Stdlib.invalid_arg_1 = camlStdlib__invalid_arg_1_41} {}
+    camlStdlib__Dynarray__iter__67_230 = closure Stdlib__Dynarray.iter__67 of
+      {Stdlib__Dynarray.iter__67 = camlStdlib__Dynarray__iter__67_188_code}
+      at {Stdlib__Dynarray.iter__67 = camlStdlib__Dynarray__iter__67_230} {}
+    camlStdlib__Dynarray = Block 0 (camlStdlib__Dynarray__create_29_194,
+      camlStdlib__Dynarray__make_30_195, camlStdlib__Dynarray__init_31_196,
+      camlStdlib__Dynarray__get_32_197, camlStdlib__Dynarray__set_33_198,
+      camlStdlib__Dynarray__length_34_199,
+      camlStdlib__Dynarray__is_empty_35_200,
+      camlStdlib__Dynarray__get_last_37_202,
+      camlStdlib__Dynarray__find_last_38_203,
+      camlStdlib__Dynarray__copy_36_201,
+      camlStdlib__Dynarray__add_last_52_217,
+      camlStdlib__Dynarray__append_array_62_225,
+      camlStdlib__Dynarray__append_list_54_219,
+      camlStdlib__Dynarray__append_65_228,
+      camlStdlib__Dynarray__append_seq_57_221,
+      camlStdlib__Dynarray__append_iter_55_220,
+      camlStdlib__Dynarray__blit_60_223,
+      camlStdlib__Dynarray__pop_last_opt_40_205,
+      camlStdlib__Dynarray__pop_last_39_204,
+      camlStdlib__Dynarray__remove_last_41_206,
+      camlStdlib__Dynarray__truncate_42_207,
+      camlStdlib__Dynarray__clear_43_208, camlStdlib__Dynarray__iter_68_231,
+      camlStdlib__Dynarray__iteri_69_232, camlStdlib__Dynarray__map_70_233,
+      camlStdlib__Dynarray__mapi_71_234,
+      camlStdlib__Dynarray__fold_left_72_235,
+      camlStdlib__Dynarray__fold_right_73_236,
+      camlStdlib__Dynarray__filter_82_245,
+      camlStdlib__Dynarray__filter_map_84_246,
+      camlStdlib__Dynarray__exists_74_237,
+      camlStdlib__Dynarray__for_all_76_239,
+      camlStdlib__Dynarray__exists2_78_241,
+      camlStdlib__Dynarray__for_all2_80_243,
+      camlStdlib__Dynarray__mem_86_247, camlStdlib__Dynarray__memq_88_248,
+      camlStdlib__Dynarray__find_opt_90_249,
+      camlStdlib__Dynarray__find_index_92_250,
+      camlStdlib__Dynarray__find_map_94_251,
+      camlStdlib__Dynarray__find_mapi_96_252,
+      camlStdlib__Dynarray__equal_98_253,
+      camlStdlib__Dynarray__compare_100_254,
+      camlStdlib__Dynarray__of_array_102_255,
+      camlStdlib__Dynarray__to_array_103_256,
+      camlStdlib__Dynarray__of_list_105_257,
+      camlStdlib__Dynarray__to_list_106_258,
+      camlStdlib__Dynarray__of_seq_107_259,
+      camlStdlib__Dynarray__to_seq_108_260,
+      camlStdlib__Dynarray__to_seq_reentrant_111_261,
+      camlStdlib__Dynarray__to_seq_rev_114_262,
+      camlStdlib__Dynarray__to_seq_rev_reentrant_117_263,
+      camlStdlib__Dynarray__capacity_44_209,
+      camlStdlib__Dynarray__ensure_capacity_46_211,
+      camlStdlib__Dynarray__ensure_extra_capacity_47_212,
+      camlStdlib__Dynarray__fit_capacity_48_213,
+      camlStdlib__Dynarray__set_capacity_49_214,
+      camlStdlib__Dynarray__reset_50_215,
+      camlStdlib__Dynarray__unsafe_to_iarray_120_264)
+    camlStdlib = Block 0 (camlStdlib__invalid_arg_1_41,
+      camlStdlib__failwith_0_40, camlStdlib__Exit1460_42,
+      caml_exn_Match_failure, caml_exn_Assert_failure,
+      caml_exn_Invalid_argument, caml_exn_Failure, caml_exn_Not_found,
+      caml_exn_Out_of_memory, caml_exn_Stack_overflow, caml_exn_Sys_error,
+      caml_exn_End_of_file, caml_exn_Division_by_zero,
+      caml_exn_Sys_blocked_io, caml_exn_Undefined_recursive_module,
+      camlStdlib__min_2_43, camlStdlib__max_3_44, camlStdlib__abs_4_45,
+      4611686018427387903, -4611686018427387904, camlStdlib__lnot_5_46,
+      camlStdlib__infinity1506_47, camlStdlib__neg_infinity1510_48,
+      camlStdlib__nan1514_49, camlStdlib__max_float1518_50,
+      camlStdlib__min_float1522_51, camlStdlib__epsilon_float1526_52,
+      camlStdlib__^_6_53, camlStdlib__char_of_int_7_54,
+      camlStdlib__string_of_bool_8_56, camlStdlib__bool_of_string_opt_10_59,
+      camlStdlib__bool_of_string_9_57, camlStdlib__string_of_int_11_60,
+      camlStdlib__int_of_string_opt_12_61, camlStdlib__string_of_float_15_63,
+      camlStdlib__float_of_string_opt_16_64, camlStdlib__@_17_65, $111, $112,
+      $113, camlStdlib__print_char_42_93, camlStdlib__print_string_43_94,
+      camlStdlib__print_bytes_44_95, camlStdlib__print_int_45_96,
+      camlStdlib__print_float_46_97, camlStdlib__print_endline_47_98,
+      camlStdlib__print_newline_48_99, camlStdlib__prerr_char_49_100,
+      camlStdlib__prerr_string_50_101, camlStdlib__prerr_bytes_51_102,
+      camlStdlib__prerr_int_52_103, camlStdlib__prerr_float_53_104,
+      camlStdlib__prerr_endline_54_105, camlStdlib__prerr_newline_55_106,
+      camlStdlib__read_line_56_107, camlStdlib__read_int_opt_58_109,
+      camlStdlib__read_int_57_108, camlStdlib__read_float_opt_60_111,
+      camlStdlib__read_float_59_110, camlStdlib__open_out_20_68,
+      camlStdlib__open_out_bin_21_69, camlStdlib__open_out_gen_19_67,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:362,0--66]_92_144,
+      camlStdlib__flush_all_22_70,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:387,0--86]_91_143,
+      camlStdlib__output_string_25_73, camlStdlib__output_bytes_24_72,
+      camlStdlib__output_26_74, camlStdlib__output_substring_27_76,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:405,0--85]_90_142,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:406,0--90]_89_141,
+      camlStdlib__output_value_28_78,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:412,0--79]_88_140,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:413,0--69]_87_139,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:414,0--85]_86_138,
+      camlStdlib__close_out_29_79, camlStdlib__close_out_noerr_30_80,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:420,0--127]_85_137,
+      camlStdlib__open_in_32_82, camlStdlib__open_in_bin_33_83,
+      camlStdlib__open_in_gen_31_81,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:439,0--75]_84_136,
+      camlStdlib__input_line_38_90, camlStdlib__input_34_84,
+      camlStdlib__really_input_36_87, camlStdlib__really_input_string_37_89,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:497,0--74]_83_135,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:498,0--79]_82_134,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:499,0--95]_81_133,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:500,0--76]_80_132,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:501,0--66]_79_131,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:502,0--83]_78_130,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:503,0--76]_77_129,
+      camlStdlib__close_in_noerr_41_92,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:505,0--124]_76_128,
+      camlStdlib__Pmakeblock3360_127, camlStdlib__string_of_format_61_112,
+      camlStdlib__^^_62_113, camlStdlib__exit_68_118,
+      camlStdlib__at_exit_65_115, camlStdlib__Safe3353_120,
+      camlStdlib__valid_float_lexem_13_62,
+      camlStdlib__unsafe_really_input_35_86, camlStdlib__do_at_exit_67_117,
+      $178)
+    and 44 closures of camlStdlib__Dynarray that nothing asks for
+    and 84 closures and 3 blocks of camlStdlib that nothing asks for
+  before Simplify, after the prefix, with its 25 imports (43 steps): 
+returns [0: <fun>; <fun>; <fun>; <fun>]
+  after Simplify, after the prefix, with its 25 imports (65 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated

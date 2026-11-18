@@ -1,0 +1,167 @@
+stdlib__Repr.fl:
+  given the .cmx of Stdlib, a prefix of 174 static bindings:
+    camlStdlib__min_2_95_code deleted
+    camlStdlib__max_3_96_code deleted
+    camlStdlib__invalid_arg_1_94_code deleted
+    camlStdlib__failwith_0_93_code deleted
+    camlStdlib__abs_4_97_code deleted
+    camlStdlib__lnot_5_98_code deleted
+    camlStdlib__^_6_99_code deleted
+    camlStdlib__char_of_int_7_100_code deleted
+    camlStdlib__string_of_bool_8_101_code deleted
+    camlStdlib__bool_of_string_opt_10_103_code deleted
+    camlStdlib__bool_of_string_9_102_code deleted
+    camlStdlib__string_of_int_11_104_code deleted
+    camlStdlib__int_of_string_opt_12_105_code deleted
+    camlStdlib__string_of_float_15_108_code deleted
+    camlStdlib__float_of_string_opt_16_109_code deleted
+    camlStdlib__@_17_110_code deleted
+    camlStdlib__print_char_42_135_code deleted
+    camlStdlib__print_string_43_136_code deleted
+    camlStdlib__print_bytes_44_137_code deleted
+    camlStdlib__print_int_45_138_code deleted
+    camlStdlib__print_float_46_139_code deleted
+    camlStdlib__print_endline_47_140_code deleted
+    camlStdlib__print_newline_48_141_code deleted
+    camlStdlib__prerr_char_49_142_code deleted
+    camlStdlib__prerr_string_50_143_code deleted
+    camlStdlib__prerr_bytes_51_144_code deleted
+    camlStdlib__prerr_int_52_145_code deleted
+    camlStdlib__prerr_float_53_146_code deleted
+    camlStdlib__prerr_endline_54_147_code deleted
+    camlStdlib__prerr_newline_55_148_code deleted
+    camlStdlib__read_line_56_149_code deleted
+    camlStdlib__read_int_opt_58_151_code deleted
+    camlStdlib__read_int_57_150_code deleted
+    camlStdlib__read_float_opt_60_153_code deleted
+    camlStdlib__read_float_59_152_code deleted
+    camlStdlib__open_out_20_113_code deleted
+    camlStdlib__open_out_bin_21_114_code deleted
+    camlStdlib__open_out_gen_19_112_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:362,0--66]_92_92_code deleted
+    camlStdlib__flush_all_22_115_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:387,0--86]_91_91_code deleted
+    camlStdlib__output_string_25_118_code deleted
+    camlStdlib__output_bytes_24_117_code deleted
+    camlStdlib__output_26_119_code deleted
+    camlStdlib__output_substring_27_120_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:405,0--85]_90_90_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:406,0--90]_89_89_code deleted
+    camlStdlib__output_value_28_121_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:412,0--79]_88_88_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:413,0--69]_87_87_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:414,0--85]_86_86_code deleted
+    camlStdlib__close_out_29_122_code deleted
+    camlStdlib__close_out_noerr_30_123_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:420,0--127]_85_85_code deleted
+    camlStdlib__open_in_32_125_code deleted
+    camlStdlib__open_in_bin_33_126_code deleted
+    camlStdlib__open_in_gen_31_124_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:439,0--75]_84_84_code deleted
+    camlStdlib__input_line_38_131_code deleted
+    camlStdlib__input_34_127_code deleted
+    camlStdlib__really_input_36_129_code deleted
+    camlStdlib__really_input_string_37_130_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:497,0--74]_83_83_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:498,0--79]_82_82_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:499,0--95]_81_81_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:500,0--76]_80_80_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:501,0--66]_79_79_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:502,0--83]_78_78_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:503,0--76]_77_77_code deleted
+    camlStdlib__close_in_noerr_41_134_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:505,0--124]_76_76_code deleted
+    camlStdlib__string_of_format_61_154_code deleted
+    camlStdlib__^^_62_155_code deleted
+    camlStdlib__exit_68_162_code deleted
+    camlStdlib__at_exit_65_158_code deleted
+    camlStdlib__valid_float_lexem_13_106_code deleted
+    camlStdlib__unsafe_really_input_35_128_code deleted
+    camlStdlib__do_at_exit_67_161_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_75_75_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_74_74_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_73_73_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_72_72_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_71_71_code deleted
+    camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_70_70_code deleted
+    camlStdlib__at_exit_safe_63_156_code deleted
+    camlStdlib__min_2_43 = closure Stdlib.min_2 of
+      {Stdlib.min_2 = camlStdlib__min_2_95_code}
+      at {Stdlib.min_2 = camlStdlib__min_2_43} {}
+    camlStdlib__max_3_44 = closure Stdlib.max_3 of
+      {Stdlib.max_3 = camlStdlib__max_3_96_code}
+      at {Stdlib.max_3 = camlStdlib__max_3_44} {}
+    camlStdlib = Block 0 (camlStdlib__invalid_arg_1_41,
+      camlStdlib__failwith_0_40, camlStdlib__Exit1460_42,
+      caml_exn_Match_failure, caml_exn_Assert_failure,
+      caml_exn_Invalid_argument, caml_exn_Failure, caml_exn_Not_found,
+      caml_exn_Out_of_memory, caml_exn_Stack_overflow, caml_exn_Sys_error,
+      caml_exn_End_of_file, caml_exn_Division_by_zero,
+      caml_exn_Sys_blocked_io, caml_exn_Undefined_recursive_module,
+      camlStdlib__min_2_43, camlStdlib__max_3_44, camlStdlib__abs_4_45,
+      4611686018427387903, -4611686018427387904, camlStdlib__lnot_5_46,
+      camlStdlib__infinity1506_47, camlStdlib__neg_infinity1510_48,
+      camlStdlib__nan1514_49, camlStdlib__max_float1518_50,
+      camlStdlib__min_float1522_51, camlStdlib__epsilon_float1526_52,
+      camlStdlib__^_6_53, camlStdlib__char_of_int_7_54,
+      camlStdlib__string_of_bool_8_56, camlStdlib__bool_of_string_opt_10_59,
+      camlStdlib__bool_of_string_9_57, camlStdlib__string_of_int_11_60,
+      camlStdlib__int_of_string_opt_12_61, camlStdlib__string_of_float_15_63,
+      camlStdlib__float_of_string_opt_16_64, camlStdlib__@_17_65, $39, $40,
+      $41, camlStdlib__print_char_42_93, camlStdlib__print_string_43_94,
+      camlStdlib__print_bytes_44_95, camlStdlib__print_int_45_96,
+      camlStdlib__print_float_46_97, camlStdlib__print_endline_47_98,
+      camlStdlib__print_newline_48_99, camlStdlib__prerr_char_49_100,
+      camlStdlib__prerr_string_50_101, camlStdlib__prerr_bytes_51_102,
+      camlStdlib__prerr_int_52_103, camlStdlib__prerr_float_53_104,
+      camlStdlib__prerr_endline_54_105, camlStdlib__prerr_newline_55_106,
+      camlStdlib__read_line_56_107, camlStdlib__read_int_opt_58_109,
+      camlStdlib__read_int_57_108, camlStdlib__read_float_opt_60_111,
+      camlStdlib__read_float_59_110, camlStdlib__open_out_20_68,
+      camlStdlib__open_out_bin_21_69, camlStdlib__open_out_gen_19_67,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:362,0--66]_92_144,
+      camlStdlib__flush_all_22_70,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:387,0--86]_91_143,
+      camlStdlib__output_string_25_73, camlStdlib__output_bytes_24_72,
+      camlStdlib__output_26_74, camlStdlib__output_substring_27_76,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:405,0--85]_90_142,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:406,0--90]_89_141,
+      camlStdlib__output_value_28_78,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:412,0--79]_88_140,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:413,0--69]_87_139,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:414,0--85]_86_138,
+      camlStdlib__close_out_29_79, camlStdlib__close_out_noerr_30_80,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:420,0--127]_85_137,
+      camlStdlib__open_in_32_82, camlStdlib__open_in_bin_33_83,
+      camlStdlib__open_in_gen_31_81,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:439,0--75]_84_136,
+      camlStdlib__input_line_38_90, camlStdlib__input_34_84,
+      camlStdlib__really_input_36_87, camlStdlib__really_input_string_37_89,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:497,0--74]_83_135,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:498,0--79]_82_134,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:499,0--95]_81_133,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:500,0--76]_80_132,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:501,0--66]_79_131,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:502,0--83]_78_130,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:503,0--76]_77_129,
+      camlStdlib__close_in_noerr_41_92,
+      camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:505,0--124]_76_128,
+      camlStdlib__Pmakeblock3360_127, camlStdlib__string_of_format_61_112,
+      camlStdlib__^^_62_113, camlStdlib__exit_68_118,
+      camlStdlib__at_exit_65_115, camlStdlib__Safe3353_120,
+      camlStdlib__valid_float_lexem_13_62,
+      camlStdlib__unsafe_really_input_35_86, camlStdlib__do_at_exit_67_117,
+      $106)
+    and 83 closures and 3 blocks of camlStdlib that nothing asks for
+  before Simplify, after the prefix, with its 24 imports (10 steps): 
+returns [0: <fun>; <fun>]
+  after Simplify, after the prefix, with its 24 imports (2 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too

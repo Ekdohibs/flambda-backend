@@ -1,0 +1,8 @@
+# The units of the library that are in neither alias of this directory: those
+# of which the driver's check does not end in 10 minutes of processor time
+# (README.md, "What it costs"). Such a unit has no stored file here. One name
+# a line, without .ml; what follows the name on its line is what was
+# measured, and gen_rules.exe does not read it. A line that begins with # is
+# a comment.
+#
+# No unit is named at present.

@@ -1,0 +1,10 @@
+stdlib__Queue.fl: not checked: the model has not got the call (((Some *extern*.caml_fresh_oo_id)〈k559〉《k2》(0)) (args_arity 𝕍?)
+          (return_arity 𝕍?)
+          (call_kind
+           (C (needs_caml_c_call false) (is_c_builtin false)
+            (effects Arbitrary_effects) (coeffects Has_coeffects)))
+          (return_mode (Not_alloc_stack (alloc toplevel_my_alloc_region/0N)))
+          (dbg /workspace_root/stdlib/build/queue.ml:22,0--15)
+          (inline Default_inlined)
+          (inlining_state ((depth 0) (stub_depth 0) (arguments O3)))
+          (probe ()) (position Normal))

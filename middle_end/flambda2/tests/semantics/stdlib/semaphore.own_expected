@@ -1,0 +1,19 @@
+stdlib__Semaphore.fl: not checked: the model has not got the call (((Some *extern*.caml_ml_mutex_new)〈k321〉《k318》(0)) (args_arity 𝕍?)
+          (return_arity 𝕍?)
+          (call_kind
+           (C (needs_caml_c_call true) (is_c_builtin false)
+            (effects Arbitrary_effects) (coeffects Has_coeffects)))
+          (return_mode (Not_alloc_stack (alloc my_alloc_region/906N)))
+          (dbg
+           /workspace_root/stdlib/build/semaphore.ml:34,10--24;/workspace_root/stdlib/build/mutex.ml:18,0--60)
+          (inline Default_inlined)
+          (inlining_state
+           ((depth 0) (stub_depth 1)
+            (arguments
+             ((max_inlining_depth 19) (max_rec_depth 0) (call_cost 0.625000)
+              (alloc_cost 0.875000) (prim_cost 0.375000)
+              (branch_cost 0.625000) (indirect_call_cost 0.500000)
+              (poly_compare_cost 1.250000) (small_function_size 10)
+              (large_function_size 10) (small_functor_size 10)
+              (large_functor_size 2000000) (threshold 10.000000)))))
+          (probe ()) (position Normal))

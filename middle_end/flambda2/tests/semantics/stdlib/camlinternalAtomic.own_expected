@@ -1,0 +1,16 @@
+camlinternalAtomic.fl:
+  before Simplify (29 steps): returns
+                                [0: <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+                                 <fun>; <fun>]
+  after Simplify (25 steps): returns
+                               [0: <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+                                <fun>; <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+  (the term before and the term after have a primitive of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that has one)
+  related once lifted: the same once values are lifted to symbols without the liftings' symbols-and-constants-only exit test and without their test of the heap, the terms normalised and unused value slots removed
+  (in the model, an exit before is matched by one after under the restricted observer class; exit values may differ)

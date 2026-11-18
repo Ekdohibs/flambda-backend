@@ -1,0 +1,10 @@
+stdlib__Gc.fl: not checked: the model has not got the call (((Some *extern*.caml_gc_stat)〈k529〉《k528》(0)) (args_arity 𝕍?)
+          (return_arity 𝕍?)
+          (call_kind
+           (C (needs_caml_c_call true) (is_c_builtin false)
+            (effects Arbitrary_effects) (coeffects Has_coeffects)))
+          (return_mode (Not_alloc_stack (alloc my_alloc_region/1444N)))
+          (dbg /workspace_root/stdlib/build/gc.ml:73,11--18)
+          (inline Default_inlined)
+          (inlining_state ((depth 0) (stub_depth 0) (arguments O3)))
+          (probe ()) (position Normal))
