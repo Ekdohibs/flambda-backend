@@ -83,7 +83,11 @@ a `CR` at the place in the `Spec` file.
   either). So a wrong subkind of a field is not seen, and
   that the subkind of a field has no bearing on what the program
   computes is not proved. The question is whether they are dropped or
-  come into the model; goes with kinds.
+  come into the model; goes with kinds. The human ruled on 18 November
+  2026 that a run is undefined where a parameter of a continuation or of
+  code is bound to a value that has not the shape that its subkind
+  states; that is not yet in the model, and what the kind of a field of
+  a made block promises stays open.
 - **D26.** Types of names that hold poison. Typing facts are about
   values that are not poison; an environment asks nothing of the type
   of a name whose value is poison; an `Is_int` or `Get_tag` relation
@@ -314,8 +318,14 @@ a `CR` at the place in the `Spec` file.
   reachable from them, what they read as, or what every term that
   could follow sees of them. Meanwhile no call of a C function has a
   meaning in the model: the conversion refuses every one and nothing
-  uses the table. Open, and the human's: `requests/P1-c-calls.md`,
-  "The open choice", has the ways to answer and what each costs.
+  uses the table. `requests/P1-c-calls.md`, "The open choice", has the
+  ways to answer and what each costs. The human ruled on 18 November
+  2026, otherwise than this entry says above of what such a call is to
+  be, that a call of a C function of which the model says nothing makes
+  the run undefined at the call; that is not yet in the test tool, whose
+  conversion still refuses every such call, and the C functions that are
+  given a meaning by name are D69.
+- **D51.** Not used: no decision has this label.
 - **D52.** A field read as immutable from a block that can be
   written: a `Block_load` marked `Immutable` or `Immutable_unique` of
   a block made mutable. The front end marks the read of a field by
@@ -658,6 +668,50 @@ a `CR` at the place in the `Spec` file.
   T4-1, T4-9 and T5-10, are not in the tree), the compiler's default,
   and the default of the tests of this tree, whose Simplify runs the
   binary pair where no flag says otherwise. Ruled.
+- **D62.** Where a check of regions accepts the term given to Simplify
+  and not the term that it returns, the test tool, under a switch that
+  is off unless asked for, does not print the unit's caption as
+  validated; the verdict of the validation is not changed. Decided,
+  provisionally; open; not yet in the tree.
+- **D63.** Atomics are cells of a model that has one thread: a verdict
+  is of runs with one thread. The addition was approved by the human on
+  18 November 2026. Decided, provisionally; not yet in the tree.
+- **D64.** A pause (`Cpu_relax`) has no effect in the model. Decided,
+  provisionally; not yet in the tree.
+- **D65.** Whether the guards of a lifting need look inside the
+  functions of a unit that has no call outside them. Meanwhile they do.
+  Open: the human's.
+- **D66.** The bit pattern of a NaN is not guaranteed to be preserved.
+  Ruled (18 November 2026); not yet in the tree. Open: whether a run
+  that observes those bits is undefined, or exits are compared up to
+  which NaN it is.
+- **D67.** How an array that may hold floats is read: the model is to
+  say least. The addition of such arrays was approved by the human on 18
+  November 2026. Open.
+- **D68.** What bytes hold before they are filled: the model is to say
+  least. The addition of bytes was approved by the human on 18 November
+  2026. Open.
+- **D69.** Named C functions are to have their meaning in the model: one
+  Rocq spec, under the names of the runtime, of what a call of each
+  does. Ruled (18 November 2026); not yet in the tree.
+- **D70.** Undefined: a store into a block not made mutable, an array
+  access out of bounds, making a mutable array of no elements, the byte
+  after the last of a string. Decided, provisionally; whether that byte
+  reads as 0 is open.
+- **D71.** Not modelled: the blocks that tail-modulo-cons fills by
+  initialising stores, and the copy of a record by `Duplicate_block`.
+  Ruled.
+- **D72.** A predefined exception is an identity: two are equal exactly
+  when they are one symbol, and one is never equal to a value that the
+  unit allocates. Decided, provisionally.
+- **D73.** The machine has no stack of exception handlers and reads no
+  trap action; on a second machine, which has the stack, some terms that
+  break the discipline of traps are undefined. Decided, provisionally.
+- **D74.** What a validation is about: the initialisation of one unit,
+  run on its own, and no later call of what the unit exports. Decided,
+  provisionally.
+- **D75.** A verdict may rest on what the `.cmx` files of other units
+  say, which is trusted. Ruled (18 November 2026), for now.
 
 ## Discrepancies with the compiler
 

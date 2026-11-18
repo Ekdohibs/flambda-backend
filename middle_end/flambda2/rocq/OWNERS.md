@@ -761,6 +761,9 @@ Owner: N1.
   traversal of types of the join on renamed arguments, which N3's
   proofs of the join of environments import)
 - `middle_end/flambda2/rocq/NAMES.md`
+- `middle_end/flambda2/rocq/SEMANTICS-DECISIONS.md` (the semantic
+  decisions of the model, in short; a change that adds a decision or
+  changes one asks N1 for its lines)
 - `middle_end/flambda2/tests/tools/nameorder/` and
   `middle_end/flambda2/tests/semantics/name_order/` (the test that what
   Simplify makes of a unit does not depend on the order in which the
