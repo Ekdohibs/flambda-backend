@@ -3360,6 +3360,30 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    function that makes it. *)
 let second_guess = ref false
 
+(* The most liftings in turn that a search for what Simplify lifted guesses. It
+   is a fuel and nothing rests on it. A sequence ends before it is spent where a
+   lifting after the first proposes nothing, where it gives the term back, or
+   where the rounds after it give back the term that it was given, the two
+   compared as terms, and no [Let] is banned at a later place of the sequence
+   (the comment in [liftings_from] says what that stop may miss). The liftings
+   guessed are given to the function asked, [validate_unit] or the second check,
+   and the statements of those are of every list of liftings
+   (FlambdaValidateSpec.validate_unit_sound_statement,
+   FlambdaValidateRelatedSpec.validate_unit_related_sound_statement): what the
+   function accepts, it accepts with the guarantee of its statement, whatever
+   the list. A sequence that is too short, too long or wrong can lose a verdict
+   that another sequence would get; it cannot get round a check of the function
+   asked. So the number has no proof obligation. The stop where the rounds give
+   a term back is what keeps a search from running to it: the guess proposes at
+   every turn that [my_closure] be bound to the symbol of a static closure, the
+   lifting gives a term rebuilt, and the rounds give back the term that there
+   was. What needs many liftings is a chain of closures in which each holds the
+   one before: one lifting for each link, as a lifting takes only a value whose
+   parts are symbols or constants already. Four functions in the body of a
+   functor, each calling the one before, need five
+   (tests/semantics/ocaml/chain_of_five_in_functor.ml). *)
+let liftings_fuel = 16
+
 let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     ~let_copies (before : Model.expr) (after : Model.expr) : Lift.lifting =
   (* The symbols bound outside code, in the order in which they are bound when
@@ -5698,6 +5722,29 @@ let undefined_by_an_open_list (state : Semantics.state) :
   | Apply _ | Apply_cont _ | Switch _ | Invalid ->
     None
 
+(* Whether the conversion of the term after met a function slot named
+   [partial_app_closure] where the conversion of the term before met no slot of
+   that name. That is the name that Simplify gives the function slot of the
+   wrapper that it makes of a partial application of code that it knows
+   (simplify/simplify_apply_expr.ml, [simplify_direct_partial_application]): new
+   code marked as a stub, which projects the arguments given from its own
+   closure and calls the function, and a closure of it. The wrapper that the
+   front end makes is named after the function
+   (from_lambda/closure_conversion.ml, [wrap_partial_application]). Where
+   Simplify makes one, the term before has a call with fewer arguments than the
+   code has parameters, and no rewrite of the validation makes the wrapper of
+   it.
+
+   THE TEST IS OF THE NAME AND OF NOTHING ELSE. The slots that a conversion
+   meets are those that it numbers ([Function_slots]): the slots of the sets of
+   closures and those that a projection names. The test does not look at the
+   code of a closure, nor at where the slot stands, nor at who made it: a
+   function of the source that is named so, in the term after and not in the
+   term before, would pass it. Read for a line under "not validated", which says
+   what the names are and whose name that is, and does not say that nothing else
+   stops the unit. *)
+let wrapper_made_after = ref false
+
 let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) =
   let loader =
@@ -5707,6 +5754,14 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
   lists_met := false;
   let has_tupled_code () = match !tupled_code with [] -> false | _ -> true in
   let before_converted = convert_unit before in
+  let named_as_a_wrapper slot =
+    String.equal (Function_slot.name slot) "partial_app_closure"
+  in
+  let wrapper_named_before =
+    List.exists
+      (fun (slot, _) -> named_as_a_wrapper slot)
+      (Function_slots.bindings ())
+  in
   before_marked
     := List.map
          (fun (place, ap, callee, times) ->
@@ -5737,6 +5792,13 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
       ~finally:(fun () -> superseded_code := [])
       (fun () -> convert_unit after)
   in
+  (* Before the prefix is made: a slot of another unit is not of the term
+     after. *)
+  wrapper_made_after
+    := (not wrapper_named_before)
+       && List.exists
+            (fun (slot, _) -> named_as_a_wrapper slot)
+            (Function_slots.bindings ());
   let prefix =
     make_prefix ~units ~loader
       ~units_have_tupled_code:(before_has_tupled_code || has_tupled_code ())
@@ -6414,6 +6476,12 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      term before: read for the line of a verdict that lifts. Each asking sets it
      to false first. *)
   let tables_were_bound = ref false in
+  (* Whether a search ended at [liftings_fuel] with another lifting to make: one
+     that the guess proposes, that changes the term, and after which the rounds
+     give another term than the one that it was given. It is read for a line
+     under "not validated" after the validation, set to false, and read again
+     after the second check. *)
+  let fuel_ran_out = ref false in
   (* Whether the term before has a [Let] of a closure at a function slot of a
      set, in its code too. Where it has none, no rewrite of the validation makes
      one, so the rounds that make direct the calls of the closures that a [Let]
@@ -6653,9 +6721,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          for those to make aliases of symbols bound around them, which are
          guessed from the second lifting on. The tables to bind at the head of
          the unit are guessed for the first. A second is always tried; one after
-         it only if it lifts something; and there are four at most. After each,
-         as [validate_unit] does, the value slots of static closures are read
-         and what the unit binds its symbols to is used in every round of the
+         it only if it lifts something; a lifting that is not the first, and
+         that has no [Let] banned at a later place, is made only if the rounds
+         after it give another term than the one that it was given, the two
+         compared as terms; and there are [liftings_fuel] at most (the comment
+         there says why the number is no more than a fuel). After each, as
+         [validate_unit] does, the value slots of static closures are read and
+         what the unit binds its symbols to is used in every round of the
          normalisation. The rounds are told, as [validate_unit] tells them, not
          to make a name that is one of the two continuations of the unit: every
          lifting has the unit of the term before, and a name made is the one
@@ -6732,6 +6804,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | 0, _, _, _, _, _, _, _ | _, _ :: _, [], [], [], [], [], [] -> true
           | _, _, _, _, _, _, _, _ -> false
         in
+        (* Where the fuel is what ends the sequence: is there another lifting to
+           make? The test is the one that the sequence makes below of a lifting
+           that is not the first, with nothing kept of it: the lifting proposed
+           is applied, and unless it gives the term back as the sequence asks
+           that below, the rounds are gone through once more and their term
+           compared with the one that the lifting was given. *)
+        (match
+           ( remaining,
+             lifting.lifted_lets,
+             lifting.lifted_my_closures,
+             lifting.lifted_out_of_code,
+             lifting.lifted_to_head,
+             lifting.lifted_around,
+             copies )
+         with
+        | 0, [], [], [], [], [], [] -> ()
+        | 0, _, _, _, _, _, _ ->
+          let lifted' =
+            Copy_lets.with_let_copies copies (with_lifting lifting lifted)
+          in
+          if
+            not
+              (lifted' == lifted
+              || match copies with [] -> false | _ :: _ -> lifted' = lifted)
+          then
+            let next =
+              Validate.normalise_lifted_own calling own rounds avoid kept
+                lifted'
+            in
+            if next <> lifted then fuel_ran_out := true
+        | _, _, _, _, _, _, _ -> ());
         if stop
         then List.rev made, lifted
         else
@@ -6742,7 +6845,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
              two pointers is a shortcut of this search, which is bounded and not
              trusted. It says nothing of the checks of a lifting: a lifting
              whose checks pass may give the same term back, and then the search
-             stops; one that gives a term rebuilt but equal may continue. *)
+             stops; one that gives a term rebuilt but equal may continue. After
+             the first lifting, the sequence also ends where the rounds after a
+             lifting give back the term that the lifting was given and no [Let]
+             is banned at a later place. That comparison is of two terms, and
+             the lifting is then not one of the sequence. Where no [Let] is
+             banned at this place either, the turn after it would be this turn
+             again: a guess is made from the term and from the bans of its
+             place, and nothing else of it changes from the second turn on. The
+             lifting that binds [my_closure] to the symbol of a static closure
+             is proposed at every turn and is such a lifting from the second
+             time on. Where a [Let] is banned at this place and none at a later
+             one, the sequence ends all the same, and the turn after it, which
+             has not that ban, might have guessed otherwise: the search may miss
+             a lifting so, and with it a verdict. That is a limit of a search
+             that is a guess; it is not tested for. Where a [Let] is banned at a
+             later place, the lifting is one of the sequence and the turns go
+             on, as a turn at that place may guess otherwise. *)
           let lifted' =
             Copy_lets.with_let_copies copies (with_lifting lifting lifted)
           in
@@ -6763,13 +6882,19 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
               Validate.normalise_lifted_own calling own rounds avoid kept
                 lifted'
             in
-            if (not own) && not !own_closures_to_know
-            then
-              own_closures_to_know
-                := Closure_of_code.know_own_closures next <> next;
-            normalised := next :: !normalised;
-            liftings_from banned (stage + 1) (lifting :: made) next
-              (remaining - 1)
+            if
+              (match made with [] -> false | _ :: _ -> true)
+              && next = lifted
+              && not (List.exists (fun (stage', _, _) -> stage' > stage) banned)
+            then List.rev made, lifted
+            else (
+              if (not own) && not !own_closures_to_know
+              then
+                own_closures_to_know
+                  := Closure_of_code.know_own_closures next <> next;
+              normalised := next :: !normalised;
+              liftings_from banned (stage + 1) (lifting :: made) next
+                (remaining - 1))
       in
       (* The guess gives a symbol to the first [Let] that makes a block of its
          shape, and a field that is a variable agrees with anything. So the
@@ -6791,7 +6916,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | Some made -> made
           | None ->
             normalised := [];
-            liftings_from banned 0 [] looped 4
+            liftings_from banned 0 [] looped liftings_fuel
         in
         guesses := (banned, !normalised) :: !guesses;
         (* After the last lifting [validate_unit] reads the known value slots
@@ -6878,7 +7003,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         | [] -> None
         | (banned, terms) :: rest ->
           normalised := [];
-          let made = liftings_from banned 0 [] looped 4 in
+          let made = liftings_from banned 0 [] looped liftings_fuel in
           if !normalised = terms
           then (
             guesses := (banned, terms) :: !guesses;
@@ -7007,7 +7132,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         | Some _, _ ->
           normalised := [];
           ignore
-            (liftings_from [] 0 [] looped 4 : Lift.lifting list * Model.expr);
+            (liftings_from [] 0 [] looped liftings_fuel
+              : Lift.lifting list * Model.expr);
           not_lifted
         | None, Some search -> (
           match made_again search.search_guesses 5 with
@@ -7832,6 +7958,34 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   | Not_validated | Same_up_to_bound_names | Same_once_normalised
   | Same_once_unused_statics_removed | Same_once_head_statics_removed ->
     ());
+  (* Two lines under "not validated", each a fact of the search or of the term
+     after, neither a statement that nothing else stops the unit. The first: a
+     search of the validation ended at [liftings_fuel] with another lifting to
+     make. The second: the term after has a function slot of the name that
+     Simplify gives the wrapper that it makes of a partial application, and the
+     term before has none of that name ([wrapper_made_after]: a test of the name
+     alone). *)
+  (match validation with
+  | Not_validated when outcome_before <> Undefined ->
+    if !fuel_ran_out
+    then
+      Format.printf
+        "  (more liftings in a chain than the tool tries: a search for what \
+         Simplify lifted stopped at %d liftings in turn with another to \
+         make)@."
+        liftings_fuel;
+    if !wrapper_made_after
+    then
+      Format.printf
+        "  (the term after has a function slot named partial_app_closure and \
+         the term before has none of that name: Simplify gives that name to \
+         the wrapper that it makes of a partial application, and no rewrite of \
+         the validation makes such a wrapper; the tool goes by the name \
+         alone)@."
+  | Not_validated | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed
+  | Same_once_lifted ->
+    ());
   if !asked_again
   then
     Format.printf
@@ -7935,8 +8089,17 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      or none, and whether the two terms have a prefix in front of them. *)
   (match validation with
   | Not_validated when outcome_before <> Undefined -> (
+    fuel_ran_out := false;
     match related () with
-    | None -> ()
+    | None ->
+      (* The second check refuses the unit: the line of the fuel, where one of
+         its searches ended at [liftings_fuel] with another lifting to make. *)
+      if !fuel_ran_out
+      then
+        Format.printf
+          "  (more liftings in a chain than the tool tries: a search of the \
+           second check stopped at %d liftings in turn with another to make)@."
+          liftings_fuel
     | Some (with_slots, tables) ->
       let head =
         match prefix_units, imports with

@@ -222,8 +222,11 @@ this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 6;
 - validated with its imports: 6;
-- compared, not validated: 8, of which `camlinternalAtomic.ml` has a line
-  under the verdict, "related once lifted";
+- compared, not validated: 8. Four have a line under the verdict:
+  `camlinternalAtomic.ml` has "related once lifted", and `option.ml`,
+  `pqueue.ml` and `result.ml` have the line of a function slot named
+  `partial_app_closure`, the name that Simplify gives the wrapper which
+  it makes of a partial application;
 - undefined in the model: none;
 - not checked: 59. The first thing that the driver names is a C function
   for 42 of them, a primitive that the model has not got for 15, a call
@@ -294,18 +297,18 @@ prints a line under the verdict. The verdicts are in the words of
 | `nativeint.ml` | `stdlib__Nativeint` | 108 | not checked | a C function: `caml_nativeint_format` |
 | `obj.ml` | `stdlib__Obj` | 254 | not checked | a primitive: `Array_load Naked_floats` |
 | `oo.ml` | `stdlib__Oo` | 23 | validated with its imports |  |
-| `option.ml` | `stdlib__Option` | 47 | compared, not validated |  |
+| `option.ml` | `stdlib__Option` | 47 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
 | `out_channel.ml` | `stdlib__Out_channel` | 79 | not checked | a C function: `caml_ml_output_bigarray` |
 | `pair.ml` | `stdlib__Pair` | 36 | validated |  |
 | `parsing.ml` | `stdlib__Parsing` | 216 | not checked | a C function: `caml_array_make` |
-| `pqueue.ml` | `stdlib__Pqueue` | 289 | compared, not validated |  |
+| `pqueue.ml` | `stdlib__Pqueue` | 289 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
 | `printexc.ml` | `stdlib__Printexc` | 416 | not checked | a C function: `caml_obj_tag` |
 | `printf.ml` | `stdlib__Printf` | 52 | not checked | a C function: `caml_blit_bytes` |
 | `queue.ml` | `stdlib__Queue` | 177 | not checked | a C function: `caml_fresh_oo_id` |
 | `quote.ml` | `stdlib__Quote` | 71 | validated with its imports |  |
 | `random.ml` | `stdlib__Random` | 387 | not checked | a C function: `caml_ba_set_1` |
 | `repr.ml` | `stdlib__Repr` | 25 | validated with its imports |  |
-| `result.ml` | `stdlib__Result` | 65 | compared, not validated |  |
+| `result.ml` | `stdlib__Result` | 65 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
 | `scanf.ml` | `stdlib__Scanf` | 1528 | not checked | a primitive: `String_load` |
 | `semaphore.ml` | `stdlib__Semaphore` | 89 | not checked | a C function: `caml_ml_mutex_new` |
 | `seq.ml` | `stdlib__Seq` | 719 | not checked | a C function: `caml_obj_tag` |
@@ -364,9 +367,16 @@ and that the validation does not accept the pair: no theorem of
 refinement comes from this validation, and it is no failure of the
 compiler either. A weaker verdict, which is proved apart, may be printed
 under it: `camlinternalAtomic.ml` has "related once lifted"
-(`../ocaml/README.md` says what that is a statement of). "Undefined in
-the model" says that the run of the term before is undefined in the
-model, so that there is nothing to validate.
+(`../ocaml/README.md` says what that is a statement of). `option.ml`,
+`pqueue.ml` and `result.ml` have under it a line in round brackets,
+which is no verdict: the term after has a function slot of the name
+that Simplify gives the wrapper which it makes of a partial
+application, the term before has none of that name, and no rewrite of
+the validation makes such a wrapper (the same section of
+`../ocaml/README.md`). The tool goes by the name alone, and the line
+does not say that nothing else stops the unit. "Undefined in the model"
+says that the run of the term before is undefined in the model, so that
+there is nothing to validate.
 
 The compilation is the build's: with `-g`, with the flags of the
 configuration (`ocamlopt_stdlib_flags.txt`), against the `.cmi` and

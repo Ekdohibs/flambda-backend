@@ -6,4 +6,4 @@ chain_of_five_in_functor.fl:
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0
-  not validated
+  validated: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed

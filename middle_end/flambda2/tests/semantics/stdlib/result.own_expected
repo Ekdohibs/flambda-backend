@@ -299,3 +299,4 @@ returns
   the same
   calls outside code once those of known code are inlined: 0
   not validated
+  (the term after has a function slot named partial_app_closure and the term before has none of that name: Simplify gives that name to the wrapper that it makes of a partial application, and no rewrite of the validation makes such a wrapper; the tool goes by the name alone)

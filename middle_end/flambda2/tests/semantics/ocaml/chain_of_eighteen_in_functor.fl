@@ -1,0 +1,224 @@
+let $camlChain_of_eighteen_in_functor__first_const_0 = Block 0 () in
+(let code size(3)
+       a_1 (x/261 : imm tagged)
+         my_closure/262 &my_alloc_region/263 my_depth/264
+         -> k/78 * k/79
+         : imm tagged =
+   let next_depth/265 = rec_info (succ my_depth/264) in
+   let int_add/266 = %int_barith.add (x/261, 1) in
+   cont k/78 (int_add/266)
+ in
+ let code size(5)
+       b_2 (x/267 : imm tagged)
+         my_closure/268 &my_alloc_region/269 my_depth/270
+         -> k/80 * k/81
+         : imm tagged =
+   let next_depth/271 = rec_info (succ my_depth/270) in
+   let a/272 = %project_value_slot.[b].[a] (my_closure/268) in
+   apply direct(a_1 &my_alloc_region/269)
+     (a/272 : imm tagged -> imm tagged) (x/267) -> k/80 * k/81
+ in
+ let code size(5)
+       c_3 (x/273 : imm tagged)
+         my_closure/274 &my_alloc_region/275 my_depth/276
+         -> k/82 * k/83
+         : imm tagged =
+   let next_depth/277 = rec_info (succ my_depth/276) in
+   let b/278 = %project_value_slot.[c].[b] (my_closure/274) in
+   apply direct(b_2 &my_alloc_region/275)
+     (b/278 : imm tagged -> imm tagged) (x/273) -> k/82 * k/83
+ in
+ let code size(5)
+       d_4 (x/279 : imm tagged)
+         my_closure/280 &my_alloc_region/281 my_depth/282
+         -> k/84 * k/85
+         : imm tagged =
+   let next_depth/283 = rec_info (succ my_depth/282) in
+   let c/284 = %project_value_slot.[d].[c] (my_closure/280) in
+   apply direct(c_3 &my_alloc_region/281)
+     (c/284 : imm tagged -> imm tagged) (x/279) -> k/84 * k/85
+ in
+ let code size(5)
+       e_5 (x/285 : imm tagged)
+         my_closure/286 &my_alloc_region/287 my_depth/288
+         -> k/86 * k/87
+         : imm tagged =
+   let next_depth/289 = rec_info (succ my_depth/288) in
+   let d/290 = %project_value_slot.[e].[d] (my_closure/286) in
+   apply direct(d_4 &my_alloc_region/287)
+     (d/290 : imm tagged -> imm tagged) (x/285) -> k/86 * k/87
+ in
+ let code size(5)
+       f_6 (x/291 : imm tagged)
+         my_closure/292 &my_alloc_region/293 my_depth/294
+         -> k/88 * k/89
+         : imm tagged =
+   let next_depth/295 = rec_info (succ my_depth/294) in
+   let e/296 = %project_value_slot.[f].[e] (my_closure/292) in
+   apply direct(e_5 &my_alloc_region/293)
+     (e/296 : imm tagged -> imm tagged) (x/291) -> k/88 * k/89
+ in
+ let code size(5)
+       g_7 (x/297 : imm tagged)
+         my_closure/298 &my_alloc_region/299 my_depth/300
+         -> k/90 * k/91
+         : imm tagged =
+   let next_depth/301 = rec_info (succ my_depth/300) in
+   let f/302 = %project_value_slot.[g].[f] (my_closure/298) in
+   apply direct(f_6 &my_alloc_region/299)
+     (f/302 : imm tagged -> imm tagged) (x/297) -> k/90 * k/91
+ in
+ let code size(5)
+       h_8 (x/303 : imm tagged)
+         my_closure/304 &my_alloc_region/305 my_depth/306
+         -> k/92 * k/93
+         : imm tagged =
+   let next_depth/307 = rec_info (succ my_depth/306) in
+   let g/308 = %project_value_slot.[h].[g] (my_closure/304) in
+   apply direct(g_7 &my_alloc_region/305)
+     (g/308 : imm tagged -> imm tagged) (x/303) -> k/92 * k/93
+ in
+ let code size(5)
+       i_9 (x/309 : imm tagged)
+         my_closure/310 &my_alloc_region/311 my_depth/312
+         -> k/94 * k/95
+         : imm tagged =
+   let next_depth/313 = rec_info (succ my_depth/312) in
+   let h/314 = %project_value_slot.[i].[h] (my_closure/310) in
+   apply direct(h_8 &my_alloc_region/311)
+     (h/314 : imm tagged -> imm tagged) (x/309) -> k/94 * k/95
+ in
+ let code size(5)
+       j_10 (x/315 : imm tagged)
+         my_closure/316 &my_alloc_region/317 my_depth/318
+         -> k/96 * k/97
+         : imm tagged =
+   let next_depth/319 = rec_info (succ my_depth/318) in
+   let i/320 = %project_value_slot.[j].[i] (my_closure/316) in
+   apply direct(i_9 &my_alloc_region/317)
+     (i/320 : imm tagged -> imm tagged) (x/315) -> k/96 * k/97
+ in
+ let code size(5)
+       k_11 (x/321 : imm tagged)
+         my_closure/322 &my_alloc_region/323 my_depth/324
+         -> k/98 * k/99
+         : imm tagged =
+   let next_depth/325 = rec_info (succ my_depth/324) in
+   let j/326 = %project_value_slot.[k].[j] (my_closure/322) in
+   apply direct(j_10 &my_alloc_region/323)
+     (j/326 : imm tagged -> imm tagged) (x/321) -> k/98 * k/99
+ in
+ let code size(5)
+       l_12 (x/327 : imm tagged)
+         my_closure/328 &my_alloc_region/329 my_depth/330
+         -> k/100 * k/101
+         : imm tagged =
+   let next_depth/331 = rec_info (succ my_depth/330) in
+   let k/332 = %project_value_slot.[l].[k] (my_closure/328) in
+   apply direct(k_11 &my_alloc_region/329)
+     (k/332 : imm tagged -> imm tagged) (x/327) -> k/100 * k/101
+ in
+ let code size(5)
+       m_13 (x/333 : imm tagged)
+         my_closure/334 &my_alloc_region/335 my_depth/336
+         -> k/102 * k/103
+         : imm tagged =
+   let next_depth/337 = rec_info (succ my_depth/336) in
+   let l/338 = %project_value_slot.[m].[l] (my_closure/334) in
+   apply direct(l_12 &my_alloc_region/335)
+     (l/338 : imm tagged -> imm tagged) (x/333) -> k/102 * k/103
+ in
+ let code size(5)
+       n_14 (x/339 : imm tagged)
+         my_closure/340 &my_alloc_region/341 my_depth/342
+         -> k/104 * k/105
+         : imm tagged =
+   let next_depth/343 = rec_info (succ my_depth/342) in
+   let m/344 = %project_value_slot.[n].[m] (my_closure/340) in
+   apply direct(m_13 &my_alloc_region/341)
+     (m/344 : imm tagged -> imm tagged) (x/339) -> k/104 * k/105
+ in
+ let code size(5)
+       o_15 (x/345 : imm tagged)
+         my_closure/346 &my_alloc_region/347 my_depth/348
+         -> k/106 * k/107
+         : imm tagged =
+   let next_depth/349 = rec_info (succ my_depth/348) in
+   let n/350 = %project_value_slot.[o].[n] (my_closure/346) in
+   apply direct(n_14 &my_alloc_region/347)
+     (n/350 : imm tagged -> imm tagged) (x/345) -> k/106 * k/107
+ in
+ let code size(5)
+       p_16 (x/351 : imm tagged)
+         my_closure/352 &my_alloc_region/353 my_depth/354
+         -> k/108 * k/109
+         : imm tagged =
+   let next_depth/355 = rec_info (succ my_depth/354) in
+   let o/356 = %project_value_slot.[p].[o] (my_closure/352) in
+   apply direct(o_15 &my_alloc_region/353)
+     (o/356 : imm tagged -> imm tagged) (x/351) -> k/108 * k/109
+ in
+ let code size(5)
+       q_17 (x/357 : imm tagged)
+         my_closure/358 &my_alloc_region/359 my_depth/360
+         -> k/110 * k/111
+         : imm tagged =
+   let next_depth/361 = rec_info (succ my_depth/360) in
+   let p/362 = %project_value_slot.[q].[p] (my_closure/358) in
+   apply direct(p_16 &my_alloc_region/359)
+     (p/362 : imm tagged -> imm tagged) (x/357) -> k/110 * k/111
+ in
+ let code loopify(never) size(241) functor
+       Make_0 (X/363 : val)
+         my_closure/364 &my_alloc_region/365 my_depth/366
+         -> k/112 * k/113
+         : val =
+   let next_depth/367 = rec_info (succ my_depth/366) in
+   let a/368 = closure a_1 @a &my_alloc_region/365 in
+   let b/369 = closure b_2 @b &my_alloc_region/365 with { a = a/368 } in
+   let c/370 = closure c_3 @c &my_alloc_region/365 with { b = b/369 } in
+   let d/371 = closure d_4 @d &my_alloc_region/365 with { c = c/370 } in
+   let e/372 = closure e_5 @e &my_alloc_region/365 with { d = d/371 } in
+   let f/373 = closure f_6 @f &my_alloc_region/365 with { e = e/372 } in
+   let g/374 = closure g_7 @g &my_alloc_region/365 with { f = f/373 } in
+   let h/375 = closure h_8 @h &my_alloc_region/365 with { g = g/374 } in
+   let i/376 = closure i_9 @i &my_alloc_region/365 with { h = h/375 } in
+   let j/377 = closure j_10 @j &my_alloc_region/365 with { i = i/376 } in
+   let k/378 = closure k_11 @k &my_alloc_region/365 with { j = j/377 } in
+   let l/379 = closure l_12 @l &my_alloc_region/365 with { k = k/378 } in
+   let m/380 = closure m_13 @m &my_alloc_region/365 with { l = l/379 } in
+   let n/381 = closure n_14 @n &my_alloc_region/365 with { m = m/380 } in
+   let o/382 = closure o_15 @o &my_alloc_region/365 with { n = n/381 } in
+   let p/383 = closure p_16 @p &my_alloc_region/365 with { o = o/382 } in
+   let q/384 = closure q_17 @q &my_alloc_region/365 with { p = p/383 } in
+   let Pmakeblock/385 =
+     %block.[`0`].my_alloc_region/365
+       (a/368,
+        b/369,
+        c/370,
+        d/371,
+        e/372,
+        f/373,
+        g/374,
+        h/375,
+        i/376,
+        j/377,
+        k/378,
+        l/379,
+        m/380,
+        n/381,
+        o/382,
+        p/383,
+        q/384)
+   in
+   cont k/112 (Pmakeblock/385)
+ in
+ let Make/386 = closure Make_0 @Make &toplevel in
+ let Pmakeblock/387 = %block.[`0`].`toplevel` (Make/386) in
+ cont k/77 (Pmakeblock/387))
+  where k/77 define_root_symbol (module_block/259) =
+    let field_0/260 =
+      %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/259)
+    in
+    let $camlChain_of_eighteen_in_functor = Block 0 (field_0/260) in
+    cont done ($camlChain_of_eighteen_in_functor)
