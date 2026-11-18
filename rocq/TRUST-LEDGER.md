@@ -1790,8 +1790,11 @@ it gave back.
     that class with a value in its place. A run that inspects the
     symbol is undefined, and of a unit whose run before Simplify is
     undefined no line of the tool is a validation: the tool prints
-    "nothing to validate", or prints under what the validator
-    answered that the validation says nothing of the unit.
+    a line that begins "nothing to validate", and where the validator
+    accepted the pair its answer is on the next line, which begins
+    "the validation accepts the pair", with a line further down that
+    says that the validation says nothing of the unit (the entry
+    "What the tool reports").
     A block with a field that is an approximation given in place of
     a symbol, or a constant that the model has not got, is not
     bound. Neither is a block bound that has a field which is a
@@ -2210,6 +2213,42 @@ it gave back.
   compared, not a validated verdict. In that case the tool also runs
   the unit before from the empty static environment, to say where
   the validation with nothing imported is vacuous.
+  A term before that is undefined is refined by anything, so where
+  the validator accepts a pair and the run of the term before that
+  the acceptance is of is undefined, the acceptance says nothing of
+  the unit. That run is the one that the tool shows, where the
+  acceptance is of the two runs shown, and the run of the unit
+  before from the empty static environment, where what is accepted
+  is the unit run with nothing imported. Where the tool's run finds
+  it undefined, the tool does not print the acceptance as a verdict,
+  and no line of the unit begins "validated". Where that line
+  would stand there are two. The first is "nothing to validate, as
+  the term before is undefined" or, for the unit run with nothing
+  imported, "nothing to validate with nothing imported, as the term
+  before is then undefined". The second, the next line, begins "the
+  validation accepts the pair" and has after those words what the
+  line would have had after "validated". That second line is the
+  validator's answer, printed as it is: it is no verdict of the
+  unit, and the unit is not one that is validated. Every other line
+  of the unit's output is what it would be under a verdict: the
+  line that begins "not validated with its imports" among them, and
+  the line further down that says that the validation says nothing
+  of the unit. The first of the two lines is also printed, where
+  "not validated" would stand, for a unit that the validator does
+  not accept and whose run before is undefined; no line of an
+  acceptance is under it there. So each account in this ledger of
+  a line that the tool as it is prints, and that begins
+  "validated", is of a unit whose run before, the one that the
+  acceptance is of, the tool did not find undefined. The lines
+  that the ledger quotes from the outputs of earlier measures are
+  as the tool of the measure printed them: this is not said of
+  them.
+  That is less than a run that is defined: a run that the bound of
+  steps ends is not found undefined, and a unit that the validator
+  accepts has then a line that begins "validated". The two lines
+  rest on the tool's run of the term before, as the lines of the
+  two runs do, and on its test of how that run ended, which is
+  OCaml: no theorem is of them.
   The refinement that a verdict concludes does not by itself say
   that a symbol which the term after exits with is bound: the
   statement of each asking concludes a refinement

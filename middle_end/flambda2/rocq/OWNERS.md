@@ -257,6 +257,12 @@ design out; that is the request, not the change.
     call of known arity comes to: the call of unknown arity where it is
     a full call of code that is not tupled, undefined elsewhere;
     decisions D58 and D59)
+  - `middle_end/flambda2/tests/tools/flknownaritylists.ml` and the
+    directory `middle_end/flambda2/tests/semantics/known_arity_lists/`
+    (controls of what the test tool does with the list of code ids of
+    a call of known arity, on terms of the model that the program
+    makes: the extension of a list under "newer version of", and the
+    test of a state that has no step; decision D59)
   - `middle_end/flambda2/rocq/status/C4.md`
 - C5, exceptions. Owner: C5, on `flambda2-rocq/C5-epoch`.
   - `middle_end/flambda2/rocq/requests/C5-exceptions.md` (the request)
