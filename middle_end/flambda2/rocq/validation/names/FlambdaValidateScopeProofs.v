@@ -27,11 +27,14 @@
 
 (* Proofs of the statements of FlambdaValidateScopeSpec.v. Nothing here
    needs review. A round is a chain of rewrites, each of which keeps
-   scope by a lemma of FlambdaKeepsScopeProofs.v or of
-   FlambdaLoopsScopeProofs.v. The chain is taken apart by a tactic that
-   finds those lemmas among its hints, so a rewrite that is added to a
-   round, or moved in it, needs its lemma among the hints and nothing
-   else. *)
+   scope by a lemma of FlambdaKeepsScopeProofs.v, of
+   FlambdaLoopsScopeProofs.v or of a Proofs file of that rewrite; the
+   lemmas of the inlining of calls and of the test of scope are proved
+   here. Where the lemmas of a chain are among the hints of the tactic
+   [scoped_chain], the tactic takes the chain apart, and a rewrite
+   that is added to such a chain, or moved in it, needs its lemma
+   among the hints and nothing else. The other steps are taken by
+   hand. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

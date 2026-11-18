@@ -28,7 +28,7 @@
 (* A rewrite made to keep scope by a test.
 
    This file is to be reviewed: [scope_kept] and [guard_scope], which
-   are to be extracted and run by the validation of
+   are extracted and run by the validation of
    middle_end/flambda2/tests/semantics/, and the statements.
 
    A rewrite keeps scope if, on a term whose code is closed, the code of
@@ -53,7 +53,7 @@
    keeps scope whatever [f] is, that it is [f] where [f] keeps scope,
    and that it commutes with renaming where [f] does are stated in
    FlambdaValidateScopeSpec.v, since the definitions they are stated
-   with come after the validation, which is to run [guard_scope].
+   with come after the validation, which runs [guard_scope].
 
    Nothing is trusted here. What the test costs: whether the code of
    each of the two terms is closed, the lists of the free variables and
