@@ -41,7 +41,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaContextSpec FlambdaContextProofs FlambdaNormaliseProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
-  FlambdaBindConstParamsSpec.
+  FlambdaStatedScopeSpec FlambdaBindConstParamsSpec.
+From OxCamlFlambda2 Require FlambdaStatedScopeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -105,18 +106,21 @@ Proof.
   destruct
     (is_plain s && negb (hm_is_exn_handler metadata) && all_give k i s body
      && negb (among p (drop_nth i params))
-     && says_nothing_at (hm_params_subkinds metadata) i)
+     && is_stated_at [] (hm_params_subkinds metadata) i s)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
-  apply andb_true_iff in Hcond as [Hcond Hnothing].
+  apply andb_true_iff in Hcond as [Hcond Hstated].
   apply andb_true_iff in Hcond as [Hcond Hfresh].
   apply andb_true_iff in Hcond as [Hcond Hgive].
   apply andb_true_iff in Hcond as [Hplain _].
   apply negb_true_iff in Hfresh.
   rewrite (all_give_plain k i s Hplain) in Hgive.
-  exact (given_param_equivalent i k s p kind params metadata handler body
-    Hparam Hkind (simple_among_plain s params Hplain) Hfresh Hnothing
-    Hgive).
+  intros vars conts statics hp rd.
+  apply (given_param_equivalent_stated i k s p kind params metadata handler
+    body Hparam Hkind (simple_among_plain s params Hplain) Hfresh Hgive).
+  exact
+    (is_stated_at_given_is_stated statics [] vars _ i s
+       (FlambdaStatedScopeProofs.stated_hold_nil statics vars) Hstated).
 Qed.
 
 Lemma bind_const_from_equivalent (i : nat) :

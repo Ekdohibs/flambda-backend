@@ -68,10 +68,15 @@
    of a non-recursive [Let_cont] of [k] ([bind_const_param]):
    - that the handler is not an exception handler, and has a kind for
      the parameter;
-   - that the handler states nothing of the parameter beyond its kind
-     (FlambdaUnaliasParamsSpec.says_nothing_at): the machine tests
-     what is stated where the handler is applied, and the [Let] tests
-     the kind only;
+   - that the symbol or the constant is known to be of what the
+     handler states of the parameter beyond its kind
+     (FlambdaStatedScopeSpec.is_stated_at, from the empty scope: a
+     constant by the machine's own test, which reads no static
+     environment for a constant; a symbol as a value that is not
+     null): the machine tests what is stated where the handler is
+     applied, and the [Let] tests the kind only (decision D25, at
+     parameters). A handler that states nothing of the parameter
+     passes;
    - that the first application of [k] in the body of the [Let_cont]
      gives the parameter a symbol or a constant ([first_given],
      [is_plain]);
@@ -120,7 +125,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaSemanticsSpec FlambdaUnaliasParamsSpec.
+  FlambdaMapSpec FlambdaSemanticsSpec FlambdaUnaliasParamsSpec
+  FlambdaStatedScopeSpec.
 Import ListNotations.
 
 Definition same_simple (s s' : simple) : bool :=
@@ -219,7 +225,7 @@ Definition bind_const_param (i : nat) (k : continuation)
            && negb (hm_is_exn_handler metadata)
            && all_give k i s body
            && negb (among p (drop_nth i params))
-           && says_nothing_at (hm_params_subkinds metadata) i
+           && is_stated_at [] (hm_params_subkinds metadata) i s
         then
           Some
             (Handler (drop_nth i params)

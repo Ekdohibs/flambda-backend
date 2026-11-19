@@ -345,6 +345,7 @@ Separate Extraction
   shortcut_switches
   sink_conts_to_uses
   sink_let_conts
+  subkinds_say_nothing
   static_names_apart
   statics_in_scope
   step
