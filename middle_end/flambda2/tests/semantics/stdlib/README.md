@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 19 of the 79 files, and "What a
+At this commit the driver validates 21 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -221,10 +221,10 @@ from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 6;
-- validated with its imports: 13, of which `stringLabels.ml` has a line
+- validated with its imports: 15, of which `stringLabels.ml` has a line
   under the verdict, "(asked of the term after with the exception
   handlers that no call can raise to made ordinary continuations)";
-- compared, not validated: 11. Six have a line under the verdict:
+- compared, not validated: 9. Six have a line under the verdict:
   `camlinternalAtomic.ml`, `semaphore.ml` and `uchar.ml` have "related
   once lifted", and `option.ml`,
   `pqueue.ml` and `result.ml` have the line of a function slot named
@@ -238,8 +238,8 @@ this commit, and a commit that moves a stored file moves its row.)
   `moreLabels.ml` a test that the tool makes of the code that the
   `.cmx` files of the other units give it.
 
-The 79 sources have 29,925 lines; the nineteen that are validated, with or
-without their imports, have 1,458.
+The 79 sources have 29,925 lines; the twenty-one that are validated, with or
+without their imports, have 1,682.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
@@ -290,7 +290,7 @@ mean".
 | `in_channel.ml` | `stdlib__In_channel` | 210 | not checked | a primitive: `Bigarray_length` |
 | `int.ml` | `stdlib__Int` | 64 | validated with its imports |  |
 | `int32.ml` | `stdlib__Int32` | 119 | validated with its imports |  |
-| `int64.ml` | `stdlib__Int64` | 116 | compared, not validated |  |
+| `int64.ml` | `stdlib__Int64` | 116 | validated with its imports |  |
 | `lazy.ml` | `stdlib__Lazy` | 84 | not checked | a primitive: `Make_lazy` |
 | `lexing.ml` | `stdlib__Lexing` | 250 | not checked | a primitive: `String_length` |
 | `list.ml` | `stdlib__List` | 618 | not checked | a primitive: `Array_set Values` |
@@ -300,7 +300,7 @@ mean".
 | `modes.ml` | `stdlib__Modes` | 45 | validated |  |
 | `moreLabels.ml` | `stdlib__MoreLabels` | 32 | not checked | with the prefix made from the `.cmx` files in front of it, the term before mentions a code id where it is not in scope |
 | `mutex.ml` | `stdlib__Mutex` | 37 | validated with its imports |  |
-| `nativeint.ml` | `stdlib__Nativeint` | 108 | compared, not validated |  |
+| `nativeint.ml` | `stdlib__Nativeint` | 108 | validated with its imports |  |
 | `obj.ml` | `stdlib__Obj` | 254 | not checked | a primitive: `Array_load Naked_floats` |
 | `oo.ml` | `stdlib__Oo` | 23 | validated with its imports |  |
 | `option.ml` | `stdlib__Option` | 47 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |

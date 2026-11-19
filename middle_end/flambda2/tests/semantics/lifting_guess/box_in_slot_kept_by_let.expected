@@ -1,0 +1,10 @@
+box_in_slot_kept_by_let.fl: the term after is read from box_in_slot_kept_by_let_after.fl; Simplify is not run
+box_in_slot_kept_by_let.fl:
+  before Simplify (10 steps): returns [0: (boxed #1000:int64); [0: 1; 2]]
+  after Simplify (3 steps): returns [0: (boxed #1000:int64); [0: 1; 2]]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised

@@ -4056,11 +4056,13 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     sym
   in
   (* The function declarations of the closures that the term after makes by a
-     [Let], anywhere, and the tag and the number of fields of the blocks that it
-     makes by one. *)
-  let made_after, blocks_made_after =
+     [Let], anywhere, the tag and the number of fields of the blocks that it
+     makes by one, and the kind and the contents of the numbers that it boxes by
+     one. *)
+  let made_after, blocks_made_after, boxes_made_after =
     let made = ref [] in
     let blocks = ref [] in
+    let boxes = ref [] in
     let rec in_term (e : Model.expr) =
       match e with
       | Let (_, _, d, body) ->
@@ -4068,6 +4070,8 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
         | Closure_of_set (_, decls, _) -> made := decls :: !made
         | Prim (Variadic (Make_block (Block_kind_values tag)), fields) ->
           blocks := (tag, List.length fields) :: !blocks
+        | Prim (Unary (Box_number kind), [contents]) ->
+          boxes := (kind, contents) :: !boxes
         | _ -> ());
         in_term body
       | Let_static (bindings, body) ->
@@ -4090,7 +4094,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
     in
     in_term after;
-    !made, !blocks
+    !made, !blocks, !boxes
   in
   (* The variables that a closure of the term before, made by a [Let] or bound
      to a symbol, anywhere, holds in a value slot. *)
@@ -4532,7 +4536,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
         | None -> ())
-      | Prim (Unary (Box_number _), [contents]) -> (
+      | Prim (Unary (Box_number kind), [contents]) -> (
         match
           take path (fun (const : Model.static_const) ->
               match const with
@@ -4542,7 +4546,36 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
               | _ -> false)
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
-        | None -> ())
+        | None -> (
+          (* A boxed number whose contents are a constant, or a variable that
+             stands for one, that a closure of the term before holds in a value
+             slot, for which the guess has no symbol left to take (as for the
+             block above), and of which the term after has no [Let]: none that
+             boxes, at that kind, contents written as that constant (a variable
+             of the term after is not looked through). The case aimed at is a
+             number that the unit computes once and that a function then reads
+             from its closure: Simplify puts the constant in the code of the
+             function, the closure has no such value slot any more, and no
+             symbol is bound to the boxed number. It is given a symbol that
+             neither of the two terms given here has, so that the value slot
+             holds a symbol: the read of the slot is then that symbol
+             (FlambdaKnownSlotsSpec.read_known_slots) and its unboxing the
+             constant (FlambdaKnownSymbolsSpec.fold_known_named). *)
+          let contents_known =
+            match contents with
+            | Var y -> (
+              match List.assoc_opt y !known_simples with
+              | Some known -> known
+              | None -> contents)
+            | Symbol _ | Const _ -> contents
+          in
+          match contents_known with
+          | Const _ ->
+            if
+              List.mem x held_in_slots
+              && not (List.mem (kind, contents_known) boxes_made_after)
+            then lift x path (Lift_to_symbol (fresh_symbol ()))
+          | Symbol _ | Var _ -> ()))
       | _ -> ());
       in_expr (Numbers.Coq_xO path) body
     | Let_static (_, body) -> in_expr (Numbers.Coq_xO path) body

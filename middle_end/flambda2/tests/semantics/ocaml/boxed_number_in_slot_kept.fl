@@ -1,0 +1,32 @@
+let $camlBoxed_number_in_slot_kept__first_const_0 = Block 0 () in
+(let code size(16)
+       add_limit_0 (n/46 : int64 boxed)
+         my_closure/47 &my_alloc_region/48 my_depth/49
+         -> k/10 * k/11
+         : imm tagged =
+   let next_depth/50 = rec_info (succ my_depth/49) in
+   let limit/51 = %project_value_slot.[add_limit].[limit] (my_closure/47) in
+   let prim/52 = %unbox_num.`int64` (limit/51) in
+   let prim/53 = %unbox_num.`int64` (n/46) in
+   let prim/54 = %int_barith.`int64`.add (prim/53, prim/52) in
+   let int64_add/55 = %box_num.`int64`.my_alloc_region/48 (prim/54) in
+   let prim/56 = %unbox_num.`int64` (int64_add/55) in
+   let prim/57 = %num_conv.[`int64`].[`imm`] (prim/56) in
+   let int_of_int64/58 = %tag_imm (prim/57) in
+   cont k/10 (int_of_int64/58)
+ in
+ let prim/59 = %untag_imm (1000) in
+ let prim/60 = %num_conv.[`imm`].[`int64`] (prim/59) in
+ let limit/61 = %box_num.`int64`.`toplevel` (prim/60) in
+ let add_limit/62 = closure add_limit_0 @add_limit &toplevel
+ with { limit = limit/61 }
+ in
+ let Pmakeblock/63 = %block.[`0`].`toplevel` (limit/61, add_limit/62) in
+ cont k/9 (Pmakeblock/63))
+  where k/9 define_root_symbol (module_block/43) =
+    let field_0/44 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/43)
+    in
+    let field_1/45 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/43)
+    in
+    let $camlBoxed_number_in_slot_kept = Block 0 (field_0/44, field_1/45) in
+    cont done ($camlBoxed_number_in_slot_kept)

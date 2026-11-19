@@ -1,0 +1,8 @@
+(* The term after of the same control, written by hand: Simplify did not make
+   it. The block is bound to a symbol; the number is boxed by a Let (no unit
+   made from OCaml is known whose term after has such a Let: see dune); the
+   closure that nothing uses is gone. *)
+let $pair = Block 0 (1, 2) in
+let limit/1 = %box_num.`int64`.`toplevel` (1000L) in
+let $camlBox_in_slot_kept_by_let = Block 0 (limit/1, $pair) in
+cont done ($camlBox_in_slot_kept_by_let)
