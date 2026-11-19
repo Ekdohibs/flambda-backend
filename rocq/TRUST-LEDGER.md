@@ -909,13 +909,30 @@ it gave back.
   compiler states nothing, keeps its tag, and nothing is said of its
   fields. Where no parameter states anything the list is empty, which
   is what `FlambdaModel.make_handler_metadata` gives a handler. What
-  code states of its results is not converted: the model has a place
-  for it (`FlambdaModel.cm_result_subkinds`), the tool gives it
-  nothing, and no machine tests it. The round trip covers this much: the
-  printer of the model writes what the parameters state
-  (`flmodel_to_fexpr.ml`, `kinded_parameters`), and the term read
-  back is compared with the first by `FlambdaCompareSpec.expr_eqb`,
-  which asks the two to state the same.
+  code states of its results is converted too
+  (`convert_result_subkinds`, into
+  `FlambdaModel.cm_result_subkinds`): each result by the function
+  that converts what a parameter states (`convert_subkind`), with
+  the same two things given as less. No machine tests a returned
+  value against it, and no statement that is proved rests on it. A
+  comparison of the validation reads it
+  (`FlambdaCompareOrderSpec.code_metadata_says_at_least`): of two
+  pieces of code that it pairs, the one of the term made from the
+  term after may state of a result no more than the one of the term
+  made from the term before. The tests of equality inside the
+  rewrites (`FlambdaCompareSpec.expr_eqb`) read it too. So a result
+  that the conversion gets wrong can make them pass or refuse
+  wrongly, and changes no run. A statement of a result that is false
+  in both terms is not seen. The commit that began to give them
+  changed no expected or stored file of the tree, and added no
+  control that shows the comparison refusing a pair for what the
+  term after states of a result, or passing one where the term after
+  states less. The round trip covers this much: the printer of the
+  model writes what the parameters and the results state
+  (`flmodel_to_fexpr.ml`, `kinded_parameters`,
+  `arity_with_subkinds`), and the term read back is compared with
+  the first by `FlambdaCompareSpec.expr_eqb`, which asks the two to
+  state the same.
 - **Tupled functions** are in the model as code that is marked
   (`FlambdaModel.cm_is_tupled`), and the converter gives code the mark
   of `Code0.is_tupled`. A direct call and a call of unknown arity of
