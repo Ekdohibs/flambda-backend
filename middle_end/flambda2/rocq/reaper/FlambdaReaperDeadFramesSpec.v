@@ -64,7 +64,17 @@
    ([code_id_actually_called]) or the one read off the call witness of
    its callee. [never_returns_frame_statement] is the two together: such
    a call returning to a handler, there is a rank [i] such that the
-   handler with its parameter [i] renamed is never applied. *)
+   handler with its parameter [i] renamed is never applied.
+
+   The statements above are of the runs of the unit. In the rebuilt terms
+   the returns of such code are dropped by the terms themselves, with no
+   invariant of their runs: [dead_return_dropped_statement], every
+   [Apply_cont] of the body of the code to its return continuation
+   ([applies_to]), and every arm of a switch, that gives a value at the
+   rank of the result with no source gives it a name with no source, and
+   both rebuilds drop it. What is left to apply the frame is a call given
+   it as a continuation (in tail position) and the wrappers of the rebuilds
+   around calls. This file is to be reviewed for [applies_to] too. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -72,7 +82,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaValueSpec FlambdaSemanticsSpec FlambdaWellFormedSpec
   FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperFlowSpec
-  FlambdaReaperCallingConventions FlambdaReaperUnboxing.
+  FlambdaReaperRebuild FlambdaReaperCallingConventions FlambdaReaperUnboxing.
 Import ListNotations.
 
 (* The list [l] with its element of rank [i] replaced by [x]; [l] if it has
@@ -186,3 +196,59 @@ Definition never_returns_frame_statement : Prop :=
              (state_statics s) (state_heap s) (state_reads s))
         = Step s' ->
         lookup x (state_vars s') = None.
+
+(* The [Apply_cont]s of [e] to [k], and the arms of its switches to [k]
+   that the rebuilds keep ([Keyed.compact]), not under a binding of [k] nor
+   in code that [e] binds. *)
+Fixpoint applies_to (k : continuation) (e : expr) {struct e}
+    : list apply_cont :=
+  match e with
+  | Let _ _ _ body | Let_static _ body => applies_to k body
+  | Let_cont_non_recursive k' h body =>
+    handler_applies_to k h
+    ++ (if Pos.eqb k' k then [] else applies_to k body)
+  | Let_cont_recursive handlers body =>
+    if existsb (fun '(k', _) => Pos.eqb k' k) handlers
+    then []
+    else
+      flat_map (fun '(_, h) => handler_applies_to k h) handlers
+      ++ applies_to k body
+  | Apply_cont ac => if Pos.eqb (ac_continuation ac) k then [ac] else []
+  | Switch _ arms =>
+    filter (fun ac => Pos.eqb (ac_continuation ac) k)
+      (map snd (Keyed.compact Z.eqb arms))
+  | Apply _ | Invalid => []
+  end
+with handler_applies_to (k : continuation) (h : continuation_handler)
+    {struct h} : list apply_cont :=
+  match h with
+  | Handler _ _ handler => applies_to k handler
+  end.
+
+(* The frames of code whose result of rank [i] has no source, in the
+   terms rebuilt: an [Apply_cont] of the body of the code to its return
+   continuation, or an arm of a switch, that gives it a value at rank [i]
+   gives it a name with no source, and both rebuilds drop it (the change of
+   calling conventions, [rewrite_apply_cont], and the rebuild with
+   unboxing, [rewrite_apply_cont_u]: [Invalid], or no arm). The return
+   continuation of such code is then applied, in the rebuilt terms, only
+   by calls given it as a continuation and by the wrappers that the
+   rebuilds make around calls. *)
+Definition dead_return_dropped_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (id : code_id) (c : code)
+    (cd : code_dep) (i : nat) (r : node) (ac : apply_cont),
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    In (id, c) (unit_codes e) ->
+    lookup id (unit_code_deps flag u e) = Some cd ->
+    nth_error (cd_return cd) i = Some r ->
+    s_has_source (solution_of_tables T) r = false ->
+    In ac (applies_to (code_return_continuation c) (code_body c)) ->
+    i < length (ac_args ac) ->
+    existsb (simple_has_no_source (solution_of_tables T)) (ac_args ac)
+    = true
+    ∧ (∀ en : rebuild_env,
+         rewrite_apply_cont (solution_of_tables T) en ac = None)
+    ∧ (∀ (unboxed : list (node * unboxed_fields)) (en : unbox_env),
+         rewrite_apply_cont_u (solution_of_tables T) unboxed en ac = None).

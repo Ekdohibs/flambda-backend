@@ -47,7 +47,13 @@
    [code_id_actually_called] finds; otherwise [w] is among the witnesses
    that [never_returns_of_call] reads, and the result of [w] it finds with
    no source is one of the code dep. The arity of the call is that of the
-   code, as the call steps ([entered_dead_result]). *)
+   code, as the call steps ([entered_dead_result]).
+
+   [dead_return_dropped]: the body of the code has the edges of the flow
+   with its return continuation at the results of the code dep
+   ([unit_codes_edges]); an [Apply_cont] to it, not under a binding of it,
+   aliases each result to its argument ([applies_to_edges]), so that an
+   argument with a source would give one to the result. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -800,4 +806,145 @@ Proof.
            Hunit_syms Hdeps Hnd Hcds Hlrs s ap callee id slots cd i r h vars0
            K0 rec0 x m s' Hs Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr Hrs
            Hres Hx Hrun').
+Qed.
+
+(* ======================================================================== *)
+(* The return continuation of code whose result has no source               *)
+(* ======================================================================== *)
+
+Lemma lookup_rec_conts_other (k : continuation) (ce : finite_map (list node))
+    (handlers : list (continuation * continuation_handler)) :
+  existsb (fun '(k', _) => Pos.eqb k' k) handlers = false ->
+  lookup k (FlambdaReaperFlowProofs.rec_conts ce handlers) = lookup k ce.
+Proof.
+  intros H. unfold FlambdaReaperFlowProofs.rec_conts. rewrite lookup_app.
+  induction handlers as [ | [k' h] handlers IH]; [ reflexivity | ].
+  cbn [existsb] in H. apply orb_false_iff in H as [Hk H].
+  cbn [map]. rewrite lookup_other; [ exact (IH H) | ].
+  intros ->. rewrite Pos.eqb_refl in Hk. discriminate Hk.
+Qed.
+
+Lemma combine_nth_in {A B : Type} (l : list A) (l' : list B) (i : nat)
+    (a : A) (b : B) :
+  nth_error l i = Some a -> nth_error l' i = Some b -> (a, b) ∈ combine l l'.
+Proof.
+  revert l' i. induction l as [ | x l IH]; intros l' i Ha Hb;
+    [ destruct i; discriminate Ha | ].
+  destruct l' as [ | y l']; [ destruct i; discriminate Hb | ].
+  destruct i as [ | i]; cbn in Ha, Hb |- *.
+  - injection Ha as <-. injection Hb as <-. left. reflexivity.
+  - right. exact (IH l' i Ha Hb).
+Qed.
+
+(* What an [Apply_cont] to [k] that [applies_to] finds gives the nodes of
+   [k]. *)
+Lemma applies_to_edges (G : graph) (noted : symbol -> Prop)
+    (deps : closure_dep -> Prop) (cds : finite_map code_dep)
+    (keep : value_slot -> bool) (codes : list (code_id * code))
+    (symbols : list symbol) (slots_read heap_prims : Prop)
+    (k : continuation) (ns : list node) :
+  ∀ e : expr, ∀ ctx ce,
+    FlambdaReaperFlowProofs.expr_edges G noted deps cds keep codes symbols
+      slots_read heap_prims ctx ce e ->
+    lookup k ce = Some ns ->
+    ∀ ac : apply_cont, ac ∈ applies_to k e ->
+      ∀ (p : node) (s : simple),
+        (p, s) ∈ combine ns (ac_args ac) -> g_alias G p (node_of_simple s).
+Proof.
+  assert (H :
+    (∀ e : expr, ∀ ctx ce,
+       FlambdaReaperFlowProofs.expr_edges G noted deps cds keep codes symbols
+         slots_read heap_prims ctx ce e ->
+       lookup k ce = Some ns ->
+       ∀ ac : apply_cont, ac ∈ applies_to k e ->
+         ∀ (p : node) (s : simple),
+           (p, s) ∈ combine ns (ac_args ac) -> g_alias G p (node_of_simple s))
+    ∧ (∀ h : continuation_handler, ∀ ctx ce,
+         FlambdaReaperFlowProofs.handler_edges G noted deps cds keep codes
+           symbols slots_read heap_prims ctx ce h ->
+         lookup k ce = Some ns ->
+         ∀ ac : apply_cont, ac ∈ handler_applies_to k h ->
+           ∀ (p : node) (s : simple),
+             (p, s) ∈ combine ns (ac_args ac) ->
+             g_alias G p (node_of_simple s)));
+    [ | exact (proj1 H) ].
+  apply FlambdaReaperFlowProofs.expr_handler_ind;
+    cbn [FlambdaReaperFlowProofs.expr_edges
+         FlambdaReaperFlowProofs.handler_edges applies_to handler_applies_to].
+  - intros x kind d body IH ctx ce [_ H]. exact (IH ctx ce H).
+  - intros bindings body _ IH ctx ce [_ H]. exact (IH ctx ce H).
+  - intros k' h body IHh IH ctx ce [Hh H] Hk ac Hac.
+    apply in_app_or in Hac as [Hac | Hac];
+      [ exact (IHh ctx ce Hh Hk ac Hac) | ].
+    destruct (Pos.eqb_spec k' k) as [_ | Hne]; [ destruct Hac | ].
+    refine (IH ctx _ H _ ac Hac). rewrite lookup_other; [ exact Hk | ].
+    intros ->. apply Hne. reflexivity.
+  - intros handlers body IHh IH ctx ce [Hhs H] Hk ac Hac.
+    destruct (existsb (fun '(k', _) => Pos.eqb k' k) handlers) eqn:Ex;
+      [ destruct Hac | ].
+    pose proof (lookup_rec_conts_other k ce handlers Ex) as Hl.
+    rewrite <- Hl in Hk.
+    apply in_app_or in Hac as [Hac | Hac]; [ | exact (IH ctx _ H Hk ac Hac) ].
+    apply in_flat_map in Hac as ([k' h] & Hkh & Hac).
+    exact (IHh k' h Hkh ctx _
+             (proj1 (FlambdaMapProofs.every_in _ _ _) Hhs _ Hkh) Hk ac Hac).
+  - intros ap ctx ce _ _ ac [].
+  - intros ac ctx ce [Hal _] Hk ac' Hac.
+    destruct (Pos.eqb_spec (ac_continuation ac) k) as [Heq | _];
+      [ | destruct Hac ].
+    destruct Hac as [<- | []]. apply Hal. rewrite Heq. exact Hk.
+  - intros scrutinee arms ctx ce Harms Hk ac Hac.
+    apply filter_In in Hac as [Hac Heq]. apply Pos.eqb_eq in Heq.
+    apply in_map_iff in Hac as ([d ac'] & <- & Hin).
+    destruct (proj1 (FlambdaMapProofs.every_in _ _ _) Harms _ Hin) as [Hal _].
+    apply Hal. cbn [snd] in Heq |- *. rewrite Heq. exact Hk.
+  - intros ctx ce _ _ ac [].
+  - intros params metadata handler IH ctx ce H. exact (IH ctx ce H).
+Qed.
+
+Theorem dead_return_dropped : dead_return_dropped_statement.
+Proof.
+  intros flag is_local u e T id c cd i r ac Hfrag Hcheck Hin Hcd Hr Hrs Hac
+    Hlt.
+  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
+  destruct (FlambdaReaperRebuildProofs.traverse_unit_keeps flag u e True false
+              Hfrag (or_introl I))
+    as (noted & deps & cds & He & Hconsts & _ & _ & _ & Hnd & _ & _ & ->).
+  set (G := graph_of_facts (traverse_unit flag u e)) in *.
+  set (sol := solution_of_tables T) in *.
+  pose proof (proj1 (FlambdaReaperWrapperProofs.unit_codes_edges G noted deps
+                       (unit_code_deps flag u e) (unit_kept e) (unit_codes e)
+                       (static_names symbols_of_binding e) True False)
+                e None (unit_conts u) He id c Hin) as Hcode.
+  destruct c as [params my_closure ret exn md body].
+  cbn [FlambdaReaperFlowProofs.code_edges] in Hcode.
+  destruct Hcode as (cd' & Hin' & _ & _ & _ & _ & _ & _ & _ & Hne & _ & _
+                     & Hbody).
+  rewrite (lookup_nodup_in _ _ _ Hnd Hin') in Hcd. injection Hcd as <-.
+  cbn [code_return_continuation code_body] in Hac.
+  assert (Hk : lookup ret [(exn, [cd_exn cd']); (ret, cd_return cd')]
+               = Some (cd_return cd')).
+  { rewrite lookup_other; [ apply lookup_head | exact (fun H => Hne H) ]. }
+  pose proof (applies_to_edges G noted deps _ _ _ _ True False ret
+                (cd_return cd') body _ _ Hbody Hk ac Hac) as Hal.
+  destruct (nth_error (ac_args ac) i) as [a | ] eqn:Ha;
+    [ | apply nth_error_None in Ha; lia ].
+  pose proof (Hal r a (combine_nth_in _ _ i r a Hr Ha)) as Hra.
+  assert (Hhs : s_has_source sol (node_of_simple a) = false).
+  { destruct (s_has_source sol (node_of_simple a)) eqn:E; [ | reflexivity ].
+    rewrite (has_source_alias _ _ _ Hc _ r E (alias_input _ _ _ Hc _ _ Hra))
+      in Hrs.
+    discriminate Hrs. }
+  assert (Hno : simple_has_no_source sol a = true).
+  { destruct a as [x | sym | c0]; cbn [node_of_simple simple_has_no_source]
+      in Hhs |- *; try (rewrite Hhs; reflexivity).
+    rewrite (as_hs is_local G sol Hc _ (any_source_input _ _ _ Hc _ Hconsts))
+      in Hhs.
+    discriminate Hhs. }
+  assert (Hex : existsb (simple_has_no_source sol) (ac_args ac) = true).
+  { apply existsb_exists. exists a. split; [ exact (nth_error_In _ _ Ha) | ].
+    exact Hno. }
+  split; [ exact Hex | split ].
+  - intros en. unfold rewrite_apply_cont. rewrite Hex. reflexivity.
+  - intros unboxed en. unfold rewrite_apply_cont_u. rewrite Hex. reflexivity.
 Qed.
