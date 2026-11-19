@@ -388,7 +388,7 @@ Proof.
   apply (unbox_loop_parameter_refines k i params metadata
     (with_one_more metadata kind) f x kind handler without'
     (fun known => extend_args known i p) (read_runs i p) Hdistinct Hx
-    eq_refl (fun _ _ _ _ => eq_refl)
+    eq_refl (with_one_more_subkinds metadata kind)
     (fun known0 vars0 statics0 hp0 rd0 args0 args0' vs0 v0 =>
        extend_args_gives_on_spine i p f x kind handler without known0 vars0
          statics0 hp0 rd0 args0 args0' vs0 v0 Hremoves Hspine)

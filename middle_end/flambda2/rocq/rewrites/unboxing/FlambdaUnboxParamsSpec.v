@@ -483,10 +483,19 @@ Definition may_take (params : list variable) (metadata : handler_metadata)
   && negb (among f params).
 
 (* The metadata of a handler that takes one more parameter, of the kind
-   given, after those it had. It is not an exception handler. *)
+   given, after those it had. It is not an exception handler. The
+   handler states of the parameters it had what it stated of them,
+   and nothing of the new one: its entries are kept, but no more of
+   them than it has kinds, so that none comes to be of the new
+   parameter (decision D25, at parameters: what a handler states of a
+   parameter is tested where the handler is applied). *)
 Definition with_one_more (metadata : handler_metadata) (kind : flambda_kind)
     : handler_metadata :=
-  make_handler_metadata (hm_params_kinds metadata ++ [kind]).
+  {| hm_params_kinds := hm_params_kinds metadata ++ [kind];
+     hm_params_subkinds :=
+       firstn (length (hm_params_kinds metadata))
+         (hm_params_subkinds metadata);
+     hm_is_exn_handler := false |}.
 
 (* The [Let_cont] of [k], with each [Let] that its handler begins with
    and that reads a box which is a parameter made a parameter, as long
