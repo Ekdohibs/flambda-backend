@@ -837,6 +837,31 @@ Proof.
   apply stated_hold_cons; [ apply stated_hold_nil | exact Hclosure ].
 Qed.
 
+(* The same from what FlambdaContextProofs.code_refines_stated gives
+   of an entry: the callee is a closure, so neither null nor poison. *)
+Lemma closure_of_not_null (statics : static_env) (v : value) :
+  closure_of statics v <> None -> value_at statics not_null v = true.
+Proof.
+  destruct v; try reflexivity; intros H; exfalso; apply H; reflexivity.
+Qed.
+
+Lemma code_stated_bound (statics : static_env) (params : list variable)
+    (my_closure : variable) (metadata : code_metadata) (vs : list value)
+    (callee : value) (callee_vars : env) :
+  closure_of statics callee <> None ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+  bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+  stated_hold statics (code_stated params my_closure metadata) callee_vars.
+Proof.
+  intros Hclosure Hvs Hbind. unfold code_stated.
+  apply
+    (params_stated_bound statics params vs _ [(my_closure, not_null)]
+       [(my_closure, callee)] callee_vars);
+    [ | exact Hvs | exact Hbind ].
+  apply stated_hold_cons;
+    [ apply stated_hold_nil | apply closure_of_not_null, Hclosure ].
+Qed.
+
 (* ======================================================================== *)
 (* The test of a rewrite is the test of the machine                         *)
 (* ======================================================================== *)
@@ -877,4 +902,52 @@ Proof.
   intros statics S vars sks i ps s v Hhold Hstated Hnth Heval.
   unfold is_stated_at in Hstated. rewrite Hnth in Hstated.
   exact (is_stated_sound statics S vars ps s v Hhold Hstated Heval).
+Qed.
+
+(* ======================================================================== *)
+(* A binder that states nothing passes                                      *)
+(* ======================================================================== *)
+
+(* The tests of the rewrites ask no more than the tests that they
+   took the place of: where the binder states nothing of a parameter
+   (FlambdaKindModel.says_nothing), the argument passes whatever is
+   known of it. *)
+Lemma is_stated_of_nothing (S : stated_in_scope) (ps : param_subkind)
+    (s : simple) :
+  says_nothing (fst ps) (snd ps) = true -> is_stated S ps s = true.
+Proof.
+  destruct ps as [nullable sk]. unfold says_nothing. cbn [fst snd].
+  intros Hnothing. apply andb_true_iff in Hnothing as [-> Hsk].
+  destruct sk; try discriminate Hsk.
+  destruct s as [x | sym | c]; cbn [is_stated];
+    [ | | exact (value_at_any_value empty_static_env (Value_const c)) ];
+    unfold param_says_at_least; cbn [fst snd];
+    rewrite Bool.orb_true_r;
+    match goal with
+    | |- true && subkind_says_at_least ?a _ = true => destruct a; reflexivity
+    end.
+Qed.
+
+Lemma are_stated_of_nothing (S : stated_in_scope)
+    (sks : list param_subkind) :
+  ∀ args : list simple,
+    subkinds_say_nothing sks = true -> are_stated S args sks = true.
+Proof.
+  induction sks as [ | ps sks IH]; intros [ | s args]; try reflexivity.
+  unfold subkinds_say_nothing. cbn [forallb are_stated]. intros Hnothing.
+  apply andb_true_iff in Hnothing as [Hps Hsks].
+  rewrite (is_stated_of_nothing S ps s Hps). exact (IH args Hsks).
+Qed.
+
+Lemma is_stated_at_of_nothing (S : stated_in_scope)
+    (sks : list param_subkind) (i : nat) (s : simple) :
+  match nth_error sks i with
+  | Some ps => says_nothing (fst ps) (snd ps)
+  | None => true
+  end
+  = true ->
+  is_stated_at S sks i s = true.
+Proof.
+  unfold is_stated_at. destruct (nth_error sks i) as [ps | ];
+    [ apply is_stated_of_nothing | reflexivity ].
 Qed.

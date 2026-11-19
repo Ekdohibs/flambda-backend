@@ -105,11 +105,12 @@ Lemma code_forwards (id : code_id) (params : list variable)
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue _.
+  intros Hrefines Hbind Hkinds Hvalue _ _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ Hbind Hkinds
        Hvalue).
@@ -126,11 +127,12 @@ Lemma code_backwards (id : code_id) (params : list variable)
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue _.
+  intros Hrefines Hbind Hkinds Hvalue _ _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ Hbind Hkinds
        Hvalue).
@@ -283,11 +285,12 @@ Lemma code_forwards_called (id : code_id) (params : list variable)
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue Hclosure.
+  intros Hrefines Hbind Hkinds Hvalue Hclosure _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ slots Hbind
        Hkinds Hvalue Hclosure).
@@ -305,11 +308,12 @@ Lemma code_backwards_called (id : code_id) (params : list variable)
   map kind_of_value vs = unarize (cm_params_arity metadata) ->
   kind_of_value callee = Value ->
   closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
   refines_from inv
     (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
     (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
 Proof.
-  intros Hrefines Hbind Hkinds Hvalue Hclosure.
+  intros Hrefines Hbind Hkinds Hvalue Hclosure _.
   exact
     (Hrefines vs callee callee_vars return_to exn_to statics hp rd_ slots Hbind
        Hkinds Hvalue Hclosure).

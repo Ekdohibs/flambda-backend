@@ -566,6 +566,7 @@ Hypothesis inv_code_related :
     map kind_of_value vs = unarize (cm_params_arity metadata) ->
     kind_of_value callee = Value ->
     closure_of statics callee = Some (id, slots) ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
     inv (State e' callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
       ->
     inv (State e callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd).
@@ -583,6 +584,7 @@ Hypothesis carried_code_related :
     map kind_of_value vs = unarize (cm_params_arity metadata) ->
     kind_of_value callee = Value ->
     closure_of statics callee = Some (id, slots) ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
     carried
       (State e callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
       b ->
@@ -716,15 +718,20 @@ Proof.
       apply Forall2_nil. }
     destruct Hbody as [Hbody | <-];
       [ | exact (IH _ _ _ _ _ _ _ _ _ Hconts Hstatics Hinv Hended) ].
+    (* The call under the second static environment has tested what
+       the code states of its parameters. *)
+    pose proof (call_code_step_subkinds _ _ _ _ _ _ _ _ _ _ _ Htarget)
+      as Hstated.
+    cbn [code_params_subkinds] in Hstated.
     (* The state of the second body has [inv]; so has that of the
        first, which the induction is about. *)
     pose proof
       (inv_code_related _ _ _ _ _ _ _ _ _ _ _ _ _ _ hp _ _ Hbody Hbind Hparams
-         Hvalue Hclosure Hinv)
+         Hvalue Hclosure Hstated Hinv)
       as Hfirst.
     exact
       (carried_code_related _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ Hbody Hfirst
-         Hbind Hparams Hvalue Hclosure
+         Hbind Hparams Hvalue Hclosure Hstated
          (IH _ _ _ _ _ _ _ _ _ Hconts Hstatics Hfirst Hended)).
 Qed.
 
@@ -1303,6 +1310,7 @@ Hypothesis code_forwards_refines :
     map kind_of_value vs = unarize (cm_params_arity metadata) ->
     kind_of_value callee = Value ->
     closure_of statics callee = Some (id, slots) ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
     refines_from inv
       (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
       (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp
@@ -1320,6 +1328,7 @@ Hypothesis code_backwards_refines :
     map kind_of_value vs = unarize (cm_params_arity metadata) ->
     kind_of_value callee = Value ->
     closure_of statics callee = Some (id, slots) ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
     refines_from inv
       (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
       (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp
@@ -1373,21 +1382,21 @@ Proof.
               Hsource)).
     + intros id params my_closure ret exn metadata source target vs' callee
         callee_vars return_to exn_to statics'' hp'' rd'' slots Hrelated Hbind
-        Hkinds Hvalue Hclosure.
+        Hkinds Hvalue Hclosure Hstated.
       exact
         (proj2
            (proj1
               (code_forwards_refines _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                 _ Hrelated Hbind Hkinds Hvalue Hclosure))).
+                 _ Hrelated Hbind Hkinds Hvalue Hclosure Hstated))).
     + intros id params my_closure ret exn metadata source target vs' callee
         callee_vars return_to exn_to statics'' hp'' rd'' slots b Hrelated
-        Hsource Hbind Hkinds Hvalue Hclosure.
+        Hsource Hbind Hkinds Hvalue Hclosure Hstated.
       destruct b; unfold exits_carried; auto.
       apply
         (proj1
            (proj2
               (code_forwards_refines _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                 _ Hrelated Hbind Hkinds Hvalue Hclosure)
+                 _ Hrelated Hbind Hkinds Hvalue Hclosure Hstated)
               Hsource)).
     + rewrite Hrun. simpl. auto.
   - intros b Hterm Hb. destruct (behaves_ended _ _ Hterm Hb) as [n Hended].
@@ -1424,18 +1433,19 @@ Proof.
         assumption.
     + intros id params my_closure ret exn metadata target source vs callee
         callee_vars return_to exn_to statics'' hp'' rd'' slots Hrelated Hbind
-        Hkinds Hvalue Hclosure.
+        Hkinds Hvalue Hclosure Hstated.
       exact
         (proj1
            (proj1
               (code_backwards_refines _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-                 _ Hrelated Hbind Hkinds Hvalue Hclosure))).
+                 _ Hrelated Hbind Hkinds Hvalue Hclosure Hstated))).
     + intros id params my_closure ret exn metadata target source vs callee
         callee_vars return_to exn_to statics'' hp'' rd'' slots b' Hrelated
-        Htarget Hbind Hkinds Hvalue Hclosure Hcarried Hterm'.
+        Htarget Hbind Hkinds Hvalue Hclosure Hstated Hcarried Hterm'.
       destruct
         (code_backwards_refines _ _ _ _ _ _ _ _ _ _ _ return_to exn_to
-           statics'' hp'' rd'' _ Hrelated Hbind Hkinds Hvalue Hclosure)
+           statics'' hp'' rd'' _ Hrelated Hbind Hkinds Hvalue Hclosure
+           Hstated)
         as [Htogether Hrefines].
       destruct (Hrefines (proj2 Htogether Htarget)) as [_ Hends].
       destruct (Hcarried Hterm') as [Hb' | Hwrong];
@@ -1800,12 +1810,12 @@ Proof.
              handler_refines_where_from params kinds def_vars source target))
        (fun id params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        (fun id params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        e vars conts conts' statics statics' _ rd_ Hok Hok' Hrel Hrel' Hstatics
@@ -1925,13 +1935,13 @@ Proof.
              handler_refines_where_from params kinds def_vars source target))
        (fun _ params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_from params my_closure metadata source target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]
             statics' hp' rd' Hrefines Hbind Hkinds Hvalue)
        (fun _ params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_from params my_closure metadata source target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]
             statics' hp' rd' Hrefines Hbind Hkinds Hvalue)
@@ -2031,6 +2041,93 @@ Proof.
          Hbind).
   - intros; exfalso; assumption.
   - intros; exfalso; assumption.
+Qed.
+
+(* The body of code refines another where it is entered: as
+   [code_refines_where], and the callee is a closure, and the values
+   are of what the code states of its parameters, under the static
+   environment of the entry. The machine enters code with no other
+   callee and no other values (FlambdaSemanticsSpec.shape_of_call,
+   which has read FlambdaValueSpec.closure_of of the callee, and
+   FlambdaSemanticsSpec.call_code, which tests the values). *)
+Definition code_refines_stated (params : list variable)
+    (my_closure : variable) (metadata : code_metadata)
+    (source target : expr) : Prop :=
+  ∀ (vs : list value) (callee : value) (callee_vars : env)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
+    map kind_of_value vs = unarize (cm_params_arity metadata) ->
+    closure_of statics callee <> None ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+    bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+    refines (State source callee_vars conts statics hp rd)
+      (State target callee_vars conts statics hp rd).
+
+Lemma code_refines_where_stated (params : list variable)
+    (my_closure : variable) (metadata : code_metadata)
+    (source target : expr) :
+  code_refines_where always params my_closure metadata source target ->
+  code_refines_stated params my_closure metadata source target.
+Proof.
+  intros H vs callee callee_vars conts statics hp rd Hkinds Hclosure _ Hbind.
+  destruct (closure_of statics callee) as [[id slots] | ] eqn:Hof;
+    [ | contradiction ].
+  exact
+    (H vs callee callee_vars conts statics hp rd_ I Hkinds
+       (closure_of_kind _ _ _ _ Hof) Hbind).
+Qed.
+
+(* A [Let_static] refines the same with the body of a piece of code
+   replaced by one that refines it where it is entered. *)
+Lemma let_static_code_refines_stated (before : list static_binding)
+    (id : code_id) (params : list variable) (my_closure : variable)
+    (ret exn : continuation) (metadata : code_metadata)
+    (code_body code_body' : expr) (after : list static_binding) (body : expr)
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record) :
+  binds_statics code_body = binds_statics code_body' ->
+  code_refines_stated params my_closure metadata code_body code_body' ->
+  refines
+    (State
+       (Let_static
+          (before
+           ++ Bind_code id
+                (Code params my_closure ret exn metadata code_body)
+           :: after)
+          body)
+       vars conts statics hp rd)
+    (State
+       (Let_static
+          (before
+           ++ Bind_code id
+                (Code params my_closure ret exn metadata code_body')
+           :: after)
+          body)
+       vars conts statics hp rd).
+Proof.
+  intros Hbinds Hcode.
+  refine
+    (let_static_code_refines_from (fun _ : state => True)
+       (fun _ _ _ _ => I) (fun _ _ _ _ _ => False) (fun _ _ _ _ _ => False)
+       (fun _ params' my_closure' _ _ metadata' =>
+          code_refines_stated params' my_closure' metadata')
+       (fun _ params' my_closure' _ _ metadata' target source =>
+          code_refines_stated params' my_closure' metadata' source target)
+       _ _ _ _ before id params my_closure ret exn metadata code_body
+       code_body' after body vars conts statics hp rd I I Hbinds Hcode Hcode).
+  - intros; exfalso; assumption.
+  - intros; exfalso; assumption.
+  - intros id' params' my_closure' ret' exn' metadata' source target vs
+      callee callee_vars return_to exn_to statics' hp' rd' slots Hrefines
+      Hbind Hkinds _ Hclosure Hstated.
+    split; [ split; intros _; exact I | intros _ ].
+    apply (Hrefines vs callee callee_vars _ statics' hp' rd' Hkinds);
+      [ rewrite Hclosure; discriminate | exact Hstated | exact Hbind ].
+  - intros id' params' my_closure' ret' exn' metadata' target source vs
+      callee callee_vars return_to exn_to statics' hp' rd' slots Hrefines
+      Hbind Hkinds _ Hclosure Hstated.
+    split; [ split; intros _; exact I | intros _ ].
+    apply (Hrefines vs callee callee_vars _ statics' hp' rd' Hkinds);
+      [ rewrite Hclosure; discriminate | exact Hstated | exact Hbind ].
 Qed.
 
 Lemma let_cont_recursive_handler_refines_at

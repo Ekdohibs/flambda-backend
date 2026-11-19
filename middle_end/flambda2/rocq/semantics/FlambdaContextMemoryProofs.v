@@ -193,12 +193,12 @@ Proof.
                target))
        (fun id params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_memory_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        (fun id params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_memory_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        e vars conts conts' statics statics' _ rd_ Hok Hok' Hrel Hrel' Hstatics
@@ -324,14 +324,14 @@ Proof.
                target))
        (fun _ params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_memory_from params my_closure metadata source
             target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]
             statics' hp' rd' Hrefines Hbind Hkinds Hvalue)
        (fun _ params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_memory_from params my_closure metadata source
             target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]
