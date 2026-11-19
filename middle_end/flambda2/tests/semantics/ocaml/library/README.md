@@ -33,8 +33,10 @@ such a symbol, and lets through no unit that has one. A predefined
 exception is not of another unit, and a unit that names one is kept:
 the tool runs it from its imports, as it does in the directory
 above. A function of the runtime, which the text writes as a symbol
-of a unit of its own, is refused with the others: the tool reads no
-term that calls one. `../script/library_function.ml` is a unit that
+of a unit of its own, is refused with the others: the tool converts
+a call of one, and a run that reaches the call is undefined there
+(`../../c_calls/` has such units), but the units kept here need
+nothing but themselves. `../script/library_function.ml` is a unit that
 the script refuses so, and `../script/library_function_not.ml` the
 same unit with a function of its own in the place of the library's.
 

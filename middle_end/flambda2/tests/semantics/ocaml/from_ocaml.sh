@@ -76,7 +76,9 @@ fi
 # (print_fexpr.ml, symbol0 and symbol_part). A predefined exception is
 # written with the name `*predef*`, is not of the library, and is let
 # through. A function of the runtime is written with the name `*extern*`,
-# and is refused with the units: the tool reads no term that calls one.
+# and is refused with the units: the tool converts a call of one, and a
+# run that reaches the call is undefined there (../c_calls/ has such
+# units), but the units kept here need nothing but themselves.
 #
 # This is a test on the text of the term and no parser: it looks for a
 # dollar followed by such a name and a dot, wherever that is. So it may

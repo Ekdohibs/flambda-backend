@@ -1,4 +1,9 @@
 stdlib__BytesLabels.fl:
+  in front of the two terms, the declarations of 4 C functions:
+    caml_create_bytes (a C function), declared with no code
+    caml_bytes_equal (a C function: noalloc), declared with no code
+    caml_bytes_compare (a C function: noalloc), declared with no code
+    caml_fill_bytes (a C function: noalloc), declared with no code
   given the .cmx of Stdlib__Bytes, a prefix of 169 static bindings:
     camlStdlib__Bytes__unsafe_escape_21_144_code deleted
     camlStdlib__Bytes__set_int64_le_86_205_code deleted
@@ -40,8 +45,6 @@ stdlib__BytesLabels.fl:
     camlStdlib__Bytes__split_on_char_56_179_code deleted
     camlStdlib__Bytes__ends_with_38_161_code deleted
     camlStdlib__Bytes__starts_with_36_159_code deleted
-    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:412,0--76]_122_122_code deleted
-    camlStdlib__Bytes__compare_55_178_code deleted
     camlStdlib__Bytes__uncapitalize_ascii_35_158_code deleted
     camlStdlib__Bytes__capitalize_ascii_34_157_code deleted
     camlStdlib__Bytes__lowercase_ascii_32_155_code deleted
@@ -79,7 +82,6 @@ stdlib__BytesLabels.fl:
     camlStdlib__Bytes__of_string_4_127_code deleted
     camlStdlib__Bytes__copy_2_125_code deleted
     camlStdlib__Bytes__init_1_124_code deleted
-    camlStdlib__Bytes__make_0_123_code deleted
     camlStdlib__Bytes__aux_62_183_code deleted
     camlStdlib__Bytes__aux_58_181_code deleted
     camlStdlib__Bytes__to_seqi_61_182_code (v1) v2 -> k1 * k2 =
@@ -102,6 +104,25 @@ stdlib__BytesLabels.fl:
           {Stdlib__Bytes.partial_aux_60 = camlStdlib__Bytes__partial_aux_60_60_code}
           {Stdlib__Bytes.aux_46 = v3} in
       cont k1 (v4)
+    camlStdlib__Bytes__fn[/workspace_root/stdlib/build/bytes.ml:412,0--76]_122_122_code stub (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(caml_bytes_equal (a C function: noalloc)) caml_bytes_equal
+        (v1, v2) -> k1 * k2
+    camlStdlib__Bytes__compare_55_178_code (v1,
+      v2) v3 -> k1 * k2 =
+      apply direct(caml_bytes_compare (a C function: noalloc)) caml_bytes_compare
+        (v1, v2) -> k1 * k2
+    camlStdlib__Bytes__make_0_123_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 (v4) =
+        let_cont k4 (v5) =
+          cont k1 (v4)
+        in
+        apply direct(caml_fill_bytes (a C function: noalloc)) caml_fill_bytes
+          (v4, 0, v1, v2) -> k4 * k2
+      in
+      apply direct(caml_create_bytes (a C function)) caml_create_bytes (v1)
+        -> k3 * k2
     camlStdlib__Bytes__partial_aux_64_64_code stub (v1) v2 -> k1 * k2 =
       let v3 = v2.(Stdlib__Bytes.partial_aux_64).Stdlib__Bytes.aux_50 in
       apply known_arity v3 (0, v1) -> k1 * k2
@@ -476,7 +497,18 @@ stdlib__BytesLabels.fl:
       camlStdlib__Bytes__set_int64_be_87_116,
       camlStdlib__Bytes__set_int64_le_86_115,
       camlStdlib__Bytes__unsafe_escape_21_55)
-  before Simplify, after the prefix, with its import (178 steps): returns
+  before Simplify, after the prefix, with its 5 imports (178 steps): 
+returns
+  [0: <fun>; <fun>; <imported 86>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
+  after Simplify, after the prefix, with its 5 imports (3 steps): returns
                                                                     [0:
                                                                     <fun>;
                                                                     <fun>;
@@ -563,92 +595,6 @@ stdlib__BytesLabels.fl:
                                                                     <fun>;
                                                                     <fun>;
                                                                     <fun>]
-  after Simplify, after the prefix, with its import (3 steps): returns
-                                                                 [0: <fun>;
-                                                                  <fun>;
-                                                                  <imported 86>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>;
-                                                                  <fun>]
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after, each with the prefix in front of it
   calls outside code: 0 before, 0 after

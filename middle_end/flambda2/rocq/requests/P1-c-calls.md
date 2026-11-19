@@ -9,12 +9,24 @@ ways to give them a meaning, what is written so far (a table of
 functions that nothing uses, `FlambdaExtcallSpec.v`), and how it
 would be wired.
 
-## What there is
+**The answer, 18 November 2026.** A run is undefined at a call of a C
+function of which the model says nothing: the reading (U) below, which
+the test tool has (decision D50). And C functions are to be given a
+meaning in the model by their names in the runtime, a fair number of
+those that the standard library calls and not all, `caml_create_bytes`
+as an allocation and `caml_fresh_oo_id` as the increment of a counter
+among them. That is being designed, and nothing of it is in the tree.
+The sections below are as they were written before the answer, each
+of its time, but for the sentences that say what the tool does now.
 
-An `Apply` whose call kind is `C_call` is refused by the conversion
-(the unit is "not checked"). A unit with one that `-drawfexpr` prints
-does not even parse back (`requests/V2-missing-constructs.md`, items
-10 and 4).
+## What there was
+
+When this was written an `Apply` whose call kind is `C_call` was
+refused by the conversion (the unit was "not checked"), and a unit
+with one that `-drawfexpr` prints did not parse back
+(`requests/V2-missing-constructs.md`, items 10 and 4). The reader of
+texts has read such a call since, and the conversion takes it under
+the reading (U).
 
 ## The calls that the front end makes of plain OCaml
 
@@ -397,7 +409,109 @@ the same count, all 200 whole units use another unit when they run,
 and 93 the heap.
 
 Meanwhile no call of a C function has a meaning in the model, the
-conversion refuses every one, and nothing uses the table.
+conversion refuses every one, and nothing uses the table. (That is
+the tool as it was when this was written. The section below is a
+reading prepared since, under which the conversion takes them.)
+
+## The reading (U): a call of a C function is undefined
+
+Ruled on 18 November 2026 (decision D50), for every C function of
+which the model says nothing. It is not what this request recommended:
+under it a call of a C function is undefined, where way (A) keeps a
+call that the table does not answer apart from an undefined one.
+
+**What it is.** No statement of the model changes. The test tool
+converts a call of a C function as a direct call of code that the term
+declares and does not bind, one code id for each C function as the
+call describes it (its name and the four things that the compiler says
+of it at the call). The machine has no step for such a call, so a run
+that reaches one is undefined there. `rocq/TRUST-LEDGER.md`, "Calls of
+C functions", has what is kept of the call and what is not.
+
+**What it gives.** A unit whose functions call C functions is no
+longer refused for that: it is compared as any unit, and may be
+validated, not validated, or not checked for another thing. In the
+term that the compiler makes of a unit, the C functions that it
+calls are among its imports. So where its own run reaches no such
+call and it is validated, its line is that of a unit that has
+imports: "validated with its imports" where the verdict passes the
+tool's test of the imports. Files of the standard library such as
+`Bool`, `Condition`, `Dynamic`, `Int`, `Mutex` and `Int32` are
+validated so (`tests/semantics/c_calls` has units of their shapes).
+The conversion refuses a call of a C function whose callee is
+another symbol than one of the unit of external symbols, which no
+compiler makes (`rocq/TRUST-LEDGER.md`, "Calls of C functions", says
+what a text written by hand showed before it did).
+The table of `FlambdaExtcallSpec.v` stays unused.
+
+**What it does not give, and this is the price.**
+
+- Of a unit whose own run reaches a call of a C function, nothing is
+  said, of what comes before the call either: the run is undefined
+  as a whole, and anything refines it. Where the tool's own run of
+  the term before, which has a bound of steps, comes to the call,
+  the tool gives no verdict of the unit. A call that the run would
+  reach only past that bound is not found, and the tool can then
+  print "validated", which is no statement that the run is defined
+  (`rocq/TRUST-LEDGER.md`, "Calls of C functions"). A unit of the
+  library that defines an exception, registers a value or opens a
+  channel as it is initialised is a unit whose run reaches such a
+  call.
+- Of a function that calls a C function and is not run, the verdict
+  is that the two terms agree as the validation compares them: where
+  it reaches two calls that are left after its rewrites, it asks the
+  same C function, arguments, arities and continuations, under its
+  pairing of names. That is not a statement about the calls of the
+  function as it was written or about the code that followed them.
+  That the validation compares what is left after a call rests on its
+  rewrites as they are written, and on no theorem: the model has no
+  run past the call, so it would allow a rewrite that dropped what
+  follows. There is no one-to-one match between the calls of C
+  functions of the two terms, and no theorem about the calls of a run
+  or their order.
+- Where Simplify makes a primitive of one of the seven comparisons
+  and the term before keeps the call, no rule relates the call to the
+  primitive, and the unit of the controls that has one is not
+  validated.
+- Nothing is said of what a C function does.
+- It can take a verdict away from a unit that calls no C function.
+  With `.cmx` files, a body of another unit that calls a C function,
+  and that the file keeps, is now bound in front of the unit, where
+  its code was declared deleted. A run that calls it is no longer
+  undefined at that call for that reason. But the liftings to symbols
+  lift nothing in a term that fails one of two tests of all the code
+  bound in it, and code that was declared deleted passed them. So
+  where such a body is still in the term that a lifting is given, and
+  has a primitive of the heap or raises a block that it makes, that
+  lifting lifts nothing, and a unit that was validated through it can
+  lose its verdict. The second unit of `body_with_a_store`, in
+  `tests/semantics/c_calls`, does. It need not happen: the validation
+  has other ways, and a rewrite before the lifting may have removed
+  the body. No unit that was measured lost a verdict so; that is a
+  fact of the measure.
+
+**A variant that is not built.** Such bodies could be left out of
+what is in front of a unit, as they were: their code declared
+deleted, and the C functions that they call not declared for them.
+That would avoid this loss, provided that what is in front of the
+unit (its bindings, its declarations, its imports) is then what it
+was. That is to be shown: the variant is not built and not measured,
+and nothing more is said of it here. Its price: the conversion
+treats a body of another unit otherwise than a body of the unit, a
+run that calls such a body stays undefined at that call, and the
+measure is to be made again.
+
+**The other ways** are those of this request: (A), a table of known
+functions, with an end of the run of its own for a call that the table
+does not answer, which shows something of the arguments ("The open
+choice"); and (B), calls as events. Each needs statements that the
+model has not got. Nothing of them is built but the table, which
+nothing uses.
+
+The answer of 18 November 2026 is (U), for every C function of which
+the model says nothing, and a meaning in the model for C functions
+that are named: the conversion of this section is what the tree has,
+and the units of `tests/semantics/c_calls` are its controls.
 
 ## `caml_fresh_oo_id`, for an exception that a unit declares
 

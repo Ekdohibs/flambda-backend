@@ -1,17 +1,22 @@
 stdlib__StringLabels.fl:
-  given the .cmx of Stdlib, Stdlib__Bytes, Stdlib__String, a prefix of 146 static bindings:
+  in front of the two terms, the declarations of 6 C functions:
+    caml_string_hash (a C function: noalloc), declared with no code
+    caml_array_make (a C function), declared with no code
+    caml_string_equal (a C function: noalloc), declared with no code
+    caml_create_bytes (a C function), declared with no code
+    caml_blit_string (a C function: noalloc), declared with no code
+    caml_fill_bytes (a C function: noalloc), declared with no code
+  given the .cmx of Stdlib, Stdlib__Bytes, Stdlib__String, a prefix of 151 static bindings:
     camlStdlib__String__get_int64_le_62_142_code deleted
     camlStdlib__String__get_int64_be_63_143_code deleted
     camlStdlib__String__get_int32_le_60_140_code deleted
     camlStdlib__String__get_int32_be_61_141_code deleted
-    camlStdlib__String__hash_43_121_code deleted
     camlStdlib__String__get_int16_le_58_138_code deleted
     camlStdlib__String__get_int16_be_59_139_code deleted
     camlStdlib__String__get_int16_ne_57_137_code deleted
     camlStdlib__String__get_uint16_le_55_135_code deleted
     camlStdlib__String__get_uint16_be_56_136_code deleted
     camlStdlib__String__get_int8_54_134_code deleted
-    camlStdlib__String__edit_distance_70_150_code deleted
     camlStdlib__String__is_valid_utf_16le_53_133_code deleted
     camlStdlib__String__is_valid_utf_16be_51_131_code deleted
     camlStdlib__String__is_valid_utf_8_49_129_code deleted
@@ -19,7 +24,6 @@ stdlib__StringLabels.fl:
     camlStdlib__String__capitalize_ascii_37_115_code deleted
     camlStdlib__String__lowercase_ascii_36_114_code deleted
     camlStdlib__String__uppercase_ascii_35_113_code deleted
-    camlStdlib__String__trim_18_96_code deleted
     camlStdlib__String__exists_15_93_code deleted
     camlStdlib__String__for_all_16_94_code deleted
     camlStdlib__String__fold_right_13_91_code deleted
@@ -28,20 +32,19 @@ stdlib__StringLabels.fl:
     camlStdlib__String__map_11_89_code deleted
     camlStdlib__String__split_on_char_44_122_code deleted
     camlStdlib__String__sub_4_82_code deleted
-    camlStdlib__^_6_99_code deleted
-    camlStdlib__String__concat_8_86_code deleted
     camlStdlib__Bytes__blit_string_11_134_code deleted
     camlStdlib__Bytes__of_string_4_127_code deleted
     camlStdlib__Bytes__to_string_3_126_code deleted
     camlStdlib__String__init_3_81_code deleted
-    camlStdlib__String__make_2_80_code deleted
+    camlStdlib__String__edit_distance'_66_146_code deleted
+    camlStdlib__Bytes__get_utf_8_uchar_99_216_code deleted
     camlStdlib__Bytes__get_utf_16le_uchar_110_224_code deleted
     camlStdlib__Bytes__get_utf_16be_uchar_106_220_code deleted
-    camlStdlib__Bytes__get_utf_8_uchar_99_216_code deleted
     camlStdlib__Bytes__of_seq_65_184_code deleted
     camlStdlib__Bytes__aux_62_183_code deleted
     camlStdlib__Bytes__aux_58_181_code deleted
     camlStdlib__Bytes__unsafe_escape_21_144_code deleted
+    camlStdlib__Bytes__trim_20_143_code deleted
     camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:281,0--81]_76_76_code stub (v1,
       v2) v3 -> k1 * k2 =
       let_cont k3 () =
@@ -64,6 +67,9 @@ stdlib__StringLabels.fl:
       switch v15
         | 0 -> cont k3 ()
         | 1 -> cont k4 (v14)
+    camlStdlib__String__hash_43_121_code (v1) v2 -> k1 * k2 =
+      apply direct(caml_string_hash (a C function: noalloc)) caml_string_hash
+        (0, v1) -> k1 * k2
     camlStdlib__String__fn[/workspace_root/stdlib/build/string.ml:280,0--81]_77_77_code stub (v1,
       v2) v3 -> k1 * k2 =
       let_cont k3 () =
@@ -144,6 +150,54 @@ stdlib__StringLabels.fl:
       switch v8
         | 0 -> cont k4 ()
         | 1 -> cont k3 (v5)
+    camlStdlib__String__edit_distance_70_150_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = String_length (v2) in
+      let v6 = Tag_immediate (v5) in
+      let_cont k3 (v7) =
+        let_cont k4 (v8) =
+          let v9 = v8 in
+          let v10 = Make_block 0 (v7, v9) in
+          apply direct(camlStdlib__String__edit_distance'_66_146_code) camlStdlib__String__edit_distance'_66_81
+            (v1, v2, v10, v3) -> k1 * k2
+        in
+        let_cont rec
+          k5 (v11,
+          v12) =
+          let v13 = Int_comp tagged_imm lt (v12, v6) in
+          let_cont k6 () =
+            let_cont k7 (v14) =
+              let v15 = Int_shift tagged_imm lsr (v14, #24) in
+              let v16 = Int_arith tagged_imm and (v15, 7) in
+              let v17 = Int_arith tagged_imm add (v12, v16) in
+              let v18 = Int_arith tagged_imm and (v14, 16777215) in
+              let_cont k8 () =
+                cont k2 pop(regular k2) (camlStdlib__String__block_9)
+              in
+              let_cont k9 () =
+                let v19 =
+                  Array_set gc_ignorable_values gc_ignorable_values (v7, v11,
+                    v18) in
+                let v20 = Int_arith tagged_imm add (v11, 1) in
+                cont k5 (v20, v17)
+              in
+              let v21 = Int_comp tagged_imm unsigned_lt (v11, v6) in
+              switch v21
+                | 0 -> cont k8 ()
+                | 1 -> cont k9 ()
+            in
+            apply direct(camlStdlib__Bytes__get_utf_8_uchar_99_216_code) camlStdlib__Bytes__get_utf_8_uchar_99_128
+              (v2, v12) -> k7 * k2
+          in
+          switch v13
+            | 0 -> cont k4 (v11)
+            | 1 -> cont k6 ()
+        in
+        cont k5 (0, 0)
+      in
+      apply direct(caml_array_make (a C function)) caml_array_make (v6,
+        1114111) -> k3 * k2
     camlStdlib__String__get_utf_16le_uchar_52_132_code (v1,
       v2) v3 -> k1 * k2 =
       apply direct(camlStdlib__Bytes__get_utf_16le_uchar_110_224_code) camlStdlib__Bytes__get_utf_16le_uchar_110_141
@@ -532,6 +586,73 @@ stdlib__StringLabels.fl:
       in
       apply direct(camlStdlib__Bytes__unsafe_escape_21_144_code) camlStdlib__Bytes__unsafe_escape_21_55
         (v1) -> k3 * k2
+    camlStdlib__String__trim_18_96_code (v1) v2 -> k1 * k2 =
+      let_cont k3 (v3) =
+        let_cont k4 () =
+          let_cont k5 () =
+            apply direct(camlStdlib__Bytes__trim_20_143_code) camlStdlib__Bytes__trim_20_54
+              (v1) -> k1 * k2
+          in
+          let_cont k6 (v4) =
+            let_cont k7 () =
+              let_cont k8 (v5) =
+                switch v5
+                  | 0 -> cont k1 (v1)
+                  | 1 -> cont k5 ()
+              in
+              let v6 = String_length (v1) in
+              let v7 = Tag_immediate (v6) in
+              let v8 = Int_arith tagged_imm sub (v7, 1) in
+              let v9 = Num_conv tagged_imm nativeint (v8) in
+              let v10 = String_load 8 (v1, v9) in
+              let v11 = Tag_immediate (v10) in
+              let v12 = Int_arith tagged_imm add (v11, -9) in
+              let v13 = Int_comp tagged_imm unsigned_lt (4, v12) in
+              let_cont k9 () =
+                let v14 = Int_comp tagged_imm neq (v12, 2) in
+                cont k8 (v14)
+              in
+              let_cont k10 () =
+                let v15 = Int_comp tagged_imm neq (v12, 23) in
+                let v16 = Tag_immediate (v15) in
+                let v17 = Boolean_not (v16) in
+                let v18 = Untag_immediate (v17) in
+                cont k8 (v18)
+              in
+              switch v13
+                | 0 -> cont k9 ()
+                | 1 -> cont k10 ()
+            in
+            switch v4
+              | 0 -> cont k7 ()
+              | 1 -> cont k5 ()
+          in
+          let v19 = String_load 8 (v1, <const>) in
+          let v20 = Tag_immediate (v19) in
+          let v21 = Int_arith tagged_imm add (v20, -9) in
+          let v22 = Int_comp tagged_imm unsigned_lt (4, v21) in
+          let_cont k11 () =
+            let v23 = Int_comp tagged_imm neq (v21, 2) in
+            cont k6 (v23)
+          in
+          let_cont k12 () =
+            let v24 = Int_comp tagged_imm neq (v21, 23) in
+            let v25 = Tag_immediate (v24) in
+            let v26 = Boolean_not (v25) in
+            let v27 = Untag_immediate (v26) in
+            cont k6 (v27)
+          in
+          switch v22
+            | 0 -> cont k11 ()
+            | 1 -> cont k12 ()
+        in
+        let v28 = Untag_immediate (v3) in
+        switch v28
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (v1)
+      in
+      apply direct(caml_string_equal (a C function: noalloc)) caml_string_equal
+        (v1, camlStdlib__String__immstring_0) -> k3 * k2
     camlStdlib__String__contains_33_111_code (v1,
       v2) v3 -> k1 * k2 =
       let v4 = String_length (v1) in
@@ -741,6 +862,156 @@ stdlib__StringLabels.fl:
       switch v8
         | 0 -> cont k1 (0)
         | 1 -> cont k3 ()
+    camlStdlib__^_6_99_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = String_length (v1) in
+      let v5 = Tag_immediate (v4) in
+      let v6 = String_length (v2) in
+      let v7 = Tag_immediate (v6) in
+      let v8 = Int_arith tagged_imm add (v5, v7) in
+      let_cont k3 (v9) =
+        let_cont k4 () =
+          let_cont k5 (v10) =
+            cont k1 (v9)
+          in
+          apply direct(caml_blit_string (a C function: noalloc)) caml_blit_string
+            (v2, 0, v9, v5, v7) -> k5 * k2
+        in
+        let_cont k6 (v11) =
+          cont k4 ()
+        in
+        apply direct(caml_blit_string (a C function: noalloc)) caml_blit_string
+          (v1, 0, v9, 0, v5) -> k6 * k2
+      in
+      apply direct(caml_create_bytes (a C function)) caml_create_bytes (v8)
+        -> k3 * k2
+    camlStdlib__String__concat_8_86_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = Is_int (v2) in
+      let_cont k3 () =
+        let v5 = Block_load 1 (v2) in
+        let v6 = Is_int (v5) in
+        let_cont k4 () =
+          let v7 = String_length (v1) in
+          let v8 = Tag_immediate (v7) in
+          let_cont k5 (v9) =
+            let v10 = v9 in
+            cont k1 (v10)
+          in
+          let_cont k6 (v11) =
+            let_cont k7 (v12) =
+              let_cont rec
+                k8 (v13,
+                v14) =
+                let v15 = Is_int (v14) in
+                let_cont k9 () =
+                  let v16 = Block_load 0 (v14) in
+                  let v17 = Block_load 1 (v14) in
+                  let v18 = Is_int (v17) in
+                  let_cont k10 () =
+                    let v19 = String_length (v16) in
+                    let v20 = Tag_immediate (v19) in
+                    let_cont k11 () =
+                      let v21 = Int_arith tagged_imm add (v13, v20) in
+                      let_cont k12 () =
+                        let v22 = Int_arith tagged_imm add (v21, v8) in
+                        cont k8 (v22, v17)
+                      in
+                      let_cont k13 (v23) =
+                        cont k12 ()
+                      in
+                      apply direct(caml_blit_string (a C function: noalloc)) caml_blit_string
+                        (v1, 0, v12, v21, v8) -> k13 * k2
+                    in
+                    let_cont k14 (v24) =
+                      cont k11 ()
+                    in
+                    apply direct(caml_blit_string (a C function: noalloc)) caml_blit_string
+                      (v16, 0, v12, v13, v20) -> k14 * k2
+                  in
+                  let_cont k15 () =
+                    let v25 = String_length (v16) in
+                    let v26 = Tag_immediate (v25) in
+                    let_cont k16 (v27) =
+                      cont k5 (v12)
+                    in
+                    apply direct(caml_blit_string (a C function: noalloc)) caml_blit_string
+                      (v16, 0, v12, v13, v26) -> k16 * k2
+                  in
+                  switch v18
+                    | 0 -> cont k10 ()
+                    | 1 -> cont k15 ()
+                in
+                switch v15
+                  | 0 -> cont k9 ()
+                  | 1 -> cont k5 (v12)
+              in
+              cont k8 (0, v2)
+            in
+            apply direct(caml_create_bytes (a C function)) caml_create_bytes
+              (v11) -> k7 * k2
+          in
+          let_cont rec
+            k17 (v28,
+            v29) =
+            let v30 = Is_int (v29) in
+            let_cont k18 () =
+              let v31 = Block_load 0 (v29) in
+              let v32 = Block_load 1 (v29) in
+              let v33 = Is_int (v32) in
+              let_cont k19 () =
+                let_cont k20 (v34) =
+                  let v35 = v34 in
+                  cont k17 (v35, v32)
+                in
+                let v36 = String_length (v31) in
+                let v37 = Tag_immediate (v36) in
+                let v38 = Int_arith tagged_imm add (v37, v8) in
+                let v39 = Int_arith tagged_imm add (v38, v28) in
+                let v40 = Int_comp tagged_imm ge (v39, v28) in
+                switch v40
+                  | 0 -> cont k2 pop(reraise k2)
+                           (camlStdlib__String__Pmakeblock1929_16)
+                  | 1 -> cont k20 (v39)
+              in
+              let_cont k21 () =
+                let v41 = String_length (v31) in
+                let v42 = Tag_immediate (v41) in
+                let v43 = Int_arith tagged_imm add (v42, v28) in
+                cont k6 (v43)
+              in
+              switch v33
+                | 0 -> cont k19 ()
+                | 1 -> cont k21 ()
+            in
+            switch v30
+              | 0 -> cont k18 ()
+              | 1 -> cont k6 (v28)
+          in
+          cont k17 (0, v2)
+        in
+        let_cont k22 () =
+          let v44 = Block_load 0 (v2) in
+          cont k1 (v44)
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k22 ()
+      in
+      switch v4
+        | 0 -> cont k3 ()
+        | 1 -> cont k1 (camlStdlib__String__immstring_0)
+    camlStdlib__String__make_2_80_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 (v4) =
+        let_cont k4 (v5) =
+          cont k1 (v4)
+        in
+        apply direct(caml_fill_bytes (a C function: noalloc)) caml_fill_bytes
+          (v4, 0, v1, v2) -> k4 * k2
+      in
+      apply direct(caml_create_bytes (a C function)) caml_create_bytes (v1)
+        -> k3 * k2
     camlStdlib__Bytes__partial_aux_64_64_code stub (v1) v2 -> k1 * k2 =
       let v3 = v2.(Stdlib__Bytes.partial_aux_64).Stdlib__Bytes.aux_50 in
       apply known_arity v3 (0, v1) -> k1 * k2
@@ -972,6 +1243,14 @@ stdlib__StringLabels.fl:
       {Stdlib__String.get_int64_le_62 = camlStdlib__String__get_int64_le_62_142_code}
       at {Stdlib__String.get_int64_le_62 = camlStdlib__String__get_int64_le_62_77}
       {}
+    camlStdlib__String__edit_distance'_66_81 = closure Stdlib__String.edit_distance'_66 of
+      {Stdlib__String.edit_distance'_66 = camlStdlib__String__edit_distance'_66_146_code}
+      at {Stdlib__String.edit_distance'_66 = camlStdlib__String__edit_distance'_66_81}
+      {}
+    camlStdlib__Bytes__get_utf_8_uchar_99_128 = closure Stdlib__Bytes.get_utf_8_uchar_99 of
+      {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_216_code}
+      at {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_128}
+      {}
     camlStdlib__Bytes__get_utf_16le_uchar_110_141 = closure Stdlib__Bytes.get_utf_16le_uchar_110 of
       {Stdlib__Bytes.get_utf_16le_uchar_110 = camlStdlib__Bytes__get_utf_16le_uchar_110_224_code}
       at {Stdlib__Bytes.get_utf_16le_uchar_110 = camlStdlib__Bytes__get_utf_16le_uchar_110_141}
@@ -980,10 +1259,6 @@ stdlib__StringLabels.fl:
       {Stdlib__Bytes.get_utf_16be_uchar_106 = camlStdlib__Bytes__get_utf_16be_uchar_106_220_code}
       at {Stdlib__Bytes.get_utf_16be_uchar_106 = camlStdlib__Bytes__get_utf_16be_uchar_106_135}
       {}
-    camlStdlib__Bytes__get_utf_8_uchar_99_128 = closure Stdlib__Bytes.get_utf_8_uchar_99 of
-      {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_216_code}
-      at {Stdlib__Bytes.get_utf_8_uchar_99 = camlStdlib__Bytes__get_utf_8_uchar_99_128}
-      {}
     camlStdlib__Bytes__of_seq_65_95 = closure Stdlib__Bytes.of_seq_65 of
       {Stdlib__Bytes.of_seq_65 = camlStdlib__Bytes__of_seq_65_184_code}
       at {Stdlib__Bytes.of_seq_65 = camlStdlib__Bytes__of_seq_65_95} {}
@@ -991,6 +1266,9 @@ stdlib__StringLabels.fl:
       {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_144_code}
       at {Stdlib__Bytes.unsafe_escape_21 = camlStdlib__Bytes__unsafe_escape_21_55}
       {}
+    camlStdlib__Bytes__trim_20_54 = closure Stdlib__Bytes.trim_20 of
+      {Stdlib__Bytes.trim_20 = camlStdlib__Bytes__trim_20_143_code}
+      at {Stdlib__Bytes.trim_20 = camlStdlib__Bytes__trim_20_54} {}
     camlStdlib__String = Block 0 (camlStdlib__String__make_2_12,
       camlStdlib__String__init_3_13, camlStdlib__String__immstring_0,
       camlStdlib__Bytes__to_string_3_31, camlStdlib__Bytes__of_string_4_32,
@@ -1054,7 +1332,9 @@ stdlib__StringLabels.fl:
       (caml_exn_Invalid_argument, camlStdlib__String__immstring_6)
     camlStdlib__String__Pmakeblock3283_51 = Block 0
       (caml_exn_Invalid_argument, camlStdlib__String__immstring_7)
-  before Simplify, after the prefix, with its 10 imports (134 steps): 
+    camlStdlib__String__Pmakeblock1929_16 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__String__immstring_1)
+  before Simplify, after the prefix, with its 17 imports (134 steps): 
 returns
   [0: <fun>; <fun>; <imported camlStdlib__String__immstring_0>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
@@ -1063,7 +1343,7 @@ returns
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
-  after Simplify, after the prefix, with its 10 imports (2 steps): returns
+  after Simplify, after the prefix, with its 17 imports (2 steps): returns
                                                                     [0:
                                                                     <fun>;
                                                                     <fun>;

@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 13 of the 79 files, and "What a
+At this commit the driver validates 19 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -221,23 +221,25 @@ from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 6;
-- validated with its imports: 7, of which `stringLabels.ml` has a line
+- validated with its imports: 13, of which `stringLabels.ml` has a line
   under the verdict, "(asked of the term after with the exception
   handlers that no call can raise to made ordinary continuations)";
-- compared, not validated: 7. Four have a line under the verdict:
-  `camlinternalAtomic.ml` has "related once lifted", and `option.ml`,
+- compared, not validated: 11. Six have a line under the verdict:
+  `camlinternalAtomic.ml`, `semaphore.ml` and `uchar.ml` have "related
+  once lifted", and `option.ml`,
   `pqueue.ml` and `result.ml` have the line of a function slot named
   `partial_app_closure`, the name that Simplify gives the wrapper which
   it makes of a partial application;
 - undefined in the model: none;
-- not checked: 59. The first thing that the driver names is a C function
-  for 43 of them, a primitive that the model has not got for 14, a call
-  with no callee for `effect.ml`, and for `moreLabels.ml` a test that the
-  tool makes of the code that the `.cmx` files of the other units give
-  it.
+- not checked: 49. The first thing that the driver names is a primitive
+  that the model has not got for 42 of them, a static constant that it
+  has not got for 5 (in each, the block of an exception that the file
+  declares), a call with no callee for `effect.ml`, and for
+  `moreLabels.ml` a test that the tool makes of the code that the
+  `.cmx` files of the other units give it.
 
-The 79 sources have 29,925 lines; the thirteen that are validated, with or
-without their imports, have 1,133.
+The 79 sources have 29,925 lines; the nineteen that are validated, with or
+without their imports, have 1,458.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
@@ -249,85 +251,85 @@ mean".
 
 | File | Unit | Lines | What the driver says | What stops it |
 |---|---|---|---|---|
-| `arg.ml` | `stdlib__Arg` | 410 | not checked | a C function: `caml_equal` |
+| `arg.ml` | `stdlib__Arg` | 410 | not checked | a static constant: `Unique_block` |
 | `array.ml` | `stdlib__Array` | 540 | not checked | a primitive: `Array_set Naked_floats` |
 | `arrayLabels.ml` | `stdlib__ArrayLabels` | 24 | validated with its imports |  |
 | `atomic.ml` | `stdlib__Atomic` | 149 | not checked | a primitive: `Atomic_int_arith Field_index` |
-| `backoff.ml` | `stdlib__Backoff` | 71 | not checked | a C function: `caml_lxm_next_unboxed` |
-| `bigarray.ml` | `stdlib__Bigarray` | 653 | not checked | a C function: `caml_ba_set_generic` |
-| `bool.ml` | `stdlib__Bool` | 49 | not checked | a C function: `caml_hash_exn` |
-| `buffer.ml` | `stdlib__Buffer` | 419 | not checked | a C function: `caml_create_bytes` |
-| `bytes.ml` | `stdlib__Bytes` | 865 | not checked | a C function: `caml_fill_bytes` |
+| `backoff.ml` | `stdlib__Backoff` | 71 | not checked | a primitive: `Dls_get` |
+| `bigarray.ml` | `stdlib__Bigarray` | 653 | not checked | a primitive: `Bigarray_length` |
+| `bool.ml` | `stdlib__Bool` | 49 | validated with its imports |  |
+| `buffer.ml` | `stdlib__Buffer` | 419 | not checked | a primitive: `String_length` |
+| `bytes.ml` | `stdlib__Bytes` | 865 | not checked | a primitive: `Bytes_set` |
 | `bytesLabels.ml` | `stdlib__BytesLabels` | 24 | validated with its imports |  |
-| `callback.ml` | `stdlib__Callback` | 36 | not checked | a C function: `caml_register_named_value` |
+| `callback.ml` | `stdlib__Callback` | 36 | not checked | a primitive: `Array_load Naked_floats` |
 | `camlinternalAtomic.ml` | `camlinternalAtomic` | 62 | compared, not validated | the line under the verdict says "related once lifted" |
 | `camlinternalComprehension.ml` | `camlinternalComprehension` | 34 | validated |  |
 | `camlinternalFormat.ml` | `camlinternalFormat` | 2997 | not checked | a primitive: `Bytes_set` |
 | `camlinternalFormatBasics.ml` | `camlinternalFormatBasics` | 749 | validated |  |
-| `camlinternalLazy.ml` | `camlinternalLazy` | 126 | not checked | a C function: `caml_lazy_reset_to_lazy` |
-| `camlinternalMod.ml` | `camlinternalMod` | 94 | not checked | a C function: `caml_obj_tag` |
+| `camlinternalLazy.ml` | `camlinternalLazy` | 126 | not checked | a primitive: `Make_lazy` |
+| `camlinternalMod.ml` | `camlinternalMod` | 94 | not checked | a primitive: `Make_lazy` |
 | `camlinternalOO.ml` | `camlinternalOO` | 632 | not checked | a primitive: `Array_set Naked_floats` |
-| `camlinternalQuote.ml` | `camlinternalQuote` | 3029 | not checked | a C function: `caml_fresh_oo_id` |
+| `camlinternalQuote.ml` | `camlinternalQuote` | 3029 | not checked | a primitive: `String_length` |
 | `char.ml` | `stdlib__Char` | 129 | not checked | a primitive: `Bytes_set` |
 | `complex.ml` | `stdlib__Complex` | 83 | not checked | a primitive: `Make_block Naked_floats` |
-| `condition.ml` | `stdlib__Condition` | 24 | not checked | a C function: `caml_ml_condition_broadcast` |
+| `condition.ml` | `stdlib__Condition` | 24 | validated with its imports |  |
 | `digest.ml` | `stdlib__Digest` | 205 | not checked | a primitive: `Bytes_set` |
-| `domain.ml` | `stdlib__Domain` | 666 | not checked | a C function: `caml_array_make` |
-| `dynamic.ml` | `stdlib__Dynamic` | 32 | not checked | a C function: `caml_dynamic_pop` |
-| `dynarray.ml` | `stdlib__Dynarray` | 1310 | not checked | a C function: `caml_array_make` |
+| `domain.ml` | `stdlib__Domain` | 666 | not checked | a primitive: `Atomic_compare_exchange Field_index` |
+| `dynamic.ml` | `stdlib__Dynamic` | 32 | validated with its imports |  |
+| `dynarray.ml` | `stdlib__Dynarray` | 1310 | not checked | a primitive: `Array_set Naked_floats` |
 | `effect.ml` | `stdlib__Effect` | 571 | not checked | a call with no callee |
 | `either.ml` | `stdlib__Either` | 86 | compared, not validated |  |
-| `ephemeron.ml` | `stdlib__Ephemeron` | 1214 | not checked | a C function: `caml_array_make` |
-| `filename.ml` | `stdlib__Filename` | 397 | not checked | a C function: `caml_string_equal` |
+| `ephemeron.ml` | `stdlib__Ephemeron` | 1214 | not checked | a primitive: `Make_lazy` |
+| `filename.ml` | `stdlib__Filename` | 397 | not checked | a primitive: `String_length` |
 | `float.ml` | `stdlib__Float` | 631 | not checked | a primitive: `=.` |
-| `format.ml` | `stdlib__Format` | 1613 | not checked | a C function: `caml_string_notequal` |
-| `fun.ml` | `stdlib__Fun` | 43 | not checked | a C function: `caml_restore_raw_backtrace` |
-| `gc.ml` | `stdlib__Gc` | 243 | not checked | a C function: `caml_gc_stat` |
+| `format.ml` | `stdlib__Format` | 1613 | not checked | a primitive: `String_length` |
+| `fun.ml` | `stdlib__Fun` | 43 | not checked | a static constant: `Unique_block` |
+| `gc.ml` | `stdlib__Gc` | 243 | not checked | a primitive: `*.` |
 | `hashtbl.ml` | `stdlib__Hashtbl` | 799 | not checked | a primitive: `Atomic_set Field_index` |
 | `iarray.ml` | `stdlib__Iarray` | 369 | not checked | a primitive: `Array_set Naked_floats` |
-| `in_channel.ml` | `stdlib__In_channel` | 210 | not checked | a C function: `caml_ml_input_bigarray` |
-| `int.ml` | `stdlib__Int` | 64 | not checked | a C function: `caml_format_int` |
-| `int32.ml` | `stdlib__Int32` | 119 | not checked | a C function: `caml_int32_format` |
-| `int64.ml` | `stdlib__Int64` | 116 | not checked | a C function: `caml_int64_format` |
-| `lazy.ml` | `stdlib__Lazy` | 84 | not checked | a C function: `caml_obj_block` |
-| `lexing.ml` | `stdlib__Lexing` | 250 | not checked | a C function: `caml_lex_engine` |
+| `in_channel.ml` | `stdlib__In_channel` | 210 | not checked | a primitive: `Bigarray_length` |
+| `int.ml` | `stdlib__Int` | 64 | validated with its imports |  |
+| `int32.ml` | `stdlib__Int32` | 119 | validated with its imports |  |
+| `int64.ml` | `stdlib__Int64` | 116 | compared, not validated |  |
+| `lazy.ml` | `stdlib__Lazy` | 84 | not checked | a primitive: `Make_lazy` |
+| `lexing.ml` | `stdlib__Lexing` | 250 | not checked | a primitive: `String_length` |
 | `list.ml` | `stdlib__List` | 618 | not checked | a primitive: `Array_set Values` |
 | `listLabels.ml` | `stdlib__ListLabels` | 24 | validated with its imports |  |
 | `map.ml` | `stdlib__Map` | 1027 | compared, not validated (the second alias) |  |
-| `marshal.ml` | `stdlib__Marshal` | 83 | not checked | a C function: `caml_output_value_to_buffer` |
+| `marshal.ml` | `stdlib__Marshal` | 83 | not checked | a primitive: `String_length` |
 | `modes.ml` | `stdlib__Modes` | 45 | validated |  |
 | `moreLabels.ml` | `stdlib__MoreLabels` | 32 | not checked | with the prefix made from the `.cmx` files in front of it, the term before mentions a code id where it is not in scope |
-| `mutex.ml` | `stdlib__Mutex` | 37 | not checked | a C function: `caml_ml_mutex_unlock` |
-| `nativeint.ml` | `stdlib__Nativeint` | 108 | not checked | a C function: `caml_nativeint_format` |
+| `mutex.ml` | `stdlib__Mutex` | 37 | validated with its imports |  |
+| `nativeint.ml` | `stdlib__Nativeint` | 108 | compared, not validated |  |
 | `obj.ml` | `stdlib__Obj` | 254 | not checked | a primitive: `Array_load Naked_floats` |
 | `oo.ml` | `stdlib__Oo` | 23 | validated with its imports |  |
 | `option.ml` | `stdlib__Option` | 47 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
-| `out_channel.ml` | `stdlib__Out_channel` | 79 | not checked | a C function: `caml_ml_output_bigarray` |
+| `out_channel.ml` | `stdlib__Out_channel` | 79 | not checked | a primitive: `Bigarray_length` |
 | `pair.ml` | `stdlib__Pair` | 36 | validated |  |
-| `parsing.ml` | `stdlib__Parsing` | 216 | not checked | a C function: `caml_array_make` |
+| `parsing.ml` | `stdlib__Parsing` | 216 | not checked | a primitive: `Array_load Naked_floats` |
 | `pqueue.ml` | `stdlib__Pqueue` | 289 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
-| `printexc.ml` | `stdlib__Printexc` | 416 | not checked | a C function: `caml_obj_tag` |
-| `printf.ml` | `stdlib__Printf` | 52 | not checked | a C function: `caml_blit_bytes` |
-| `queue.ml` | `stdlib__Queue` | 177 | not checked | a C function: `caml_fresh_oo_id` |
+| `printexc.ml` | `stdlib__Printexc` | 416 | not checked | a primitive: `Atomic_load Field_index` |
+| `printf.ml` | `stdlib__Printf` | 52 | not checked | a primitive: `String_length` |
+| `queue.ml` | `stdlib__Queue` | 177 | not checked | a static constant: `Unique_block` |
 | `quote.ml` | `stdlib__Quote` | 71 | validated with its imports |  |
-| `random.ml` | `stdlib__Random` | 387 | not checked | a C function: `caml_ba_set_1` |
+| `random.ml` | `stdlib__Random` | 387 | not checked | a primitive: `Bytes_set` |
 | `repr.ml` | `stdlib__Repr` | 25 | validated with its imports |  |
 | `result.ml` | `stdlib__Result` | 65 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
 | `scanf.ml` | `stdlib__Scanf` | 1528 | not checked | a primitive: `String_load` |
-| `semaphore.ml` | `stdlib__Semaphore` | 89 | not checked | a C function: `caml_ml_mutex_new` |
-| `seq.ml` | `stdlib__Seq` | 719 | not checked | a C function: `caml_obj_tag` |
+| `semaphore.ml` | `stdlib__Semaphore` | 89 | compared, not validated | the line under the verdict says "related once lifted" |
+| `seq.ml` | `stdlib__Seq` | 719 | not checked | a primitive: `Atomic_exchange Field_index` |
 | `set.ml` | `stdlib__Set` | 1179 | compared, not validated (the second alias) |  |
-| `stack.ml` | `stdlib__Stack` | 74 | not checked | a C function: `caml_fresh_oo_id` |
+| `stack.ml` | `stdlib__Stack` | 74 | not checked | a static constant: `Unique_block` |
 | `stdLabels.ml` | `stdlib__StdLabels` | 30 | validated |  |
 | `std_exit.ml` | `std_exit` | 22 | not checked | a primitive: `Atomic_load Field_index` |
-| `stdlib.ml` | `stdlib` | 692 | not checked | a C function: `caml_lessequal` |
-| `string.ml` | `stdlib__String` | 389 | not checked | a C function: `caml_blit_string` |
+| `stdlib.ml` | `stdlib` | 692 | not checked | a primitive: `Array_set Values` |
+| `string.ml` | `stdlib__String` | 389 | not checked | a primitive: `Bytes_set` |
 | `stringLabels.ml` | `stdlib__StringLabels` | 24 | validated with its imports (asked of the term after with the exception handlers that no call can raise to made ordinary continuations) |  |
-| `sys.ml` | `stdlib__Sys` | 324 | not checked | a C function: `caml_install_signal_handler` |
-| `type.ml` | `stdlib__Type` | 48 | not checked | a C function: `caml_fresh_oo_id` |
-| `uchar.ml` | `stdlib__Uchar` | 112 | not checked | a C function: `caml_format_int` |
+| `sys.ml` | `stdlib__Sys` | 324 | not checked | a static constant: `Unique_block` |
+| `type.ml` | `stdlib__Type` | 48 | not checked | a primitive: `Array_load Naked_floats` |
+| `uchar.ml` | `stdlib__Uchar` | 112 | compared, not validated | the line under the verdict says "related once lifted" |
 | `unit.ml` | `stdlib__Unit` | 24 | validated |  |
-| `weak.ml` | `stdlib__Weak` | 339 | not checked | a C function: `caml_weak_create` |
+| `weak.ml` | `stdlib__Weak` | 339 | not checked | a primitive: `Array_load Naked_floats` |
 
 ## What a verdict means for a file of the library
 
@@ -352,6 +354,44 @@ handlers, and they are in the code of `contains`, `contains_from` and
 `rcontains_from` of `String`, which the prefix has from the `.cmx` of
 `String`; the build compiles the library with `-g`.
 
+**A call of a C function does not stop a file.** The driver converts
+such a call (decision D50; `../ocaml/README.md`, "What the conversion
+does to a unit", "Calls of C functions"): a run of the model that
+reaches one is undefined there. At this commit no stored file says that
+a run is undefined at a call of a C function, and in the stored file of
+each unit that the driver compares the run of the term before returns:
+the initialisation of none of them, as the driver runs it, reaches such
+a call. The stored file of a
+unit that is compared says what is put in front of its two terms, if
+anything is, in one or two blocks before the lines of the runs:
+
+- "in front of the two terms, the declarations of N C functions:" (or
+  "the declaration of 1 C function:"): the C functions that one of the
+  two terms, or code that the prefix binds, calls, a line for each, with
+  its name, "(a C function)" or "(a C function: noalloc)" in the stored
+  files of this commit, and "declared with no code". 15 stored files
+  have that block. In 4 of them (`bool.own_expected`,
+  `condition.own_expected`, `int.own_expected` and `mutex.own_expected`)
+  nothing else is in front of the terms: the lines of the two runs say
+  "after the declarations of the C functions", and the line of the check
+  of static names "each with the declarations of the C functions in
+  front of it".
+- "given the .cmx of ..., a prefix of N static bindings:", the prefix
+  made from the `.cmx` files of the units named. 19 stored files have
+  it, 11 of them after the block of the declarations; the lines of their
+  two runs say "after the prefix".
+
+The C functions that the two terms of a unit call are among its imports,
+so the verdict of such a file, where the driver validates it, is that of
+a unit that has imports: "validated with its imports", or, where there
+is a prefix, "validated with its imports, given the .cmx of N of them":
+the two terms are then the two units each with the prefix made from
+those N files in front of it (`../ocaml/README.md`, "What the verdicts
+mean", says so of the line "related once lifted", which can have the
+same head). `rocq/TRUST-LEDGER.md`, "Calls of C functions", says what is
+kept of a call of a C function and what a verdict of a function that
+calls one rests on.
+
 What it is not:
 
 - **No theorem about the fields of the module block.** What the run exits
@@ -373,7 +413,7 @@ What it is not:
   the program that links them.
 
 "Not checked" says that the term has something that the model has not
-got, a C function of the runtime first among them, or, for
+got, a primitive first among them, or, for
 `moreLabels.ml`, that a test which the tool makes before it checks
 refuses the unit (the table says which). It is not a failure of the
 compiler, and it says nothing of the rest of the file. "Compared, not
@@ -418,15 +458,17 @@ says what is trusted in the driver.
 ## What a stored file holds, and what moves it
 
 A stored file is the whole of what the driver prints of the unit: for
-most units what it says of a unit that is not checked, with the call
-that stops the unit, which may take several lines, or the primitive,
-which is on one line in every stored file of this commit (the driver
-prints a primitive with a margin of a million columns, and a name that
-has a newline in it with its newline); for a
-unit inside the model, the two runs, the checks and the verdict. Its
+most units what it says of a unit that is not checked, with the
+primitive that stops the unit, which is on one line in every stored
+file of this commit (the driver prints a primitive with a margin of a
+million columns, and a name that has a newline in it with its
+newline), or the static constant, which takes several lines; for a
+unit inside the model, what is put in front of its two terms (the
+declarations of the C functions that are called, the prefix), the two
+runs, the checks and the verdict. Its
 first line begins with the name that the build gives the unit, and `.fl`
-(`stdlib__List.fl:`). It is stored byte for byte: at this commit 13
-lines of 10 of the files end with a space, as
+(`stdlib__List.fl:`). It is stored byte for byte: at this commit 28
+lines of 21 of the files end with a space, as
 the driver prints them (a line whose value begins on the next line; in
 `modes.own_expected`, a block of empty blocks cut at a field), and
 `git diff --check` reports those lines.
@@ -436,19 +478,20 @@ uses; with a change of the compiler that gives Simplify another term or
 makes it return another; with a change of the model, of the conversion or
 of the validation; with a change of the build's flags or of the
 configuration. **It can move when no verdict does**: a line "not
-checked" prints a call with the numbers of its names
-(`sig_num/857UV`), which move when a change before them makes one name
+checked" prints a static constant with the numbers of its names
+(`Pccall/1510N`), which move when a change before them makes one name
 more or fewer (it prints a primitive with the names of its variables
-alone, which do not), and most files hold a place in the source
-(`/workspace_root/stdlib/build/sys.ml.in:142,41--65`), which moves with
+alone, which do not), and 26 of the files hold a place in the source
+(`/workspace_root/stdlib/build/sys.ml.in:225,0--15`), which moves with
 the lines of the source. A file that is validated with its imports names
 the code of the other unit by its numbers.
 
 `stdlib/sys.ml` is not a file of the repository: `configure` writes it
 from `stdlib/sys.ml.in`, with the version of the compiler in it. What the
 driver prints of it must not hold what `configure` writes, or the stored
-file would move with the version. It does not at this commit (the line
-names a C function and a place in `sys.ml.in`), and a rule of this
+file would move with the version. It does not at this commit (the
+stored file shows a static constant and a place in `sys.ml.in`), and a
+rule of this
 directory fails if `sys.own_expected` has the first line of `VERSION`.
 
 The driver must exit with the status 0 of every unit that
@@ -501,6 +544,19 @@ unit of the first alias alone: the times of single units above, and the
 times beside the two names in `long.txt` (298 and 284 seconds), are
 those of the measure of 18 November 2026 in the tree built at
 f5591bb185. `long.txt` stays as it was; only its names are read.
+
+Since the driver converts the calls of C functions (decision D50), ten
+more files are compared where it stopped at a call before. The two
+aliases were not measured again with that change. P1 measured the 79
+files on another route on 19 November 2026 (the same files compiled with
+the driver outside the rules of this directory, at the build's flags,
+one process at a time): 829 seconds of processor time with the driver of
+the stage before and 837 with the driver of this change. `map.ml` and
+`set.ml` are counted in those sums by a second run of each alone, as
+each had ended at the limit of 120 seconds of the run of the 79; the
+other 77 files took about 25 seconds before and about 34 with the
+change, and of the ten files the slowest took 4.3 seconds there
+(`nativeint.ml`).
 
 The rules depend on the driver, which links the whole compiler: any
 change of the compiler runs all 79 again. A change of `stdlib/X.ml` runs

@@ -1454,8 +1454,8 @@ it gave back.
   and the tool still does not ask it (the entry above).
 - **Calls that never return**, in the same file (`convert_apply`). A
   call whose result continuation is `Never_returns`, whatever its call
-  kind among those that the conversion takes (a method call, a C call
-  and an effect are refused before that), is converted to a call that
+  kind among those that the conversion takes (a method call and an
+  effect are refused before that), is converted to a call that
   returns to a continuation bound around it and used nowhere else,
   whose handler is `Invalid` and whose parameters are of the kinds of
   the return arity of the call, which the call keeps; the continuation
@@ -1475,6 +1475,231 @@ it gave back.
   the callee does not return in native code. The term of the model has
   a continuation that the compiler's term has not, and the round trip
   of the conversion prints it.
+- **Calls of C functions**, in the same file (`convert_apply`,
+  `c_function_id`, `with_c_function_declarations`,
+  `undefined_at_a_c_call`; the comment "Calls of C functions"). WHAT A
+  CALL OF A C FUNCTION IS IN THE MODEL IS DECISION D50, RULED ON 18
+  NOVEMBER 2026: A RUN IS UNDEFINED AT A CALL OF A C FUNCTION OF WHICH
+  THE MODEL SAYS NOTHING, and it says nothing of any yet. It is the
+  reading called (U) in
+  `middle_end/flambda2/rocq/requests/P1-c-calls.md`.
+  The conversion makes of such a call a direct call of code that the
+  term declares and does not bind. Each C function, as a call
+  describes it, has one code id: the description is the linkage name
+  of the callee and the four things that the compiler says of the
+  function at the call (whether it is called through `caml_c_call`,
+  whether it may be taken for a builtin, its effects, its coeffects).
+  The code ids are declared deleted in front of the two terms, and the
+  machine has no step for a direct call of code that is not bound
+  (`FlambdaSemanticsSpec.shape_of_closure_call`), so a run is
+  undefined at the call. No statement of the model is changed, and
+  none about a C function is used.
+  Kept of a call, and compared by the validation
+  (`FlambdaCompareSpec.apply_eqb`, `call_kind_eqb`): the function and
+  its four marks (two calls that differ in one of them are calls of
+  different code), the arguments, the two arities, of every kind, the
+  continuation that the call returns to, the exception continuation
+  and its extra arguments. Not kept: the allocation mode of the call
+  and the region that it names (what the check of regions is to say
+  of a C function that allocates in a region of its caller belongs
+  with the rule of regions, which is not decided), the subkinds of
+  the arities, the position, the inlining attribute and the
+  debugging information. The text of a term writes all four marks
+  (`ccall`, with `noalloc`, `builtin`, `no_effects` or
+  `only_generative_effects`, `no_coeffects`); a text made before it
+  wrote the last three has `noalloc` alone, and is read as a call of
+  a function that is no builtin and has effects and coeffects, so
+  such a text and the compiler's term of the same unit can be calls
+  of different code.
+  THE CALLEE, AND THE WORDS AFTER "validated". In a term that the
+  compiler makes, the callee of such a call is a symbol of the
+  compilation unit of external symbols
+  (`middle_end/flambda2/from_lambda/closure_conversion.ml` makes the
+  call with one, and nothing else makes such a call but the reader
+  of a text, `middle_end/flambda2/parser/fexpr_to_flambda.ml`): a
+  symbol of another unit that nothing binds, so an import, of the
+  class of data, which the count of imports counts. A unit that has
+  such a call in one of its two terms then has an import, and where
+  it is validated its line is what the tool's test of the imports
+  gives for any unit that has one (the entries "What the tool
+  reports" and "What the `.cmx` files of other units say", below):
+  "validated with its imports" where the verdict passes the test,
+  "validated with nothing imported" and under it "not validated with
+  its imports" where it does not, or the two lines that say the same
+  given the `.cmx` files, where there is a prefix. None of them
+  begins "validated:". THE CONVERSION ASKS THE SAME OF EVERY TERM:
+  `c_function_of` refuses a call of a C function whose callee is
+  another symbol, and the unit is not checked. No compiler makes
+  such a call; a text written by hand may have one, with a callee
+  that is no import (a symbol of the unit itself, bound or not, or a
+  symbol of another unit that the prefix binds). The control
+  `callee_bound_in_the_text` is such a text: its call is in an arm
+  that the run does not take, and names a symbol that the text
+  itself binds as a block. Before the refusal the C function of that
+  name was declared in front, the symbol was bound in the term, no
+  import was counted, and the line of the text given twice was
+  "validated: the same up to bound names" (run on 18 November 2026).
+  That was no wrong verdict under this reading, as the run would be
+  undefined at the call if it reached it; it was a term in which one
+  name is declared as a C function and bound as data, which nothing
+  should take.
+  WHAT A VERDICT THEN SAYS. Anything refines an undefined run
+  (`FlambdaSemanticsSpec.refines`). So of a unit whose own run
+  reaches a call of a C function, an acceptance by the validator
+  says NOTHING: nothing of what the run does after the call, and
+  nothing of what it does before it, as the run is undefined as a
+  whole. That is of the run. WHAT THE TOOL PRINTS IS OF ITS OWN
+  RUNS, WHICH HAVE A BOUND: it gives the machine 1,000,000 steps,
+  and it finds a run undefined only where the run comes, within
+  them, to a state that has no step (the entry "What the tool
+  reports", below). Of each of the two runs that it shows, where it
+  finds the run undefined at such a call, it prints a line that says
+  so and names the C function. Where it finds undefined the run of
+  the term before that an acceptance is of, it prints no verdict of
+  the unit: the line is "nothing to validate, as the term before is
+  undefined"; the acceptance is on the next line, and further down
+  is the line that the validation says nothing of the unit. That run
+  is the run shown or, where what is accepted is the unit with
+  nothing imported, a run from the empty static environment, which
+  is not shown (the line is then "nothing to validate with nothing
+  imported, as the term before is then undefined"): the line that
+  names a C function is of the runs shown, and never of that one. A
+  RUN THAT WOULD COME TO SUCH A CALL ONLY AFTER THOSE STEPS IS NOT
+  FOUND UNDEFINED: no line names that call as the stop of that run;
+  if it is one of the runs shown, its line ends "still running when
+  the fuel ran out"; and the tool can print "validated" of the unit.
+  The word is then, as of any unit, no statement that the run before
+  is defined. Of a unit whose own run
+  returns, a verdict
+  is of that run, the initialisation of the unit, as for any unit.
+  A unit that has such a call is no longer refused for it: it is
+  compared as any unit, and may be validated, not validated, or not
+  checked for another thing.
+  WHAT IS COMPARED WHERE THE CODE IS NOT RUN, AND WHAT THAT RESTS ON,
+  WHICH IS NO THEOREM. A function that calls a C function is compared
+  by the validation as a term. Where the comparison reaches two calls
+  that are left in the two terms after its rewrites,
+  `FlambdaCompareSpec.apply_eqb` asks of them the same callee, the
+  same call kind (for a C function, the same code id), the same
+  arguments, the same continuations with the same extra arguments and
+  their kinds, and the same two arities. Variables and continuations
+  are compared under the pairing of names that the comparison has
+  made, and the handlers that are left are compared as terms. That
+  says nothing of the calls of the function as it was written, of the
+  code that followed them there, or of anything after a C function
+  returns. The rewrites of the validation, AS THEY ARE WRITTEN, do
+  not use the fact that a call of code that is not bound is
+  undefined: none removes or changes what follows such a call for
+  that reason. The model itself would allow such a rewrite, as it
+  has no run past the call, so a rewrite added later could make the
+  validation accept two terms that differ after a call of a C
+  function, and every theorem would still hold. Two things are not
+  true and are not claimed. One: that each call of a C function of
+  the term before has one call in the term after, and conversely.
+  Substitution, normalisation, the removal of code that is not reached
+  and the inlining of an enclosing body can move, copy or remove a
+  call; there is no theorem about the calls of C functions of a run or
+  their order. Two: that a rewrite changes a direct call only where
+  the term binds its code. `FlambdaForwardSpec.forward_apply` changes
+  the continuation that a call returns to without looking the code
+  up. The controls of `middle_end/flambda2/tests/semantics/c_calls`
+  are pairs of terms that differ in the C function, in one of its
+  four marks, in an argument, only in what follows the return of the
+  call, only in its exception handler, or only in a later call of a C
+  function: the tool must validate none of them. Five of the terms
+  before are also given twice (`guarded`, `guarded_generative`,
+  `handled`, `two_calls`, `reached`), and the validator accepts each
+  of the five pairs. Four of them are validated. `reached` is not:
+  its run comes to the call, the tool finds it undefined, and the
+  output has "nothing to validate, as the term before is undefined"
+  with the acceptance under it, which is no verdict. No term after
+  is given twice. They are tests of the tool as it is built, and not a
+  proof about the rewrites: they show a change of the tool that makes
+  one of those comparisons accepted, and not every rewrite of what
+  follows a call. One that touches another shape of term, a function
+  body, another arity or another handler leaves them as they are.
+  And the pairs have no function body (the reader of a term after
+  numbers code apart from the term before), so a call inside a
+  function is tested only by the units from OCaml, through Simplify.
+  WHAT CHANGES IN FRONT OF A UNIT THAT IS GIVEN `.cmx` FILES. The
+  prefix binds the code of another unit whose body the file keeps and
+  the model has got. A body that calls a C function was refused by
+  the conversion, and its code was declared deleted; it is converted
+  now, so it is bound, where nothing else in it is refused. Three
+  things follow. One: a run that calls such a body is no longer
+  undefined at that call for that reason. It enters the body, and is
+  undefined where it reaches a call of a C function; it may be
+  undefined for another reason, or not end. Two: the declarations in
+  front are of the C functions that are called, by one of the two
+  terms or by a body that is bound in front of them, and of no
+  other; a body of the prefix that is converted and then not bound
+  leaves none in front (the control `tupled_body_with_a_call_named`).
+  The tool prints them under a line of their own, before the line of
+  the prefix, which counts the bindings made from the files and
+  nothing else. Three, AND IT CAN TAKE A
+  VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION: each of the four
+  liftings to symbols lifts nothing in a term that fails one of two
+  tests, and both are of all the code that the term binds, that of
+  the prefix too (`FlambdaHeapFreeSpec.expr_free_of_heap`,
+  `FlambdaLiftSpec.exits_plain_knowing`). Code that is declared
+  deleted passes them; the same code bound is tested with what it
+  has. So where such a body is still in the term that a lifting is
+  given, and it has a primitive of the heap or gives its exception
+  continuation a block that it makes, that lifting lifts nothing, and
+  a unit that was validated through it can lose its verdict. It need
+  not: the validation has other ways than that lifting, and a rewrite
+  before it may have removed the body. The controls:
+  `body_with_a_call` and its two second units (a run that enters a
+  body, and reaches the call or does not), and `body_with_a_store`
+  and its second unit, which calls nothing and is not validated, and
+  is validated where the code of the body is declared deleted (the
+  tool as it was before this reading, run on that text; no rule runs
+  that tool). Measured on 19 November 2026 against the tool as it
+  was before this reading, on the 79 files of the standard library
+  at two settings and on the 395 units cut from 13 of them, one
+  function each: no output of a unit that ran before changes class;
+  ten outputs of the files and two of the units change, in what is
+  in front of the terms and in the lines of the two runs (the count
+  of imports). That no unit measured lost a verdict is a fact of the
+  measure and not of the design.
+  LEFT OUT. Simplify makes a primitive of seven comparisons
+  (`caml_compare`, `caml_equal`, `caml_notequal`, `caml_lessequal`,
+  `caml_lessthan`, `caml_greaterequal`, `caml_greaterthan`) where it
+  knows both arguments to be immediates or boxed numbers
+  (`middle_end/flambda2/simplify/simplify_extcall.ml`). Where the
+  term before keeps the call and the term after has the primitive,
+  no rule of the validation relates them: the unit
+  `comparison_made_a_primitive` of the controls is such a unit and is
+  not validated. A law for them would be a new statement of the
+  model, and is no part of this reading. Nothing is claimed of what a
+  C function does: its effects, what it allocates, what it raises,
+  the callbacks that it makes.
+  WHAT THE ROUND TRIP TESTS OF IT. The printer of the model writes
+  the direct call that the conversion makes of a call of a C function
+  back as a call of a C function, with what the compiler says of the
+  function at the call (`flmodel_to_fexpr.ml`). It writes the callee
+  as a symbol of the unit of external symbols that it names after
+  the number of the symbol, so the text read back names another
+  function than the term did; the round trip takes the C function
+  read back to the one of the term printed whose callee had that
+  number and of which the compiler says the same, and fails where
+  there is none (`flroundtrip.ml`, `c_function_back`). So "round trip
+  the same" of a unit that has such a call says that the call is
+  converted to a call of one C function with the callee, the
+  arguments, the arities, the continuations and the four things said
+  of the function that the text read back has. IT DOES NOT SAY that
+  the function has its name in the table of the conversion: the name
+  is not in the text printed. A rule of the controls runs the round
+  trip on the sixteen texts of `c_calls` that are units by
+  themselves; the rules of `tests/semantics/roundtrip/` do not take
+  that directory. With a printer changed to write the opposite of
+  what the term says of whether the function is called through
+  `caml_c_call`, the round trip of a unit of the controls fails with
+  "names not read back: the call of a C function at the callee x4 is
+  not, read back, a call of the C function that was printed" (tried
+  on 18 November 2026; no rule runs that printer). And nothing in the
+  tree checks, of the units of the controls, that their text is the
+  compiler's term, or runs the compiler's own pair on them.
 - **The conversion of primitives**, in the same file (the section
   "Primitives"): one function for each arity of primitive that the model
   has (`convert_unary_primitive`, `convert_binary_primitive` and, once

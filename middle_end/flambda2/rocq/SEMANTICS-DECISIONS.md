@@ -170,8 +170,9 @@ does what the line says). Dates are of 2026.
 ## 7. C calls
 
 - **D50.** A call of a C function of which the model says nothing
-  makes the run undefined at the call (ruled 18 Nov; not yet in the
-  tree, where every such call is still refused before the model).
+  makes the run undefined at the call (ruled 18 Nov). The model says
+  nothing of any C function yet: the test tool converts such a call
+  as a direct call of code that the term declares and does not bind.
 - **D69.** Named C functions are to have their meaning in the model: one
   Rocq spec, under the names of the runtime, of what a call of each
   does. Not all of them: not the collector and the like. Two are given:

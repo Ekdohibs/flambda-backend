@@ -37,11 +37,21 @@
    parser and converted again should be the term of the model it was.
 
    The result is a function of the term, of the two continuations of its unit,
-   and of the kinds of the value slots, which the model keeps beside the term.
-   Names are made from the numbers of the model: a variable [v12], a
-   continuation [k3], a code id [code7], a value slot [vs2], a function slot
-   [fs1], a symbol [$s5]. The two continuations of the unit are [done] and
-   [error].
+   of the kinds of the value slots, which the model keeps beside the term, and
+   of which code ids stand for C functions, with what the compiler says of each
+   at a call, which the conversion keeps beside the term too. Names are made
+   from the numbers of the model: a variable [v12], a continuation [k3], a code
+   id [code7], a value slot [vs2], a function slot [fs1], a symbol [$s5]. The
+   two continuations of the unit are [done] and [error].
+
+   The model has no call of a C function: the conversion makes a direct call of
+   a code id of one, and the term declares that code id and does not bind it
+   (flsemantics.ml, "Calls of C functions"). Such a direct call is written back
+   as a call of a C function, with the word [ccall] and what the compiler says
+   of the function. Its callee is written as a symbol of the compilation unit of
+   external symbols, which is where the conversion asks the callee of such a
+   call to be, named [x5] after the number of the symbol: the name of the
+   function is not written.
 
    What the model has not got is given the value that says least: no
    continuation sort but that of an exception handler, no inlining attribute,
@@ -139,6 +149,14 @@ let function_slot_prefix = "fs"
 
 let symbol_prefix = "s"
 
+(* The callee of a call of a C function has a prefix of its own. The compiler
+   takes two symbols of one linkage name to be one symbol, whatever their
+   compilation units (utils/symbol.ml), and nothing in the round trip resets the
+   compiler's table of symbols. With the prefix of the other symbols, the callee
+   of the unit after Simplify could be read back as the symbol of the unit
+   itself that the round trip of the file had read under the same name. *)
+let external_symbol_prefix = "x"
+
 let name prefix number = prefix ^ string_of_int (int_of_positive number)
 
 (* For showing where two terms differ, variables and continuations can be named
@@ -181,6 +199,22 @@ let function_slot slot : F.function_slot =
   located (name function_slot_prefix slot)
 
 let symbol s : F.symbol = located (None, name symbol_prefix s)
+
+(* The callee of a call of a C function: a symbol of the compilation unit of
+   external symbols, which is where the conversion asks it to be, named after
+   its number with [external_symbol_prefix]. So the C function that the text
+   read back names is not the one of the term: it is named after the number of
+   its callee, and the round trip finds the C function again from that
+   number. *)
+let external_symbol s : F.symbol =
+  located
+    ( Some
+        { F.ident =
+            Compilation_unit.name_as_string
+              (Symbol.external_symbols_compilation_unit ());
+          linkage_name = None
+        },
+      name external_symbol_prefix s )
 
 (* The number in a name made as above: [Some n] for exactly the name that [name]
    makes of the number [n], and [None] for any other, such as one whose digits
@@ -587,6 +621,15 @@ let project_function_slot ~move_from ~move_to closure : F.prim =
 
 (* ---- Terms ------------------------------------------------------------ *)
 
+(* What the conversion keeps of a C function beside its name, which the callee
+   of a call has: what the compiler says of the function at a call. *)
+type c_function =
+  { needs_caml_c_call : bool;
+    is_c_builtin : bool;
+    effects : Effects.t;
+    coeffects : Coeffects.t
+  }
+
 type env =
   { unit_return : Model.continuation;
     unit_exn : Model.continuation;
@@ -597,7 +640,11 @@ type env =
     (* The kinds of the value slots, which the model keeps beside the term. *)
     value_slot_kind : Model.value_slot -> Kinds.flambda_kind option;
     (* The code of the unit that is tupled. *)
-    tupled_code : Model.code_id list
+    tupled_code : Model.code_id list;
+    (* The C function that a code id stands for, where it stands for one: the
+       conversion makes a call of a C function a direct call of such a code
+       id. *)
+    c_function : Model.code_id -> c_function option
   }
 
 let bind env x kind = { env with kinds = (x, kind) :: env.kinds }
@@ -864,14 +911,41 @@ let rec expr env (e : Model.expr) : F.expr =
       | Indirect_unknown_arity -> default_arities
       | Direct _ | Indirect_known_arity _ -> false
     in
+    (* A direct call of the code id of a C function is written as the call of
+       the C function that the conversion made it from: the word [ccall] with
+       what the compiler says of the function, the callee as a symbol of the
+       unit of external symbols, and the two arities, which such a call always
+       has in the text. *)
+    let c_function =
+      match ap.ap_call_kind with
+      | Direct code -> env.c_function code
+      | Indirect_unknown_arity | Indirect_known_arity _ -> None
+    in
+    let func, call_kind, without_arities =
+      match c_function with
+      | None -> simple ap.ap_callee, F.Function call_kind, without_arities
+      | Some { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
+        let callee : F.simple =
+          match ap.ap_callee with
+          | Symbol s -> Symbol (external_symbol s)
+          | Var _ | Const _ ->
+            not_printable
+              "a call of a C function whose callee is not a symbol, which the \
+               conversion does not make"
+        in
+        ( callee,
+          F.C_call
+            { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects },
+          false )
+    in
     F.Apply
-      { func = Some (simple ap.ap_callee);
+      { func = Some func;
         continuation = Return (continuation env ap.ap_continuation);
         exn_continuation =
           ( continuation env ap.ap_exn_continuation,
             List.map (fun (s, k) -> simple s, kind k) ap.ap_exn_extra_args );
         args = simples ap.ap_args;
-        call_kind = Function call_kind;
+        call_kind;
         alloc_mode = Not_alloc_stack { alloc_region = env.region };
         arities =
           (if without_arities
@@ -1089,7 +1163,7 @@ let rec tupled_code_of (e : Model.expr) : Model.code_id list =
   | Apply _ | Apply_cont _ | Switch _ | Invalid -> []
 
 (* A unit of the model: its body and its two continuations. *)
-let unit ~value_slot_kind ~return_continuation ~exn_continuation
+let unit ~value_slot_kind ~c_function ~return_continuation ~exn_continuation
     (body : Model.expr) : F.flambda_unit =
   let env =
     { unit_return = return_continuation;
@@ -1097,7 +1171,8 @@ let unit ~value_slot_kind ~return_continuation ~exn_continuation
       region = Toplevel_alloc_region;
       kinds = [];
       value_slot_kind;
-      tupled_code = tupled_code_of body
+      tupled_code = tupled_code_of body;
+      c_function
     }
   in
   { body = expr env body }

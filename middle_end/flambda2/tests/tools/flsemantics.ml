@@ -137,6 +137,12 @@
    out. A body taken from the .cmx of another unit may have the mark, and is
    then left out of the prefix, so that a call of it is undefined.
 
+   A call of a C function is converted as a direct call of code that the term
+   declares and does not bind, so that a run is undefined at the call. That is
+   decision D50 as it is ruled: see "Calls of C functions" below, by
+   [c_function_id], for what is kept of the call, what a verdict then says and
+   what it does not.
+
    What a text may lose of a primitive. The printer writes the kind of an
    [Opaque_identity] unless it is the kind of values, and whether it is for the
    middle end only; the reader takes both, and gives one that is written with no
@@ -1237,6 +1243,255 @@ let directly_called_code : Code_id.t list ref = ref []
 
 let known_arity_call_met : bool ref = ref false
 
+(* ---- Calls of C functions ----------------------------------------------- *)
+
+(* What a call of a C function is in the model is decision D50
+   (rocq/DECISIONS.md), ruled on 18 November 2026: a run is undefined at a call
+   of a C function of which the model says nothing. The model says nothing of
+   any C function yet, so what is here is of every call. It is the reading
+   called (U) in rocq/requests/P1-c-calls.md. The same ruling asks that C
+   functions be given a meaning in the model by their names in the runtime; a
+   call of one that has a meaning will then be converted otherwise, and this
+   conversion will be of the others.
+
+   A call of a C function is converted as a direct call of code that the term
+   declares and does not bind. Each C function, as a call describes it, has one
+   code id ([c_function_id]). The description is the linkage name of the callee
+   and the four things that the compiler says of the function at the call:
+   whether it is called through [caml_c_call], whether the compiler may take it
+   for a builtin, its effects and its coeffects. The code ids are declared
+   deleted in front of the two terms ([with_c_function_declarations]) and
+   nothing binds them. The machine has no step for a direct call of code that is
+   not bound (FlambdaSemanticsSpec.shape_of_closure_call), so a run is undefined
+   at the call. No statement of the model is changed for this, and nothing of
+   the model that is about a C function is used.
+
+   What is kept of a call: the function and its four marks, in the code id (two
+   calls that differ in one of them are calls of different code); the arguments;
+   the two arities, of whatever kinds ([convert_arity]); the continuation that
+   the call returns to; the exception continuation and its extra arguments. The
+   comparison of two terms compares each of these (FlambdaCompareSpec.apply_eqb,
+   and call_kind_eqb for the code ids). What is not kept: the allocation mode of
+   the call and the region that it names; the subkinds of the arities, as
+   everywhere; the position, the inlining attribute and the debugging
+   information.
+
+   The callee, and the words after "validated". In a term that the compiler
+   makes, the callee of such a call is a symbol of the compilation unit of
+   external symbols: from_lambda/closure_conversion.ml makes the call with one,
+   and nothing else makes such a call but the reader of a text
+   (parser/fexpr_to_flambda.ml). It is then a symbol of another unit that
+   nothing binds, an import of the class of data ([imports]). So a unit that has
+   such a call in one of its two terms has an import, and its line, where it is
+   validated, is what the test of the imports gives for any unit that has one
+   ("Imports", at the head of this file): "validated with its imports" where the
+   verdict passes the test, "validated with nothing imported" and under it "not
+   validated with its imports" where it does not, or the two lines that say the
+   same given the [.cmx] files, where there is a prefix. None of them begins
+   "validated:".
+
+   The conversion asks the same of every term: [c_function_of] refuses a call of
+   a C function whose callee is another symbol, and the unit is not checked. No
+   compiler makes such a call. A text written by hand may have one, with a
+   callee that is no import: a symbol of the unit itself, bound or not, or a
+   symbol of another unit that the prefix binds. callee_bound_in_the_text, in
+   tests/semantics/c_calls, is such a text: its call is in an arm that the run
+   does not take, and names a symbol that the text itself binds as a block.
+   Before the refusal the C function of that name was declared in front, the
+   symbol was bound in the term, no import was counted, and the line of the text
+   given twice was "validated: the same up to bound names" (run on 18 November
+   2026). That was no wrong verdict under this reading, as the run would be
+   undefined at the call if it reached it; it was a term in which one name is
+   declared as a C function and bound as data, which nothing should take.
+
+   CR mshinwell: the allocation mode of a call of a C function is dropped, as
+   that of every call is. What the check of regions is to say of a C function
+   that allocates in a region of its caller belongs with the rule of regions,
+   which is not decided. As it is, that check says nothing of a run that is
+   undefined at such a call.
+
+   What a verdict then says. Anything refines an undefined run
+   (FlambdaSemanticsSpec.refines). So of a unit whose own run reaches a call of
+   a C function an acceptance by the validator says nothing, of what comes
+   before the call either: the run is undefined as a whole. That is of the run;
+   the tool's runs have a bound ([fuel]). Where a run shown is found undefined
+   at such a call, a line names it ([undefined_at]); where the run that an
+   acceptance is of is found undefined, no verdict is printed (the head of this
+   file). A call beyond the bound is not found: "validated" may then be printed.
+   Of a unit whose own run returns, a verdict is of that run, the initialisation
+   of the unit, and not of a later call of one of its functions by another unit.
+
+   What is compared where the code is not run. A function of the unit that calls
+   a C function is compared by the validation as a term. Where the comparison
+   reaches two calls that are left in the two terms after its rewrites,
+   FlambdaCompareSpec.apply_eqb asks of them the same callee, the same call kind
+   (for a C function, the same code id), the same arguments, the same
+   continuations with the same extra arguments and their kinds, and the same two
+   arities. Variables and continuations are compared under the pairing of names
+   that the comparison has made, and the handlers that are left are compared as
+   terms. That says nothing of the calls of the function as it was written, of
+   the code that followed them there, or of anything after a C function returns.
+   As the rewrites of the validation are written, none uses the fact that a call
+   of code that is not bound is undefined to remove or change what follows such
+   a call. NO THEOREM SAYS SO, and the model would allow such a rewrite, as it
+   has no run past the call. Two things are not true and are not claimed. One:
+   that each call of a C function of the term before has one call in the term
+   after, and conversely; substitution, normalisation, the removal of code that
+   is not reached and the inlining of an enclosing body can move, copy or remove
+   a call, and nothing is said of the order of the calls of C functions in a
+   run. Two: that a rewrite changes a direct call only where the term binds its
+   code; FlambdaForwardSpec.forward_apply changes the continuation that a call
+   returns to without looking the code up. The controls of
+   tests/semantics/c_calls are pairs of terms that differ in the C function, in
+   one of its marks, in an argument, only after the call returns, only in its
+   exception handler, or only in a later call of a C function: none may be
+   validated. They show a change of the tool that makes one of those comparisons
+   accepted. They do not show every rewrite of what follows a call: one that
+   touches another shape of term, a function body, another arity or another
+   handler leaves them as they are.
+
+   What changes in front of a unit that is given [.cmx] files. The prefix binds
+   the code of another unit whose body the file keeps and the model has got
+   ([make_prefix]). A body that calls a C function was refused by the
+   conversion, and its code was declared deleted. It is converted now, so it is
+   bound, where nothing else in it is refused. Three things follow.
+
+   One: a run that calls such a body is no longer undefined at that call for
+   that reason. It enters the body, and is undefined where it reaches a call of
+   a C function. It may be undefined for another reason, or not end.
+
+   Two: the declarations in front are of the C functions that are called, by one
+   of the two terms or by a body that is bound in front of them, and of no other
+   ([with_c_function_declarations]). A body of the prefix that is converted and
+   then not bound ([bind_code]) leaves its C functions in the table of the
+   conversion, and none in front.
+
+   Three, AND IT CAN TAKE A VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION.
+   Each of the four liftings to symbols lifts nothing in a term that fails one
+   of two tests, and both tests are of all the code that the term binds, that of
+   the prefix too (FlambdaHeapFreeSpec.expr_free_of_heap;
+   FlambdaLiftSpec.exits_plain_knowing). Code that is declared deleted passes
+   them, and the same code bound is tested with what it has. So where such a
+   body is still in the term that a lifting is given, and it has a primitive of
+   the heap or gives its exception continuation a block that it makes, that
+   lifting lifts nothing, and a unit that was validated through it can lose its
+   verdict. It need not: the validation has other ways than that lifting, and a
+   rewrite before it may have removed the body.
+
+   tests/semantics/c_calls has a control of each: body_with_a_call and its two
+   second units (a run that enters a body, and reaches the call or does not),
+   and body_with_a_store and its second unit (a unit that calls nothing, which
+   is not validated, and is validated where the code of the body is declared
+   deleted). Measured on 19 November 2026 against the tool before this reading,
+   on the 79 files of the standard library at two settings and on the 395 units
+   cut from 13 of them, one function each: no output of a unit that ran before
+   changes class; ten outputs of the files and two of the units change, in what
+   is in front of the terms and in the lines of the two runs (the count of
+   imports).
+
+   What is left out. Simplify makes a primitive of seven comparisons
+   ([caml_compare], [caml_equal], [caml_notequal], [caml_lessequal],
+   [caml_lessthan], [caml_greaterequal], [caml_greaterthan]) where it knows both
+   arguments to be immediates or boxed numbers (simplify/simplify_extcall.ml).
+   Where the term before keeps the call and the term after has the primitive, no
+   rule of the validation relates the two: comparison_made_a_primitive, in
+   tests/semantics/c_calls, is such a unit and is not validated. A law for them
+   would be a new statement of the model and is no part of this reading.
+
+   What the round trip tests of it. The round trip of the conversion
+   (flroundtrip.ml) writes a call of a C function back as one: the printer of
+   the model is told which code ids stand for C functions, and what the compiler
+   says of each. The callee is written as a symbol of the unit of external
+   symbols named after its number, so the text read back names another function
+   than the term did; the round trip takes the C function read back to the one
+   of the term whose callee had that number and of which the compiler says the
+   same, and fails where there is none. So "round trip the same" of a unit that
+   has such a call says that the call is converted to a call of one C function
+   with the callee, the arguments, the arities, the continuations and what the
+   compiler says of the function that the text read back has. It does not say
+   that the function has the right name in the table of the conversion: the name
+   is not in the text printed. *)
+type c_function =
+  { c_name : string;
+    c_needs_caml_c_call : bool;
+    c_is_c_builtin : bool;
+    c_effects : Effects.t;
+    c_coeffects : Coeffects.t
+  }
+
+let c_function_ids : (c_function, Model.code_id) Hashtbl.t = Hashtbl.create 16
+
+let c_functions_by_id : (int, c_function) Hashtbl.t = Hashtbl.create 16
+
+let c_function_id (c_function : c_function) : Model.code_id =
+  match Hashtbl.find_opt c_function_ids c_function with
+  | Some id -> id
+  | None ->
+    let id = Code_ids.fresh () in
+    Hashtbl.replace c_function_ids c_function id;
+    Hashtbl.replace c_functions_by_id (int_of_positive id) c_function;
+    id
+
+(* In the order in which the conversion met them. *)
+let c_function_code_ids () : Model.code_id list =
+  List.sort
+    (fun id id' -> compare (int_of_positive id) (int_of_positive id'))
+    (Hashtbl.fold (fun _ id ids -> id :: ids) c_function_ids [])
+
+let c_function_of (apply : Apply_expr.t) ~needs_caml_c_call ~is_c_builtin
+    ~effects ~coeffects : c_function =
+  let c_name =
+    match Apply_expr.callee apply with
+    | Some callee -> (
+      match Simple.must_be_symbol callee with
+      | Some (symbol, _) ->
+        if
+          Compilation_unit.equal
+            (Symbol.compilation_unit symbol)
+            (Symbol.external_symbols_compilation_unit ())
+        then Linkage_name.to_string (Symbol.linkage_name symbol)
+        else
+          unsupported
+            "a call of a C function whose callee is not a symbol of the \
+             compilation unit of external symbols"
+      | None ->
+        unsupported "a call of a C function whose callee is not a symbol")
+    | None -> unsupported "a call of a C function with no callee"
+  in
+  { c_name;
+    c_needs_caml_c_call = needs_caml_c_call;
+    c_is_c_builtin = is_c_builtin;
+    c_effects = effects;
+    c_coeffects = coeffects
+  }
+
+(* The marks of a C function, in the words of the text of a term
+   (parser/print_fexpr.ml): none for a function that is called through
+   [caml_c_call], is no builtin and has effects and coeffects. *)
+let c_function_marks (c_function : c_function) : string list =
+  (if c_function.c_needs_caml_c_call then [] else ["noalloc"])
+  @ (if c_function.c_is_c_builtin then ["builtin"] else [])
+  @ (match c_function.c_effects with
+    | Effects.Arbitrary_effects -> []
+    | Effects.No_effects -> ["no_effects"]
+    | Effects.Only_generative_effects Mutability.Immutable ->
+      ["only_generative_effects"]
+    | Effects.Only_generative_effects Mutability.Mutable ->
+      ["only_generative_effects mutable"]
+    | Effects.Only_generative_effects Mutability.Immutable_unique ->
+      ["only_generative_effects immutable_unique"])
+  @
+  match c_function.c_coeffects with
+  | Coeffects.Has_coeffects -> []
+  | Coeffects.No_coeffects -> ["no_coeffects"]
+
+let shown_c_function (c_function : c_function) : string =
+  match c_function_marks c_function with
+  | [] -> Printf.sprintf "%s (a C function)" c_function.c_name
+  | _ :: _ as marks ->
+    Printf.sprintf "%s (a C function: %s)" c_function.c_name
+      (String.concat ", " marks)
+
 (* The code whose body is being converted, if any; and the direct calls
    converted so far that Simplify is told to unroll or always to inline: each
    with the code that it stands in, the call as it was converted, its code, and
@@ -1381,6 +1636,8 @@ let reset_conversion () =
   Continuations.reset ();
   Symbols.reset ();
   Code_ids.reset ();
+  Hashtbl.reset c_function_ids;
+  Hashtbl.reset c_functions_by_id;
   Value_slots.reset ();
   Function_slots.reset ();
   slot_kinds := [];
@@ -2160,8 +2417,13 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
                (List.map Code_ids.find (Code_id.Set.elements code_ids))))
     | Function { function_call = Indirect_unknown_arity; _ } ->
       Indirect_unknown_arity
-    | Method _ | C_call _ | Effect _ ->
-      unsupported "the call %a" Apply_expr.print apply
+    | C_call { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
+      (* See "Calls of C functions", above. *)
+      Direct
+        (c_function_id
+           (c_function_of apply ~needs_caml_c_call ~is_c_builtin ~effects
+              ~coeffects))
+    | Method _ | Effect _ -> unsupported "the call %a" Apply_expr.print apply
   in
   let exn_continuation = Apply_expr.exn_continuation apply in
   (* See [region_params]. *)
@@ -2215,13 +2477,13 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
   | Return k -> Model.Apply (noted (returning_to (Continuations.find k)))
   | Never_returns ->
     (* CR mshinwell: a call that never returns, of whatever kind that is
-       converted (a method call, a C call and an effect are refused above), is
-       made a call that returns to a continuation bound around it and used
-       nowhere else, whose handler is [Invalid]: a return from the call is
-       undefined. The call keeps its return arity, and the parameters of the
-       continuation are of the kinds of that arity. The continuation has a
-       number that no continuation of the two units of the check has, and its
-       parameters have numbers that no variable of them has. See the header. *)
+       converted (a method call and an effect are refused above), is made a call
+       that returns to a continuation bound around it and used nowhere else,
+       whose handler is [Invalid]: a return from the call is undefined. The call
+       keeps its return arity, and the parameters of the continuation are of the
+       kinds of that arity. The continuation has a number that no continuation
+       of the two units of the check has, and its parameters have numbers that
+       no variable of them has. See the header. *)
     let k = Continuations.fresh () in
     let kinds = Model.unarize return_arity in
     let params = List.map (fun _ -> Variables.fresh ()) kinds in
@@ -2767,10 +3029,13 @@ let shown_symbol sym =
   | Some _ | None -> Printf.sprintf "$%d" (int_of_positive sym)
 
 let shown_code_id id =
-  match Code_ids.name_of id with
-  | Some code_id when !names_shown ->
-    Linkage_name.to_string (Code_id.linkage_name code_id)
-  | Some _ | None -> Printf.sprintf "code%d" (int_of_positive id)
+  match Hashtbl.find_opt c_functions_by_id (int_of_positive id) with
+  | Some c_function -> shown_c_function c_function
+  | None -> (
+    match Code_ids.name_of id with
+    | Some code_id when !names_shown ->
+      Linkage_name.to_string (Code_id.linkage_name code_id)
+    | Some _ | None -> Printf.sprintf "code%d" (int_of_positive id))
 
 let shown_function_slot slot =
   match Function_slots.name_of slot with
@@ -3062,7 +3327,10 @@ and print_binding ppf (binding : Model.static_binding) =
       (if metadata.cm_is_stub then " stub" else "")
       (print_list print_var) params print_var my_closure print_cont ret
       print_cont exn print_expr body
-  | Bind_deleted_code id -> Format.fprintf ppf "%s deleted" (shown_code_id id)
+  | Bind_deleted_code id ->
+    if Hashtbl.mem c_functions_by_id (int_of_positive id)
+    then Format.fprintf ppf "%s, declared with no code" (shown_code_id id)
+    else Format.fprintf ppf "%s deleted" (shown_code_id id)
   | Bind_symbol (sym, Static_const_set_of_closures (code, slots)) ->
     Format.fprintf ppf "@[<hov 2>%s = closure %s@ {%a}@]" (shown_symbol sym)
       (shown_code_id code) print_value_slots slots
@@ -4798,7 +5066,10 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
    bound, and neither is code whose body the model has not got, tupled code (no
    direct call of tupled code is in the model, see [tupled_code]), or code with
    a call of known arity where one of the two units has tupled code. A call of
-   code that is not bound is undefined.
+   code that is not bound is undefined. A body that calls a C function is one
+   that the model has got, up to the call ("Calls of C functions", above): it is
+   bound where nothing else in it is refused, and a run that enters it is
+   undefined where it reaches the call.
 
    A code id of which the file of its own unit has the code or its metadata, and
    which is not bound: it is declared deleted ([Bind_deleted_code]), once, where
@@ -4904,6 +5175,43 @@ let no_prefix =
     prefix_unmentioned = [];
     prefix_hidden = []
   }
+
+(* What is in front of the two terms as they are run and validated: nothing;
+   declarations of C functions and nothing else, as for a unit that read no
+   [.cmx] ([with_c_function_declarations]); or a prefix made from [.cmx] files,
+   with such declarations in its first group where there are any. The
+   declarations are of the C functions that one of the two terms, or a body that
+   the prefix binds, calls. Which of the three it is is told from the bindings
+   that are in front. The lines of the tool say which. *)
+type what_in_front =
+  | Nothing_in_front
+  | C_functions_alone
+  | A_prefix
+
+let is_c_function_declaration (binding : Model.static_binding) : bool =
+  match binding with
+  | Bind_deleted_code id -> Hashtbl.mem c_functions_by_id (int_of_positive id)
+  | Bind_symbol _ | Bind_code _ -> false
+
+let what_is_in_front (prefix : prefix) : what_in_front =
+  match prefix.prefix_groups with
+  | [] -> Nothing_in_front
+  | _ :: _ as groups ->
+    if List.for_all (List.for_all is_c_function_declaration) groups
+    then C_functions_alone
+    else A_prefix
+
+let in_front_short (prefix : prefix) : string option =
+  match what_is_in_front prefix with
+  | Nothing_in_front -> None
+  | C_functions_alone -> Some "the declarations of the C functions"
+  | A_prefix -> Some "the prefix"
+
+let in_front_long (prefix : prefix) : string option =
+  match what_is_in_front prefix with
+  | Nothing_in_front -> None
+  | C_functions_alone -> Some "the declarations of the C functions"
+  | A_prefix -> Some "the prefix made from the .cmx files"
 
 (* What the [.cmx] file of its unit says of a symbol. *)
 type approximation = Code_or_metadata.t Value_approximation.t
@@ -5525,7 +5833,17 @@ let with_prefix (prefix : prefix) (unit : converted) : converted =
    each unit are apart (FlambdaStaticsInScopeSpec.static_names_apart, of the
    unit with the prefix in front of it, where they are of the unit alone). Each
    of these fails only where [make_prefix] is wrong, as no source makes a unit
-   that binds, or declares deleted, a name of another unit. *)
+   that binds, or declares deleted, a name of another unit. The declarations of
+   the C functions are in the prefix that this is given
+   ([with_c_function_declarations]), and none of these can fail for them. They
+   bind no symbol. Their code ids are numbers that no name has
+   ([Code_ids.fresh]), one for each C function of the table, so none is declared
+   twice and none is a code id that the files or a unit bind or declare deleted.
+   And a declaration of deleted code leaves the static environment as it is
+   (FlambdaSemanticsSpec.eval_static_bindings). So this answers nothing where
+   the declarations are alone in front of the two terms, and the line of a
+   fault, which says "the prefix made from the .cmx files", is printed only
+   where something in front is made from such files. *)
 let prefix_fault (prefix : prefix)
     ~(imports : (Model.symbol * Values.import_class) list) (before : converted)
     (after : converted) : string option =
@@ -5586,16 +5904,37 @@ let print_prefix (prefix : prefix) =
   | _ :: _ ->
     let digests = Sys.getenv_opt "FLSEMANTICS_PRINT_DIGESTS" <> None in
     let every_binding = Sys.getenv_opt "FLSEMANTICS_PRINT_TERMS" <> None in
-    let bindings = List.length (List.concat prefix.prefix_groups) in
-    Format.printf "  given the .cmx of %s, a prefix of %d static binding%s:@."
-      (String.concat ", "
-         (List.map
-            (fun (unit, digest) ->
-              Compilation_unit.name_as_string unit
-              ^ if digests then " (" ^ Digest.to_hex digest ^ ")" else "")
-            prefix.prefix_units))
-      bindings
-      (if bindings = 1 then "" else "s");
+    (* The declarations of the C functions are counted apart from the bindings
+       made from the files. *)
+    let c_functions =
+      List.length
+        (List.filter is_c_function_declaration
+           (List.concat prefix.prefix_groups))
+    in
+    let bindings =
+      List.length (List.concat prefix.prefix_groups) - c_functions
+    in
+    let declarations =
+      if c_functions = 1
+      then "the declaration of 1 C function"
+      else Printf.sprintf "the declarations of %d C functions" c_functions
+    in
+    (* The declarations of the C functions are printed first, under a head line
+       of their own, which is the line of a unit that has nothing else in front
+       of it. Then the bindings made from the files, under the head line of a
+       prefix, which counts them and no declaration of a C function: that line
+       and the lines under it are what they are for a unit that calls no C
+       function, and scripts read them. *)
+    let c_declarations =
+      List.filter is_c_function_declaration (List.concat prefix.prefix_groups)
+    in
+    let groups =
+      List.filter
+        (fun group -> match group with [] -> false | _ :: _ -> true)
+        (List.map
+           (List.filter (fun binding -> not (is_c_function_declaration binding)))
+           prefix.prefix_groups)
+    in
     let unasked : (int, Model.symbol) Hashtbl.t = Hashtbl.create 64 in
     if not every_binding
     then
@@ -5610,6 +5949,28 @@ let print_prefix (prefix : prefix) =
     Fun.protect
       ~finally:(fun () -> names_shown := false)
       (fun () ->
+        (match c_declarations with
+        | [] -> ()
+        | _ :: _ ->
+          Format.printf "  in front of the two terms, %s:@." declarations;
+          List.iter
+            (fun binding ->
+              forget_shown_names ();
+              Format.printf "    @[<v>%a@]@." print_binding binding)
+            c_declarations);
+        (match groups with
+        | [] -> ()
+        | _ :: _ ->
+          Format.printf
+            "  given the .cmx of %s, a prefix of %d static binding%s:@."
+            (String.concat ", "
+               (List.map
+                  (fun (unit, digest) ->
+                    Compilation_unit.name_as_string unit
+                    ^ if digests then " (" ^ Digest.to_hex digest ^ ")" else "")
+                  prefix.prefix_units))
+            bindings
+            (if bindings = 1 then "" else "s"));
         List.iteri
           (fun i group ->
             if i > 0 then Format.printf "    and then@.";
@@ -5667,7 +6028,7 @@ let print_prefix (prefix : prefix) =
                      @ if !others > 0 then [number !others "block"] else []))
                   (shown_symbol block))
               (List.rev !blocks))
-          prefix.prefix_groups)
+          groups)
 
 (* The two units are converted with one numbering of names, the continuations of
    the second unit standing for those of the first, so that the verified
@@ -5995,6 +6356,67 @@ let undefined_by_an_open_list (state : Semantics.state) :
    stops the unit. *)
 let wrapper_made_after = ref false
 
+(* Whether a C function is called: by one of the two terms, or by a body that
+   the prefix binds. A call is a direct call of the code id of the C function,
+   in the term or in the body of code that it binds ([code_id_used]; such a code
+   id is neither bound nor made a closure of). *)
+let c_function_called (prefix : prefix) (terms : Model.expr list)
+    (id : Model.code_id) : bool =
+  let in_front =
+    List.fold_right
+      (fun group body -> Model.Let_static (group, body))
+      prefix.prefix_groups Model.Invalid
+  in
+  List.exists (code_id_used id) (in_front :: terms)
+
+(* The code ids of the C functions that are called ([c_function_called]):
+   declared deleted in the first group of the prefix, in the order in which the
+   conversion met them. The conversion meets more than are called: a body of the
+   prefix that is converted and then not bound ([bind_code]) has left its C
+   functions in the table ([c_function_id]), and they are not declared. A group
+   is made where the prefix has none. Nothing binds what is declared. *)
+let with_c_function_declarations (prefix : prefix) (terms : Model.expr list) :
+    prefix =
+  match
+    List.filter (c_function_called prefix terms) (c_function_code_ids ())
+  with
+  | [] -> prefix
+  | _ :: _ as ids -> (
+    let declarations = List.map (fun id -> Model.Bind_deleted_code id) ids in
+    match prefix.prefix_groups with
+    | [] -> { prefix with prefix_groups = [declarations] }
+    | first :: rest ->
+      { prefix with prefix_groups = (declarations @ first) :: rest })
+
+(* The C function at a call of which a run is undefined, where the state that
+   has no step is a call of one. *)
+let undefined_at_a_c_call (state : Semantics.state) : c_function option =
+  match state.state_expr with
+  | Apply { ap_call_kind = Direct id; _ } ->
+    Hashtbl.find_opt c_functions_by_id (int_of_positive id)
+  | Apply _ | Let _ | Let_static _ | Let_cont_non_recursive _
+  | Let_cont_recursive _ | Apply_cont _ | Switch _ | Invalid ->
+    None
+
+(* Where a run is undefined and why, read off the state that has no step: the
+   two parts of the line that is printed under the lines of the two runs, "the
+   run before Simplify is undefined at WHERE: WHY". It has one case, the call of
+   a C function, and says nothing of any other state. That case is to stay the
+   first where others are added: the code id of a C function is declared and not
+   bound, as code is of which a [.cmx] file has no body, and the callee of its
+   call is no closure, so a case for either of those would take this state too.
+   A state whose expression is such a call has no step whatever its operands
+   are. *)
+let undefined_at (state : Semantics.state) : (string * string) option =
+  match undefined_at_a_c_call state with
+  | Some c_function ->
+    Some
+      ( Printf.sprintf "a call of %s" (shown_c_function c_function),
+        "the model does not run a C function (decision D50), so of a run that \
+         reaches such a call nothing is said, of what comes before the call \
+         either" )
+  | None -> None
+
 let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) =
   let loader =
@@ -6052,6 +6474,10 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
   let prefix =
     make_prefix ~units ~loader
       ~units_have_tupled_code:(before_has_tupled_code || has_tupled_code ())
+      [before_converted.body; after_converted.body]
+  in
+  let prefix =
+    with_c_function_declarations prefix
       [before_converted.body; after_converted.body]
   in
   let prefix, before_converted, after_converted =
@@ -6155,7 +6581,9 @@ let not_in_scope ~(symbols : Model.symbol list) ~(code_ids : Model.code_id list)
   then None
   else
     let all_symbols = symbols @ List.map snd (Symbols.bindings ()) in
-    let all_code_ids = code_ids @ List.map snd (Code_ids.bindings ()) in
+    let all_code_ids =
+      code_ids @ List.map snd (Code_ids.bindings ()) @ c_function_code_ids ()
+    in
     let symbols_pass =
       Statics_in_scope.expr_statics_in_scope symbols all_code_ids unit.body
     in
@@ -6184,7 +6612,7 @@ let not_in_scope_alone (unit : converted) : string option =
   let code_ids =
     List.filter
       (fun id -> not (Hashtbl.mem own (int_of_positive id)))
-      (List.map snd (Code_ids.bindings ()))
+      (List.map snd (Code_ids.bindings ()) @ c_function_code_ids ())
   in
   not_in_scope ~symbols ~code_ids unit
 
@@ -6222,12 +6650,14 @@ let static_names_in_scope ~(imports : Model.symbol list) (unit : converted) =
 (* The line: the two terms are given with the prefix in front of them where
    there is one, and the imports are those that the validation is given. *)
 let print_static_names ~(imports : (Model.symbol * Values.import_class) list)
-    ~(with_prefix : bool) (before : converted) (after : converted) =
+    ~(in_front : string option) (before : converted) (after : converted) =
   let imports = List.map fst imports in
   Format.printf "  the check of static names: %s before, %s after%s@."
     (static_names_in_scope ~imports before)
     (static_names_in_scope ~imports after)
-    (if with_prefix then ", each with the prefix in front of it" else "")
+    (match in_front with
+    | Some what -> ", each with " ^ what ^ " in front of it"
+    | None -> "")
 
 (* A condition of well-formedness that a unit which is not well-formed fails. *)
 let why_not_well_formed (unit : converted) =
@@ -8713,8 +9143,7 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
       ~imports:
         (imports ~bound:prefix.prefix_symbols
            ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden)
-      ~with_prefix:
-        (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
+      ~in_front:(in_front_short prefix)
       (with_prefix prefix before)
       (with_prefix prefix after);
     raise Check_failed
@@ -8738,18 +9167,23 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     let has_prefix =
       match prefix.prefix_groups with [] -> false | _ :: _ -> true
     in
+    (* What is in front of the two terms, in words: the prefix, or the
+       declarations of the C functions alone ([what_is_in_front]). *)
+    let in_front_of_them =
+      match in_front_long prefix with Some what -> what | None -> ""
+    in
     if has_prefix && not (well_formed after)
     then (
       Format.printf
-        "%s: not checked: with the prefix made from the .cmx files in front of \
-         it the term after Simplify is not well-formed (%s)@."
-        filename
+        "%s: not checked: with %s in front of it the term after Simplify is \
+         not well-formed (%s)@."
+        filename in_front_of_them
         (why_not_well_formed after);
       raise Check_failed);
     (* The guard, of the two terms as they are run. *)
     let in_front =
       if has_prefix
-      then "with the prefix made from the .cmx files in front of it, "
+      then "with " ^ in_front_of_them ^ " in front of it, "
       else ""
     in
     let not_in_scope unit =
@@ -8802,9 +9236,9 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
           raise List_left_open
         | None -> ());
         let with_imports =
-          (match prefix.prefix_groups with
-            | [] -> ""
-            | _ :: _ -> ", after the prefix")
+          (match in_front_short prefix with
+            | None -> ""
+            | Some what -> ", after " ^ what)
           ^
           match imports with
           | [] -> ""
@@ -8827,14 +9261,24 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
           steps_before print_outcome outcome_before;
         Format.printf "  after Simplify%s (%d steps): %a@." with_imports
           steps_after print_outcome outcome_after;
+        (* A run that is undefined where [undefined_at] says something of the
+           state that has no step: a line says where and why. Today that is a
+           call of a C function, which the line names ("Calls of C functions",
+           above). *)
+        List.iter
+          (fun (which, stopped) ->
+            match Option.bind stopped undefined_at with
+            | Some (where, why) ->
+              Format.printf "  the run %s Simplify is undefined at %s: %s@."
+                which where why
+            | None -> ())
+          ["before", stopped_before; "after", stopped_after];
         let passes ok = if ok then "passes" else "fails" in
         Format.printf "  the check of kinds: %s before, %s after@."
           (passes (well_kinded before))
           (passes (well_kinded after));
-        print_static_names ~imports
-          ~with_prefix:
-            (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
-          before after;
+        print_static_names ~imports ~in_front:(in_front_short prefix) before
+          after;
         Format.printf "  calls outside code: %d before, %d after@."
           (calls_outside_code before.body)
           (calls_outside_code after.body);
@@ -10297,6 +10741,20 @@ let conversion_for_round_trip : Flroundtrip.conversion =
     reset = reset_conversion;
     value_slot_kind =
       (fun slot -> Option.map convert_kind (List.assoc_opt slot !slot_kinds));
+    c_functions =
+      (fun () ->
+        Hashtbl.fold
+          (fun (c_function : c_function) id c_functions ->
+            ( id,
+              c_function.c_name,
+              { Flmodel_to_fexpr.needs_caml_c_call =
+                  c_function.c_needs_caml_c_call;
+                is_c_builtin = c_function.c_is_c_builtin;
+                effects = c_function.c_effects;
+                coeffects = c_function.c_coeffects
+              } )
+            :: c_functions)
+          c_function_ids []);
     symbols =
       (fun () ->
         names Symbols.bindings (fun symbol ->

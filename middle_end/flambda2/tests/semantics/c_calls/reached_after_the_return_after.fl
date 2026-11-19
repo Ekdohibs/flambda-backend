@@ -1,0 +1,9 @@
+(* The term after of the control reached_after_the_return (see dune), written
+   by hand: Simplify did not make it. It is reached.fl but for one thing:
+   what follows the return of the call adds 2 to its result. *)
+apply ccall &toplevel
+  ($`*extern*`.c_one : val? -> val?) (5) -> returned * error
+  where returned (r) =
+    let s = %int_barith.`add` (r, 2) in
+    let $camlReached = Block 0 (s) in
+    cont done ($camlReached)

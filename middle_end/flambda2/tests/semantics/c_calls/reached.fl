@@ -1,0 +1,9 @@
+(* The term before of the controls reached_* (see dune). The unit calls a C
+   function as it is initialised: its run reaches the call, and is undefined
+   there. *)
+apply ccall &toplevel
+  ($`*extern*`.c_one : val? -> val?) (5) -> returned * error
+  where returned (r) =
+    let s = %int_barith.`add` (r, 1) in
+    let $camlReached = Block 0 (s) in
+    cont done ($camlReached)

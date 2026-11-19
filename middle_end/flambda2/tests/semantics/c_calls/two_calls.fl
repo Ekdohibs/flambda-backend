@@ -1,0 +1,20 @@
+(* The term before of the controls two_calls_* (see dune). As guarded.fl,
+   with two calls: c_one, and then c_two of what c_one returned. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall &toplevel
+        ($`*extern*`.c_one : val? -> val?) (a) -> returned * error
+        where returned (r) =
+          (apply ccall &toplevel
+             ($`*extern*`.c_two : val? -> val?) (r) -> returned_again * error
+             where returned_again (s) =
+               cont leave (s)))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlTwo_calls = Block 0 (v) in
+    cont done ($camlTwo_calls)

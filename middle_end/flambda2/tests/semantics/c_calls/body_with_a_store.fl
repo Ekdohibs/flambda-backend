@@ -1,0 +1,21 @@
+let $camlBody_with_a_store__first_const_0 = Block 0 () in
+(let code inline(always) size(15)
+       store_0 (cell/28 : val, x/29 : imm tagged)
+         my_closure/30 &my_alloc_region/31 my_depth/32
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/33 = rec_info (succ my_depth/32) in
+   apply ccall &my_alloc_region/31
+     ($`*extern*`.c_work : val? -> val?) (x/29) -> k/14 * k/13
+     where k/14 (Pccall/34) =
+       let Psetfield/35 = %block_set.`imm`.[`0`] (cell/28, Pccall/34) in
+       cont k/12 (Psetfield/35)
+ in
+ let store/36 = closure store_0 @store &toplevel in
+ let Pmakeblock/37 = %block.[`0`].`toplevel` (store/36) in
+ cont k/11 (Pmakeblock/37))
+  where k/11 define_root_symbol (module_block/26) =
+    let field_0/27 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/26)
+    in
+    let $camlBody_with_a_store = Block 0 (field_0/27) in
+    cont done ($camlBody_with_a_store)

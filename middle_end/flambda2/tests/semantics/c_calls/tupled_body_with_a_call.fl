@@ -1,0 +1,22 @@
+let $camlTupled_body_with_a_call__first_const_0 = Block 0 () in
+(let code inline(always) size(11) tupled 
+       apply_to_first_0 (param/27 : imm tagged, param/28)
+         my_closure/29 &my_alloc_region/30 my_depth/31
+         -> k/10 * k/11
+         : imm tagged =
+   let next_depth/32 = rec_info (succ my_depth/31) in
+   let apply_to_first/33 =
+     %project_function_slot.[apply_to_first].[apply_to_first] (my_closure/29)
+   in
+   apply ccall &my_alloc_region/30
+     ($`*extern*`.c_work : val? -> val?) (param/27) -> k/10 * k/11
+ in
+ let apply_to_first/34 = closure apply_to_first_0 @apply_to_first &toplevel
+ in
+ let Pmakeblock/35 = %block.[`0`].`toplevel` (apply_to_first/34) in
+ cont k/9 (Pmakeblock/35))
+  where k/9 define_root_symbol (module_block/25) =
+    let field_0/26 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/25)
+    in
+    let $camlTupled_body_with_a_call = Block 0 (field_0/26) in
+    cont done ($camlTupled_body_with_a_call)

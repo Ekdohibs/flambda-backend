@@ -108,7 +108,7 @@ and its two exceptions).
 
 The test tool converts the compiler's term to a term of the model
 (`../../tools/flsemantics.ml`; it is trusted, and
-`rocq/TRUST-LEDGER.md` lists it). Four things it does matter to a
+`rocq/TRUST-LEDGER.md` lists it). Five things it does matter to a
 unit made from OCaml.
 
 - **Regions.** Where a block, a boxed number or a closure does not
@@ -193,6 +193,33 @@ unit made from OCaml.
   binds tupled code. A function with a pair pattern is not always
   tupled code: the code that `nested_tuple.ml` makes takes one
   parameter, the pair, which the call allocates.
+
+- **Calls of C functions.** What such a call is in the model is
+  decision D50, ruled on 18 November 2026: a run is undefined at a
+  call of a C function of which the model says nothing, and it says
+  nothing of any yet. The tool converts one as a direct call of code
+  that the term declares and does not bind (the reading called (U) in
+  `rocq/requests/P1-c-calls.md`): a run that reaches it is undefined
+  there. So a unit whose functions call C functions, and
+  whose own run reaches no such call, is checked as any unit. The C
+  functions that the compiler's term of a unit calls are among its
+  imports, so where such a unit is validated its line is that of a
+  unit that has imports: "validated with its imports" where the
+  verdict passes the test of the imports. Of a unit whose own run
+  reaches such a call an acceptance by the validator says nothing,
+  of what comes before the call either. What the tool prints is of
+  its own runs, which have 1,000,000 steps: where it finds undefined
+  the run of the term before that an acceptance is of, it prints no
+  verdict; and of each run that it shows and finds undefined at a
+  call of a C function, a line says so and names the function. A
+  call that a run would reach only after those steps is not found,
+  and the unit can then have the word "validated" ("What the
+  verdicts mean", below).
+  `../c_calls/` has units of both kinds and the controls, which are in
+  none of the tables and counts of this file. `rocq/TRUST-LEDGER.md`,
+  "Calls of C functions", says what is kept of a call, and what a
+  verdict of a function that calls one rests on: the rewrites of the
+  validation as they are written, and no theorem.
 
 ## What the verdicts mean
 
@@ -338,7 +365,9 @@ unit made from OCaml.
   `maker_of_mutual_inlined.ml` and, under the line of the copies,
   `local_rec_inlined_twice.ml`.
 - **validated with its imports**: the unit names a symbol of another
-  unit, here always a predefined exception, and the tool runs both
+  unit, here always a predefined exception (the C function of a call
+  is such a symbol too: "Calls of C functions" above), and the tool
+  runs both
   terms from the static environment of their imports
   (`FlambdaImportsSpec.imports_statics`), where such a symbol is
   bound to an imported value whose contents are unknown; the two
@@ -1414,7 +1443,7 @@ in the tree, and that term written by hand. The import was a
 predefined exception or, in a unit that uses another unit, an
 exception or another symbol of that unit. A declaration of a fresh
 exception uses the runtime call `caml_fresh_oo_id`. A term in which
-that call remains has no verdict: the tool does not convert C calls.
+that call remained had no verdict: that tool did not convert C calls.
 Those examples exercised the line with no import. That measure is
 not one of the tool of this tree, whose conversion makes the
 primitives of the heap. A unit that stores or makes a cell can have
@@ -3593,9 +3622,12 @@ directory sets the variable; one of `../regions/` does.
   not compared.
 
 What no example here validates, because the model has not got it:
-arithmetic on floats, calls of C functions (polymorphic comparison among
-them), an exception that the unit declares (it is made by a call of a C
-function), objects, laziness. And no example here has one of the cases
+arithmetic on floats, a call of a C function that the run of the unit
+reaches (the model does not run one; `../c_calls/` has units whose
+functions call C functions and whose run does not, and a comparison of
+which Simplify makes a primitive, which is not validated), an exception
+that the unit declares (it is made by a call of a C function), objects,
+laziness. And no example here has one of the cases
 of the primitives of the heap that the conversion refuses though the
 model has the primitive: a store marked `Initialization`, a block of
 floats or a mixed block that is written, an array that is not of

@@ -1,0 +1,15 @@
+exported_externals.fl:
+  in front of the two terms, the declarations of 3 C functions:
+    c_signal (a C function), declared with no code
+    c_wait (a C function), declared with no code
+    c_create (a C function), declared with no code
+  before Simplify, after the declarations of the C functions, with its 3 imports (18 steps): 
+returns [0: <fun>; <fun>; <fun>; <fun>]
+  after Simplify, after the declarations of the C functions, with its 3 imports (11 steps): 
+returns [0: <fun>; <fun>; <fun>; <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the declarations of the C functions in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised

@@ -37,9 +37,10 @@
    code ids and slots to be the same; so the symbols, code ids and slots of the
    second term are first given the numbers they had in the first, which are read
    off the names that the printer gave them. A name is read as a number only if
-   it is exactly what the printer makes of that number. And the value slots of
-   each set of closures are put, in both terms, in the order of their numbers
-   ([slots_in_order] says why).
+   it is exactly what the printer makes of that number. The code id of a C
+   function has no name in the text and is found otherwise ([c_function_back]).
+   And the value slots of each set of closures are put, in both terms, in the
+   order of their numbers ([slots_in_order] says why).
 
    The same is done of the unit that Simplify makes of the one in the file,
    whose conversion is trusted as much, and which has what the parser of fexpr
@@ -56,34 +57,33 @@
    error that it reports or with an exception, or the text printed is one that
    the normalisation below refuses; - "names not read back", with the reason:
    the term read back uses a symbol, a code id or a slot whose name is not one
-   that the printer makes, or two of them have one name or one number. This is a
-   mistake of the printer or of the conversion; - "not converted", with the
-   reason: the unit of the file has something that the model has not got, or its
-   text is one that the normalisation below refuses; "not converted back" is the
-   same of the unit read back, and is a mistake of the printer.
+   that the printer makes, or two of them have one name or one number, or a C
+   function read back is not the one that was printed. This is a mistake of the
+   printer or of the conversion; - "not converted", with the reason: the unit of
+   the file has something that the model has not got, or its text is one that
+   the normalisation below refuses; "not converted back" is the same of the unit
+   read back, and is a mistake of the printer.
 
    A unit read from a text is first normalised as the check of a unit normalises
-   it (flsemantics.ml, [with_lost_kinds]): each [Opaque_identity] whose kind as
-   read is the kind of values, and is not the kind of its argument, is given the
-   kind of its argument, a kind as read that is not the kind of values being
-   kept, and a direct call or a call of unknown arity whose arity as read is one
-   value for each argument may be given another ([with_lost_kinds] says which,
-   and from what). That is done to the unit of the file and to each unit read
-   back. So the round trip shows that the conversion and the printer agree once
-   both units are so normalised; where the text of the file left out a kind or
-   an arity that the term had, it does not show that.
+   it (flsemantics.ml, [with_lost_kinds]; the comment of [conversion], below,
+   says what that does to an [Opaque_identity] and to the arity of a call). That
+   is done to the unit of the file and to each unit read back. So the round trip
+   shows that the conversion and the printer agree once both units are so
+   normalised; where the text of the file left out a kind or an arity that the
+   term had, it does not show that.
 
    What this does not check: the kinds of the value slots, which are not in the
-   term; the order of the value slots of a set of closures, which the text
-   cannot keep; what the conversion does to the two units of a check together
-   (the numbers it gives the code ids of the unit after: flsemantics.ml,
-   [convert_both]); and what the conversion drops, when the printer puts nothing
-   in its place: a mistake by which both terms lack the same thing is not seen.
-   So it is a check that what the conversion makes of each example is stable
-   under this round trip, in which the printer is a second reading of the model.
-   It does not show that the conversion is one to one (a conversion that takes
-   two things to one, with a printer that writes one of them, passes) nor that
-   it keeps enough.
+   term; the name of a C function, which the printer does not write (the callee
+   is named by its number); the order of the value slots of a set of closures,
+   which the text cannot keep; what the conversion does to the two units of a
+   check together (the numbers it gives the code ids of the unit after:
+   flsemantics.ml, [convert_both]); and what the conversion drops, when the
+   printer puts nothing in its place: a mistake by which both terms lack the
+   same thing is not seen. So it is a check that what the conversion makes of
+   each example is stable under this round trip, in which the printer is a
+   second reading of the model. It does not show that the conversion is one to
+   one (a conversion that takes two things to one, with a printer that writes
+   one of them, passes) nor that it keeps enough.
 
    This module does not know the conversion, nor how Simplify is run:
    flsemantics.ml gives both as functions. *)
@@ -111,12 +111,16 @@ type converted =
    applied to the unit of the file and to each unit read back, and not to the
    unit that Simplify makes, which is not read from a text. [reset] forgets
    every name numbered so far. The four lists are the global names numbered
-   since the last [reset], each with its number. *)
+   since the last [reset], each with its number. [c_functions] are the C
+   functions met since the last [reset]: the code id that stands for each, the
+   name of the function, which is the linkage name of the callee of a call of
+   it, and what the compiler says of it at a call. *)
 type conversion =
   { convert : Flambda_unit.t -> (converted, string) result;
     as_read : Flambda_unit.t -> (Flambda_unit.t, string) result;
     reset : unit -> unit;
     value_slot_kind : Model.value_slot -> Kinds.flambda_kind option;
+    c_functions : unit -> (Model.code_id * string * Printer.c_function) list;
     symbols : unit -> (string * Numbers.positive) list;
     code_ids : unit -> (string * Numbers.positive) list;
     value_slots : unit -> (string * Numbers.positive) list;
@@ -340,13 +344,13 @@ let rec positive_of_int n : Numbers.positive =
    that the printer did not make and the term does not use is not a failure: the
    conversion numbers the function slots of a unit whose sets of closures it
    then writes without them, and the parser names those after the code. *)
-let back_to_numbers ~sort ~prefix (numbered : (string * Numbers.positive) list)
-    =
+let back_to_numbers ~sort ~number_of_name
+    (numbered : (string * Numbers.positive) list) =
   let table =
     List.fold_left
       (fun table (name, m) ->
         let m = Printer.int_of_positive m in
-        let n = Printer.number_of_name ~prefix name in
+        let n = number_of_name name in
         List.iter
           (fun (name', m', n') ->
             if m' = m
@@ -355,7 +359,12 @@ let back_to_numbers ~sort ~prefix (numbered : (string * Numbers.positive) list)
                 name' name;
             match n, n' with
             | Some n, Some n' when n = n' ->
-              names_not_read_back "two %ss have the name %s" sort name
+              if String.equal name name'
+              then names_not_read_back "two %ss have the name %s" sort name
+              else
+                names_not_read_back
+                  "the %ss %s and %s are the printer's names of one number" sort
+                  name' name
             | (Some _ | None), (Some _ | None) -> ())
           table;
         (name, m, n) :: table)
@@ -370,18 +379,95 @@ let back_to_numbers ~sort ~prefix (numbered : (string * Numbers.positive) list)
         name
     | None -> names_not_read_back "a %s that has no name" sort
 
-let renaming_of (conversion : conversion) : renaming =
+(* The code id of a C function of the term read back goes to the code id of the
+   C function of the term printed from which the printer made it. The printer
+   names the callee of a call of a C function after the number of the callee and
+   not after the function ([Printer.external_symbol]), so the C function read
+   back is named after that number: it goes to the C function of the first term
+   whose callee had that number and of which the compiler says the same. It is a
+   failure of the round trip that there is none: the name of the function, or
+   something that the compiler says of it, is then not what the term printed
+   had. [first_symbols] and [first_c_functions] are the symbols and the C
+   functions of the first conversion. *)
+let c_function_back (conversion : conversion) ~first_symbols ~first_c_functions
+    =
+  let second = conversion.c_functions () in
+  fun (id : Model.code_id) : Model.code_id option ->
+    match List.find_opt (fun (id', _, _) -> id' = id) second with
+    | None -> None
+    | Some (_, name, said) -> (
+      match
+        Printer.number_of_name ~prefix:Printer.external_symbol_prefix name
+      with
+      | None ->
+        names_not_read_back
+          "the callee %s of a call of a C function is not a name that the \
+           printer makes"
+          name
+      | Some n -> (
+        let callee_had_the_number name' =
+          List.exists
+            (fun (symbol, number) ->
+              String.equal symbol name' && Printer.int_of_positive number = n)
+            first_symbols
+        in
+        match
+          List.find_opt
+            (fun (_, name', said') ->
+              said' = said && callee_had_the_number name')
+            first_c_functions
+        with
+        | Some (id', _, _) -> Some id'
+        | None ->
+          names_not_read_back
+            "the call of a C function at the callee %s is not, read back, a \
+             call of the C function that was printed"
+            name))
+
+let renaming_of (conversion : conversion) ~first_symbols ~first_c_functions :
+    renaming =
+  let c_function_back =
+    c_function_back conversion ~first_symbols ~first_c_functions
+  in
+  let code_id_back =
+    back_to_numbers ~sort:"code id"
+      ~number_of_name:(Printer.number_of_name ~prefix:Printer.code_id_prefix)
+      (conversion.code_ids ())
+  in
+  (* A symbol of the term read back is one that the printer made from a number
+     with the prefix of symbols, or, where it is the callee of a call of a C
+     function of that term, with the prefix of such callees. A symbol that the
+     term printed uses both as such a callee and elsewhere is printed under two
+     names, and the round trip fails on it: the two are the printer's names of
+     one number. The compiler makes no such term. *)
+  let callees =
+    List.map (fun (_, name, _) -> name) (conversion.c_functions ())
+  in
+  let number_of_symbol_name name =
+    match Printer.number_of_name ~prefix:Printer.symbol_prefix name with
+    | Some n -> Some n
+    | None ->
+      if List.exists (String.equal name) callees
+      then Printer.number_of_name ~prefix:Printer.external_symbol_prefix name
+      else None
+  in
   { symbol =
-      back_to_numbers ~sort:"symbol" ~prefix:Printer.symbol_prefix
+      back_to_numbers ~sort:"symbol" ~number_of_name:number_of_symbol_name
         (conversion.symbols ());
     code_id =
-      back_to_numbers ~sort:"code id" ~prefix:Printer.code_id_prefix
-        (conversion.code_ids ());
+      (fun id ->
+        match c_function_back id with
+        | Some id' -> id'
+        | None -> code_id_back id);
     value_slot =
-      back_to_numbers ~sort:"value slot" ~prefix:Printer.value_slot_prefix
+      back_to_numbers ~sort:"value slot"
+        ~number_of_name:
+          (Printer.number_of_name ~prefix:Printer.value_slot_prefix)
         (conversion.value_slots ());
     function_slot =
-      back_to_numbers ~sort:"function slot" ~prefix:Printer.function_slot_prefix
+      back_to_numbers ~sort:"function slot"
+        ~number_of_name:
+          (Printer.number_of_name ~prefix:Printer.function_slot_prefix)
         (conversion.function_slots ())
   }
 
@@ -420,9 +506,10 @@ let read_back (conversion : conversion) ~comp_unit text :
 
 (* ---- Where two terms differ -------------------------------------------- *)
 
-let printed ~value_slot_kind (unit : converted) =
+let printed ~value_slot_kind ~c_function (unit : converted) =
   match
-    Printer.unit ~value_slot_kind ~return_continuation:unit.return_continuation
+    Printer.unit ~value_slot_kind ~c_function
+      ~return_continuation:unit.return_continuation
       ~exn_continuation:unit.exn_continuation unit.body
   with
   | fexpr -> Ok fexpr
@@ -431,10 +518,12 @@ let printed ~value_slot_kind (unit : converted) =
 (* The two terms printed with their variables and continuations named in the
    order in which they are met, so that terms that differ by bound names only
    are printed the same; and the first line that differs. *)
-let first_difference ~value_slot_kind (first : converted) (second : converted) =
+let first_difference ~value_slot_kind ~c_function (first : converted)
+    (second : converted) =
   let lines unit =
     match
-      Printer.naming_by_order_met (fun () -> printed ~value_slot_kind unit)
+      Printer.naming_by_order_met (fun () ->
+          printed ~value_slot_kind ~c_function unit)
     with
     | Ok fexpr -> String.split_on_char '\n' (Printer.to_string fexpr)
     | Error reason -> ["(not printable: " ^ reason ^ ")"]
@@ -475,7 +564,18 @@ let round_trip (conversion : conversion) ~comp_unit (unit : Flambda_unit.t) :
         (conversion.value_slots ())
     in
     let value_slot_kind slot = Option.join (List.assoc_opt slot slot_kinds) in
-    match printed ~value_slot_kind first with
+    (* The C functions and the symbols of the first conversion, read now for the
+       same reason. A code id of the second term that stands for a C function is
+       renamed to one of these ([c_function_back]), so this is the table for
+       both terms. *)
+    let first_c_functions = conversion.c_functions () in
+    let first_symbols = conversion.symbols () in
+    let c_function id =
+      Option.map
+        (fun (_, _, said) -> said)
+        (List.find_opt (fun (id', _, _) -> id' = id) first_c_functions)
+    in
+    match printed ~value_slot_kind ~c_function first with
     | Error reason -> Not_printable reason
     | Ok fexpr -> (
       match read_back conversion ~comp_unit (Printer.to_string fexpr) with
@@ -485,7 +585,11 @@ let round_trip (conversion : conversion) ~comp_unit (unit : Flambda_unit.t) :
         match conversion.convert unit_read with
         | Error reason -> Not_converted_back reason
         | Ok second -> (
-          match rename_expr (renaming_of conversion) second.body with
+          match
+            rename_expr
+              (renaming_of conversion ~first_symbols ~first_c_functions)
+              second.body
+          with
           | exception Names_not_read_back reason -> Names_not_read_back reason
           | body ->
             let first = { first with body = slots_in_order first.body } in
@@ -498,7 +602,9 @@ let round_trip (conversion : conversion) ~comp_unit (unit : Flambda_unit.t) :
               Compare.expr_eqb [] continuations_of_the_units first.body
                 second.body
             then The_same
-            else Differs (first_difference ~value_slot_kind first second)))))
+            else
+              Differs
+                (first_difference ~value_slot_kind ~c_function first second)))))
 
 (* A reason, on one line. *)
 let one_line reason =
@@ -570,7 +676,16 @@ let check_file (conversion : conversion)
         match conversion.convert unit with
         | Error _ -> ()
         | Ok first -> (
-          match printed ~value_slot_kind:conversion.value_slot_kind first with
+          let c_functions = conversion.c_functions () in
+          let c_function id =
+            Option.map
+              (fun (_, _, said) -> said)
+              (List.find_opt (fun (id', _, _) -> id' = id) c_functions)
+          in
+          match
+            printed ~value_slot_kind:conversion.value_slot_kind ~c_function
+              first
+          with
           | Ok fexpr -> print_string (Printer.to_string fexpr)
           | Error _ -> ()))
     in

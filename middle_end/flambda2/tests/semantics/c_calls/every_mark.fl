@@ -1,0 +1,54 @@
+(* A text for the round trip alone (see dune, "THE ROUND TRIP"). It is
+   guarded.fl with a chain of calls in the arm that the run does not take.
+   The first call says nothing of its C function. Each of the next six says
+   one of the things that the compiler says of a C function at a call:
+   noalloc; builtin; no_effects; only_generative_effects, of what is
+   immutable, which the text writes with no word after it; the same of what
+   is mutable; no_coeffects. The last is of the function of the first call
+   again, and says four of them together: the conversion takes it for another
+   C function than that of the first call, and the printer of the model gives
+   the two one callee. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall &toplevel
+        ($`*extern*`.c_plain : val? -> val?) (a) -> k1 * error
+        where k1 (r1) =
+          (apply ccall noalloc &toplevel
+             ($`*extern*`.c_noalloc : val? -> val?) (r1) -> k2 * error
+             where k2 (r2) =
+               (apply ccall builtin &toplevel
+                  ($`*extern*`.c_builtin : val? -> val?) (r2) -> k3 * error
+                  where k3 (r3) =
+                    (apply ccall no_effects &toplevel
+                       ($`*extern*`.c_no_effects : val? -> val?) (r3)
+                       -> k4 * error
+                       where k4 (r4) =
+                         (apply ccall only_generative_effects &toplevel
+                            ($`*extern*`.c_generative : val? -> val?) (r4)
+                            -> k5 * error
+                            where k5 (r5) =
+                              (apply ccall only_generative_effects mutable
+                                 &toplevel
+                                 ($`*extern*`.c_generative_mutable
+                                  : val? -> val?) (r5) -> k6 * error
+                                 where k6 (r6) =
+                                   (apply ccall no_coeffects &toplevel
+                                      ($`*extern*`.c_no_coeffects
+                                       : val? -> val?) (r6) -> k7 * error
+                                      where k7 (r7) =
+                                        (apply ccall noalloc builtin
+                                           no_effects no_coeffects &toplevel
+                                           ($`*extern*`.c_plain
+                                            : val? -> val?) (r7)
+                                           -> k8 * error
+                                           where k8 (r8) =
+                                             cont leave (r8)))))))))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlEvery_mark = Block 0 (v) in
+    cont done ($camlEvery_mark)

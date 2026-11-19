@@ -1,0 +1,32 @@
+call_at_toplevel.fl: round trip the same
+call_at_toplevel.fl, after Simplify: round trip the same
+call_in_function.fl: round trip the same
+call_in_function.fl, after Simplify: round trip the same
+call_under_handler.fl: round trip the same
+call_under_handler.fl, after Simplify: round trip the same
+call_with_unboxed_result.fl: round trip the same
+call_with_unboxed_result.fl, after Simplify: round trip the same
+comparison_made_a_primitive.fl: round trip the same
+comparison_made_a_primitive.fl, after Simplify: round trip the same
+exported_externals.fl: round trip the same
+exported_externals.fl, after Simplify: round trip the same
+body_with_a_call.fl: round trip the same
+body_with_a_call.fl, after Simplify: round trip the same
+body_with_a_store.fl: round trip the same
+body_with_a_store.fl, after Simplify: round trip the same
+tupled_body_with_a_call.fl: round trip the same
+tupled_body_with_a_call.fl, after Simplify: round trip the same
+guarded.fl: round trip the same
+guarded.fl, after Simplify: round trip the same
+guarded_generative.fl: round trip the same
+guarded_generative.fl, after Simplify: round trip the same
+handled.fl: round trip the same
+handled.fl, after Simplify: round trip the same
+reached.fl: round trip the same
+reached.fl, after Simplify: round trip the same
+two_calls.fl: round trip the same
+two_calls.fl, after Simplify: round trip the same
+callee_bound_in_the_text.fl: not converted: the model has not got a call of a C function whose callee is not a symbol of the compilation unit of external symbols
+callee_bound_in_the_text.fl, after Simplify: not converted: the model has not got a call of a C function whose callee is not a symbol of the compilation unit of external symbols
+every_mark.fl: round trip the same
+every_mark.fl, after Simplify: round trip the same

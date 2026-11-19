@@ -1,0 +1,24 @@
+(* The term after of the control handled_other_handler (see dune), written by
+   hand: Simplify did not make it. It is handled.fl but for one thing: the
+   exception handler of the call adds 200. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> attempt)
+   where attempt =
+     (cont body push(handler)
+        where body =
+          (apply ccall &toplevel
+             ($`*extern*`.c_one : val? -> val?) (a) -> returned * handler
+             where returned (r) =
+               cont leave pop(handler) (r))
+        where handler exn (e : val) =
+          let payload = %block_load.[`0`] (e) in
+          let r = %int_barith.`add` (payload, 200) in
+          cont leave (r))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlHandled = Block 0 (v) in
+    cont done ($camlHandled)

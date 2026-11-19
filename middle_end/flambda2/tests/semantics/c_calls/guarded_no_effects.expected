@@ -1,0 +1,15 @@
+guarded.fl: the term after is read from guarded_no_effects_after.fl; Simplify is not run
+guarded.fl:
+  in front of the two terms, the declarations of 2 C functions:
+    c_one (a C function), declared with no code
+    c_one (a C function: no_effects), declared with no code
+  before Simplify, after the declarations of the C functions, with its import (10 steps): 
+returns [0: 7]
+  after Simplify, after the declarations of the C functions, with its import (10 steps): 
+returns [0: 7]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the declarations of the C functions in front of it
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  not validated

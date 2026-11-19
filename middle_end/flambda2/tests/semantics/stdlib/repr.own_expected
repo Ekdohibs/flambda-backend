@@ -1,7 +1,8 @@
 stdlib__Repr.fl:
+  in front of the two terms, the declarations of 2 C functions:
+    caml_lessequal (a C function), declared with no code
+    caml_greaterequal (a C function), declared with no code
   given the .cmx of Stdlib, a prefix of 174 static bindings:
-    camlStdlib__min_2_95_code deleted
-    camlStdlib__max_3_96_code deleted
     camlStdlib__invalid_arg_1_94_code deleted
     camlStdlib__failwith_0_93_code deleted
     camlStdlib__abs_4_97_code deleted
@@ -85,6 +86,26 @@ stdlib__Repr.fl:
     camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_71_71_code deleted
     camlStdlib__fn[/workspace_root/stdlib/build/stdlib.ml:0]_70_70_code deleted
     camlStdlib__at_exit_safe_63_156_code deleted
+    camlStdlib__min_2_95_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 (v4) =
+        let v5 = Untag_immediate (v4) in
+        switch v5
+          | 0 -> cont k1 (v2)
+          | 1 -> cont k1 (v1)
+      in
+      apply direct(caml_lessequal (a C function)) caml_lessequal (v1, v2)
+        -> k3 * k2
+    camlStdlib__max_3_96_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 (v4) =
+        let v5 = Untag_immediate (v4) in
+        switch v5
+          | 0 -> cont k1 (v2)
+          | 1 -> cont k1 (v1)
+      in
+      apply direct(caml_greaterequal (a C function)) caml_greaterequal (v1,
+        v2) -> k3 * k2
     camlStdlib__min_2_43 = closure Stdlib.min_2 of
       {Stdlib.min_2 = camlStdlib__min_2_95_code}
       at {Stdlib.min_2 = camlStdlib__min_2_43} {}
@@ -153,9 +174,9 @@ stdlib__Repr.fl:
       camlStdlib__unsafe_really_input_35_86, camlStdlib__do_at_exit_67_117,
       $106)
     and 83 closures and 3 blocks of camlStdlib that nothing asks for
-  before Simplify, after the prefix, with its 24 imports (10 steps): 
+  before Simplify, after the prefix, with its 26 imports (10 steps): 
 returns [0: <fun>; <fun>]
-  after Simplify, after the prefix, with its 24 imports (2 steps): returns
+  after Simplify, after the prefix, with its 26 imports (2 steps): returns
                                                                     [0:
                                                                     <fun>;
                                                                     <fun>]

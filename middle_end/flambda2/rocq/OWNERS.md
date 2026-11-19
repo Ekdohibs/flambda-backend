@@ -696,6 +696,10 @@ tool), delegated by the orchestrator, and:
   `int_shift*`, `string_length*`, `int_not`, `int_xor_minus_one`,
   `string_load*`, `block_load_mut*`, `int_bswap`,
   `reinterpret_int63_int64`), with their `.expected` files
+- `middle_end/flambda2/tests/semantics/c_calls/` (the units and the
+  controls of decision D50 as it is ruled: a call of a C function of
+  which the model says nothing is a call that is undefined; it runs V2's
+  `ocaml/from_ocaml.sh` and `ocaml/pairs/from_ocaml.sh`)
 
 ## V4: loops
 

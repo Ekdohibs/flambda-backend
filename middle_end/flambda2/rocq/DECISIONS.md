@@ -307,24 +307,22 @@ a `CR` at the place in the `Spec` file.
   run that has a meaning. Open, and the human's: whether the rule
   is to be his, or one under which the move of X5-3 is right, that
   bytes of which a view has been read are never written again.
-- **D50.** What a call of a C function shows of its arguments where
-  the model has no answer for it. The table of
+- **D50.** What a call of a C function is where the model says
+  nothing of the function. A run is undefined at the call. The test
+  tool takes such a call as a direct call of code that is not bound,
+  for which the machine has no step (`requests/P1-c-calls.md`, "The
+  reading (U)"; `rocq/TRUST-LEDGER.md`, "Calls of C functions", for
+  what a verdict then says and does not say). The model says nothing
+  of any C function yet, so that is every call: the table of
   `FlambdaExtcallSpec.v` answers fourteen comparisons, on two strings
-  or on two tagged immediates; a program that compares two lists
-  calls one of them outside that. Such a call is to be neither
-  undefined nor a raise, so the run would end there, and a statement
-  that relates the term before to the term after has to say what of
-  the two ends is the same: the arguments as values, what is
-  reachable from them, what they read as, or what every term that
-  could follow sees of them. Meanwhile no call of a C function has a
-  meaning in the model: the conversion refuses every one and nothing
-  uses the table. `requests/P1-c-calls.md`, "The open choice", has the
-  ways to answer and what each costs. The human ruled on 18 November
-  2026, otherwise than this entry says above of what such a call is to
-  be, that a call of a C function of which the model says nothing makes
-  the run undefined at the call; that is not yet in the test tool, whose
-  conversion still refuses every such call, and the C functions that are
-  given a meaning by name are D69.
+  or on two tagged immediates, and nothing uses it. The question had
+  been put otherwise: what such a call shows of its arguments if it is
+  neither undefined nor a raise (`requests/P1-c-calls.md`, "The open
+  choice"); that was not taken. Ruled, on 18 November 2026, with the
+  word that C functions are to be given a meaning in the model by
+  their names in the runtime, a fair number of those that the
+  standard library calls and not all. That is decision D69, which is
+  being designed: nothing of it is in the model.
 - **D51.** Not used: no decision has this label.
 - **D52.** A field read as immutable from a block that can be
   written: a `Block_load` marked `Immutable` or `Immutable_unique` of

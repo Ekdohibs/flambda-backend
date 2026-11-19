@@ -1,0 +1,20 @@
+(* The term before of the controls guarded_generative_* (see dune). It is
+   guarded.fl but for one thing: the call says that the C function has
+   generative effects only, with no word after it, which is what the text
+   writes where what the function makes is immutable. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall only_generative_effects &toplevel
+        ($`*extern*`.c_one : val? * val? -> val?) (a, 1) -> returned * error
+        where returned (r) =
+          let s = %int_barith.`add` (r, 1) in
+          cont leave (s))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlGuarded_generative = Block 0 (v) in
+    cont done ($camlGuarded_generative)

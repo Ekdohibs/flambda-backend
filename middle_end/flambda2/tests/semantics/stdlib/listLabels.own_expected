@@ -1,4 +1,6 @@
 stdlib__ListLabels.fl:
+  in front of the two terms, the declaration of 1 C function:
+    caml_compare (a C function), declared with no code
   given the .cmx of Stdlib, Stdlib__List, a prefix of 167 static bindings:
     camlStdlib__List__of_seq_106_210_code deleted
     camlStdlib__List__merge_86_192_code deleted
@@ -8,11 +10,7 @@ stdlib__ListLabels.fl:
     camlStdlib__List__split_84_190_code deleted
     camlStdlib__List__remove_assq_48_156_code deleted
     camlStdlib__List__remove_assoc_47_155_code deleted
-    camlStdlib__List__mem_assoc_45_153_code deleted
-    camlStdlib__List__assoc_opt_42_150_code deleted
-    camlStdlib__List__assoc_41_149_code deleted
     camlStdlib__List__find_all_58_164_code deleted
-    camlStdlib__List__mem_39_147_code deleted
     camlStdlib__List__fold_right2_34_142_code deleted
     camlStdlib__List__map2_28_136_code deleted
     camlStdlib__List__fold_right_27_135_code deleted
@@ -50,6 +48,33 @@ stdlib__ListLabels.fl:
           switch v9
             | 0 -> cont k5 ()
             | 1 -> cont k1 (1)
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (0)
+      in
+      cont k3 (v2)
+    camlStdlib__List__mem_assoc_45_153_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont rec
+        k3 (v4) =
+        let v5 = v1 in
+        let v6 = Is_int (v4) in
+        let_cont k4 () =
+          let v7 = Block_load 0 (v4) in
+          let v8 = Block_load 0 (v7) in
+          let_cont k5 (v9) =
+            let v10 = Phys_equal eq (v9, 0) in
+            let_cont k6 () =
+              let v11 = Block_load 1 (v4) in
+              cont k3 (v11)
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (1)
+          in
+          apply direct(caml_compare (a C function)) caml_compare (v8, v5)
+            -> k5 * k2
         in
         switch v6
           | 0 -> cont k4 ()
@@ -105,6 +130,69 @@ stdlib__ListLabels.fl:
           switch v9
             | 0 -> cont k5 ()
             | 1 -> cont k6 ()
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2) (caml_exn_Not_found)
+      in
+      cont k3 (v2)
+    camlStdlib__List__assoc_opt_42_150_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont rec
+        k3 (v4) =
+        let v5 = v1 in
+        let v6 = Is_int (v4) in
+        let_cont k4 () =
+          let v7 = Block_load 0 (v4) in
+          let v8 = Block_load 0 (v7) in
+          let_cont k5 (v9) =
+            let v10 = Phys_equal eq (v9, 0) in
+            let_cont k6 () =
+              let v11 = Block_load 1 (v4) in
+              cont k3 (v11)
+            in
+            let_cont k7 () =
+              let v12 = Block_load 1 (v7) in
+              let v13 = Make_block 0 (v12) in
+              cont k1 (v13)
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k7 ()
+          in
+          apply direct(caml_compare (a C function)) caml_compare (v8, v5)
+            -> k5 * k2
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (0)
+      in
+      cont k3 (v2)
+    camlStdlib__List__assoc_41_149_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont rec
+        k3 (v4) =
+        let v5 = v1 in
+        let v6 = Is_int (v4) in
+        let_cont k4 () =
+          let v7 = Block_load 0 (v4) in
+          let v8 = Block_load 0 (v7) in
+          let_cont k5 (v9) =
+            let v10 = Phys_equal eq (v9, 0) in
+            let_cont k6 () =
+              let v11 = Block_load 1 (v4) in
+              cont k3 (v11)
+            in
+            let_cont k7 () =
+              let v12 = Block_load 1 (v7) in
+              cont k1 (v12)
+            in
+            switch v10
+              | 0 -> cont k6 ()
+              | 1 -> cont k7 ()
+          in
+          apply direct(caml_compare (a C function)) caml_compare (v8, v5)
+            -> k5 * k2
         in
         switch v6
           | 0 -> cont k4 ()
@@ -390,6 +478,32 @@ stdlib__ListLabels.fl:
           switch v8
             | 0 -> cont k5 ()
             | 1 -> cont k1 (1)
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k1 (0)
+      in
+      cont k3 (v2)
+    camlStdlib__List__mem_39_147_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont rec
+        k3 (v4) =
+        let v5 = v1 in
+        let v6 = Is_int (v4) in
+        let_cont k4 () =
+          let v7 = Block_load 0 (v4) in
+          let_cont k5 (v8) =
+            let v9 = Phys_equal eq (v8, 0) in
+            let_cont k6 () =
+              let v10 = Block_load 1 (v4) in
+              cont k3 (v10)
+            in
+            switch v9
+              | 0 -> cont k6 ()
+              | 1 -> cont k1 (1)
+          in
+          apply direct(caml_compare (a C function)) caml_compare (v7, v5)
+            -> k5 * k2
         in
         switch v6
           | 0 -> cont k4 ()
@@ -1617,7 +1731,7 @@ stdlib__ListLabels.fl:
       camlStdlib__List__immstring_1)
     camlStdlib__List__Pmakeblock2543_19 = Block 0 (caml_exn_Failure,
       camlStdlib__List__immstring_0)
-  before Simplify, after the prefix, with its 13 imports (148 steps): 
+  before Simplify, after the prefix, with its 14 imports (148 steps): 
 returns
   [0: <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
@@ -1626,7 +1740,7 @@ returns
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
    <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
-  after Simplify, after the prefix, with its 13 imports (2 steps): returns
+  after Simplify, after the prefix, with its 14 imports (2 steps): returns
                                                                     [0:
                                                                     <fun>;
                                                                     <fun>;

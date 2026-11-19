@@ -1,0 +1,41 @@
+let $camlCall_under_handler__first_const_0 = Block 0 () in
+(let code size(51)
+       protect_0 (m/47 : val, f/48 : val)
+         my_closure/49 &my_alloc_region/50 my_depth/51
+         -> k/27 * k/28
+         : val =
+   let next_depth/52 = rec_info (succ my_depth/51) in
+   apply ccall &my_alloc_region/50
+     ($`*extern*`.c_lock : val? -> val?) (m/47) -> k/29 * k/28
+     where k/29 (Pccall/53) =
+       ((let try_region/56 = %begin_try_region () in
+         let try_ghost_region/57 = %begin_try_ghost_region () in
+         cont k/34 push(k/32)
+           where k/34 =
+             (apply unknown_arity &my_alloc_region/50
+                (f/48 : imm tagged -> val) (0) -> k/35 * k/32
+                where k/35 (apply_result/62 : val) =
+                  (cont k/36 pop(k/32)
+                     where k/36 =
+                       cont k/30 (apply_result/62)))
+           where k/32 exn (e/58 : val) =
+             let unit/59 = %end_try_region (try_region/56) in
+             let unit/60 = %end_try_ghost_region (try_ghost_region/57) in
+             (apply ccall &my_alloc_region/50
+                ($`*extern*`.c_unlock : val? -> val?) (m/47) -> k/33 * k/28
+                where k/33 (Pccall/61) =
+                  cont k/28 pop(reraise k/28) (e/58)))
+          where k/30 (x/54 : val) =
+            (apply ccall &my_alloc_region/50
+               ($`*extern*`.c_unlock : val? -> val?) (m/47) -> k/31 * k/28
+               where k/31 (Pccall/55) =
+                 cont k/27 (x/54)))
+ in
+ let protect/63 = closure protect_0 @protect &toplevel in
+ let Pmakeblock/64 = %block.[`0`].`toplevel` (protect/63) in
+ cont k/26 (Pmakeblock/64))
+  where k/26 define_root_symbol (module_block/45) =
+    let field_0/46 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/45)
+    in
+    let $camlCall_under_handler = Block 0 (field_0/46) in
+    cont done ($camlCall_under_handler)

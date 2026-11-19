@@ -1,0 +1,19 @@
+(* The term after of the control guarded_other_argument (see dune), written
+   by hand: Simplify did not make it. It is guarded.fl but for one thing: the
+   second argument of the call is 2. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall &toplevel
+        ($`*extern*`.c_one : val? * val? -> val?) (a, 2) -> returned * error
+        where returned (r) =
+          let s = %int_barith.`add` (r, 1) in
+          cont leave (s))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlGuarded = Block 0 (v) in
+    cont done ($camlGuarded)

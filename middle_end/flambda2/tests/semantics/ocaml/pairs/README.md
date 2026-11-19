@@ -131,7 +131,10 @@ rule):
   closure at its function slot, alone in its set and with no value
   slot;
 - the code that the two terms ask for, and the code that such code
-  asks for in turn, where the file has its body.
+  asks for in turn, where the file has its body. A body that calls a
+  C function is bound as any other, and the C functions that it calls
+  are declared in front of the two terms with it; no pair of this
+  directory has such a body, and `../../c_calls/` has pairs that do.
 
 The prefix declares deleted, and binds to nothing, the code that it
 has from the file of the code's own unit and does not bind: code
@@ -456,7 +459,10 @@ what it says of a unit of the directory above, and each is validated.
 `cycle.ml` is compiled and the tool is not run on it. Its two blocks
 name each other, and the compiler makes them by four calls of C
 functions of the runtime (`caml_alloc_dummy`, `caml_update_dummy`).
-The model has no call of a C function. (The tool could not read the term
+The model says nothing of a C function, and a run that reaches a call
+of one is undefined there (`../README.md`, "Calls of C functions"):
+the term of this unit comes to such a call as soon as it runs. (The
+tool could not read the term
 at all while `-drawfexpr` printed such a call as `apply ccall (...)`
 with no region, where the parser asks for one after `ccall`
 (`middle_end/flambda2/parser/flambda_parser.mly`, rule `call_kind`); the

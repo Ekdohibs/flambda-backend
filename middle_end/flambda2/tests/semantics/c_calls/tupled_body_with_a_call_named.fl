@@ -1,0 +1,11 @@
+let $camlTupled_body_with_a_call_named__first_const_0 = Block 0 () in
+(let apply_to_first/12 =
+   %block_load.[`0`] ($Tupled_body_with_a_call.camlTupled_body_with_a_call)
+ in
+ let Pmakeblock/13 = %block.[`0`].`toplevel` (apply_to_first/12) in
+ cont k/5 (Pmakeblock/13))
+  where k/5 define_root_symbol (module_block/10) =
+    let field_0/11 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/10)
+    in
+    let $camlTupled_body_with_a_call_named = Block 0 (field_0/11) in
+    cont done ($camlTupled_body_with_a_call_named)

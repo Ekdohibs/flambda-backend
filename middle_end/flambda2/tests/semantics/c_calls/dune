@@ -1,0 +1,826 @@
+;; Calls of C functions: decision D50 as it is ruled, which the tool has
+;; (see ../../tools/flsemantics.ml, "Calls of C functions"). A run is
+;; undefined at a call of a C function of which the model says nothing, and
+;; it says nothing of any yet: the tool makes of such a call a direct call
+;; of code that the term declares and does not bind (the reading called (U)
+;; in the request). The units and the pairs here are in none of the tables
+;; and counts of ../ocaml/README.md. `dune promote` updates an X.expected.
+;; The rules are written out below.
+;;
+;; UNITS FROM OCAML, each of the shape of a file of the standard library
+;; that this reading lets the tool check. X.fl is the term that the
+;; compiler gives Simplify of X.ml, as ../ocaml/from_ocaml.sh makes it, and
+;; a rule checks that it still makes it; X.expected is what the tool prints
+;; of X.fl.
+;;
+;; exported_externals (Condition, Dynamic), call_in_function (Int, Bool),
+;; call_under_handler (Mutex), call_with_unboxed_result (Int32: a result
+;; that is not a value): the run of each unit returns, and no call of a C
+;; function is reached. The line of each is "validated with its imports".
+;; In a term that the compiler makes, the callee of a call of a C function
+;; is a symbol of the unit of external symbols, which is an import: so each
+;; of these units has imports, and the words after "validated" are what the
+;; tool's test of the imports gives for any unit that has some. These four
+;; pass it. What the verdict says of the functions that call C functions is
+;; that the two terms agree as the validation compares them; that rests on
+;; the rewrites of the validation as they are written, and on no theorem
+;; (the comment in the tool). exported_externals has an interface that says
+;; val of its C functions, as those two files of the library have: the
+;; compiler then makes a function for each, whose body is the call.
+;;
+;; call_at_toplevel: A CONTROL. The unit calls a C function as it is
+;; initialised. Both runs are undefined at the call; a line says so of each
+;; and names the C function. There is no verdict: the line is "nothing to
+;; validate, as the term before is undefined", the validator's acceptance of
+;; the pair is on the next line, and under that is "the term before is
+;; undefined in the model, so the validation says nothing of this unit":
+;; nothing of what comes after the call, and nothing of what comes before it.
+;;
+;; comparison_made_a_primitive: A CONTROL of what is left out. Simplify
+;; makes a primitive of a call of caml_compare whose arguments it knows to
+;; be integers; nothing relates the call to the primitive, and the unit is
+;; NOT validated.
+;;
+;; PAIRS OF TERMS, given to the tool with the option -after (the term
+;; after is read from a text and Simplify is not run). Every term after is
+;; written by hand: it is the term before with one thing changed, and the
+;; comment at its head says which. The terms name no code id and no slot,
+;; which are what the reader of a term after numbers apart from the term
+;; before (compare ../guard/, after_same_text, where a unit with code is not
+;; validated against itself). A symbol is the same by its name. The code ids
+;; of the C functions are made by the conversion from one table for both
+;; terms, whose key is the name of the function and the four marks of the
+;; call. So the validator ACCEPTS the pair X_same, which gives one text
+;; twice. Four such pairs are validated (guarded_same,
+;; guarded_generative_same, handled_same, two_calls_same); reached_same is
+;; accepted and has no verdict, as its run before is found undefined (below).
+;; Where a pair below with the same term before is not accepted, the one
+;; change is why.
+;;
+;; In guarded.fl, handled.fl and two_calls.fl the call is in the arm of a
+;; test that the run does not take, and the test is of an opaque value: the
+;; run returns, and the call is compared and not run.
+;;
+;; guarded_other_function, guarded_other_argument: another C function; another
+;; argument. NOT validated.
+;;
+;; guarded_noalloc, guarded_builtin, guarded_no_effects, guarded_no_coeffects:
+;; the term after says of the C function one of the four things that the
+;; compiler says of it at a call, and the term before does not. NOT
+;; validated: the four are part of what the conversion keeps of the call.
+;;
+;; guarded_generative_same, guarded_generative_mutable: the one mark that
+;; has a word after it. guarded_generative.fl says that the C function has
+;; generative effects only, and its term after that what it makes is
+;; mutable. NOT validated, and the two C functions are printed with their
+;; words; the text given twice is.
+;;
+;; guarded_after_the_return: the terms differ only in what follows the return
+;; of the call. handled_other_handler: only in the exception handler of the
+;; call. two_calls_other_later_function, two_calls_other_later_argument: only
+;; in a second call of a C function, after the first has returned. NOT
+;; validated, none of them. These four are the controls of a hazard: the
+;; model has no run past a call of a C function, so it says nothing of what
+;; follows one, and a rewrite of the validation that dropped or changed what
+;; follows such a call would be sound in the model. As the rewrites are
+;; written, none does. These pairs show a change of the tool that makes one
+;; of these four comparisons accepted. They do not show every such rewrite:
+;; one that touches another shape of term, a function body, another arity or
+;; another handler leaves them as they are. The test of the hazard inside a
+;; function body is the compiler's own pair on a source, with a Simplify
+;; built with a fault that changes what follows the return of a C call; that
+;; is outside the tree.
+;;
+;; reached_same, reached_after_the_return: the run reaches the call
+;; (reached.fl has it at toplevel) and is undefined there, and both have the
+;; line "nothing to validate, as the term before is undefined". One text
+;; given twice has under it the line of the validator's acceptance, which is
+;; no verdict, and under that the line that the validation says nothing of
+;; this unit. The pair that differs after the return has neither: the
+;; validator does not accept it.
+;;
+;; A FIRST UNIT AND ITS SECOND UNITS, compiled as ../ocaml/pairs/ compiles
+;; a pair (its from_ocaml.sh): the second unit against the .cmi and the .cmx
+;; of the first, and the tool run on the second with that .cmx at hand. They
+;; are the controls of what the reading changes IN FRONT of a unit: the
+;; body of a function of another unit that calls a C function, where the
+;; .cmx keeps it, is now bound there, where its code was declared deleted.
+;; The tool is not run on a first unit.
+;;
+;; body_with_a_call, a function that calls a C function in one arm.
+;; body_with_a_call_reached calls it in that arm: the run enters the body
+;; and is undefined at the call of the C function, which is named, in the
+;; term before and in the term after. body_with_a_call_not_reached calls it
+;; in the other arm: the run enters the body and returns, and the unit is
+;; validated with its imports. With the code declared deleted, its run is
+;; undefined at the call of the body, and there is nothing to validate.
+;;
+;; body_with_a_store, a function that calls a C function and stores what it
+;; returns in a cell. body_with_a_store_not_called names that function,
+;; calls nothing, and defines a function of its own. It is NOT validated:
+;; the liftings to symbols lift nothing in a term that has a primitive of
+;; the heap in the code bound in front of it, and the tool prints that line.
+;; With the code declared deleted the unit is validated with its imports
+;; (the tool as it was before this reading, run on this text on 19 November
+;; 2026; no rule here runs that tool). THIS IS A UNIT THAT CALLS NO C
+;; FUNCTION AND LOSES ITS VERDICT BY THE READING.
+;;
+;; tupled_body_with_a_call, a function of a pair that calls a C function:
+;; tupled code, which the conversion does not bind from another unit. Its
+;; body is converted, and then the code is declared deleted.
+;; tupled_body_with_a_call_named names the function and calls nothing. A
+;; CONTROL of what is declared in front of a unit: nothing in front of this
+;; one calls the C function, so it is not declared, and the output has no
+;; line of a C function. The lines of its prefix are those of a unit that
+;; has nothing to do with C functions.
+;;
+;; A CONTROL OF A REFUSAL. callee_bound_in_the_text, a text written by hand
+;; and given twice with -after: the callee of its call of a C function is a
+;; symbol that the text itself binds as a block, and not a symbol of the
+;; unit of external symbols. The conversion refuses such a call, and the
+;; text is NOT CHECKED. No compiler makes such a call; every other callee of
+;; this directory is a symbol of that unit. Before the refusal this text had
+;; the C function of that name declared in front and the symbol bound in the
+;; term, no import, and the line "validated: the same up to bound names"
+;; (run on 18 November 2026).
+;;
+;; THE ROUND TRIP of the conversion (../roundtrip/README.md), on the
+;; sixteen texts here that are units by themselves: the six units from
+;; OCaml, the three first units, the five terms before of the pairs, the
+;; text of the refusal, and every_mark, which is a text for this rule alone.
+;; The rules of ../roundtrip/ do not take this directory. The printer of the
+;; model writes a call of a C function back as one, with what the compiler
+;; says of the function, and the round trip compares the C function that is
+;; read back with the one that was printed (the comment in the tool, "What
+;; the round trip tests of it"). round_trip.expected has two lines for each
+;; text, of the unit of the file and of the unit that Simplify makes of it:
+;; "round trip the same" in each, but for callee_bound_in_the_text, which
+;; the conversion refuses. every_mark has a call for each of the things
+;; that the compiler says of a C function at a call, and two calls of one
+;; function that say different things: two C functions for the conversion,
+;; with one callee. The rule takes neither the terms after of the pairs, on
+;; which Simplify cannot be run by themselves (each binds the symbol of its
+;; term before), nor the second units, which would be read here without the
+;; .cmx of their first unit. With a printer changed to write the opposite
+;; of what the term says of whether the function is called through
+;; caml_c_call, the lines of call_in_function are "names not read back: the
+;; call of a C function at the callee x4 is not, read back, a call of the C
+;; function that was printed" (tried on 18 November 2026; no rule runs that
+;; printer).
+;;
+;; BOUNDS. Nothing in the tree checks, of the units from OCaml here, that
+;; their text is the compiler's term (../text_is_term/), or runs the
+;; compiler's own pair on them. "Round trip the same" does not say that a C
+;; function has its name in the table of the conversion: the printer does
+;; not write the name.
+
+(rule
+ (with-stdout-to
+  round_trip.output
+  (progn
+   (run ../../tools/flsemantics.exe -round-trip %{dep:call_at_toplevel.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:call_in_function.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:call_under_handler.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:call_with_unboxed_result.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:comparison_made_a_primitive.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:exported_externals.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:body_with_a_call.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:body_with_a_store.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:tupled_body_with_a_call.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:guarded.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:guarded_generative.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:handled.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:reached.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:two_calls.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:callee_bound_in_the_text.fl})
+   (run ../../tools/flsemantics.exe -round-trip %{dep:every_mark.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff round_trip.expected round_trip.output)))
+
+(rule
+ (with-stdout-to
+  guarded_same.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_same.expected guarded_same.output)))
+
+(rule
+ (with-stdout-to
+  guarded_other_function.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_other_function_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_other_function.expected guarded_other_function.output)))
+
+(rule
+ (with-stdout-to
+  guarded_other_argument.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_other_argument_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_other_argument.expected guarded_other_argument.output)))
+
+(rule
+ (with-stdout-to
+  guarded_noalloc.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_noalloc_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_noalloc.expected guarded_noalloc.output)))
+
+(rule
+ (with-stdout-to
+  guarded_builtin.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_builtin_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_builtin.expected guarded_builtin.output)))
+
+(rule
+ (with-stdout-to
+  guarded_no_effects.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_no_effects_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_no_effects.expected guarded_no_effects.output)))
+
+(rule
+ (with-stdout-to
+  guarded_no_coeffects.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_no_coeffects_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_no_coeffects.expected guarded_no_coeffects.output)))
+
+(rule
+ (with-stdout-to
+  guarded_after_the_return.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_after_the_return_after.fl}
+   %{dep:guarded.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_after_the_return.expected guarded_after_the_return.output)))
+
+(rule
+ (with-stdout-to
+  handled_same.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:handled.fl}
+   %{dep:handled.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff handled_same.expected handled_same.output)))
+
+(rule
+ (with-stdout-to
+  handled_other_handler.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:handled_other_handler_after.fl}
+   %{dep:handled.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff handled_other_handler.expected handled_other_handler.output)))
+
+(rule
+ (with-stdout-to
+  two_calls_same.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:two_calls.fl}
+   %{dep:two_calls.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff two_calls_same.expected two_calls_same.output)))
+
+(rule
+ (with-stdout-to
+  two_calls_other_later_function.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:two_calls_other_later_function_after.fl}
+   %{dep:two_calls.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   two_calls_other_later_function.expected
+   two_calls_other_later_function.output)))
+
+(rule
+ (with-stdout-to
+  two_calls_other_later_argument.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:two_calls_other_later_argument_after.fl}
+   %{dep:two_calls.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   two_calls_other_later_argument.expected
+   two_calls_other_later_argument.output)))
+
+(rule
+ (with-stdout-to
+  reached_same.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:reached.fl}
+   %{dep:reached.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff reached_same.expected reached_same.output)))
+
+(rule
+ (with-stdout-to
+  reached_after_the_return.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:reached_after_the_return_after.fl}
+   %{dep:reached.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff reached_after_the_return.expected reached_after_the_return.output)))
+
+(rule
+ (targets exported_externals.fl.made)
+ (deps %{ocamlopt} exported_externals.mli)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:exported_externals.ml}
+   exported_externals.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff exported_externals.fl exported_externals.fl.made)))
+
+(rule
+ (with-stdout-to
+  exported_externals.output
+  (run ../../tools/flsemantics.exe %{dep:exported_externals.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff exported_externals.expected exported_externals.output)))
+
+(rule
+ (targets call_in_function.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:call_in_function.ml}
+   call_in_function.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_in_function.fl call_in_function.fl.made)))
+
+(rule
+ (with-stdout-to
+  call_in_function.output
+  (run ../../tools/flsemantics.exe %{dep:call_in_function.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_in_function.expected call_in_function.output)))
+
+(rule
+ (targets call_under_handler.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:call_under_handler.ml}
+   call_under_handler.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_under_handler.fl call_under_handler.fl.made)))
+
+(rule
+ (with-stdout-to
+  call_under_handler.output
+  (run ../../tools/flsemantics.exe %{dep:call_under_handler.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_under_handler.expected call_under_handler.output)))
+
+(rule
+ (targets call_with_unboxed_result.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:call_with_unboxed_result.ml}
+   call_with_unboxed_result.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_with_unboxed_result.fl call_with_unboxed_result.fl.made)))
+
+(rule
+ (with-stdout-to
+  call_with_unboxed_result.output
+  (run ../../tools/flsemantics.exe %{dep:call_with_unboxed_result.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_with_unboxed_result.expected call_with_unboxed_result.output)))
+
+(rule
+ (targets call_at_toplevel.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:call_at_toplevel.ml}
+   call_at_toplevel.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_at_toplevel.fl call_at_toplevel.fl.made)))
+
+(rule
+ (with-stdout-to
+  call_at_toplevel.output
+  (run ../../tools/flsemantics.exe %{dep:call_at_toplevel.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff call_at_toplevel.expected call_at_toplevel.output)))
+
+(rule
+ (targets comparison_made_a_primitive.fl.made)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:comparison_made_a_primitive.ml}
+   comparison_made_a_primitive.fl.made)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff comparison_made_a_primitive.fl comparison_made_a_primitive.fl.made)))
+
+(rule
+ (with-stdout-to
+  comparison_made_a_primitive.output
+  (run ../../tools/flsemantics.exe %{dep:comparison_made_a_primitive.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   comparison_made_a_primitive.expected
+   comparison_made_a_primitive.output)))
+
+(rule
+ (with-stdout-to
+  guarded_generative_same.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_generative.fl}
+   %{dep:guarded_generative.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_generative_same.expected guarded_generative_same.output)))
+
+(rule
+ (with-stdout-to
+  guarded_generative_mutable.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:guarded_generative_mutable_after.fl}
+   %{dep:guarded_generative.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff guarded_generative_mutable.expected guarded_generative_mutable.output)))
+
+(rule
+ (targets body_with_a_call.fl.made body_with_a_call.cmi body_with_a_call.cmx)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_call.ml}
+   body_with_a_call)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff body_with_a_call.fl body_with_a_call.fl.made)))
+
+(rule
+ (targets
+  body_with_a_call_reached.fl.made
+  body_with_a_call_reached.cmi
+  body_with_a_call_reached.cmx)
+ (deps %{ocamlopt} body_with_a_call.cmi body_with_a_call.cmx)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_call_reached.ml}
+   body_with_a_call_reached
+   body_with_a_call)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_call_reached.fl
+   body_with_a_call_reached.fl.made)))
+
+(rule
+ (deps body_with_a_call.cmi body_with_a_call.cmx)
+ (action
+  (with-stdout-to
+   body_with_a_call_reached.output
+   (run
+    ../../tools/flsemantics.exe
+    -I
+    .
+    %{dep:body_with_a_call_reached.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_call_reached.expected
+   body_with_a_call_reached.output)))
+
+(rule
+ (targets
+  body_with_a_call_not_reached.fl.made
+  body_with_a_call_not_reached.cmi
+  body_with_a_call_not_reached.cmx)
+ (deps %{ocamlopt} body_with_a_call.cmi body_with_a_call.cmx)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_call_not_reached.ml}
+   body_with_a_call_not_reached
+   body_with_a_call)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_call_not_reached.fl
+   body_with_a_call_not_reached.fl.made)))
+
+(rule
+ (deps body_with_a_call.cmi body_with_a_call.cmx)
+ (action
+  (with-stdout-to
+   body_with_a_call_not_reached.output
+   (run
+    ../../tools/flsemantics.exe
+    -I
+    .
+    %{dep:body_with_a_call_not_reached.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_call_not_reached.expected
+   body_with_a_call_not_reached.output)))
+
+(rule
+ (targets body_with_a_store.fl.made body_with_a_store.cmi body_with_a_store.cmx)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_store.ml}
+   body_with_a_store)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff body_with_a_store.fl body_with_a_store.fl.made)))
+
+(rule
+ (targets
+  body_with_a_store_not_called.fl.made
+  body_with_a_store_not_called.cmi
+  body_with_a_store_not_called.cmx)
+ (deps %{ocamlopt} body_with_a_store.cmi body_with_a_store.cmx)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_store_not_called.ml}
+   body_with_a_store_not_called
+   body_with_a_store)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_store_not_called.fl
+   body_with_a_store_not_called.fl.made)))
+
+(rule
+ (deps body_with_a_store.cmi body_with_a_store.cmx)
+ (action
+  (with-stdout-to
+   body_with_a_store_not_called.output
+   (run
+    ../../tools/flsemantics.exe
+    -I
+    .
+    %{dep:body_with_a_store_not_called.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_store_not_called.expected
+   body_with_a_store_not_called.output)))
+
+(rule
+ (with-stdout-to
+  callee_bound_in_the_text.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:callee_bound_in_the_text.fl}
+   %{dep:callee_bound_in_the_text.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff callee_bound_in_the_text.expected callee_bound_in_the_text.output)))
+
+(rule
+ (targets
+  tupled_body_with_a_call.fl.made
+  tupled_body_with_a_call.cmi
+  tupled_body_with_a_call.cmx)
+ (deps %{ocamlopt})
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:tupled_body_with_a_call.ml}
+   tupled_body_with_a_call)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff tupled_body_with_a_call.fl tupled_body_with_a_call.fl.made)))
+
+(rule
+ (targets
+  tupled_body_with_a_call_named.fl.made
+  tupled_body_with_a_call_named.cmi
+  tupled_body_with_a_call_named.cmx)
+ (deps %{ocamlopt} tupled_body_with_a_call.cmi tupled_body_with_a_call.cmx)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:tupled_body_with_a_call_named.ml}
+   tupled_body_with_a_call_named
+   tupled_body_with_a_call)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   tupled_body_with_a_call_named.fl
+   tupled_body_with_a_call_named.fl.made)))
+
+(rule
+ (deps tupled_body_with_a_call.cmi tupled_body_with_a_call.cmx)
+ (action
+  (with-stdout-to
+   tupled_body_with_a_call_named.output
+   (run
+    ../../tools/flsemantics.exe
+    -I
+    .
+    %{dep:tupled_body_with_a_call_named.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   tupled_body_with_a_call_named.expected
+   tupled_body_with_a_call_named.output)))
