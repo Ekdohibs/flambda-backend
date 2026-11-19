@@ -419,6 +419,8 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (negb (values_of_subkinds _ vs _));
+    [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
   exact
@@ -467,6 +469,8 @@ Proof.
     intros vs Hc Hvs.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
@@ -1366,6 +1370,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
+  destruct (values_of_subkinds _ _ _); [ | exact I ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | exact I ].
   assert (Hvs : Forall (fun v => variable_no_mark (rs_frames rs) v = true) vs).
@@ -2173,6 +2178,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
+  destruct (values_of_subkinds _ _ _); [ | exact I ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | exact I ].
   apply
@@ -2785,7 +2791,8 @@ Lemma erased_if_usable (rs : region_state) (vs vs' : list value) :
   Forall2 (value_erased_if_usable rs) vs vs' ->
   Forall2 (value_erased rs) vs vs'.
 Proof.
-  intros Hu H. induction H as [ | v v' vs vs' [_ Hv] _ IH]; [ constructor | ].
+  intros Hu H.
+  induction H as [ | v v' vs vs' (_ & _ & Hv) _ IH]; [ constructor | ].
   simpl in Hu. apply andb_true_iff in Hu as [Hu Hus].
   constructor; [ exact (Hv (or_introl Hu)) | exact (IH Hus) ].
 Qed.

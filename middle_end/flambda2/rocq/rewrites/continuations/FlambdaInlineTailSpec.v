@@ -50,8 +50,10 @@
    the [Let]s may run.
 
    [inline_tail_conts_kinded] is the same pass where the handler gives
-   one kind for each parameter, and leaves the [Let_cont] alone
-   otherwise. It is an equivalence
+   one kind for each parameter and states nothing of its parameters
+   beyond their kinds, and leaves the [Let_cont] alone otherwise: the
+   application tests what the handler states, and a [Let] tests a kind
+   only (decision D25, at parameters). It is an equivalence
    ([inline_tail_conts_kinded_equivalent_statement]), under all
    environments: the application binds the parameters to the values of
    the arguments and runs the handler, and the [Let]s do the same, one
@@ -63,7 +65,8 @@
    where the [Let]s would run.
 
    The compiler gives every parameter a kind, so on its terms the two
-   passes do the same.
+   passes differ only where the handler states something of a
+   parameter: this pass may then leave the [Let_cont] alone.
 
    Renaming: the pass compares names by equality only and binds none
    that the term has not got, as [inline_tail_conts]. That statement is
@@ -89,6 +92,7 @@ Fixpoint inline_tail_conts_kinded (e : expr) : expr :=
       Let_cont_non_recursive k (Handler params metadata handler') body'
     in
     if Nat.eqb (length params) (length (hm_params_kinds metadata))
+       && subkinds_say_nothing (hm_params_subkinds metadata)
     then
       match inline_cont_at_tail k params metadata handler' body' with
       | Some inlined => inlined

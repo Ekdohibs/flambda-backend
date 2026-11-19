@@ -381,15 +381,60 @@ Proof.
     [ apply map_keep | reflexivity ].
 Qed.
 
-(* The kinds that [keep_kinds] leaves. *)
+(* The values kept are of what is stated of the parameters kept. *)
+Lemma values_of_subkinds_keep (statics : static_env) (mask : list bool) :
+  ∀ (vs : list value) (sks : list param_subkind),
+    values_of_subkinds statics vs sks = true ->
+    values_of_subkinds statics (keep mask vs) (keep mask sks) = true.
+Proof.
+  induction mask as [ | b mask IH]; intros vs sks H; [ reflexivity | ].
+  destruct vs as [ | v vs], sks as [ | ps sks], b; cbn [keep];
+    try reflexivity; try apply values_of_subkinds_no_values;
+    rewrite values_of_subkinds_cons in H;
+    apply andb_true_iff in H as [Hv Hvs].
+  - rewrite values_of_subkinds_cons, Hv. exact (IH vs sks Hvs).
+  - exact (IH vs sks Hvs).
+Qed.
+
+(* The values are of the first entries of what is stated. *)
+Lemma values_of_subkinds_firstn (statics : static_env) (n : nat) :
+  ∀ (sks : list param_subkind) (vs : list value),
+    values_of_subkinds statics vs sks = true ->
+    values_of_subkinds statics vs (firstn n sks) = true.
+Proof.
+  induction n as [ | n IH]; intros [ | ps sks] [ | v vs] H; cbn [firstn];
+    try reflexivity.
+  rewrite values_of_subkinds_cons in H |- *.
+  apply andb_true_iff in H as [Hv Hvs]. rewrite Hv. exact (IH _ _ Hvs).
+Qed.
+
+Lemma any_values_say_nothing {A : Type} (l : list A) :
+  subkinds_say_nothing (map (fun _ => any_value) l) = true.
+Proof. induction l as [ | a l IH]; [ reflexivity | exact IH ]. Qed.
+
+Lemma subkinds_masked (mask : option (list bool)) (statics : static_env)
+    (vs : list value) (sks sks' : list param_subkind) :
+  sks' = keep_all_or mask sks ->
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics (keep_all_or mask vs) sks' = true.
+Proof.
+  intros -> Hstated. destruct mask as [mask | ]; simpl;
+    [ apply values_of_subkinds_keep | ]; exact Hstated.
+Qed.
+
+(* The metadata of a handler with the parameters that a mask keeps:
+   their kinds, and what is stated of them. *)
+Definition metadata_kept (mask : option (list bool))
+    (metadata metadata' : handler_metadata) : Prop :=
+  hm_params_kinds metadata' = keep_all_or mask (hm_params_kinds metadata)
+  ∧ hm_params_subkinds metadata'
+    = keep_all_or mask (hm_params_subkinds metadata).
+
+(* The kinds that [keep_kinds] leaves, and what it leaves stated. *)
 Lemma keep_kinds_kinds (mask : option (list bool))
     (metadata : handler_metadata) :
-  hm_params_kinds (keep_kinds mask metadata)
-  = keep_all_or mask (hm_params_kinds metadata).
-Proof.
-  destruct mask as [mask | ]; simpl; [ | reflexivity ].
-  destruct (hm_is_exn_handler metadata); reflexivity.
-Qed.
+  metadata_kept mask metadata (keep_kinds mask metadata).
+Proof. destruct mask as [mask | ]; split; reflexivity. Qed.
 
 (* ======================================================================== *)
 (* An expression with parameters and arguments removed                      *)
@@ -431,7 +476,7 @@ Inductive drops : masks -> expr -> expr -> Prop :=
       (body body' : expr) :
     drops known handler handler' ->
     mask_fits mask params handler' ->
-    hm_params_kinds metadata' = keep_all_or mask (hm_params_kinds metadata) ->
+    metadata_kept mask metadata metadata' ->
     drops ((k, mask) :: known) body body' ->
     drops known
       (Let_cont_non_recursive k (Handler params metadata handler) body)
@@ -479,7 +524,7 @@ with handlers_drop :
       (handlers handlers' : list (continuation * continuation_handler)) :
     drops inside handler handler' ->
     mask_fits mask params handler' ->
-    hm_params_kinds metadata' = keep_all_or mask (hm_params_kinds metadata) ->
+    metadata_kept mask metadata metadata' ->
     handlers_drop inside loop handlers handlers' ->
     handlers_drop inside ((k, mask) :: loop)
       ((k, Handler params metadata handler) :: handlers)
@@ -495,8 +540,7 @@ Lemma handlers_drop_lookup (inside loop : masks) (k : continuation)
       h' = Handler (keep_all_or mask params) metadata' handler'
       ∧ drops inside handler handler'
       ∧ mask_fits mask params handler'
-      ∧ hm_params_kinds metadata'
-        = keep_all_or mask (hm_params_kinds metadata)
+      ∧ metadata_kept mask metadata metadata'
   | None, None, None => True
   | _, _, _ => False
   end.
@@ -523,7 +567,8 @@ Proof.
   - apply Drops_let_static, drops_refl, Hnone.
   - apply (Drops_let_cont known k params metadata metadata handler handler
       None body body);
-      [ apply drops_refl, Hnone | exact I | reflexivity | apply drops_refl ].
+      [ apply drops_refl, Hnone | exact I | split; reflexivity
+      | apply drops_refl ].
     intros k1. destruct (Pos.eq_dec k1 k) as [-> | Hne];
       [ apply mask_of_head | rewrite mask_of_other by exact Hne; apply Hnone ].
   - assert (Hnone' :
@@ -538,7 +583,7 @@ Proof.
       [ apply Handlers_drop_nil | ].
     apply (Handlers_drop_cons known' k None params metadata metadata handler
       handler);
-      [ apply drops_refl, Hnone' | exact I | reflexivity | exact IH ].
+      [ apply drops_refl, Hnone' | exact I | split; reflexivity | exact IH ].
   - apply Drops_apply; apply Hnone.
   - pose proof (Drops_apply_cont known ac) as Hdrops.
     rewrite (drop_args_none known ac (Hnone _)) in Hdrops. exact Hdrops.
@@ -978,7 +1023,7 @@ Inductive cont_drops : option (list bool) -> cont_value -> cont_value -> Prop :=
     handlers_drop (loop ++ known) loop recursive recursive' ->
     drops (loop ++ known) handler handler' ->
     mask_fits mask params handler' ->
-    hm_params_kinds metadata' = keep_all_or mask (hm_params_kinds metadata) ->
+    metadata_kept mask metadata metadata' ->
     (∀ x : variable,
       var_free_in_handler x
         (Handler (keep_all_or mask params) metadata' handler')
@@ -1150,7 +1195,10 @@ Proof.
     simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Hgiven; [ | exact I ].
-    rewrite (kinds_masked mask vs _ _ Hkinds Hgiven).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hstated; [ | exact I ].
+    rewrite (kinds_masked mask vs _ _ (proj1 Hkinds) Hgiven),
+      (subkinds_masked mask statics vs _ _ (proj2 Hkinds) Hstated).
     destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_masked mask params metadata' handler' vs def_vars

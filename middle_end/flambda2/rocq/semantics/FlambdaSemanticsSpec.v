@@ -251,7 +251,7 @@ From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec.
 From OxCamlFlambda2 Require Export FlambdaValueSpec FlambdaPrimitiveSpec
-  FlambdaHeapSpec.
+  FlambdaHeapSpec FlambdaSubkindSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -684,7 +684,14 @@ Definition with_extra_args (c : cont_value) (extra : list value)
      results of the code, unboxed products and all
      ([simplify_direct_function_call], by
      [Flambda_arity.equal_ignoring_subkinds];
-     [Application_result_kind_mismatch]). *)
+     [Application_result_kind_mismatch]).
+
+   And each argument must be of what the parameter of the code states
+   of it beyond its kind ([values_of_subkinds], against
+   [cm_params_subkinds]): the body is not entered with a value of
+   another shape. Simplify reads what a parameter states into its
+   type; no test of the compiler is transcribed here. What the code
+   states of its results is not tested. Decision D25, at parameters. *)
 Definition call_code (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) : step_result :=
@@ -695,6 +702,8 @@ Definition call_code (closure : value) (c : code) (vs : list value)
        && kinds_per_parameter_eqb (unarize_per_parameter args_arity)
             (unarize_per_parameter (code_params_arity c))
        && arity_eqb return_arity (code_result_arity c))
+  then Undefined
+  else if negb (values_of_subkinds statics vs (code_params_subkinds c))
   then Undefined
   else
     match bind_params (code_params c) vs [(code_my_closure c, closure)] with
@@ -1153,7 +1162,14 @@ Definition run_call (return_partial : value -> step_result)
    exception continuation is that of the over-application, extra
    arguments included. No variable is bound there, and the kind of the
    value is not tested: a value that can be called is of kind
-   [Value]. *)
+   [Value].
+
+   The values must also be of what the handler states of its
+   parameters beyond their kinds ([values_of_subkinds], against
+   [hm_params_subkinds]): otherwise there is no step. So a handler is
+   not entered with a value of another shape, whichever it is: an
+   ordinary one, one of a recursive group, an exception handler, the
+   one that a call returns to. Decision D25, at parameters. *)
 Fixpoint apply_cont_value (c : cont_value) (vs : list value)
     (statics : static_env) (hp : heap) (rd : read_record)
       {struct c} : step_result :=
@@ -1162,13 +1178,16 @@ Fixpoint apply_cont_value (c : cont_value) (vs : list value)
   | Closure (Handler params metadata handler) def_vars def_conts recursive =>
     if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
-      match bind_params params vs def_vars with
-      | Some handler_vars =>
-        Step (State handler handler_vars
-          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
-            rd)
-      | None => Undefined
-      end
+      if values_of_subkinds statics vs (hm_params_subkinds metadata)
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars =>
+          Step (State handler handler_vars
+            (rec_closures recursive def_vars def_conts ++ def_conts) statics
+              hp rd)
+        | None => Undefined
+        end
+      else Undefined
     else Undefined
   | Extra_args c extra => apply_cont_value c (vs ++ extra) statics hp rd
   | Over_application remaining remaining_arity return_arity return_to exn_to =>

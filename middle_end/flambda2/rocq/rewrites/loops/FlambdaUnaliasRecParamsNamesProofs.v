@@ -87,9 +87,11 @@ Proof.
     (negb (hm_is_exn_handler metadata) && all_give_var k i x true body
      && all_give_var k i p true handler
      && negb (among x (drop_nth i params))
-     && negb (among p (drop_nth i params)))
+     && negb (among p (drop_nth i params))
+     && says_nothing_at (hm_params_subkinds metadata) i)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
+  apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].

@@ -100,6 +100,29 @@ Lemma kind_of_value_erased (rs : region_state) (v v' : value) :
   value_erased rs v v' -> kind_of_value v' = kind_of_value v.
 Proof. intros H. erased_cases H; reflexivity. Qed.
 
+(* What [handler_returns_no_region] says of a handler: of its body,
+   and of what it states of its parameters that are regions. *)
+Lemma handler_returns_no_region_body (conts : region_conts)
+    (params : list variable) (metadata : handler_metadata) (handler : expr) :
+  handler_returns_no_region conts (Handler params metadata handler) = true ->
+  calls_return_no_region conts handler = true.
+Proof.
+  cbn [handler_returns_no_region]. intros H.
+  apply andb_true_iff in H. exact (proj2 H).
+Qed.
+
+Lemma handler_regions_state_nothing (conts : region_conts)
+    (params : list variable) (metadata : handler_metadata) (handler : expr) :
+  handler_returns_no_region conts (Handler params metadata handler) = true ->
+  regions_state_nothing
+    (map (fun kind => kind_eqb kind Region) (hm_params_kinds metadata))
+    (hm_params_subkinds metadata)
+  = true.
+Proof.
+  cbn [handler_returns_no_region]. intros H.
+  apply andb_true_iff in H. exact (proj1 H).
+Qed.
+
 Lemma kinds_of_values_erased (rs : region_state) (vs vs' : list value) :
   Forall2 (value_erased rs) vs vs' ->
   map kind_of_value vs' = map kind_of_value vs.
@@ -112,7 +135,8 @@ Lemma value_erased_if_usable_intro (rs : region_state) (v v' : value) :
   value_erased rs v v' -> value_erased_if_usable rs v v'.
 Proof.
   intros H. split; [ exact (kind_of_value_erased rs v v' H) | ].
-  intros _. exact H.
+  split; [ | intros _; exact H ].
+  intros c ->. inversion H. reflexivity.
 Qed.
 
 Lemma values_erased_if_usable_intro (rs : region_state)
@@ -128,7 +152,7 @@ Lemma kinds_of_values_if_usable (rs : region_state) (vs vs' : list value) :
   Forall2 (value_erased_if_usable rs) vs vs' ->
   map kind_of_value vs' = map kind_of_value vs.
 Proof.
-  induction 1 as [ | v v' vs vs' [Hkind _] _ IH]; simpl; [ reflexivity | ].
+  induction 1 as [ | v v' vs vs' (Hkind & _) _ IH]; simpl; [ reflexivity | ].
   rewrite Hkind, IH. reflexivity.
 Qed.
 
@@ -157,7 +181,7 @@ Lemma values_erased_of_usable (rs : region_state) (vs vs' : list value) :
   Forall (fun v => value_usable rs v = true) vs ->
   Forall2 (value_erased rs) vs vs'.
 Proof.
-  induction 1 as [ | v v' vs vs' [_ Hv] _ IH]; intros Husable;
+  induction 1 as [ | v v' vs vs' (_ & _ & Hv) _ IH]; intros Husable;
     [ constructor | ].
   inversion Husable as [ | v0 vs0 Hhead Htail]; subst.
   constructor; [ exact (Hv (usable_asked rs v Hhead)) | exact (IH Htail) ].
@@ -317,9 +341,9 @@ Proof.
         (value_erased_extend _ _ Hextends _ _
            (Hpcallee (erased_asked_extends rs rs1 pcallee Hextends Hasked))).
     + clear Hpcallee. revert pargs pargs' Hpargs. fix IH 3.
-      intros args args' [ | w w' rest rest' [Hkind Hhead] Htail];
+      intros args args' [ | w w' rest rest' (Hkind & Hconst & Hhead) Htail];
         constructor; [ | exact (IH _ _ Htail) ].
-      split; [ exact Hkind | ].
+      split; [ exact Hkind | ]. split; [ exact Hconst | ].
       intros Hasked.
       exact
         (value_erased_extend _ _ Hextends _ _
@@ -387,7 +411,8 @@ Lemma value_erased_if_usable_extend (rs rs1 : region_state) (v v' : value) :
   value_erased_if_usable rs v v' ->
   value_erased_if_usable rs1 v v'.
 Proof.
-  intros Hextends [Hkind Hv]. split; [ exact Hkind | ].
+  intros Hextends (Hkind & Hconst & Hv). split; [ exact Hkind | ].
+  split; [ exact Hconst | ].
   intros Hasked.
   exact
     (value_erased_extend _ _ Hextends _ _
@@ -804,6 +829,68 @@ Proof.
        value_erased_respects).
 Qed.
 
+(* Nor can the test of what a binder states, of a value that may be
+   evaluated. A symbol that is gone passes only where nothing is
+   stated of it but, at most, that it is not null; the value at its
+   place passes there too, as it is no constant. *)
+Lemma value_at_erased_if_usable (ps : param_subkind) (v v' : value) :
+  value_erased_if_usable rs v v' ->
+  value_at (live_statics rs) ps v = true ->
+  value_at statics' ps v' = true.
+Proof.
+  intros (Hkind & Hconst & Hv) Hat.
+  assert (Hrelated : value_erased rs v v' -> value_at statics' ps v' = true).
+  { intros HR.
+    destruct value_erased_respects as ((Hleft & Hright) & _ & Hobserved).
+    refine
+      (value_at_related (value_erased rs) (live_statics rs) statics' _ _ _ _ _
+         ps v v' HR Hat).
+    - intros c w Hw. left. exact (Hleft c w Hw).
+    - intros w c Hw. left. exact (Hright w c Hw).
+    - intros w w' c Hw. exact (proj1 (proj2 (Hobserved w w' Hw)) c).
+    - intros w w' tag fields Hw. exact (proj1 (Hobserved w w' Hw) tag fields).
+    - intros w w' Hw. symmetry. exact (kind_of_value_erased rs w w' Hw). }
+  destruct (value_usable rs v) eqn:Husable;
+    [ exact (Hrelated (Hv (or_introl eq_refl))) | ].
+  destruct v as [ | | | s | | | | l | ]; try discriminate Husable;
+    [ | exact (Hrelated (Hv (or_intror eq_refl))) ].
+  unfold value_usable in Husable.
+  apply orb_false_iff in Husable as [_ Hunbound].
+  destruct (lookup s (static_values (live_statics rs))) eqn:Hs;
+    [ discriminate Hunbound | ].
+  destruct ps as [nullable sk]. unfold value_at in Hat |- *.
+  cbn [fst snd] in Hat |- *.
+  assert (Hsk : sk = Subkind_anything).
+  { destruct sk; cbn [value_of_subkind] in Hat;
+      unfold boxed_number_of, block_of in Hat; try rewrite Hs in Hat;
+      try discriminate Hat.
+    reflexivity. }
+  subst sk.
+  destruct v' as [c | | | | | | | | ]; try reflexivity.
+  discriminate (Hconst c eq_refl).
+Qed.
+
+Lemma values_of_subkinds_erased_if_usable (vs vs' : list value) :
+  Forall2 (value_erased_if_usable rs) vs vs' ->
+  ∀ sks : list param_subkind,
+    values_of_subkinds (live_statics rs) vs sks = true ->
+    values_of_subkinds statics' vs' sks = true.
+Proof.
+  induction 1 as [ | v v' vs vs' Hv _ IH]; intros [ | ps sks]; simpl; auto.
+  intros H. apply andb_true_iff in H as [Hhead Hrest].
+  rewrite (value_at_erased_if_usable ps v v' Hv Hhead). exact (IH sks Hrest).
+Qed.
+
+Lemma values_of_subkinds_erased (vs vs' : list value) :
+  Forall2 (value_erased rs) vs vs' ->
+  ∀ sks : list param_subkind,
+    values_of_subkinds (live_statics rs) vs sks = true ->
+    values_of_subkinds statics' vs' sks = true.
+Proof.
+  intros Hvs. apply values_of_subkinds_erased_if_usable.
+  exact (Forall2_impl _ (value_erased_if_usable_intro rs) Hvs).
+Qed.
+
 End Observations.
 
 (* ======================================================================== *)
@@ -883,7 +970,8 @@ Lemma bind_params_erased (rs : region_state) (params : list variable) :
       ∧ env_erased rs bound bound'.
 Proof.
   induction params as [ | p params IH]; intros vs vs' vars vars' bound Hvs;
-    destruct Hvs as [ | v v' vs vs' [_ Hv] Hvs]; simpl; try discriminate.
+    destruct Hvs as [ | v v' vs vs' (_ & _ & Hv) Hvs]; simpl;
+    try discriminate.
   - intros Hvars [= <-]. eauto.
   - intros Hvars. apply (IH vs vs' _ _ bound Hvs).
     apply env_erased_cons; assumption.
@@ -1753,7 +1841,11 @@ Proof.
     revert args Hargs. fix IH 1.
     intros [ | w args] Hargs; constructor; simpl in Hargs;
       apply andb_true_iff in Hargs as [Hw Hrest];
-      [ split; [ reflexivity | intros _; exact (value_erased_refl rs w Hw) ]
+      [ split;
+        [ reflexivity
+        | split;
+          [ intros c H; exact H
+          | intros _; exact (value_erased_refl rs w Hw) ] ]
       | exact (IH args Hrest) ].
 Qed.
 

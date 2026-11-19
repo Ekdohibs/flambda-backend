@@ -325,6 +325,8 @@ Proof.
   - cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact eq_refl ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | exact eq_refl ].
     destruct (bind_params params vs vars) as [handler_vars | ];
       [ | exact eq_refl ].
     apply result_under_step; [ | exact Hh | exact Hstatics ].

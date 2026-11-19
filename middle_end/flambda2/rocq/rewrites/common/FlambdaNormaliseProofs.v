@@ -1038,10 +1038,15 @@ Proof.
       [ | apply step_undefined_refines; rewrite step_apply_cont, Hargs, Hk;
           unfold apply_continuation; rewrite resolve_head; simpl;
           rewrite Hkinds; reflexivity ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds;
+      [ | apply step_undefined_refines; rewrite step_apply_cont, Hargs, Hk;
+          unfold apply_continuation; rewrite resolve_head; simpl;
+          rewrite Hkinds, Hsubkinds; reflexivity ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | apply step_undefined_refines; rewrite step_apply_cont, Hargs, Hk;
           unfold apply_continuation; rewrite resolve_head; simpl;
-          rewrite Hkinds, Hbind; reflexivity ].
+          rewrite Hkinds, Hsubkinds, Hbind; reflexivity ].
     destruct (bind_params_defined params vs def_vars vars handler_vars Hbind)
       as [bound Hbound].
     destruct (let_params_run params (hm_params_kinds metadata) (ac_args ac)
@@ -1057,7 +1062,7 @@ Proof.
       apply (step_apply_cont_handler _ _ _ _ _ rd_ vs params metadata handler
         def_vars conts []);
         [ exact Hargs | rewrite Hk; apply resolve_head | exact Hkinds
-        | exact Hbind ]. }
+        | exact Hsubkinds | exact Hbind ]. }
     apply (equivalent_trans _ (State handler bound conts statics hp rd)).
     { apply coincide_equivalent.
       - intros x Hx.
@@ -1778,6 +1783,7 @@ Proof.
   apply andb_true_iff in Hcheck as [Hsame Hinlinable].
   apply Pos.eqb_eq in Hsame. subst code.
   unfold call_agrees_b in Hagrees.
+  apply andb_true_iff in Hagrees as [Hagrees Hnothing].
   apply andb_true_iff in Hagrees as [Hagrees Hparams_kinds].
   apply andb_true_iff in Hagrees as [Hargs_arity Hreturn_arity].
   apply kinds_per_parameter_eqb_eq in Hargs_arity.
@@ -1788,7 +1794,7 @@ Proof.
     [ exact Hkind | rewrite Hcallee; reflexivity
     | exact Hclosure | exact (Hcode called c Hc)
     | exact (inlinable_b_sound ap c Hinlinable) | exact Hargs_arity
-    | exact Hreturn_arity | exact Hparams_kinds ].
+    | exact Hreturn_arity | exact Hparams_kinds | exact Hnothing ].
 Qed.
 
 Definition statics_know_both (known_code : list (code_id * code))
@@ -2537,7 +2543,8 @@ Proof.
           (step_apply_cont_handler _ _ _ _ _ rd_ [] [] metadata (Switch s inner)
           vars conts []);
         [ reflexivity | apply resolve_head
-        | rewrite Hno_kinds; reflexivity | reflexivity ]
+        | rewrite Hno_kinds; reflexivity
+        | apply values_of_subkinds_no_values | reflexivity ]
       | ].
     apply step_equivalent. rewrite step_switch, Hs, Hi, Hinner.
     reflexivity.

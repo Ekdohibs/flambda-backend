@@ -329,9 +329,16 @@ Proof. intros i kind Hkind. destruct i; discriminate Hkind. Qed.
 Lemma kinds_fit_refl (kinds : list flambda_kind) : kinds_fit kinds kinds.
 Proof. intros i kind Hkind. exact Hkind. Qed.
 
-Definition handler_kinds (h : continuation_handler) : list flambda_kind :=
+(* The kinds of the parameters of a handler, with what it states of
+   them. *)
+Definition stated (metadata : handler_metadata)
+    : list flambda_kind * list param_subkind :=
+  (hm_params_kinds metadata, hm_params_subkinds metadata).
+
+Definition handler_stated (h : continuation_handler)
+    : list flambda_kind * list param_subkind :=
   match h with
-  | Handler _ metadata _ => hm_params_kinds metadata
+  | Handler _ metadata _ => stated metadata
   end.
 
 (* The second expression is the first with, at some [Let_cont]s, [Let]s
@@ -360,7 +367,7 @@ Inductive aliased : fates -> expr -> expr -> Prop :=
     aliased K handler handler' ->
     (∀ p : variable, p ∈ params -> unfrozen K p) ->
     aliases_fit aliases params ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     kinds_fit kinds (hm_params_kinds metadata) ->
     aliased ((k, (aliases, [])) :: K) body body' ->
     aliased K
@@ -376,7 +383,7 @@ Inductive aliased : fates -> expr -> expr -> Prop :=
       (fun kh kh' =>
          fst kh = fst kh'
          ∧ handler_params (snd kh) = handler_params (snd kh')
-         ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+         ∧ handler_stated (snd kh') = handler_stated (snd kh)
          ∧ aliased (plain_fates handlers ++ K) (handler_expr (snd kh))
              (handler_expr (snd kh'))
          ∧ ∀ p : variable, p ∈ handler_params (snd kh) -> unfrozen K p)
@@ -392,7 +399,7 @@ Inductive aliased : fates -> expr -> expr -> Prop :=
     aliased ((k, (aliases, params)) :: K) handler handler' ->
     (∀ p : variable, p ∈ params -> unfrozen K p) ->
     aliases_fit aliases params ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     kinds_fit kinds (hm_params_kinds metadata) ->
     binds_statics handler' = binds_statics handler ->
     aliased ((k, (aliases, [])) :: K) body body' ->
@@ -427,7 +434,7 @@ Definition handlers_aliased (inside K : fates)
     (fun kh kh' =>
        fst kh = fst kh'
        ∧ handler_params (snd kh) = handler_params (snd kh')
-       ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+       ∧ handler_stated (snd kh') = handler_stated (snd kh)
        ∧ aliased inside (handler_expr (snd kh)) (handler_expr (snd kh'))
        ∧ ∀ p : variable, p ∈ handler_params (snd kh) -> unfrozen K p)
     handlers handlers'.
@@ -438,7 +445,7 @@ Lemma handlers_aliased_lookup (inside K : fates) (k : continuation)
   match lookup k handlers, lookup k handlers' with
   | Some h, Some h' =>
     handler_params h = handler_params h'
-    ∧ handler_kinds h' = handler_kinds h
+    ∧ handler_stated h' = handler_stated h
     ∧ aliased inside (handler_expr h) (handler_expr h')
     ∧ ∀ p : variable, p ∈ handler_params h -> unfrozen K p
   | None, None => True
@@ -530,7 +537,7 @@ Inductive cont_aliased : env -> fate -> cont_value -> cont_value -> Prop :=
     aliased (plain_fates recursive ++ K) handler handler' ->
     (∀ p : variable, p ∈ params -> unfrozen K p) ->
     aliases_fit (fst f) params ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     kinds_fit kinds (hm_params_kinds metadata) ->
     (∀ x : variable, lookup x def_vars = lookup x def_vars') ->
     (∀ k : continuation,
@@ -550,7 +557,7 @@ Inductive cont_aliased : env -> fate -> cont_value -> cont_value -> Prop :=
     aliased ((k, (fst f, params)) :: K) handler handler' ->
     (∀ p : variable, p ∈ params -> unfrozen K p) ->
     aliases_fit (fst f) params ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     kinds_fit kinds (hm_params_kinds metadata) ->
     (∀ x : variable, lookup x def_vars = lookup x def_vars') ->
     (∀ k' : continuation,
@@ -877,9 +884,13 @@ Proof.
     exists t, 0, t. split; [ reflexivity | ].
     split; [ reflexivity | apply state_aliased_refl ].
   - (* related closures *)
-    simpl. rewrite Hmeta.
+    simpl. pose proof Hmeta as Hsame_kinds.
+    injection Hsame_kinds as Hsame_kinds Hstated.
+    rewrite Hsame_kinds, Hstated.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Htested; [ | exact I ].
+    destruct
+      (values_of_subkinds _ vs (hm_params_subkinds metadata)); [ | exact I ].
     destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_alike params vs def_vars def_vars' bound Hdef_vars
@@ -911,9 +922,13 @@ Proof.
       apply (lookup_bind_params_other params vs def_vars bound x Hbind).
       intros Hin. exact (Hparams x Hin k Hx).
   - (* the closures of a loop *)
-    simpl. rewrite Hmeta.
+    simpl. pose proof Hmeta as Hsame_kinds.
+    injection Hsame_kinds as Hsame_kinds Hstated.
+    rewrite Hsame_kinds, Hstated.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Htested; [ | exact I ].
+    destruct
+      (values_of_subkinds _ vs (hm_params_subkinds metadata)); [ | exact I ].
     destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_alike params vs def_vars def_vars' bound Hdef_vars

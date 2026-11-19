@@ -211,3 +211,8 @@ Definition any_value : param_subkind := (true, Subkind_anything).
 (* Whether every value of the kind is of the subkind. *)
 Definition says_nothing (nullable : bool) (sk : subkind) : bool :=
   nullable && match sk with Subkind_anything => true | _ => false end.
+
+(* Whether nothing is stated of any parameter: each entry is one that
+   every value of the kind is of. The empty list states nothing. *)
+Definition subkinds_say_nothing (sks : list param_subkind) : bool :=
+  forallb (fun ps => says_nothing (fst ps) (snd ps)) sks.

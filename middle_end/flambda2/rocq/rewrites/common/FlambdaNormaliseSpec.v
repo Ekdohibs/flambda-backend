@@ -125,8 +125,11 @@
    arguments are not asked for: the call tests them, and so does the
    inlined body, where each parameter is bound by a [Let] at its kind.
    For the two to test the same, the code must give as many kinds as it
-   has parameters. It goes where [inline_calls] goes, and leaves the
-   same calls alone.
+   has parameters, and state nothing of them beyond their kinds: the
+   call tests what the code states of a parameter, and a [Let] tests a
+   kind only (decision D25, at parameters). It goes where [inline_calls]
+   goes, and it too inlines no call of code whose id is among those
+   given ([kept]).
 
    [merge_statics], for either term, makes one group of [Let_static]s that
    follow one another, and puts the code of a group before its symbols.
@@ -913,12 +916,16 @@ Fixpoint symbols_of (bindings : list static_binding)
    FlambdaSemanticsSpec.call_function asks of the terms alone: its
    arities are those of the code. What it asks of the values of the
    arguments, that they be of the kinds of the arity, the inlined body
-   asks too, provided the code gives one kind for each parameter. *)
+   asks too, provided the code gives one kind for each parameter. What
+   it asks of them beyond their kinds, that they be of what the code
+   states of its parameters, the inlined body does not ask, as a [Let]
+   states nothing: so the code must state nothing. *)
 Definition call_agrees_b (ap : apply_expr) (c : code) : bool :=
   kinds_per_parameter_eqb (unarize_per_parameter (ap_args_arity ap))
     (unarize_per_parameter (code_params_arity c))
   && arity_eqb (ap_return_arity ap) (code_result_arity c)
-  && Nat.eqb (length (code_params c)) (length (code_params_kinds c)).
+  && Nat.eqb (length (code_params c)) (length (code_params_kinds c))
+  && subkinds_say_nothing (code_params_subkinds c).
 
 Definition inline_known_apply (kept : list code_id)
     (known_code : list (code_id * code))

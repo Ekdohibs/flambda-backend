@@ -272,11 +272,37 @@ with order_args_in_handler (k : continuation) (order : list nat)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
+(* What is stated of [n] parameters, with an entry for each: the
+   entries that the list has, and after them entries that state
+   nothing. *)
+Fixpoint subkinds_of (n : nat) (sks : list param_subkind)
+    : list param_subkind :=
+  match n with
+  | O => []
+  | S n =>
+    match sks with
+    | [] => any_value :: subkinds_of n []
+    | ps :: sks => ps :: subkinds_of n sks
+    end
+  end.
+
+(* What is stated of [n] parameters, in an order of their positions.
+   Where nothing is stated of any of them it is the empty list. *)
+Definition subkinds_in_order (order : list nat) (n : nat)
+    (sks : list param_subkind) : list param_subkind :=
+  if subkinds_say_nothing sks then []
+  else
+    match in_order order (subkinds_of n sks) with
+    | Some sks' => sks'
+    | None => []
+    end.
+
 (* The pass at one node: the parameters of a non-recursive [Let_cont]
-   in the order in which its handler first names them, their kinds and
-   the arguments of the applications of its continuation with them.
-   Any other term is left as it is, and so is a [Let_cont] of which
-   one of the things asked above fails. *)
+   in the order in which its handler first names them, their kinds,
+   what the handler states of them and the arguments of the
+   applications of its continuation with them. Any other term is left
+   as it is, and so is a [Let_cont] of which one of the things asked
+   above fails. *)
 Definition order_node (e : expr) : expr :=
   match e with
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
@@ -296,10 +322,7 @@ Definition order_node (e : expr) : expr :=
           (Handler params'
              {| hm_params_kinds := kinds';
                 hm_params_subkinds :=
-                  match in_order order (hm_params_subkinds metadata) with
-                  | Some subkinds' => subkinds'
-                  | None => []
-                  end;
+                  subkinds_in_order order n (hm_params_subkinds metadata);
                 hm_is_exn_handler := false |}
              handler)
           (order_args k order body)

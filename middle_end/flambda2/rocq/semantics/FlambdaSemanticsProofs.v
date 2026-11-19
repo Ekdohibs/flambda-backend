@@ -35,7 +35,8 @@ From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec.
-From OxCamlFlambda2 Require Export FlambdaValueProofs FlambdaPrimitiveProofs.
+From OxCamlFlambda2 Require Export FlambdaValueProofs FlambdaPrimitiveProofs
+  FlambdaSubkindProofs.
 From OxCamlFlambda2 Require FlambdaHeapProofs.
 Import ListNotations.
 
@@ -263,6 +264,7 @@ Lemma step_apply_cont_handler (ac : apply_cont) (vars : env)
   resolve (ac_continuation ac) conts
   = Closure (Handler params metadata handler) def_vars def_conts recursive ->
   kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
   bind_params params vs def_vars = Some handler_vars ->
   step (State (Apply_cont ac) vars conts statics hp rd)
   = Step
@@ -270,9 +272,9 @@ Lemma step_apply_cont_handler (ac : apply_cont) (vars : env)
          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
            rd).
 Proof.
-  intros Hargs Hresolve Hkinds Hbind. rewrite step_apply_cont, Hargs.
+  intros Hargs Hresolve Hkinds Hsubkinds Hbind. rewrite step_apply_cont, Hargs.
   unfold apply_continuation. rewrite Hresolve. simpl.
-  rewrite Hkinds, Hbind. reflexivity.
+  rewrite Hkinds, Hsubkinds, Hbind. reflexivity.
 Qed.
 
 Lemma step_apply_cont_exit (ac : apply_cont) (vars : env) (conts : cont_env)
@@ -301,6 +303,10 @@ Lemma step_apply_cont_target_handler (ac : apply_cont) (vars : env)
     (map kind_of_value (cont_args (resolve (ac_continuation ac) conts) vs))
     (hm_params_kinds metadata)
   = true ->
+  values_of_subkinds statics
+    (cont_args (resolve (ac_continuation ac) conts) vs)
+    (hm_params_subkinds metadata)
+  = true ->
   bind_params params (cont_args (resolve (ac_continuation ac) conts) vs)
     def_vars
   = Some handler_vars ->
@@ -310,9 +316,10 @@ Lemma step_apply_cont_target_handler (ac : apply_cont) (vars : env)
          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
            rd).
 Proof.
-  intros Hargs Htarget Hkinds Hbind. rewrite step_apply_cont, Hargs.
+  intros Hargs Htarget Hkinds Hsubkinds Hbind.
+  rewrite step_apply_cont, Hargs.
   unfold apply_continuation. rewrite apply_cont_value_target, Htarget.
-  simpl. rewrite Hkinds, Hbind. reflexivity.
+  simpl. rewrite Hkinds, Hsubkinds, Hbind. reflexivity.
 Qed.
 
 Lemma step_apply_cont_target_exit (ac : apply_cont) (vars : env)
@@ -558,6 +565,7 @@ Lemma step_apply_closure (ap : apply_expr) (vars : env) (conts : cont_env)
     (unarize_per_parameter (code_params_arity c))
   = true ->
   arity_eqb (ap_return_arity ap) (code_result_arity c) = true ->
+  values_of_subkinds statics vs (code_params_subkinds c) = true ->
   bind_params (code_params c) vs [(code_my_closure c, callee)]
   = Some callee_vars ->
   step (State (Apply ap) vars conts statics hp rd)
@@ -569,7 +577,7 @@ Lemma step_apply_closure (ap : apply_expr) (vars : env) (conts : cont_env)
          statics hp rd).
 Proof.
   intros Hcallee Hargs Hextra Hclosure Hkind Hcode Htupled Hbinds Hkinds
-    Hparams Hresult Hbind.
+    Hparams Hresult Hsubkinds Hbind.
   rewrite step_apply, Hcallee, Hargs, Hextra. unfold call_function.
   rewrite (shape_of_call_closure statics callee _ _ _ _
              (closure_not_partial statics callee _ Hclosure)).
@@ -598,7 +606,7 @@ Proof.
     rewrite <- (length_map unarize_component (ap_args_arity ap)), Hequal.
     apply length_map. }
   rewrite Hcount. simpl. unfold call_code.
-  rewrite Hbinds, Hkinds, Hparams, Hresult, Hbind. reflexivity.
+  rewrite Hbinds, Hkinds, Hparams, Hresult, Hsubkinds, Hbind. reflexivity.
 Qed.
 
 (* A [Switch] is undefined, or steps to the arm of its scrutinee. *)
@@ -636,6 +644,7 @@ Lemma call_code_heap (closure : value) (c : code) (vs : list value)
 Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
   destruct (bind_params _ _ _); [ | discriminate ].
   intros [= <-]. reflexivity.
@@ -676,6 +685,8 @@ Proof.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs vars); [ | discriminate ].
     intros [= <-]. reflexivity.
   - discriminate.
@@ -710,6 +721,7 @@ Lemma call_code_exit_heap (closure : value) (c : code) (vs : list value)
 Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
   destruct (bind_params _ _ _); discriminate.
 Qed.
@@ -751,6 +763,8 @@ Proof.
     intros vs k vs' hp' rd'; simpl.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs vars); discriminate.
   - intros [= _ _ H _]. exact (eq_sym H).
@@ -2605,9 +2619,26 @@ Proof.
   apply andb_true_iff in Hagree as [Hkinds Hargs].
   apply kinds_eqb_eq in Hkinds. apply kinds_per_parameter_eqb_eq in Hargs.
   apply arity_eqb_eq in Hreturn.
+  destruct (negb (values_of_subkinds statics vs (code_params_subkinds c)));
+    [ discriminate | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ] eqn:Hbind; [ | discriminate ].
   intros [= <-]. exists callee_vars. auto 7.
+Qed.
+
+(* And the arguments are of what the code states of its parameters. *)
+Lemma call_code_step_subkinds (closure : value) (c : code) (vs : list value)
+    (args_arity return_arity : arity) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record) (s : state) :
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp rd
+  = Step s ->
+  values_of_subkinds statics vs (code_params_subkinds c) = true.
+Proof.
+  unfold call_code.
+  destruct (binds_statics (code_body c)); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
+  destruct (values_of_subkinds statics vs (code_params_subkinds c));
+    [ reflexivity | discriminate ].
 Qed.
 
 (* A full call is undefined, or runs the body of the code under
@@ -2638,6 +2669,8 @@ Proof.
         && kinds_per_parameter_eqb (unarize_per_parameter args_arity)
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
+    [ left; reflexivity | ].
+  destruct (negb (values_of_subkinds statics vs (code_params_subkinds c)));
     [ left; reflexivity | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ]; [ | left; reflexivity ].
@@ -2910,6 +2943,8 @@ Proof.
   - simpl in Hstep.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs def_vars); [ | discriminate ].
     injection Hstep as <-. reflexivity.
   - discriminate.
@@ -3036,6 +3071,8 @@ Proof.
     intros vs s' Hc Hstep.
   - simpl in Hstep.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | discriminate ].
@@ -3231,6 +3268,9 @@ Lemma call_code_alike (closure : value) (c c' : code) (vs : list value)
   code_params_arity c' = code_params_arity c ->
   code_result_arity c' = code_result_arity c ->
   binds_statics (code_body c') = binds_statics (code_body c) ->
+  code_params_subkinds c' = code_params_subkinds c ->
+  values_of_subkinds statics' vs (code_params_subkinds c)
+  = values_of_subkinds statics vs (code_params_subkinds c) ->
   (∀ return_to exn_to return_to' exn_to' : cont_value,
     call_code closure c vs args_arity return_arity return_to exn_to statics hp
       rd
@@ -3255,10 +3295,11 @@ Lemma call_code_alike (closure : value) (c c' : code) (vs : list value)
                   (code_exn_continuation c, exn_to')]
                  statics' hp rd)).
 Proof.
-  intros Hparams Hmy_closure Hret Hexn Hparams_arity Hresult_arity Hbinds.
+  intros Hparams Hmy_closure Hret Hexn Hparams_arity Hresult_arity Hbinds
+    Hsubkinds Hsame.
   unfold call_code.
   rewrite Hparams, Hmy_closure, Hret, Hexn, Hparams_arity, Hresult_arity,
-    Hbinds.
+    Hbinds, Hsubkinds, Hsame.
   destruct (binds_statics (code_body c)); [ left; split; reflexivity | ].
   destruct
     (negb
@@ -3266,6 +3307,8 @@ Proof.
         && kinds_per_parameter_eqb (unarize_per_parameter args_arity)
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
+    [ left; split; reflexivity | ].
+  destruct (negb (values_of_subkinds statics vs (code_params_subkinds c)));
     [ left; split; reflexivity | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ]; [ | left; split; reflexivity ].
@@ -3832,6 +3875,8 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (negb (values_of_subkinds statics vs (code_params_subkinds c)));
+    [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
   apply Hstate.
@@ -3907,6 +3952,8 @@ Proof.
     intros vs Hc Hvs.
   - simpl. destruct Hc as [Hdef_vars Hdef_conts].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
@@ -4130,6 +4177,7 @@ Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ reflexivity | ].
   destruct (negb _); [ reflexivity | ].
+  destruct (negb _); [ reflexivity | ].
   destruct (bind_params _ _ _); reflexivity.
 Qed.
 
@@ -4166,6 +4214,8 @@ Proof.
     intros vs statics hp rd1 rd2.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | reflexivity ].
     destruct (bind_params params vs def_vars); reflexivity.
   - reflexivity.

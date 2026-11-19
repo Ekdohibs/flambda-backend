@@ -101,7 +101,9 @@ Proof.
        | c IH extra
        | remaining remaining_arity return_arity return_to IHret exn_to IHexn];
     intros vs statics hp rd; cbn [apply_cont_value apply_unkinded].
-  - destruct (kinds_eqb _ _); [ right; reflexivity | left; reflexivity ].
+  - destruct (kinds_eqb _ _); [ | left; reflexivity ].
+    destruct (values_of_subkinds _ _ _);
+      [ right; reflexivity | left; reflexivity ].
   - right. reflexivity.
   - exact (IH _ _ _ _).
   - destruct vs as [ | v [ | w vs]]; try (left; reflexivity).
@@ -148,6 +150,7 @@ Lemma call_code_cases (closure : value) (c : code) (vs : list value)
 Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ left; reflexivity | ].
+  destruct (negb _); [ left; reflexivity | ].
   destruct (negb _); [ left; reflexivity | ].
   destruct (bind_params _ _ _) as [callee_vars | ];
     [ right; exists callee_vars; reflexivity | left; reflexivity ].

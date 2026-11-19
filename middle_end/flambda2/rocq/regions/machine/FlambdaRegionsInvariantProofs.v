@@ -1405,6 +1405,8 @@ Proof.
   destruct
     (kinds_eqb (map (region_kind_of_value rs) vs) (hm_params_kinds metadata));
     [ | discriminate ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+    [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ];
     [ | discriminate ].
   intros [= <-]. reflexivity.

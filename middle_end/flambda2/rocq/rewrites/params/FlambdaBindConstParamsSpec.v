@@ -68,6 +68,10 @@
    of a non-recursive [Let_cont] of [k] ([bind_const_param]):
    - that the handler is not an exception handler, and has a kind for
      the parameter;
+   - that the handler states nothing of the parameter beyond its kind
+     (FlambdaUnaliasParamsSpec.says_nothing_at): the machine tests
+     what is stated where the handler is applied, and the [Let] tests
+     the kind only;
    - that the first application of [k] in the body of the [Let_cont]
      gives the parameter a symbol or a constant ([first_given],
      [is_plain]);
@@ -215,6 +219,7 @@ Definition bind_const_param (i : nat) (k : continuation)
            && negb (hm_is_exn_handler metadata)
            && all_give k i s body
            && negb (among p (drop_nth i params))
+           && says_nothing_at (hm_params_subkinds metadata) i
         then
           Some
             (Handler (drop_nth i params)

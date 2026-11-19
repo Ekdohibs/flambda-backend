@@ -456,6 +456,16 @@
    which no call returns or raises to a handler that has a region
    parameter ([calls_return_no_region]); of another term the erased
    one would give the handler a value that it has no parameter for.
+   It is meant for a term in which no handler states anything of a
+   parameter that is a region ([regions_state_nothing], which
+   [calls_return_no_region] asks of every handler): the machine tests
+   what a handler states of each value that it is given, a mark
+   passes only an entry that says nothing or that says no more than
+   not null, and the erased term has neither the mark nor the test of
+   what was stated of its parameter. The condition asks more than
+   that: it refuses a handler that states not null of a region, which
+   a mark would pass. The conversion states nothing of a parameter
+   that is not of the kind [Value].
    And it is meant for a term, and a static environment, that have no
    poison constant of the kind [Region] ([no_region_poison],
    [statics_no_region_poison]): given at a region parameter, such a
@@ -482,8 +492,8 @@
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaSemanticsSpec.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaMapSpec FlambdaSemanticsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1359,7 +1369,11 @@ Fixpoint simples_fault (rs : region_state) (simples : list simple)
    left as they are: giving a region ends nothing and begins nothing.
    Where the continuation is not bound to a handler this is
    [plain_step]; [region_step] does not come here then, as the test of
-   the simples has refused the mark. *)
+   the simples has refused the mark.
+
+   What the handler states of its parameters beyond their kinds is
+   tested as [step] tests it, under [live_statics]: a block that a
+   local allocation made is read there. Decision D25, at parameters. *)
 Definition region_apply_cont (rs : region_state) (ac : apply_cont)
     : region_step_result :=
   let s := rs_state rs in
@@ -1370,17 +1384,21 @@ Definition region_apply_cont (rs : region_state) (ac : apply_cont)
       if kinds_eqb (map (region_kind_of_value rs) vs)
            (hm_params_kinds metadata)
       then
-        match bind_params params vs def_vars with
-        | Some handler_vars =>
-          Region_step
-            (Region_state
-               (State handler handler_vars
-                  (rec_closures recursive def_vars def_conts ++ def_conts)
-                  (state_statics s) (state_heap s) (state_reads s))
-               (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs)
-               (rs_cells rs))
-        | None => Region_undefined No_plain_step
-        end
+        if values_of_subkinds (live_statics rs) vs
+             (hm_params_subkinds metadata)
+        then
+          match bind_params params vs def_vars with
+          | Some handler_vars =>
+            Region_step
+              (Region_state
+                 (State handler handler_vars
+                    (rec_closures recursive def_vars def_conts ++ def_conts)
+                    (state_statics s) (state_heap s) (state_reads s))
+                 (rs_frames rs) (rs_base rs) (rs_next rs) (rs_counts rs)
+                 (rs_cells rs))
+          | None => Region_undefined No_plain_step
+          end
+        else Region_undefined No_plain_step
       else Region_undefined No_plain_step
     | None => Region_undefined No_plain_step
     end
@@ -1695,9 +1713,22 @@ Definition takes_no_region (conts : region_conts) (k : continuation) : bool :=
   | None => true
   end.
 
+(* What is stated of parameters says nothing of those that are
+   regions: [places] is as [region_params] gives it. Decision D25, at
+   parameters. *)
+Fixpoint regions_state_nothing (places : list bool)
+    (sks : list param_subkind) : bool :=
+  match places, sks with
+  | place :: places, ps :: sks =>
+    (negb place || says_nothing (fst ps) (snd ps))
+    && regions_state_nothing places sks
+  | _, _ => true
+  end.
+
 (* No call of the expression, of its handlers or of the code that it
    binds returns or raises to a continuation that has a region
-   parameter. [conts] is as for [erase]. See the header: [erase] is
+   parameter, and no handler states anything of a parameter that is a
+   region. [conts] is as for [erase]. See the header: [erase] is
    meant for such a term only. *)
 Fixpoint calls_return_no_region (conts : region_conts) (e : expr) : bool :=
   match e with
@@ -1722,7 +1753,9 @@ Fixpoint calls_return_no_region (conts : region_conts) (e : expr) : bool :=
 with handler_returns_no_region (conts : region_conts)
     (h : continuation_handler) : bool :=
   match h with
-  | Handler _ _ handler => calls_return_no_region conts handler
+  | Handler _ _ handler =>
+    regions_state_nothing (region_params h) (handler_params_subkinds h)
+    && calls_return_no_region conts handler
   end
 with binding_returns_no_region (binding : static_binding) : bool :=
   match binding with
@@ -1829,7 +1862,8 @@ Definition statics_no_region_poison (statics : static_env) : bool :=
 
 (* The terms that [erase] is meant for, with the static environment
    that they are run in: no call returns or raises to a handler that
-   has a region parameter, and there is no poison constant of the kind
+   has a region parameter, no handler states anything of a parameter
+   that is a region, and there is no poison constant of the kind
    [Region]. See the header. *)
 Definition erasable (e : expr) (statics : static_env) : bool :=
   calls_return_no_region [] e

@@ -231,6 +231,8 @@ Proof.
     cbn [apply_cont_value] in Hstep.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs vars) as [vars' | ] eqn:Hbind;
       [ | discriminate ].
     injection Hstep as <-.
@@ -306,6 +308,7 @@ Proof.
             & Hc & _).
       rewrite Hc in Hstep. cbn [apply_cont_value] in Hstep.
       destruct (kinds_eqb _ _); [ | discriminate ].
+      destruct (values_of_subkinds _ _ _); [ | discriminate ].
       destruct (bind_params params vs vars) as [vars' | ] eqn:Hbind;
         [ | discriminate ].
       rewrite (map_const_same (None, l) vs params
@@ -362,6 +365,7 @@ Proof.
               & Hc & _).
         rewrite Hc in Hstep. cbn [apply_cont_value] in Hstep.
         destruct (kinds_eqb _ _); [ | discriminate ].
+        destruct (values_of_subkinds _ _ _); [ | discriminate ].
         destruct (bind_params params (vs ++ extra) vars) as [vars' | ]
           eqn:Hbind; [ | discriminate ].
         pose proof (bind_params_same_length _ _ _ _ Hbind) as Hlength.

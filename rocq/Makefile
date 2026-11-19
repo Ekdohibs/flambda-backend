@@ -442,8 +442,11 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   validation/names/FlambdaStaticsScopeSpec.v \
   rewrites/calls/FlambdaStubCallsProofs.v \
   rewrites/calls/FlambdaStubCallsSpec.v \
+  semantics/FlambdaSubkindBinderProofs.v \
+  semantics/FlambdaSubkindBinderSpec.v \
   semantics/FlambdaSubkindOrderProofs.v \
   semantics/FlambdaSubkindOrderSpec.v \
+  semantics/FlambdaSubkindProofs.v \
   semantics/FlambdaSubkindSpec.v \
   terms/FlambdaTermInductionProofs.v \
   wellformed/FlambdaTrapProofs.v \

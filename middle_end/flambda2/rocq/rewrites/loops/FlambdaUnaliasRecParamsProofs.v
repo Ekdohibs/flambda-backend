@@ -63,6 +63,7 @@ Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
   nth_error (hm_params_kinds metadata) i = Some kind ->
   simple_among s (drop_nth i params) = false ->
   among p (drop_nth i params) = false ->
+  says_nothing_at (hm_params_subkinds metadata) i = true ->
   all_give_simple k i s true body = true ->
   all_give_simple k i (Var p) true handler = true ->
   expr_equivalent
@@ -77,7 +78,8 @@ Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
            (Let p kind (Simple s) (drop_arg k i handler)))]
        (drop_arg k i body)).
 Proof.
-  intros Hparam Hkind Hs Hfresh Hgive Hturns vars conts statics hp rd.
+  intros Hparam Hkind Hs Hfresh Hnothing Hgive Hturns vars conts statics hp
+    rd.
   set (h' :=
     Handler (drop_nth i params)
       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
@@ -115,7 +117,7 @@ Proof.
           rewrite step_let_cont_recursive, Hstatics; reflexivity ].
     apply
       (simple_site_equivalent true k i s p kind params metadata handler vars
-         conts Hparam Hkind Hs Hfresh (fun _ => Hturns)).
+         conts Hparam Hkind Hs Hfresh Hnothing (fun _ => Hturns)).
     apply (Rel_state_in_scope true k i s p kind params metadata handler vars
       conts s true);
       [ apply agree_refl | reflexivity | exact Hgive | ].
@@ -144,9 +146,11 @@ Proof.
     (negb (hm_is_exn_handler metadata) && all_give_var k i x true body
      && all_give_var k i p true handler
      && negb (among x (drop_nth i params))
-     && negb (among p (drop_nth i params)))
+     && negb (among p (drop_nth i params))
+     && says_nothing_at (hm_params_subkinds metadata) i)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
+  apply andb_true_iff in Hcond as [Hcond Hnothing].
   apply andb_true_iff in Hcond as [Hcond Hfresh].
   apply andb_true_iff in Hcond as [Hcond Hx].
   apply andb_true_iff in Hcond as [Hcond Hturns].
@@ -154,7 +158,7 @@ Proof.
   apply negb_true_iff in Hfresh, Hx.
   rewrite all_give_var_simple in Hgive, Hturns.
   exact (loop_param_equivalent i k (Var x) p kind params metadata handler
-    body Hparam Hkind Hx Hfresh Hgive Hturns).
+    body Hparam Hkind Hx Hfresh Hnothing Hgive Hturns).
 Qed.
 
 Lemma unalias_rec_from_equivalent (i : nat) :

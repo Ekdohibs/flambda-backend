@@ -923,6 +923,19 @@ Proof.
        value_lifted_respects).
 Qed.
 
+(* Nor can the test of what a binder states. *)
+Lemma values_of_subkinds_lifted (vs vs' : list value)
+    (sks : list param_subkind) :
+  Forall2 (value_lifted statics') vs vs' ->
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics' vs' sks = true.
+Proof.
+  destruct value_lifted_respects as (Hconstants & _ & Hobserved).
+  exact
+    (values_of_subkinds_related (value_lifted statics') statics statics' vs
+       vs' sks Hconstants Hobserved).
+Qed.
+
 End Observations.
 
 (* ======================================================================== *)
@@ -1935,6 +1948,14 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma bind_my_closure_params_subkinds (id : code_id) (c : code) :
+  code_params_subkinds (bind_my_closure known id c) = code_params_subkinds c.
+Proof.
+  destruct c as [params my_closure ret exn metadata body]. simpl.
+  destruct (lookup id known); [ destruct (among my_closure params) | ];
+    reflexivity.
+Qed.
+
 Lemma bind_my_closure_result_arity (id : code_id) (c : code) :
   code_result_arity (bind_my_closure known id c) = code_result_arity c.
 Proof.
@@ -2099,6 +2120,7 @@ Proof.
   rewrite Hparams, Hmy_closure, Hret, Hexn_k,
     (bind_my_closure_params_arity called c),
     (bind_my_closure_result_arity called c),
+    (bind_my_closure_params_subkinds called c),
     (kinds_of_values_lifted statics' vs vs' Hvs).
   destruct (binds_statics (code_body c)) eqn:Hbinds; [ exact I | ].
   destruct
@@ -2108,6 +2130,11 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (values_of_subkinds statics vs (code_params_subkinds c))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite (values_of_subkinds_lifted statics statics' (proj2 Hstatics) vs vs'
+    _ Hvs Hsubkinds).
+  cbn [negb].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [bound | ] eqn:Hbind;
     [ | exact I ].
@@ -2282,6 +2309,10 @@ Proof.
   - simpl. rewrite (kinds_of_values_lifted statics' vs vs' Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (values_of_subkinds_lifted statics statics' (proj2 Hstatics) vs
+      vs' _ Hvs Hsubkinds).
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_lifted statics' params vs vs' vars vars' bound Hvs
@@ -2881,6 +2912,8 @@ Proof.
     intros vs statics hp rd k exit_vs hp' rd'.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs vars); discriminate.
   - rewrite apply_cont_value_over_application.
@@ -3574,6 +3607,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | exact I ].
     destruct (bind_params params vs dvars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     exists scope, (params_known k sp 0 params plain). simpl.
@@ -3584,6 +3619,8 @@ Proof.
              Hvs).
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs dvars) as [bound | ] eqn:Hbind;
       [ | exact I ].
@@ -4152,6 +4189,11 @@ Proof.
     intros vs statics hp rd; simpl.
   - repeat split.
   - destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    rewrite
+      <- (values_of_subkinds_same_values statics (strip_statics statics) vs
+            (hm_params_subkinds metadata) eq_refl).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs dvars) as [bound | ]; [ | exact I ].
     simpl. apply State_stripped; [ exact Hh | ].

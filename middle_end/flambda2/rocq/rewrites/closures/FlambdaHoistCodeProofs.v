@@ -1638,10 +1638,10 @@ Lemma call_code_hoist (closure : value) (c : code) (vs : list value)
 Proof.
   unfold result_hoisted, call_code.
   destruct (binds_statics (code_body c)) eqn:Hbinds; [ reflexivity | ].
-  match goal with
-  | |- context [negb ?agrees] => destruct (negb agrees)
-  end;
-    [ reflexivity | ].
+  rewrite <- (values_of_subkinds_same_values statics (code_first_env statics)
+    vs _ eq_refl).
+  destruct (negb (kinds_eqb _ _ && _ && _)); [ reflexivity | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ reflexivity | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
     [ | reflexivity ].
   unfold hoist_state. simpl_state.
@@ -1776,6 +1776,10 @@ Proof.
     intros vs Hknown Hvalues Hvs.
   - unfold result_hoisted. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    rewrite <- (values_of_subkinds_same_values statics
+      (code_first_env statics) vs _ eq_refl).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
       [ | reflexivity ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | reflexivity ].

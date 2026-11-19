@@ -188,16 +188,16 @@ Definition used_params (is_exn_handler : bool) (params : list variable)
   in
   if forallb (fun used => used) mask then None else Some mask.
 
-(* The metadata of a handler with the kinds of the parameters kept: a
-   parameter that goes takes its kind with it. An exception handler
-   stays one. *)
+(* The metadata of a handler with the kinds of the parameters kept, and
+   what is stated of them: a parameter that goes takes its kind with
+   it, and what was stated of it. An exception handler stays one. *)
 Definition keep_kinds (mask : option (list bool))
     (metadata : handler_metadata) : handler_metadata :=
   match mask with
   | Some mask =>
-    let kinds := keep mask (hm_params_kinds metadata) in
-    if hm_is_exn_handler metadata then make_exn_handler_metadata kinds
-    else make_handler_metadata kinds
+    {| hm_params_kinds := keep mask (hm_params_kinds metadata);
+       hm_params_subkinds := keep mask (hm_params_subkinds metadata);
+       hm_is_exn_handler := hm_is_exn_handler metadata |}
   | None => metadata
   end.
 

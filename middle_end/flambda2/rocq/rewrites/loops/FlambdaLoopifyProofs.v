@@ -810,6 +810,7 @@ Lemma enter_loop (self : continuation) (c : code) (vs : list value)
   binds_statics (code_body c) = false ->
   distinct (code_params c) = true ->
   map kind_of_value vs = code_params_kinds c ->
+  values_of_subkinds statics vs (code_params_subkinds c) = true ->
   bind_params (code_params c) vs base = Some entry ->
   ∃ entry' : env,
     run 2 (State (code_body (looped_code self c)) entry conts statics hp rd)
@@ -826,7 +827,7 @@ Lemma enter_loop (self : continuation) (c : code) (vs : list value)
            statics hp rd)
     ∧ ∀ x : variable, lookup x entry = lookup x entry'.
 Proof.
-  intros Hbinds Hdistinct Hkinds Hbind.
+  intros Hbinds Hdistinct Hkinds Hsubkinds Hbind.
   destruct (rebind_params (code_params c) vs base entry Hbind)
     as (vs' & entry' & Hvs' & Hbind' & Hext).
   rewrite (eval_params_bound _ vs base entry Hdistinct Hbind) in Hvs'.
@@ -839,7 +840,7 @@ Proof.
   rewrite loop_calls_binds_statics, Hbinds. simpl.
   rewrite step_apply_cont. simpl. rewrite Hvs.
   unfold apply_continuation. rewrite resolve_head. unfold loop_handler.
-  simpl. rewrite Hkinds, Hbind'. reflexivity.
+  simpl. rewrite Hkinds, Hsubkinds, Hbind'. reflexivity.
 Qed.
 
 (* The same full call, of code and of what the second static environment
@@ -864,10 +865,10 @@ Proof.
   intros Hstatics Hclosure Hc Hcode Hr Hx.
   destruct Hcode as [-> | (self & Hloopable & ->)]; unfold call_code.
   - destruct (binds_statics (code_body c)); [ exact I | ].
-    match goal with
-    | |- context [if negb ?agrees then _ else _] =>
-      destruct (negb agrees); [ exact I | ]
-    end.
+    rewrite <- (values_of_subkinds_same_values statics statics' vs _
+      (proj2 Hstatics)).
+    destruct (negb (kinds_eqb _ _ && _ && _)); [ exact I | ].
+    destruct (negb (values_of_subkinds _ _ _)); [ exact I | ].
     destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
       as [entry | ]; [ | exact I ].
     cbn [result_loops]. eexists _, 0, _.
@@ -877,20 +878,32 @@ Proof.
   - destruct (looped_code_fields self c)
       as (Hsame_params & Hsame_closure & Hsame_ret & Hsame_exn
           & Hsame_params_arity & Hsame_result_arity).
+    assert (Hsame_subkinds :
+      code_params_subkinds (looped_code self c) = code_params_subkinds c)
+      by (destruct c; reflexivity).
     rewrite looped_code_binds_statics, Hsame_params_arity,
-      Hsame_result_arity, Hsame_params, Hsame_closure, Hsame_ret, Hsame_exn.
+      Hsame_result_arity, Hsame_params, Hsame_closure, Hsame_ret, Hsame_exn,
+      Hsame_subkinds,
+      <- (values_of_subkinds_same_values statics statics' vs _
+            (proj2 Hstatics)).
     destruct (binds_statics (code_body c)) eqn:Hbinds; [ exact I | ].
-    match goal with
-    | |- context [if negb ?agrees then _ else _] =>
-      destruct (negb agrees) eqn:Hagrees; [ exact I | ]
-    end.
+    destruct (negb (kinds_eqb _ _ && _ && _)) eqn:Hagrees; [ exact I | ].
+    destruct (values_of_subkinds statics vs (code_params_subkinds c))
+      eqn:Hsubkinds; [ | exact I ].
+    cbn [negb].
     destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
       as [entry | ] eqn:Hbind; [ | exact I ].
     destruct (enter_loop self c vs _ entry
                 [(code_return_continuation c, r');
                  (code_exn_continuation c, x')]
                 statics' hp rd Hbinds (loopable_distinct self c Hloopable)
-                (agreed_kinds vs args_arity return_arity c Hagrees) Hbind)
+                (agreed_kinds vs args_arity return_arity c Hagrees)
+                (eq_trans
+                   (eq_sym
+                      (values_of_subkinds_same_values statics statics' vs _
+                         (proj2 Hstatics)))
+                   Hsubkinds)
+                Hbind)
       as (entry' & Hrun & Hext).
     cbn [result_loops]. eexists _, 2, _.
     split; [ reflexivity | ]. split; [ exact Hrun | ].
@@ -1013,6 +1026,10 @@ Proof.
     + simpl.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
         [ | exact I ].
+      rewrite <- (values_of_subkinds_same_values statics statics' vs _
+        (proj2 Hstatics)).
+      destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+        [ | exact I ].
       destruct (bind_params params vs vars) as [bound | ]; [ | exact I ].
       eexists _, 0, _. split; [ reflexivity | ]. split; [ reflexivity | ].
       apply Loops_out; [ exact Hstatics | intros k; apply Rel_same ].
@@ -1028,6 +1045,10 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    rewrite <- (values_of_subkinds_same_values statics statics' vs _
+      (proj2 Hstatics)).
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | exact I ].
     destruct (bind_params params vs vars) as [bound | ]; [ | exact I ].
     eexists _, 0, _. split; [ reflexivity | ]. split; [ reflexivity | ].
     apply Loops_out; [ exact Hstatics | ].
@@ -1036,6 +1057,10 @@ Proof.
       [ apply Rel_out, Hconts | apply Hconts ].
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    rewrite <- (values_of_subkinds_same_values statics statics' vs _
+      (proj2 Hstatics)).
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
@@ -1170,11 +1195,12 @@ Proof.
   unfold shape_of_code_call. cbv zeta.
   rewrite Hfull, Nat.eqb_refl. cbn [run_call].
   unfold call_code. rewrite Hbinds.
-  match goal with
-  | |- context [if negb ?agrees then _ else _] =>
-    destruct (negb agrees) eqn:Hagrees; [ exact I | ]
-  end.
+  destruct (negb (kinds_eqb _ _ && _ && _)) eqn:Hagrees; [ exact I | ].
   apply agreed_kinds, kinds_eqb_eq in Hagrees.
+  destruct
+    (values_of_subkinds statics vs (code_params_subkinds (frame_code F)))
+    eqn:Hsubkinds; [ | exact I ].
+  cbn [negb].
   destruct
     (bind_params (code_params (frame_code F)) vs
        [(code_my_closure (frame_code F), frame_closure F)])
@@ -1182,8 +1208,12 @@ Proof.
   destruct (bind_params_defined _ vs _ (frame_entry F) entry Hbind)
     as [bound' Hbind'].
   rewrite Hself. unfold frame_self_closure, loop_handler.
-  cbn [apply_cont_value hm_params_kinds make_handler_metadata].
-  rewrite Hagrees, Hbind'. eexists. split; [ reflexivity | ].
+  cbn [apply_cont_value hm_params_kinds hm_params_subkinds].
+  rewrite Hagrees,
+    <- (values_of_subkinds_same_values statics statics' vs _
+          (proj2 Hstatics)),
+    Hsubkinds, Hbind'.
+  eexists. split; [ reflexivity | ].
   apply (Loops_in F (code_body (frame_code F)) entry bound');
     try assumption.
   - split.

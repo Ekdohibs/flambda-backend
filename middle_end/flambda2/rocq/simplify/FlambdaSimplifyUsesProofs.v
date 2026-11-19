@@ -681,10 +681,15 @@ Proof.
     2: { apply step_undefined_refines. rewrite step_apply_cont, Hargs.
          unfold apply_continuation. rewrite Hk, resolve_head. simpl.
          rewrite Hkinds. reflexivity. }
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds.
+    2: { apply step_undefined_refines. rewrite step_apply_cont, Hargs.
+         unfold apply_continuation. rewrite Hk, resolve_head. simpl.
+         rewrite Hkinds, Hsubkinds. reflexivity. }
     destruct (bind_params params vs vars) as [handler_vars | ] eqn:Hbind.
     2: { apply step_undefined_refines. rewrite step_apply_cont, Hargs.
          unfold apply_continuation. rewrite Hk, resolve_head. simpl.
-         rewrite Hkinds, Hbind. reflexivity. }
+         rewrite Hkinds, Hsubkinds, Hbind. reflexivity. }
     assert (Hstep :
       step
         (State (Apply_cont ac) vars
@@ -694,12 +699,14 @@ Proof.
       = Step (State handler handler_vars conts statics hp rd)).
     { apply (step_apply_cont_handler ac vars _ statics _ rd_ vs params metadata
                handler vars conts [] handler_vars Hargs);
-        [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hbind ]. }
+        [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hsubkinds
+        | exact Hbind ]. }
     eapply refines_step.
     + exact Hstep.
     + apply (step_apply_cont_handler ac vars _ statics _ rd_ vs params metadata
                handler' vars conts [] handler_vars Hargs);
-        [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hbind ].
+        [ rewrite Hk; apply resolve_head | exact Hkinds | exact Hsubkinds
+        | exact Hbind ].
     + exact (Hhandler Hk vs handler_vars eq_refl
                (proj1 (kinds_eqb_eq _ _) Hkinds) Hbind
                (Hkept _ _ Hinv Hstep)).

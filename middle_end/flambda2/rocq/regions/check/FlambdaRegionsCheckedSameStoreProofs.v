@@ -505,6 +505,7 @@ Proof.
   destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hvs;
     [ | discriminate ].
   destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (values_of_subkinds _ _ _); [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | discriminate ].
   injection Hstep as <-.

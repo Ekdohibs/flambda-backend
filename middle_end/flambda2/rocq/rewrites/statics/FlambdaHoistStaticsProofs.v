@@ -1106,27 +1106,6 @@ Proof.
       unfold kept_symbol. rewrite Hkept. reflexivity.
 Qed.
 
-(* A full call. *)
-Lemma call_code_hoist (closure : value) (c : code) (vs : list value)
-    (args_arity return_arity : arity) (return_to exn_to : cont_value)
-    (statics : static_env) (hp : heap) (rd : read_record) :
-  result_hoisted
-    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
-       rd)
-    (call_code closure c vs args_arity return_arity (hoist_cont return_to)
-       (hoist_cont exn_to) (hoist_env statics) hp rd).
-Proof.
-  unfold result_hoisted, call_code.
-  destruct (binds_statics (code_body c)) eqn:Hbinds; [ reflexivity | ].
-  match goal with
-  | |- context [negb ?agrees] => destruct (negb agrees)
-  end;
-    [ reflexivity | ].
-  destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
-    [ | reflexivity ].
-  unfold hoist_state. simpl_state.
-  rewrite (proj1 (without_hoisted_nothing _ Hbinds)). reflexivity.
-Qed.
 
 (* ------------------------------------------------------------------------ *)
 (* What the two static environments agree on                                *)
@@ -1356,12 +1335,107 @@ Proof.
     rewrite Hargs, Hsym in Hall. exact (Forall_inv Hall).
 Qed.
 
+(* The test of what a binder states reads alike, under the two static
+   environments, values that mention only what the first binds. *)
+Lemma values_of_subkinds_hoist (statics : static_env) (vs : list value)
+    (sks : list param_subkind) :
+  statics_known statics ->
+  statics_fine statics ->
+  Forall (value_statics_bound deleted statics) vs ->
+  values_of_subkinds (hoist_env statics) vs sks
+  = values_of_subkinds statics vs sks.
+Proof.
+  intros S Hfine Hvs.
+  set (R :=
+    fun v v' : value => v' = v ∧ value_statics_bound deleted statics v).
+  assert (Hblock_same :
+    ∀ v : value,
+      value_statics_bound deleted statics v ->
+      block_of (hoist_env statics) v = block_of statics v).
+  { intros v Hv.
+    exact (block_of_static_values (hoist_env statics) statics v
+             (symbol_bound_hoist statics v S Hv)). }
+  assert (Hboxed_same :
+    ∀ v : value,
+      value_statics_bound deleted statics v ->
+      boxed_number_of (hoist_env statics) v = boxed_number_of statics v).
+  { intros v Hv.
+    exact (boxed_number_of_static_values (hoist_env statics) statics v
+             (symbol_bound_hoist statics v S Hv)). }
+  assert (Hall_R :
+    ∀ l : list value,
+      Forall (value_statics_bound deleted statics) l -> Forall2 R l l).
+  { induction 1; constructor;
+      [ split; [ reflexivity | assumption ] | assumption ]. }
+  assert (Hfields :
+    ∀ (v : value) (tag : Z) (fields : list value),
+      value_statics_bound deleted statics v ->
+      block_of statics v = Some (tag, fields) ->
+      Forall2 R fields fields).
+  { intros v tag fields Hv Hblock. apply Hall_R.
+    apply forallb_Forall_among.
+    destruct (block_of_cases _ _ _ _ Hblock) as [-> | (sym & -> & Hs)];
+      [ exact Hv | exact (statics_among_lookup _ _ statics sym _ Hfine Hs) ]. }
+  destruct (values_of_subkinds statics vs sks) eqn:Htest.
+  - refine
+      (values_of_subkinds_related_aux R statics (hoist_env statics) _ _ _ _ _
+         vs vs (Hall_R vs Hvs) sks Htest).
+    + intros c v' [-> _]. left. reflexivity.
+    + intros v c [<- _]. left. reflexivity.
+    + intros v v' c [-> Hv]. rewrite (Hboxed_same v Hv). exact (fun H => H).
+    + intros v v' tag fields [-> Hv] Hb. exists fields.
+      split;
+        [ rewrite (Hblock_same v Hv); exact Hb
+        | exact (Hfields v tag fields Hv Hb) ].
+    + intros v v' [-> _]. reflexivity.
+  - destruct (values_of_subkinds (hoist_env statics) vs sks) eqn:Htest';
+      [ | reflexivity ].
+    assert (Hback : values_of_subkinds statics vs sks = true).
+    { refine
+        (values_of_subkinds_related_aux R (hoist_env statics) statics _ _ _ _
+           _ vs vs (Hall_R vs Hvs) sks Htest').
+      - intros c v' [-> _]. left. reflexivity.
+      - intros v c [<- _]. left. reflexivity.
+      - intros v v' c [-> Hv]. rewrite (Hboxed_same v Hv).
+        exact (fun H => H).
+      - intros v v' tag fields [-> Hv] Hb. rewrite (Hblock_same v Hv) in Hb.
+        exists fields. split; [ exact Hb | exact (Hfields v tag fields Hv Hb) ].
+      - intros v v' [-> _]. reflexivity. }
+    rewrite Hback in Htest. discriminate Htest.
+Qed.
+
+(* A full call. *)
+Lemma call_code_hoist (closure : value) (c : code) (vs : list value)
+    (args_arity return_arity : arity) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  statics_known statics ->
+  statics_fine statics ->
+  Forall (value_statics_bound deleted statics) vs ->
+  result_hoisted
+    (call_code closure c vs args_arity return_arity return_to exn_to statics hp
+       rd)
+    (call_code closure c vs args_arity return_arity (hoist_cont return_to)
+       (hoist_cont exn_to) (hoist_env statics) hp rd).
+Proof.
+  intros S Hfine Hvs. unfold result_hoisted, call_code.
+  destruct (binds_statics (code_body c)) eqn:Hbinds; [ reflexivity | ].
+  rewrite (values_of_subkinds_hoist statics vs _ S Hfine Hvs).
+  destruct (negb (kinds_eqb _ _ && _ && _)); [ reflexivity | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ reflexivity | ].
+  destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
+    [ | reflexivity ].
+  unfold hoist_state. simpl_state.
+  rewrite (proj1 (without_hoisted_nothing _ Hbinds)). reflexivity.
+Qed.
+
 (* A call of a given shape, given what the two runs do with a partial
    application. *)
 Lemma run_call_hoist (statics : static_env) (hp : heap) (rd : read_record)
     (return_partial return_partial' : value -> step_result)
     (shape shape' : option call_shape) (return_arity : arity)
     (return_to exn_to : cont_value) :
+  statics_known statics ->
+  statics_fine statics ->
   shapes_related eq shape shape' ->
   shape_values_all (value_statics_bound deleted statics) shape ->
   (∀ partial : value,
@@ -1372,18 +1446,18 @@ Lemma run_call_hoist (statics : static_env) (hp : heap) (rd : read_record)
     (run_call return_partial' shape' return_arity (hoist_cont return_to)
        (hoist_cont exn_to) (hoist_env statics) hp rd).
 Proof.
-  intros Hshapes Hvalues Hpartial.
+  intros S Hfine Hshapes Hvalues Hpartial.
   destruct Hshapes
     as [ | closure c c' vs args_arity <-
        | closure c c' vs remaining args_arity remaining_arity <-
        | partial];
     simpl in Hvalues |- *.
   - reflexivity.
-  - apply call_code_hoist.
+  - apply call_code_hoist; [ exact S | exact Hfine | exact (proj2 Hvalues) ].
   - exact (call_code_hoist closure c vs args_arity (code_result_arity c)
              (Over_application remaining remaining_arity return_arity
                 return_to exn_to)
-             exn_to statics hp rd).
+             exn_to statics hp rd S Hfine (proj1 (proj2 Hvalues))).
   - exact (Hpartial partial Hvalues).
 Qed.
 
@@ -1408,7 +1482,7 @@ Lemma call_function_hoist_from (statics : static_env) (hp : heap)
        (hoist_cont return_to) (hoist_cont exn_to) (hoist_env statics) hp rd).
 Proof.
   intros S Hfine Hcallee Hvs Hpartial. unfold call_function.
-  apply run_call_hoist.
+  apply run_call_hoist; [ exact S | exact Hfine | | | ].
   - apply shape_of_call_hoist; assumption.
   - apply (shape_of_call_values_all _ (value_bound_partial statics));
       [ exact (tuple_fields_bound statics Hfine) | assumption | assumption ].
@@ -1436,6 +1510,9 @@ Proof.
     intros vs Hknown Hvalues Hvs.
   - unfold result_hoisted. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    rewrite (values_of_subkinds_hoist statics vs _ S Hfine Hvs).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
       [ | reflexivity ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | reflexivity ].

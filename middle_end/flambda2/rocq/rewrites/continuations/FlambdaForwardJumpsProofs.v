@@ -96,7 +96,10 @@ Proof.
       discriminate Hsome. }
   destruct params as [ | p params]; [ | exact Hnone ].
   destruct (hm_params_kinds metadata) eqn:Hkinds; [ | exact Hnone ].
-  apply forwarding_fits. intros _. rewrite Hkinds. reflexivity.
+  apply forwarding_fits. intros _. rewrite Hkinds.
+  split; [ reflexivity | ].
+  intros statics [ | v vs] Hlength; [ | discriminate Hlength ].
+  apply values_of_subkinds_no_values.
 Qed.
 
 (* Every entry is for a continuation of no parameters whose handler

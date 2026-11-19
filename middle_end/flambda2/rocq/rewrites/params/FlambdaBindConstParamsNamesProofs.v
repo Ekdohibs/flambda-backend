@@ -114,9 +114,11 @@ Proof.
   destruct (first_given k i body) as [[s | ] | ]; try discriminate.
   destruct
     (is_plain s && negb (hm_is_exn_handler metadata) && all_give k i s body
-     && negb (among p (drop_nth i params)))
+     && negb (among p (drop_nth i params))
+     && says_nothing_at (hm_params_subkinds metadata) i)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
+  apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hplain _].

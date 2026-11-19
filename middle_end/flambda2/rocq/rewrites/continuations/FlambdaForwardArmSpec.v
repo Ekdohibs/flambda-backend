@@ -143,7 +143,7 @@
    [forward_to_arms_kinded] is for the term after, where an
    equivalence is needed
    ([forward_to_arms_kinded_equivalent_statement]). It forwards an
-   application only where the three things that the application does
+   application only where the four things that the application does
    cannot fail, as FlambdaForwardKindedSpec.forward_kinded does and
    by the same means: going down the term it keeps the kinds of the
    variables bound around the point
@@ -151,7 +151,9 @@
    argument have, by them, the kind that the handler gives the
    parameter it is given to (FlambdaForwardKindedSpec.have_kinds);
    and it keeps no entry for a handler that does not give as many
-   kinds as it has parameters, which never runs. The [Switch] of the
+   kinds as it has parameters, which never runs, nor for one that
+   states something of its parameters beyond their kinds
+   (FlambdaKindModel.subkinds_say_nothing). The [Switch] of the
    handler cannot fail either: the parameter tested is bound to the
    naked immediate given, and the arm of that number has been found.
 
@@ -220,14 +222,17 @@ Definition arm_forwards : Type := list (continuation * option arm_entry).
 (* The entry of a continuation with these parameters. [handler] is the
    handler once the pass has been through it, and [body] the body of
    the [Let_cont]. Where [kinded], none is kept for a handler that does
-   not give as many kinds as it has parameters. *)
+   not give as many kinds as it has parameters, or that states
+   something of them beyond their kinds. *)
 
 Definition arm_entry_of (kinded : bool) (params : list variable)
     (metadata : handler_metadata) (handler body : expr) : option arm_entry :=
   match handler with
   | Switch (Var p) arms =>
     if kinded
-       && negb (Nat.eqb (length params) (length (hm_params_kinds metadata)))
+       && negb
+            (Nat.eqb (length params) (length (hm_params_kinds metadata))
+             && subkinds_say_nothing (hm_params_subkinds metadata))
     then None
     else
       match position_of p params with

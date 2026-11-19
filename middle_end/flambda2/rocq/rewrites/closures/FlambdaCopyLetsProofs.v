@@ -728,6 +728,19 @@ Proof.
     + intros elements. exact (array_of_copied v v' elements Hv).
 Qed.
 
+(* Nor can the test of what a binder states. *)
+Lemma values_of_subkinds_copied (vs vs' : list value)
+    (sks : list param_subkind) :
+  Forall2 value_copied vs vs' ->
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics' vs' sks = true.
+Proof.
+  destruct value_copied_respects as (Hconstants & _ & Hobserved).
+  exact
+    (values_of_subkinds_related value_copied statics statics' vs vs' sks
+       Hconstants Hobserved).
+Qed.
+
 End Observations.
 
 (* ======================================================================== *)
@@ -1494,11 +1507,18 @@ Proof.
   destruct (code_lets_parts c c' Hc)
     as (_ & Hparams_arity & Hresult & Hparams & Hmy & Hret & Hexn_k & Hbinds
         & Hbody).
+  assert (Hsubkinds_eq : code_params_subkinds c' = code_params_subkinds c)
+    by (destruct Hc as [lets ->]; destruct c; reflexivity).
   unfold call_code.
   rewrite Hbinds, Hparams_arity, Hresult, Hparams, Hmy, Hret, Hexn_k,
-    (kinds_of_values_copied vs vs' Hvs).
+    Hsubkinds_eq, (kinds_of_values_copied vs vs' Hvs).
   destruct (binds_statics (code_body c)) eqn:Hb; [ exact I | ].
   destruct (negb _); [ exact I | ].
+  destruct (values_of_subkinds statics vs (code_params_subkinds c))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite (values_of_subkinds_copied statics statics'
+    (proj1 (proj2 Hstatics)) vs vs' _ Hvs Hsubkinds).
+  cbn [negb].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [bound | ] eqn:Hbind;
     [ | exact I ].
@@ -1614,6 +1634,10 @@ Proof.
     rewrite (kinds_of_values_copied vs vs' Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (values_of_subkinds_copied statics statics'
+      (proj1 (proj2 Hstatics)) vs vs' _ Hvs Hsubkinds).
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_copied params vs vs' vars vars' bound Hvs Hvars

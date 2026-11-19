@@ -487,6 +487,7 @@ Definition inline_tail_kinded_step (e : expr) : expr :=
   match e with
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     if Nat.eqb (length params) (length (hm_params_kinds metadata))
+       && subkinds_say_nothing (hm_params_subkinds metadata)
     then
       match inline_cont_at_tail k params metadata handler body with
       | Some inlined => inlined
@@ -3106,7 +3107,9 @@ Lemma kinded_entry_equivariant (r : renaming) (k : continuation)
   = rename_forward_entry r (kinded_entry k params metadata handler body).
 Proof.
   unfold kinded_entry. rewrite length_map.
-  destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)));
+  destruct
+    (Nat.eqb (length params) (length (hm_params_kinds metadata))
+     && subkinds_say_nothing (hm_params_subkinds metadata));
     [ apply forwarding_equivariant | reflexivity ].
 Qed.
 
@@ -3286,7 +3289,9 @@ Proof.
   rewrite length_map, position_of_renamed.
   destruct
     (kinded
-     && negb (Nat.eqb (length params) (length (hm_params_kinds metadata))));
+     && negb
+          (Nat.eqb (length params) (length (hm_params_kinds metadata))
+           && subkinds_say_nothing (hm_params_subkinds metadata)));
     [ reflexivity | ].
   destruct (position_of p params); reflexivity.
 Qed.

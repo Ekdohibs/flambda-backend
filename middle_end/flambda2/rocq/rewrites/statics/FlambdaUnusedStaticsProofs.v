@@ -457,6 +457,49 @@ Proof.
   - split; [ reflexivity | discriminate ].
 Qed.
 
+(* Values that avoid the names removed are of the same subkinds under
+   the two static environments. *)
+Lemma values_of_subkinds_erased (statics statics' : static_env)
+    (vs : list value) (sks : list param_subkind) :
+  statics_erased statics statics' ->
+  forallb (value_avoids D) vs = true ->
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics' vs sks = true.
+Proof.
+  intros (_ & _ & Hvalues & Havoid) Hvs.
+  apply (values_of_subkinds_related_aux
+    (fun v v' => v' = v ∧ value_avoids D v = true) statics statics').
+  - intros c v' [-> _]. left. reflexivity.
+  - intros v c [[= <-] _]. left. reflexivity.
+  - intros v v' c [-> Hv].
+    destruct v as [ | | | s | | | | | ]; try exact (fun H => H).
+    simpl in Hv |- *. rewrite (Hvalues s Hv). exact (fun H => H).
+  - intros v v' tag fields [-> Hv] Hblock. exists fields.
+    assert (Hfields : forallb (value_avoids D) fields = true).
+    { destruct v as [ | | | s | tag0 fields0 | | | | ]; try discriminate.
+      - simpl in Hv, Hblock.
+        destruct (lookup s (static_values statics)) as [allocated | ]
+          eqn:Hlookup; [ | discriminate ].
+        pose proof (Havoid s allocated Hv Hlookup) as Hallocated.
+        destruct allocated; try discriminate.
+        injection Hblock as <- <-. exact Hallocated.
+      - injection Hblock as <- <-. exact Hv. }
+    split.
+    + destruct v as [ | | | s | | | | | ]; try exact Hblock.
+      simpl in Hv, Hblock |- *. rewrite (Hvalues s Hv). exact Hblock.
+    + clear - Hfields.
+      induction fields as [ | field fields IH]; [ apply Forall2_nil | ].
+      simpl in Hfields. apply andb_true_iff in Hfields as [Hfield Hfields].
+      apply Forall2_cons; [ split; [ reflexivity | exact Hfield ] | ].
+      apply IH, Hfields.
+  - intros v v' [-> _]. reflexivity.
+  - clear - Hvs.
+    induction vs as [ | v vs IH]; [ apply Forall2_nil | ].
+    simpl in Hvs. apply andb_true_iff in Hvs as [Hv Hvs].
+    apply Forall2_cons; [ split; [ reflexivity | exact Hv ] | ].
+    apply IH, Hvs.
+Qed.
+
 (* The primitives introduce no symbols and no code ids: referring to no
    name removed is a property that every primitive preserves
    (FlambdaPrimitiveSpec.eval_prim_preserves_statement). *)
@@ -996,6 +1039,11 @@ Proof.
              (unarize_per_parameter (cm_params_arity metadata))
         && arity_eqb return_arity (cm_result_arity metadata)));
     [ exact I | ].
+  destruct (values_of_subkinds statics vs (cm_params_subkinds metadata))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite (values_of_subkinds_erased statics statics' vs _ Hstatics Hvs
+    Hsubkinds).
+  cbn [negb].
   destruct (bind_params params vs [(my_closure, closure)]) as [bound | ]
     eqn:Hbind; simpl; [ | exact I ].
   apply State_erased.
@@ -1067,6 +1115,10 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (values_of_subkinds_erased statics statics' vs _ Hstatics Hvs
+      Hsubkinds).
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind; simpl;
       [ | exact I ].
     apply State_erased;

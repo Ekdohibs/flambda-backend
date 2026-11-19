@@ -108,8 +108,10 @@
    is of the kind [Value].
 
    So of a value at an exit that is a symbol whose allocation is
-   gone, the statements say its kind and nothing else: the run of the
-   erased term may have any value of the kind [Value] at its place.
+   gone, the statements say its kind, and that the value at its place
+   in the run of the erased term is no constant, and nothing else: that
+   run may have any value of the kind [Value] that is no constant
+   there.
    Of one that is the location of a dead cell they say that the run
    of the erased term has that location at its place. They are not
    the agreement of the values at the exit
@@ -237,6 +239,7 @@ Inductive value_erased (rs : region_state) : value -> value -> Prop :=
     Forall2
       (fun arg arg' =>
          kind_of_value arg' = kind_of_value arg
+         ∧ (∀ c : const, arg' = Value_const c -> arg = Value_const c)
          ∧ (value_usable rs arg = true ∨ is_location arg = true ->
             value_erased rs arg arg'))
       args args' ->
@@ -279,11 +282,19 @@ Inductive value_erased (rs : region_state) : value -> value -> Prop :=
     value_erased rs (Value_symbol s)
       (Value_closure_of_set slot function_decls value_slots').
 
-(* The two values are of one kind, and the relation holds if the first
-   may be evaluated or is a location. *)
+(* The two values are of one kind, the second is a constant only where
+   the first is that constant, and the relation holds if the first may
+   be evaluated or is a location.
+
+   The second part is for the test of what a binder states: a symbol
+   that is gone is not null, and passes where a binder states that
+   its value is not null and nothing else; the value at its place in
+   the run of the erased term must then pass too, so it must not be
+   null, nor poison. Decision D25, at parameters. *)
 Definition value_erased_if_usable (rs : region_state) (v v' : value)
     : Prop :=
   kind_of_value v' = kind_of_value v
+  ∧ (∀ c : const, v' = Value_const c -> v = Value_const c)
   ∧ (value_usable rs v = true ∨ is_location v = true ->
      value_erased rs v v').
 

@@ -414,6 +414,10 @@ Lemma erase_code_result_arity (c : code) :
   code_result_arity (erase_code c) = code_result_arity c.
 Proof. destruct c. reflexivity. Qed.
 
+Lemma erase_code_params_subkinds (c : code) :
+  code_params_subkinds (erase_code c) = code_params_subkinds c.
+Proof. destruct c. reflexivity. Qed.
+
 Lemma erase_code_is_tupled (c : code) :
   code_is_tupled (erase_code c) = code_is_tupled c.
 Proof. destruct c. reflexivity. Qed.
@@ -517,7 +521,7 @@ Lemma tuple_fields_erased (rs : region_state) (statics' : static_env)
     tuple_fields statics' size tuple' = Some fields'
     ∧ Forall2 (value_erased rs) fields fields'.
 Proof.
-  intros Hsymbols [_ Htuple]. unfold tuple_fields.
+  intros Hsymbols (_ & _ & Htuple). unfold tuple_fields.
   destruct (value_usable rs tuple) eqn:Husable.
   - exact
       (tuple_fields_from_related (value_erased rs) (live_statics rs) statics'
@@ -717,7 +721,7 @@ Lemma shape_of_call_erased (rs : region_state) (statics' : static_env)
     = Some shape'
     ∧ shape_erased rs shape shape'.
 Proof.
-  intros Hstatics [_ Hcallee] Hvs Hshape.
+  intros Hstatics (_ & _ & Hcallee) Hvs Hshape.
   assert (Husable : value_usable rs callee = true).
   { unfold shape_of_call in Hshape.
     destruct kind as [named | | code_ids];
@@ -782,7 +786,7 @@ Proof.
   rewrite erase_code_body, erase_binds_statics, erase_code_params_arity,
     erase_code_result_arity, erase_code_params, erase_code_my_closure,
     erase_code_return_continuation, erase_code_exn_continuation,
-    (kinds_of_values_if_usable rs vs vs' Hvs).
+    erase_code_params_subkinds, (kinds_of_values_if_usable rs vs vs' Hvs).
   destruct (binds_statics (code_body c)); [ exact I | ].
   destruct
     (negb
@@ -791,6 +795,13 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct
+    (values_of_subkinds (live_statics rs) vs (code_params_subkinds c))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite
+    (values_of_subkinds_erased_if_usable rs statics'
+       (proj1 (proj2 (proj2 Hstatics))) vs vs' Hvs _ Hsubkinds).
+  cbn [negb].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [bound | ] eqn:Hbind;
     [ | exact I ].
@@ -941,6 +952,12 @@ Proof.
     rewrite (kinds_of_values_if_usable rs vs vs' Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct
+      (values_of_subkinds (live_statics rs) vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite
+      (values_of_subkinds_erased_if_usable rs statics'
+         (proj1 (proj2 (proj2 Hstatics))) vs vs' Hvs _ Hsubkinds).
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct
@@ -948,7 +965,7 @@ Proof.
       as (bound' & -> & Hbound).
     eexists. split; [ reflexivity | ].
     apply state_erased_plain_next.
-    + exact Hh.
+    + exact (handler_returns_no_region_body _ _ _ _ Hh).
     + exact
         (conts_agree_rec rconts conts vars conts recursive recursive Hagree).
     + exact Hbound.

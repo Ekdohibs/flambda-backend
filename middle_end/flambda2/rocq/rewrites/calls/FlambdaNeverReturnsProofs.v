@@ -57,6 +57,8 @@ Proof.
                     (unarize_per_parameter (code_params_arity c))
                && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (negb (values_of_subkinds _ vs _));
+    [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ]; [ | exact I ].
   apply

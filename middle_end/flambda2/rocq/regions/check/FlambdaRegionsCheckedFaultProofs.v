@@ -75,6 +75,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
     [ | intros [= <-]; reflexivity ].
   destruct (kinds_eqb _ _); [ | intros [= <-]; reflexivity ].
+  destruct (values_of_subkinds _ _ _); [ | intros [= <-]; reflexivity ].
   destruct (bind_params params vs def_vars);
     [ discriminate | intros [= <-]; reflexivity ].
 Qed.

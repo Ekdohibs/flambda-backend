@@ -451,6 +451,19 @@ Proof.
     + intros elements'. exact (array_of_back v' v elements' Hback).
 Qed.
 
+(* Nor can the test of what a binder states. *)
+Lemma values_of_subkinds_back (vs' vs : list value)
+    (sks : list param_subkind) :
+  Forall2 erased_back vs' vs ->
+  values_of_subkinds statics' vs' sks = true ->
+  values_of_subkinds (live_statics rs) vs sks = true.
+Proof.
+  destruct erased_back_respects as (Hconstants & _ & Hobserved).
+  exact
+    (values_of_subkinds_related erased_back statics' (live_statics rs) vs' vs
+       sks Hconstants Hobserved).
+Qed.
+
 Lemma eval_prim_back (p : prim) (vs' vs : list value) (v' : value) :
   Forall2 erased_back vs' vs ->
   eval_prim statics' p vs' = Some v' ->

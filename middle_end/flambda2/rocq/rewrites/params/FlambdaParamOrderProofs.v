@@ -165,6 +165,19 @@ Proof.
   - apply IH.
 Qed.
 
+(* What the result has at a position of the order. *)
+Lemma in_order_at {A : Type} (order : list nat) (l l' : list A) (j i : nat) :
+  in_order order l = Some l' ->
+  nth_error order j = Some i ->
+  nth_error l' j = nth_error l i.
+Proof.
+  intros Hin. apply in_order_spec in Hin. revert j.
+  induction Hin as [ | i0 b order l' Hi0 _ IH]; intros [ | j]; simpl;
+    try discriminate.
+  - intros [= ->]. symmetry. exact Hi0.
+  - apply IH.
+Qed.
+
 (* What an order of [n] positions is. *)
 Lemma is_order_facts (n : nat) (order : list nat) :
   is_order n order = true ->
@@ -305,6 +318,93 @@ Proof.
     exact (in_order_injective n order kinds1 kinds2 kinds1' Hall Hl1 Hl2 H1
       H2).
   - exfalso. apply Hne'. subst kinds2. congruence.
+Qed.
+
+(* The test of what is stated, position by position. *)
+Lemma values_of_subkinds_spec (statics : static_env) :
+  ∀ (sks : list param_subkind) (vs : list value),
+    values_of_subkinds statics vs sks = true
+    <-> ∀ (j : nat) (v : value) (ps : param_subkind),
+          nth_error vs j = Some v ->
+          nth_error sks j = Some ps ->
+          value_at statics ps v = true.
+Proof.
+  induction sks as [ | ps sks IH]; intros [ | v vs].
+  - split; [ intros _ [ | j] v ps Hv; discriminate Hv | reflexivity ].
+  - split; [ intros _ [ | j] v' ps _ Hps; discriminate Hps | reflexivity ].
+  - split; [ intros _ [ | j] v ps' Hv; discriminate Hv | reflexivity ].
+  - rewrite values_of_subkinds_cons, andb_true_iff, IH. split.
+    + intros [Hhead Hrest] [ | j] v' ps' Hv Hps; simpl in Hv, Hps.
+      * injection Hv as <-. injection Hps as <-. exact Hhead.
+      * exact (Hrest j v' ps' Hv Hps).
+    + intros Hall. split; [ exact (Hall 0 v ps eq_refl eq_refl) | ].
+      intros j v' ps' Hv Hps. exact (Hall (S j) v' ps' Hv Hps).
+Qed.
+
+(* The values against what is stated, both in an order of their
+   positions. *)
+Lemma values_of_subkinds_ordered (statics : static_env) (order : list nat)
+    (vs vs' : list value) (sks sks' : list param_subkind) :
+  (∀ i : nat, i < length vs -> In i order) ->
+  in_order order vs = Some vs' ->
+  in_order order sks = Some sks' ->
+  values_of_subkinds statics vs' sks' = values_of_subkinds statics vs sks.
+Proof.
+  intros Hall Hvs' Hsks'. apply eq_true_iff_eq.
+  rewrite !values_of_subkinds_spec. split.
+  - intros Hstated i v ps Hv Hps.
+    assert (Hi : i < length vs)
+      by (apply nth_error_Some; rewrite Hv; discriminate).
+    destruct (In_nth_error order i (Hall i Hi)) as [j Hj].
+    rewrite <- (in_order_at order vs vs' j i Hvs' Hj) in Hv.
+    rewrite <- (in_order_at order sks sks' j i Hsks' Hj) in Hps.
+    exact (Hstated j v ps Hv Hps).
+  - intros Hstated j v ps Hv Hps.
+    destruct (in_order_same_position order vs vs' sks sks' j v Hvs' Hsks' Hv)
+      as (i & _ & Hi & Hsame).
+    rewrite Hsame in Hps. exact (Hstated i v ps Hi Hps).
+Qed.
+
+Lemma length_subkinds_of (n : nat) :
+  ∀ sks : list param_subkind, length (subkinds_of n sks) = n.
+Proof.
+  induction n as [ | n IH]; intros [ | ps sks]; cbn [subkinds_of length];
+    rewrite ?IH; reflexivity.
+Qed.
+
+(* An entry for each value asks what the list asked. *)
+Lemma values_of_subkinds_of (statics : static_env) :
+  ∀ (vs : list value) (sks : list param_subkind),
+    values_of_subkinds statics vs (subkinds_of (length vs) sks)
+    = values_of_subkinds statics vs sks.
+Proof.
+  induction vs as [ | v vs IH]; intros [ | ps sks]; cbn [length subkinds_of];
+    rewrite ?values_of_subkinds_no_values; try reflexivity.
+  - rewrite values_of_subkinds_cons, value_at_any_value, IH. reflexivity.
+  - rewrite !values_of_subkinds_cons, IH. reflexivity.
+Qed.
+
+(* The values in an order of their positions against what
+   [subkinds_in_order] gives. *)
+Lemma values_of_subkinds_in_order (statics : static_env) (order : list nat)
+    (vs vs' : list value) (sks : list param_subkind) :
+  is_order (length vs) order = true ->
+  in_order order vs = Some vs' ->
+  values_of_subkinds statics vs' (subkinds_in_order order (length vs) sks)
+  = values_of_subkinds statics vs sks.
+Proof.
+  intros Horder Hvs'. unfold subkinds_in_order.
+  destruct (subkinds_say_nothing sks) eqn:Hnothing.
+  - rewrite (values_of_subkinds_nothing statics sks vs Hnothing).
+    reflexivity.
+  - destruct (is_order_facts (length vs) order Horder) as (_ & Hbelow & Hall).
+    rewrite <- (values_of_subkinds_of statics vs sks).
+    destruct (in_order_some order (subkinds_of (length vs) sks))
+      as [sks' Hsks'];
+      [ rewrite length_subkinds_of; exact Hbelow | ].
+    rewrite Hsks'.
+    exact
+      (values_of_subkinds_ordered statics order vs vs' _ sks' Hall Hvs' Hsks').
 Qed.
 
 (* What a variable is once parameters are bound: what was bound to it
@@ -467,6 +567,12 @@ Hypothesis Hkinds : length (hm_params_kinds metadata) = length params.
 Hypothesis Horder : is_order (length params) order = true.
 Hypothesis Hparams' : in_order order params = Some params'.
 Hypothesis Hkinds' : in_order order (hm_params_kinds metadata) = Some kinds'.
+Hypothesis Hsubkinds' :
+  ∀ (statics : static_env) (vs vs' : list value),
+    length vs = length params ->
+    in_order order vs = Some vs' ->
+    values_of_subkinds statics vs' subkinds'
+    = values_of_subkinds statics vs (hm_params_subkinds metadata).
 
 Definition order_site_closure : cont_value :=
   Closure (Handler params metadata handler) vars0 conts0 [].
@@ -702,6 +808,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     pose proof (bind_params_agree ps vs dv dv' Hdv) as Hbind.
     destruct (bind_params ps vs dv) as [bound | ],
       (bind_params ps vs dv') as [bound' | ]; try contradiction;
@@ -710,6 +818,8 @@ Proof.
     apply order_rec_conts_plain; assumption.
   - cbn [order_args_in_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
       [ | exact I ].
     pose proof (bind_params_agree ps vs dv dv' Hdv) as Hbind.
     destruct (bind_params ps vs dv) as [bound | ],
@@ -757,7 +867,8 @@ Proof.
   destruct (is_order_facts (length params) order Horder)
     as (Horder_length & _ & Hall).
   unfold order_site_closure, order_site_closure_ordered.
-  cbn [apply_cont_value hm_params_kinds].
+  cbn [apply_cont_value hm_params_kinds hm_params_subkinds].
+  rewrite (Hsubkinds' statics vs vs' Hlength Hvs').
   assert (Hmapped :
     in_order order (map kind_of_value vs) = Some (map kind_of_value vs'))
     by (rewrite in_order_map, Hvs'; reflexivity).
@@ -766,6 +877,8 @@ Proof.
        (hm_params_kinds metadata) (map kind_of_value vs') kinds' Hall
        ltac:(rewrite length_map; exact Hlength) Hkinds Hmapped Hkinds').
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+    [ | exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
     [ | exact I ].
   pose proof (bind_params_lengths params vs vars0) as Hbound.
   pose proof (bind_params_lengths params' vs' vars0) as Hbound'.
@@ -966,6 +1079,16 @@ Proof.
   apply andb_true_iff in Hcond as [Hcond Hkinds].
   apply andb_true_iff in Hcond as [_ Hdistinct].
   apply Nat.eqb_eq in Hkinds.
+  assert (Hsubkinds' :
+    ∀ (statics0 : static_env) (vs vs' : list value),
+      length vs = length params ->
+      in_order (use_order params handler) vs = Some vs' ->
+      values_of_subkinds statics0 vs'
+        (subkinds_in_order (use_order params handler) (length params)
+           (hm_params_subkinds metadata))
+      = values_of_subkinds statics0 vs (hm_params_subkinds metadata)).
+  { intros statics0 vs vs' Hlength Hvs'. rewrite <- Hlength in Horder |- *.
+    exact (values_of_subkinds_in_order statics0 _ vs vs' _ Horder Hvs'). }
   intros vars conts statics hp rd.
   apply (equivalent_trans _
     (State body vars
@@ -976,12 +1099,8 @@ Proof.
     (State (order_args k (use_order params handler) body) vars
        ((k,
          order_site_closure_ordered params' kinds'
-           match
-             in_order (use_order params handler) (hm_params_subkinds metadata)
-           with
-           | Some subkinds' => subkinds'
-           | None => []
-           end
+           (subkinds_in_order (use_order params handler) (length params)
+              (hm_params_subkinds metadata))
            handler vars conts)
         :: conts)
        statics hp rd));
@@ -989,13 +1108,10 @@ Proof.
   apply
     (order_site_equivalent k (use_order params handler) params params' metadata
        kinds'
-       match
-         in_order (use_order params handler) (hm_params_subkinds metadata)
-       with
-       | Some subkinds' => subkinds'
-       | None => []
-       end
-       handler vars conts Hdistinct Hkinds Horder Hparams' Hkinds').
+       (subkinds_in_order (use_order params handler) (length params)
+          (hm_params_subkinds metadata))
+       handler vars conts Hdistinct Hkinds Horder Hparams' Hkinds'
+       Hsubkinds').
   apply Order_state_in_scope; [ apply agree_refl | exact Happly | ].
   split; [ apply resolve_head | split; [ apply resolve_head | ] ].
   intros k1 Hne. rewrite !(resolve_other k1 k) by exact Hne. apply Order_same.

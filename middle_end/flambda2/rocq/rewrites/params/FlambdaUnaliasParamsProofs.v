@@ -231,6 +231,49 @@ Proof.
       rewrite (proj2 (IH l l' a a' Ha Ha') (conj Hl Haa)). reflexivity.
 Qed.
 
+Lemma drop_nth_nil {A : Type} (i : nat) : drop_nth i ([] : list A) = [].
+Proof. destruct i; reflexivity. Qed.
+
+Lemma drop_nth_zero {A : Type} (a : A) (l : list A) :
+  drop_nth 0 (a :: l) = l.
+Proof. reflexivity. Qed.
+
+(* Values that are of what is stated are still so without the value
+   and the entry at one position. *)
+Lemma values_of_subkinds_drop_nth (statics : static_env) (i : nat) :
+  ∀ (sks : list param_subkind) (vs : list value),
+    values_of_subkinds statics vs sks = true ->
+    values_of_subkinds statics (drop_nth i vs) (drop_nth i sks) = true.
+Proof.
+  induction i as [ | i IH]; intros [ | ps sks] [ | v vs] H;
+    rewrite ?drop_nth_nil, ?drop_nth_zero, ?drop_nth_succ;
+    try reflexivity; try apply values_of_subkinds_no_values.
+  - rewrite values_of_subkinds_cons in H.
+    apply andb_true_iff in H. exact (proj2 H).
+  - rewrite values_of_subkinds_cons in H |- *.
+    apply andb_true_iff in H as [Hv Hvs]. rewrite Hv. exact (IH _ _ Hvs).
+Qed.
+
+(* And where nothing is stated at that position the two tests are the
+   same. *)
+Lemma values_of_subkinds_drop_nth_nothing (statics : static_env) (i : nat) :
+  ∀ (sks : list param_subkind) (vs : list value),
+    says_nothing_at sks i = true ->
+    values_of_subkinds statics (drop_nth i vs) (drop_nth i sks)
+    = values_of_subkinds statics vs sks.
+Proof.
+  unfold says_nothing_at.
+  induction i as [ | i IH]; intros [ | ps sks] [ | v vs] Hnothing;
+    cbn [nth_error] in Hnothing;
+    rewrite ?drop_nth_nil, ?drop_nth_zero, ?drop_nth_succ,
+      ?values_of_subkinds_no_values;
+    try reflexivity.
+  - rewrite values_of_subkinds_cons, value_at_eq,
+      (says_nothing_any statics _ _ v Hnothing).
+    reflexivity.
+  - rewrite !values_of_subkinds_cons, (IH _ _ Hnothing). reflexivity.
+Qed.
+
 Definition agree (vars vars' : env) : Prop :=
   ∀ y : variable, lookup y vars = lookup y vars'.
 
@@ -611,6 +654,7 @@ Hypothesis Hparam : nth_error params i = Some p.
 Hypothesis Hkind : nth_error (hm_params_kinds metadata) i = Some kind.
 Hypothesis Hx : simple_among s0 (drop_nth i params) = false.
 Hypothesis Hfresh : among p (drop_nth i params) = false.
+Hypothesis Hnothing : says_nothing_at (hm_params_subkinds metadata) i = true.
 Hypothesis Hturns :
   loop = true -> all_give_simple k i (Var p) true handler = true.
 
@@ -877,6 +921,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     pose proof (bind_params_agree ps vs dv dv' Hdv) as Hbind.
     destruct (bind_params ps vs dv) as [bound | ],
       (bind_params ps vs dv') as [bound' | ]; try contradiction;
@@ -885,6 +931,8 @@ Proof.
     apply rec_conts_plain; assumption.
   - cbn [drop_arg_in_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
       [ | exact I ].
     pose proof (bind_params_agree ps vs dv dv' Hdv) as Hbind.
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound,
@@ -931,10 +979,13 @@ Lemma apply_the_closure (vs : list value) (statics : static_env) (hp : heap)
   apply_cont_value site_closure vs statics hp rd
   = if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
-      match bind_params params vs vars0 with
-      | Some bound => Step (State handler bound site_conts statics hp rd)
-      | None => Undefined
-      end
+      if values_of_subkinds statics vs (hm_params_subkinds metadata)
+      then
+        match bind_params params vs vars0 with
+        | Some bound => Step (State handler bound site_conts statics hp rd)
+        | None => Undefined
+        end
+      else Undefined
     else Undefined.
 Proof. reflexivity. Qed.
 
@@ -944,13 +995,17 @@ Lemma apply_the_closure_binding (vs : list value) (statics : static_env)
   = if kinds_eqb (map kind_of_value vs)
          (drop_nth i (hm_params_kinds metadata))
     then
-      match bind_params (drop_nth i params) vs vars0 with
-      | Some bound =>
-        Step
-          (State (Let p kind (Simple s0) site_body) bound site_conts_binding
-             statics hp rd)
-      | None => Undefined
-      end
+      if values_of_subkinds statics vs
+           (drop_nth i (hm_params_subkinds metadata))
+      then
+        match bind_params (drop_nth i params) vs vars0 with
+        | Some bound =>
+          Step
+            (State (Let p kind (Simple s0) site_body) bound
+               site_conts_binding statics hp rd)
+        | None => Undefined
+        end
+      else Undefined
     else Undefined.
 Proof. reflexivity. Qed.
 
@@ -1048,6 +1103,10 @@ Proof.
     rewrite <- map_drop_nth in Hkinds.
     pose proof (bind_params_drop_nth i params vs vars0 p v Hparam Hnth_v
       Hfresh) as Hbind.
+    rewrite (values_of_subkinds_drop_nth_nothing statics i _ vs Hnothing).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
+      [ | left; split;
+          destruct (kinds_eqb _ _); reflexivity ].
     destruct
       (kinds_eqb (map kind_of_value (drop_nth i vs))
          (drop_nth i (hm_params_kinds metadata)))
@@ -1094,6 +1153,10 @@ Proof.
     destruct
       (kinds_eqb (map kind_of_value rest)
          (drop_nth i (hm_params_kinds metadata)));
+      [ | left; auto ].
+    destruct
+      (values_of_subkinds statics rest
+         (drop_nth i (hm_params_subkinds metadata)));
       [ | left; auto ].
     destruct (bind_params (drop_nth i params) rest vars0) as [bound | ]
       eqn:Hbound; [ | left; auto ].
@@ -1423,6 +1486,7 @@ Lemma given_param_equivalent (i : nat) (k : continuation) (s : simple)
   nth_error (hm_params_kinds metadata) i = Some kind ->
   simple_among s params = false ->
   among p (drop_nth i params) = false ->
+  says_nothing_at (hm_params_subkinds metadata) i = true ->
   all_give_simple k i s true body = true ->
   expr_equivalent
     (Let_cont_non_recursive k (Handler params metadata handler) body)
@@ -1435,7 +1499,7 @@ Lemma given_param_equivalent (i : nat) (k : continuation) (s : simple)
           (Let p kind (Simple s) handler))
        (drop_arg k i body)).
 Proof.
-  intros Hparam Hkind Hs Hfresh Hgive vars conts statics hp rd.
+  intros Hparam Hkind Hs Hfresh Hnothing Hgive vars conts statics hp rd.
   apply (equivalent_trans _
     (State body vars
        ((k, the_closure params metadata handler vars conts) :: conts)
@@ -1450,7 +1514,7 @@ Proof.
   apply
     (simple_site_equivalent false k i s p kind params metadata handler vars
        conts Hparam Hkind (simple_among_drop_nth_false i s params Hs) Hfresh
-       (not_a_loop _)).
+       Hnothing (not_a_loop _)).
   apply (Rel_state_in_scope false k i s p kind params metadata handler vars
     conts s true);
     [ apply agree_refl | reflexivity | exact Hgive | ].
@@ -1494,14 +1558,16 @@ Lemma site_equivalent (k : continuation) (i : nat) (x p : variable)
   nth_error (hm_params_kinds metadata) i = Some kind ->
   among x params = false ->
   among p (drop_nth i params) = false ->
+  says_nothing_at (hm_params_subkinds metadata) i = true ->
   ∀ s s' : state,
     state_rel k i (Var x) p kind params metadata handler vars0 conts0 s s' ->
     equivalent s s'.
 Proof.
-  intros Hparam Hkind Hx Hfresh.
+  intros Hparam Hkind Hx Hfresh Hnothing.
   exact (simple_site_equivalent false k i (Var x) p kind params metadata
     handler vars0 conts0 Hparam Hkind
-    (simple_among_drop_nth_false i (Var x) params Hx) Hfresh (not_a_loop _)).
+    (simple_among_drop_nth_false i (Var x) params Hx) Hfresh Hnothing
+    (not_a_loop _)).
 Qed.
 
 (* ======================================================================== *)
@@ -1522,16 +1588,18 @@ Proof.
   destruct (first_given_var k i body) as [[x | ] | ]; try discriminate.
   destruct
     (negb (hm_is_exn_handler metadata) && all_give_var k i x true body
-     && negb (among x params) && negb (among p (drop_nth i params)))
+     && negb (among x params) && negb (among p (drop_nth i params))
+     && says_nothing_at (hm_params_subkinds metadata) i)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
+  apply andb_true_iff in Hcond as [Hcond Hnothing].
   apply andb_true_iff in Hcond as [Hcond Hfresh].
   apply andb_true_iff in Hcond as [Hcond Hx].
   apply andb_true_iff in Hcond as [_ Hgive].
   apply negb_true_iff in Hfresh, Hx.
   rewrite all_give_var_simple in Hgive.
   exact (given_param_equivalent i k (Var x) p kind params metadata handler
-    body Hparam Hkind Hx Hfresh Hgive).
+    body Hparam Hkind Hx Hfresh Hnothing Hgive).
 Qed.
 
 Lemma unalias_from_equivalent (i : nat) :

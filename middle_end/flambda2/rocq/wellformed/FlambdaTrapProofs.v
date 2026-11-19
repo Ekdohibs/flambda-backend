@@ -1542,6 +1542,8 @@ Proof.
     destruct h as [params metadata handler]. unfold stack_enter. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | exact I ].
     destruct (bind_params params vs vars) as [handler_vars | ]; [ | exact I ].
     simpl. unfold inv. simpl_state.
     split; [ reflexivity | ]. split; [ reflexivity | ].

@@ -58,8 +58,10 @@
    parameter is taken away: every application loses the argument, and
    the handler begins with a [Let] of [p] to [x], with the kind that
    the handler had for the parameter. The other tests: the handler
-   is no exception handler, and neither [x] nor [p] is one of the
-   other parameters. [x] may be [p]: the loop that a function has
+   is no exception handler, it states nothing of the parameter beyond
+   its kind (FlambdaUnaliasParamsSpec.says_nothing_at), and neither
+   [x] nor [p] is one of the other parameters. [x] may be [p]: the
+   loop that a function has
    become has the names of the parameters of the function for its
    own, and is given, from outside, the variable of the same name;
    the [Let] at the head of the handler then binds [p] to the
@@ -83,8 +85,9 @@
    are left, binds [p] to the value that the application gave. The
    machine tests the kind of
    a value where a handler is applied, and the [Let] tests the same
-   kind of the same value: the two runs stop or go on together at
-   every entry.
+   kind of the same value; it tests there too what the handler states
+   of each parameter, which for this one is nothing: the two runs
+   stop or go on together at every entry.
 
    The pass is that step for each position, the last first
    ([unalias_rec_from]), at every recursive [Let_cont] of the term,
@@ -122,6 +125,7 @@ Definition unalias_rec_param (i : nat) (k : continuation)
            && all_give_var k i p true handler
            && negb (among x (drop_nth i params))
            && negb (among p (drop_nth i params))
+           && says_nothing_at (hm_params_subkinds metadata) i
         then
           Some
             (Handler (drop_nth i params)

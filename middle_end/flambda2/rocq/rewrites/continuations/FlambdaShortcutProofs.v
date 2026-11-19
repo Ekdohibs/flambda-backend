@@ -112,7 +112,8 @@ Proof.
       (step_apply_cont_handler _ _ _ _ _ rd_ [] [] metadata (Apply_cont target)
       vars conts []);
       [ reflexivity | apply resolve_head
-      | rewrite Hno_kinds; reflexivity | reflexivity ].
+      | rewrite Hno_kinds; reflexivity
+      | apply values_of_subkinds_no_values | reflexivity ].
   - apply equivalent_sym, step_eq_equivalent, apply_cont_skip, Hother.
 Qed.
 

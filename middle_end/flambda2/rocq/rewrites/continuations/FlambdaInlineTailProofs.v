@@ -59,6 +59,7 @@ Lemma inline_cont_at_tail_equivalent (k : continuation)
     (params : list variable) (metadata : handler_metadata) (handler : expr)
     (body : expr) :
   length params = length (hm_params_kinds metadata) ->
+  subkinds_say_nothing (hm_params_subkinds metadata) = true ->
   ∀ inlined : expr,
     inline_cont_at_tail k params metadata handler body = Some inlined ->
     ∀ (vars def_vars : env) (conts : cont_env) (statics : static_env)
@@ -73,7 +74,7 @@ Lemma inline_cont_at_tail_equivalent (k : continuation)
            statics hp rd)
         (State inlined vars conts statics hp rd).
 Proof.
-  intros Hkinds.
+  intros Hkinds Hnothing.
   induction body
     as [ x kind d body IH | bindings body IH | k' h body IH | handlers body IH
        | ap | ac | scrutinee arms | ];
@@ -143,6 +144,7 @@ Proof.
             (step_apply_cont_handler _ _ _ _ _ rd_ vs params metadata handler
             def_vars conts []);
             [ exact Hargs | rewrite Hk; apply resolve_head | exact Htested
+            | exact (values_of_subkinds_nothing statics _ vs Hnothing)
             | exact Hbind ]. }
         apply (equivalent_trans _ (State handler bound conts statics hp rd)).
         { apply coincide_equivalent.
@@ -206,8 +208,11 @@ Proof.
              (Handler params metadata (inline_tail_conts_kinded handler))
              Hole)
           _ _ (not_many _) (inline_tail_conts_kinded_equivalent_aux body)). }
-    destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)))
+    destruct
+      (Nat.eqb (length params) (length (hm_params_kinds metadata))
+       && subkinds_say_nothing (hm_params_subkinds metadata))
       eqn:Hkinds; [ | exact Hlayers ].
+    apply andb_true_iff in Hkinds as [Hkinds Hnothing].
     apply Nat.eqb_eq in Hkinds.
     destruct
       (inline_cont_at_tail k params metadata
@@ -217,8 +222,8 @@ Proof.
       rd.
     eapply equivalent_trans;
       [ apply step_equivalent, step_let_cont_non_recursive | ].
-    apply (inline_cont_at_tail_equivalent k params metadata _ _ Hkinds inlined
-      Hinline).
+    apply (inline_cont_at_tail_equivalent k params metadata _ _ Hkinds
+      Hnothing inlined Hinline).
     intros x _. reflexivity.
   - exact (plug_equivalent (Let_cont_recursive_body handlers Hole) _ _
       (not_many _) (inline_tail_conts_kinded_equivalent_aux body)).

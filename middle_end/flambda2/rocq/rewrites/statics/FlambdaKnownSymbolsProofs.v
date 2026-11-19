@@ -1368,10 +1368,14 @@ Proof.
   rewrite Hparams, Hmy_closure, Hret, Hexn_c, Hbody, fold_known_binds_statics.
   destruct (binds_statics (code_body c)); [ exact I | ].
   rewrite Hparams_arity, Hresult_arity.
-  match goal with
-  | |- context [negb ?agrees] => destruct (negb agrees)
-  end;
-    [ exact I | ].
+  assert (Hsubkinds :
+    code_params_subkinds (fold_known_code S T c) = code_params_subkinds c)
+    by (destruct c; reflexivity).
+  rewrite Hsubkinds,
+    <- (values_of_subkinds_same_values statics (fold_statics statics) vs _
+          eq_refl).
+  destruct (negb (kinds_eqb _ _ && _ && _)); [ exact I | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ];
     [ | exact I ].
@@ -1459,6 +1463,10 @@ Proof.
     destruct Hparts as (params & metadata & body & body' & -> & -> & Hbody).
     unfold result_kept. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    rewrite <- (values_of_subkinds_same_values statics (fold_statics statics)
+      vs _ eq_refl).
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | exact I ].

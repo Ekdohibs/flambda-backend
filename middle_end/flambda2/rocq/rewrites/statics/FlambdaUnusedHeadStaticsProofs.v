@@ -214,6 +214,11 @@ Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
   destruct (negb _); [ exact I | ].
+  destruct (values_of_subkinds statics' vs (code_params_subkinds c))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite (values_of_subkinds_extend statics' statics vs _ symbols_extend
+    Hsubkinds).
+  cbn [negb].
   destruct (bind_params _ vs _); simpl; auto.
 Qed.
 
@@ -246,6 +251,10 @@ Proof.
     intros vs hp rd; simpl.
   - destruct h as [params metadata handler].
     destruct (kinds_eqb _ _); [ | exact I ].
+    destruct (values_of_subkinds statics' vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (values_of_subkinds_extend statics' statics vs _ symbols_extend
+      Hsubkinds).
     destruct (bind_params params vs def_vars); simpl; auto.
   - reflexivity.
   - apply apply_cont_value_more.

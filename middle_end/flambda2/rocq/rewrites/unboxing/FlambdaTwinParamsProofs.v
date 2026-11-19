@@ -584,6 +584,27 @@ Proof.
   rewrite <- Hkinds, map_app, moved_from_map. apply kinds_eqb_refl.
 Qed.
 
+(* And they are of what that metadata states. *)
+Lemma subkinds_twin (statics : static_env) (ts : list nat) (vs : list value)
+    (metadata : handler_metadata) :
+  kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+  values_of_subkinds statics (twin_values ts vs)
+    (hm_params_subkinds (twin_metadata ts metadata))
+  = true.
+Proof.
+  intros Hkinds Hstated.
+  destruct (values_of_stated statics vs metadata Hkinds Hstated)
+    as [Hlength Hfirst].
+  unfold twin_values, twin_metadata. cbn [hm_params_subkinds].
+  pose proof
+    (values_of_subkinds_kept statics [] (moved_from ts 0 vs) _
+       (any_values_say_nothing (moved_from ts 0 (stated_of_params metadata)))
+       vs (stated_of_params metadata) 0 Hlength Hfirst)
+    as Hkept.
+  rewrite !kept_from_nil in Hkept. exact Hkept.
+Qed.
+
 (* The handler entered: the new parameters are bound, and the
    variables of the two runs are related with the [Let]s of the
    parameters that have twins still to come. *)
@@ -1024,16 +1045,21 @@ Proof.
   - rewrite twin_values_nil. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     exists 0. apply Rel_state_plain, rec_conts_plain. exact Hdc.
   - cbn [twin_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m))
       eqn:Hkinds; [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m)) eqn:Hstated;
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound; [ | exact I ].
     cbn [twin_handler_ok] in Hok. apply andb_true_iff in Hok as [Hfits Hok].
     unfold handler_twins_fit in Hfits.
     apply andb_true_iff in Hfits as [Hdistinct Hhead].
-    rewrite (kinds_twin ts vs m Hkinds).
+    rewrite (kinds_twin ts vs m Hkinds),
+      (subkinds_twin _ ts vs m Hkinds Hstated).
     destruct
       (bind_twin_params ts pairs ps
          (twin_names (moved_from ts 0 ps) he) vs dv dv' bound Hdistinct

@@ -667,7 +667,10 @@ Proof.
               (Code params my_closure ret exn metadata body') vs args_arity
               return_arity statics statics' hp rd eq_refl eq_refl eq_refl
                 eq_refl
-              eq_refl eq_refl (eq_sym Hbinds))
+              eq_refl eq_refl (eq_sym Hbinds) eq_refl
+              (eq_sym
+                 (values_of_subkinds_same_values statics statics' vs _
+                    (proj2 Hstatics))))
     as [Hundefined | [callee_vars Hcall]].
   - destruct (Hundefined return_to exn_to return_to' exn_to')
       as [Hsource Htarget].
@@ -796,6 +799,11 @@ Proof.
     simpl in Hended, Hinv |- *.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Hkinds;
+      simpl in Hended, Hinv |- *; [ | exact (ended_undefined b Hended) ].
+    rewrite <- (values_of_subkinds_same_values statics statics' vs _
+      (proj2 Hstatics)) in Hinv |- *.
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds;
       simpl in Hended, Hinv |- *; [ | exact (ended_undefined b Hended) ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       simpl in Hended, Hinv |- *; [ | exact (ended_undefined b Hended) ].

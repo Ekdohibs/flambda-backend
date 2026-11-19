@@ -33,9 +33,14 @@
    ([With_subkind.Non_null_value_subkind.t]) and what Simplify reads
    of a subkind into the type of a parameter
    (types/more_type_creators.ml, [unknown_with_subkind]). It holds
-   definitions only, and nothing uses them yet: the machine
-   (FlambdaSemanticsSpec.v) tests no value against a subkind. They
-   are for decision D25, at parameters.
+   definitions only. The machine uses them: where a handler is applied
+   and where the body of code is entered it has no step unless the
+   values are of what the parameters state
+   (FlambdaSemanticsSpec.apply_cont_value and [call_code], through
+   [values_of_subkinds]; the machine with a heap and the machine of
+   regions do the same). That is decision D25, at parameters. What
+   follows from the test is stated in FlambdaSubkindBinderSpec.v, and
+   the order on what two binders state in FlambdaSubkindOrderSpec.v.
 
    The compiler gives a parameter of a continuation and a parameter of
    code a kind with a subkind ([Bound_parameter.kind], a
@@ -135,11 +140,13 @@ Definition value_at (statics : static_env) (ps : param_subkind) (v : value)
 (* Whether values are of what the binders state of them, one for one.
    Nothing is asked of the values that are left where the list of what
    is stated is the shorter, nor of what is stated beyond the values:
-   the empty list asks nothing. *)
+   the empty list asks nothing. The recursion is on what is stated,
+   so that the test of the empty list computes with values not yet
+   known. *)
 Fixpoint values_of_subkinds (statics : static_env) (vs : list value)
-    (sks : list param_subkind) : bool :=
-  match vs, sks with
-  | v :: vs, ps :: sks =>
+    (sks : list param_subkind) {struct sks} : bool :=
+  match sks, vs with
+  | ps :: sks, v :: vs =>
     value_at statics ps v && values_of_subkinds statics vs sks
   | _, _ => true
   end.

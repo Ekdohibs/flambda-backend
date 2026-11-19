@@ -216,6 +216,8 @@ Proof.
     apply let_cont_handler_alike. intros vs statics' hp' rd'. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata'));
       simpl; [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata'));
+      simpl; [ | exact I ].
     destruct (bind_params params' vs vars) as [handler_vars | ] eqn:Hbind;
       simpl; [ | exact I ].
     apply equivalent_sym.

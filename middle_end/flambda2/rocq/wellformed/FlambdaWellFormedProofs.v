@@ -646,6 +646,8 @@ Proof.
   - simpl in Hstep.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs def_vars); [ | discriminate ].
     injection Hstep as <-. unfold inv. simpl_state. simpl in Cr, Nr.
     destruct Cr as (Ph & Dh & Xh & Hrec & Cdef).

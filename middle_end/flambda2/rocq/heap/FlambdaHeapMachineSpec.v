@@ -128,6 +128,8 @@ Definition heap_call_code (closure : value) (c : code) (vs : list value)
             (unarize_per_parameter (code_params_arity c))
        && arity_eqb return_arity (code_result_arity c))
   then Heap_undefined
+  else if negb (values_of_subkinds statics vs (code_params_subkinds c))
+  then Heap_undefined
   else
     match bind_params (code_params c) vs [(code_my_closure c, closure)] with
     | Some callee_vars =>
@@ -167,14 +169,17 @@ Fixpoint heap_apply_cont_value (c : cont_value) (vs : list value)
   | Closure (Handler params metadata handler) def_vars def_conts recursive =>
     if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
-      match bind_params params vs def_vars with
-      | Some handler_vars =>
-        Heap_step
-          (Heap_state handler handler_vars
-             (rec_closures recursive def_vars def_conts ++ def_conts) statics
-             h)
-      | None => Heap_undefined
-      end
+      if values_of_subkinds statics vs (hm_params_subkinds metadata)
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars =>
+          Heap_step
+            (Heap_state handler handler_vars
+               (rec_closures recursive def_vars def_conts ++ def_conts)
+               statics h)
+        | None => Heap_undefined
+        end
+      else Heap_undefined
     else Heap_undefined
   | Extra_args c extra => heap_apply_cont_value c (vs ++ extra) statics h
   | Over_application remaining remaining_arity return_arity return_to exn_to =>

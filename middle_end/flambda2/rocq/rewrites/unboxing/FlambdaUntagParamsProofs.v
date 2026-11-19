@@ -143,8 +143,8 @@ Proof.
   exact (Permutation_NoDup (kept_moved_permutation us params 0) Hdistinct).
 Qed.
 
-(* With no position, the rewrite of the arguments, of the parameters
-   and of the metadata changes nothing. *)
+(* With no position, the rewrite of the arguments and of the
+   parameters changes nothing. *)
 Lemma untag_args_nil (tagged : tags) (args : list simple) :
   untag_args [] tagged args = args.
 Proof.
@@ -158,14 +158,6 @@ Proof.
   apply app_nil_r.
 Qed.
 
-Lemma untag_metadata_nil (metadata : handler_metadata) :
-  untag_metadata [] metadata = metadata.
-Proof.
-  destruct metadata as [kinds subkinds is_exn]. unfold untag_metadata.
-  cbn [hm_params_kinds hm_params_subkinds hm_is_exn_handler].
-  rewrite !kept_from_nil, !moved_from_nil. cbn [rev map]. rewrite !app_nil_r.
-  reflexivity.
-Qed.
 
 (* ======================================================================== *)
 (* Values and variables                                                     *)
@@ -736,6 +728,65 @@ Proof.
   rewrite Hmoved. apply kinds_eqb_refl.
 Qed.
 
+(* Values that are of what a handler states are of that no further
+   than the handler has kinds, and there is an entry for no more than
+   the values. *)
+Lemma values_of_stated (statics : static_env) (vs : list value)
+    (metadata : handler_metadata) :
+  kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+  length (stated_of_params metadata) <= length vs
+  ∧ values_of_subkinds statics vs (stated_of_params metadata) = true.
+Proof.
+  intros Hkinds Hstated. apply kinds_eqb_eq in Hkinds.
+  unfold stated_of_params.
+  split; [ | apply values_of_subkinds_firstn, Hstated ].
+  rewrite <- Hkinds, length_firstn, length_map. apply Nat.le_min_l.
+Qed.
+
+(* Values that are of what is stated, without those at some positions
+   and with others after them, are of what is stated without those
+   positions and with nothing stated after. *)
+Lemma values_of_subkinds_kept (statics : static_env) (us : list nat)
+    (extra : list value) (more : list param_subkind) :
+  subkinds_say_nothing more = true ->
+  ∀ (vs : list value) (sks : list param_subkind) (i : nat),
+    length sks <= length vs ->
+    values_of_subkinds statics vs sks = true ->
+    values_of_subkinds statics (kept_from us i vs ++ extra)
+      (kept_from us i sks ++ more)
+    = true.
+Proof.
+  intros Hmore.
+  induction vs as [ | v vs IH]; intros [ | ps sks] i Hlength Hstated;
+    cbn [kept_from length] in *;
+    try (apply values_of_subkinds_nothing, Hmore); [ lia | ].
+  rewrite values_of_subkinds_cons in Hstated.
+  apply andb_true_iff in Hstated as [Hv Hvs].
+  destruct (at_position us i).
+  - apply IH; [ lia | exact Hvs ].
+  - cbn [app]. rewrite values_of_subkinds_cons, Hv.
+    apply IH; [ lia | exact Hvs ].
+Qed.
+
+(* The values in the order of the rewrite are of what the metadata
+   rewritten states. *)
+Lemma subkinds_untagged (statics : static_env) (us : list nat)
+    (vs : list value) (metadata : handler_metadata) :
+  kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+  values_of_subkinds statics (untag_values us vs)
+    (hm_params_subkinds (untag_metadata us metadata))
+  = true.
+Proof.
+  intros Hkinds Hstated.
+  destruct (values_of_stated statics vs metadata Hkinds Hstated)
+    as [Hlength Hfirst].
+  unfold untag_values, untag_metadata. cbn [hm_params_subkinds].
+  apply values_of_subkinds_kept;
+    [ apply any_values_say_nothing | exact Hlength | exact Hfirst ].
+Qed.
+
 (* ======================================================================== *)
 (* What the rewrite keeps of the syntax                                     *)
 (* ======================================================================== *)
@@ -1076,16 +1127,21 @@ Proof.
   - rewrite untag_values_nil. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     apply Rel_state_plain, rec_conts_plain. exact Hdc.
   - cbn [untag_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m))
       eqn:Hkinds; [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m)) eqn:Hstated;
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound; [ | exact I ].
     cbn [handler_ok] in Hok. apply andb_true_iff in Hok as [Hfits Hok].
     unfold handler_fits in Hfits.
     apply andb_true_iff in Hfits as [Hdistinct _].
-    rewrite (kinds_untagged us vs m Htagged Hkinds).
+    rewrite (kinds_untagged us vs m Htagged Hkinds),
+      (subkinds_untagged _ us vs m Hkinds Hstated).
     destruct
       (bind_params_rel untagged us ps vs dv dv' bound Hdistinct Hvars Htagged
          Hbound)

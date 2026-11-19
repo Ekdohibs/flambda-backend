@@ -930,6 +930,11 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (values_of_subkinds statics vs (code_params_subkinds c))
+    eqn:Hsubkinds; [ | exact I ].
+  rewrite (values_of_subkinds_lifted statics statics'
+    (proj1 (proj2 Hstatics)) vs vs' _ Hvs Hsubkinds).
+  cbn [negb].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [bound | ] eqn:Hbind;
     [ | exact I ].
@@ -1043,6 +1048,10 @@ Proof.
   - simpl. rewrite (kinds_of_values_lifted statics' vs vs' Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (values_of_subkinds_lifted statics statics'
+      (proj1 (proj2 Hstatics)) vs vs' _ Hvs Hsubkinds).
     destruct (bind_params params vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     destruct (bind_params_lifted statics' params vs vs' vars vars' bound Hvs

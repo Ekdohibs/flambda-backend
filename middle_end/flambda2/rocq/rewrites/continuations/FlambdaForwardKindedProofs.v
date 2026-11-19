@@ -119,9 +119,14 @@ Lemma kinded_entry_fits (k : continuation) (params : list variable)
       binds_cont k0 body = false).
 Proof.
   unfold kinded_entry.
-  destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)))
-    eqn:Hlength.
-  - apply forwarding_fits. intros _. apply Nat.eqb_eq, Hlength.
+  destruct
+    (Nat.eqb (length params) (length (hm_params_kinds metadata))
+     && subkinds_say_nothing (hm_params_subkinds metadata))
+    eqn:Hentry.
+  - apply andb_true_iff in Hentry as [Hlength Hnothing].
+    apply forwarding_fits. intros _.
+    split; [ apply Nat.eqb_eq, Hlength | ].
+    intros statics vs _. apply values_of_subkinds_nothing, Hnothing.
   - split; [ exact I | ].
     split; [ intros x (params0 & target & Hsome & _)
            | intros k0 (params0 & target & Hsome & _) ];

@@ -325,10 +325,16 @@ Inductive goes (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
       (forwarded_keeping (ac_trap_action ac) params (ac_args ac) target).
 
 (* What [strict] asks of an entry: a handler that gives as many kinds
-   as it has parameters, so that it runs on values of those kinds. *)
+   as it has parameters, and that as many values, whatever they are,
+   are of what it states of its parameters, so that it runs on values
+   of those kinds. *)
 Definition strict_entry (params : list variable)
     (metadata' : handler_metadata) : Prop :=
-  strict = true -> length params = length (hm_params_kinds metadata').
+  strict = true ->
+  length params = length (hm_params_kinds metadata')
+  ∧ ∀ (statics : static_env) (vs : list value),
+      length vs = length params ->
+      values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 
 (* What an entry for [k] says of a handler with these parameters, as the
    second term has it. *)
@@ -382,7 +388,7 @@ Inductive fwd
       (e : entry) (body body' : expr) :
     fwd (params_in_scope params (hm_params_kinds metadata) G) K F handler
       handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> var_unfrozen F p) ->
     cont_unfrozen F k ->
     entry_fits k params metadata' handler' e ->
@@ -398,7 +404,7 @@ Inductive fwd
       (fun kh kh' =>
          fst kh = fst kh'
          ∧ handler_params (snd kh) = handler_params (snd kh')
-         ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+         ∧ handler_stated (snd kh') = handler_stated (snd kh)
          ∧ fwd
              (params_in_scope (handler_params (snd kh))
                 (handler_kinds (snd kh)) G)
@@ -434,7 +440,7 @@ Definition handlers_fwd (G : kinds_in_scope) (K : kinds_of_conts)
     (fun kh kh' =>
        fst kh = fst kh'
        ∧ handler_params (snd kh) = handler_params (snd kh')
-       ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+       ∧ handler_stated (snd kh') = handler_stated (snd kh)
        ∧ fwd
            (params_in_scope (handler_params (snd kh))
               (handler_kinds (snd kh)) G)
@@ -450,7 +456,7 @@ Lemma handlers_fwd_lookup (G : kinds_in_scope) (K : kinds_of_conts)
   match lookup k handlers, lookup k handlers' with
   | Some h, Some h' =>
     handler_params h = handler_params h'
-    ∧ handler_kinds h' = handler_kinds h
+    ∧ handler_stated h' = handler_stated h
     ∧ fwd (params_in_scope (handler_params h) (handler_kinds h) G) K inside
         (handler_expr h) (handler_expr h')
     ∧ (∀ p : variable, p ∈ handler_params h -> var_unfrozen F p)
@@ -605,7 +611,7 @@ Inductive cont_fwd : bool -> cont_value -> cont_value -> Prop :=
       recursive' ->
     fwd (params_in_scope params (hm_params_kinds metadata) G) K
       (plain_forwards recursive ++ F) handler handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> var_unfrozen F p) ->
     (∀ k : continuation,
       cont_fwd (no_entry F k) (resolve k def_conts) (resolve k def_conts')) ->
@@ -822,14 +828,20 @@ Lemma strict_runs (G : kinds_in_scope) (K : kinds_of_conts) (k : continuation)
   ∃ vs : list value,
     eval_simples vars args = Some vs
     ∧ map kind_of_value vs = hm_params_kinds metadata'
-    ∧ length params = length vs.
+    ∧ length params = length vs
+    ∧ ∀ statics : static_env,
+        values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 Proof.
   intros Htyped [Hse Hkinds] Hhave Hstrict.
   destruct (Hhave Hstrict) as (kinds & Hlookup & Hargs).
   rewrite (Hkinds Hstrict) in Hlookup. injection Hlookup as <-.
   destruct (Hargs vars Htyped) as (vs & Hvs & Hk).
+  destruct (Hse Hstrict) as [Hlength Hpasses].
+  assert (Hvs_length : length params = length vs)
+    by (rewrite Hlength, <- Hk; apply length_map).
   exists vs. split; [ exact Hvs | ]. split; [ exact Hk | ].
-  rewrite (Hse Hstrict), <- Hk. apply length_map.
+  split; [ exact Hvs_length | ].
+  intros statics. apply Hpasses. symmetry. exact Hvs_length.
 Qed.
 
 (* What is asked of the values that the closure of an entry is applied
@@ -838,7 +850,9 @@ Definition runs_on_values (params : list variable)
     (metadata' : handler_metadata) (vs : list value) : Prop :=
   strict = true ->
   map kind_of_value vs = hm_params_kinds metadata'
-  ∧ length params = length vs.
+  ∧ length params = length vs
+  ∧ ∀ statics : static_env,
+      values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 
 (* What a result comes to after some more steps. *)
 Definition run_on (n : nat) (result : step_result) : step_result :=
@@ -1084,8 +1098,13 @@ Proof.
       eqn:Hkinds;
       [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
           rewrite Hvs, kinds_eqb_refl in Hkinds; discriminate Hkinds ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata'))
+      eqn:Hstated;
+      [ | exists 0; intros Hstrict;
+          destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+          rewrite (Hpasses statics) in Hstated; discriminate Hstated ].
     destruct (bind_params params vs def_vars0) as [bound | ] eqn:Hbind;
-      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as (_ & Hvs & _);
           destruct (bind_params_length params vs def_vars0 Hvs)
             as [bound Hsome];
           rewrite Hsome in Hbind; discriminate Hbind ].
@@ -1095,11 +1114,16 @@ Proof.
          def_conts0 statics _ rd_ Hnodup Hargs Hbind Hvars Hcont).
     apply answer_refl.
   - (* related closures *)
+    pose proof Hmeta as Hmeta_kinds. unfold stated in Hmeta_kinds.
+    injection Hmeta_kinds as Hmeta_kinds Hmeta_stated.
     split.
-    + intros vs statics. exists 0. rewrite run_on_zero. simpl. rewrite Hmeta.
+    + intros vs statics. exists 0. rewrite run_on_zero. simpl.
+      rewrite Hmeta_kinds, Hmeta_stated.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds; [ | apply answer_undefined ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
+        [ | apply answer_undefined ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
         [ | apply answer_undefined ].
       eexists. split; [ reflexivity | ].
@@ -1127,11 +1151,18 @@ Proof.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds;
         [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
-            rewrite <- Hmeta, Hvs, kinds_eqb_refl in Hkinds;
+            rewrite <- Hmeta_kinds, Hvs, kinds_eqb_refl in Hkinds;
             discriminate Hkinds ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+        eqn:Hstated;
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+            rewrite <- Hmeta_stated, (Hpasses statics) in Hstated;
+            discriminate Hstated ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
-        [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & Hvs & _);
             destruct (bind_params_length params vs def_vars Hvs)
               as [bound Hsome];
             rewrite Hsome in Hbind; discriminate Hbind ].
@@ -1241,7 +1272,8 @@ Proof.
       { simpl.
         destruct (kinds_eqb (map kind_of_value vs)
                     (hm_params_kinds metadata'));
-          [ rewrite Hbind | ]; reflexivity. }
+          [ rewrite Hbind; destruct (values_of_subkinds _ _ _) | ];
+          reflexivity. }
       rewrite Hundefined in Hanswer.
       rewrite (answer_undefined_inv _ Hanswer). intros Hs.
       rewrite Hstrict in Hs. discriminate Hs.

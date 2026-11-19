@@ -35,7 +35,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNominalProofs FlambdaAlphaProofs FlambdaNameAbstractionSpec
   FlambdaNameAbstractionProofs FlambdaHeapSpec FlambdaHeapProofs
   FlambdaLocationsSpec FlambdaLocationsProofs FlambdaLocationsPrimitiveSpec.
-From OxCamlFlambda2 Require FlambdaPrimitiveProofs.
+From OxCamlFlambda2 Require FlambdaPrimitiveProofs FlambdaSubkindProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -167,6 +167,39 @@ Proof.
     pose proof (proj1 (act_inverse _ _ p statics static_env_laws)) as Hst.
     pose proof (proj1 (act_inverse _ _ p vs values_laws)) as Hvs.
     cbv beta in Hst, Hvs. rewrite Hst, Hvs in Heval'. congruence.
+Qed.
+
+(* The test of subkinds reads the same of the values moved. *)
+Lemma values_of_subkinds_moved (p : permutation) (statics : static_env)
+    (vs : list value) (sks : list param_subkind) :
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds (permute_static_env p statics)
+    (map (permute_value p) vs) sks
+  = true.
+Proof.
+  destruct (moved_respects p statics) as (Hconstants & _ & Hobserved).
+  apply
+    (FlambdaSubkindProofs.values_of_subkinds_related (moved p) statics
+       (permute_static_env p statics) vs _ sks Hconstants Hobserved).
+  apply Forall2_moved. reflexivity.
+Qed.
+
+Lemma values_of_subkinds_permuted (p : permutation) (statics : static_env)
+    (vs : list value) (sks : list param_subkind) :
+  values_of_subkinds (permute_static_env p statics)
+    (map (permute_value p) vs) sks
+  = values_of_subkinds statics vs sks.
+Proof.
+  destruct (values_of_subkinds statics vs sks) eqn:Htest.
+  - exact (values_of_subkinds_moved p statics vs sks Htest).
+  - destruct
+      (values_of_subkinds (permute_static_env p statics)
+         (map (permute_value p) vs) sks)
+      eqn:Htest'; [ | reflexivity ].
+    apply (values_of_subkinds_moved (inverse_permutation p)) in Htest'.
+    pose proof (proj1 (act_inverse _ _ p statics static_env_laws)) as Hst.
+    pose proof (proj1 (act_inverse _ _ p vs values_laws)) as Hvs.
+    cbv beta in Hst, Hvs. rewrite Hst, Hvs in Htest'. congruence.
 Qed.
 
 (* ======================================================================== *)

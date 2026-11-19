@@ -89,7 +89,7 @@
    Simplify left. The term after must have them forwarded too, by an
    equivalence.
 
-   [forward_kinded] forwards an application where the three things
+   [forward_kinded] forwards an application where the four things
    that the application does cannot fail and cannot be seen:
    - every argument has a value. An argument is a constant, a symbol,
      or a variable that a [Let] or the parameters of a handler bind
@@ -108,6 +108,11 @@
      gives the parameter it is given to ([have_kinds], with
      FlambdaNormaliseSpec.kind_of_simple_in_scope). A constant has
      its own kind and a symbol the kind [Value];
+   - the values are of what the handler states of its parameters: the
+     machine tests that too where a handler is applied
+     (FlambdaSubkindSpec.values_of_subkinds), and the pass asks that
+     the handler state nothing of them beyond their kinds
+     (FlambdaKindModel.subkinds_say_nothing; [kinded_entry]);
    - the binding succeeds: the application has as many arguments as
      the handler has parameters, and the handler gives as many kinds
      ([kinded_entry]).
@@ -240,8 +245,8 @@
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
-  FlambdaValueSpec FlambdaSemanticsSpec FlambdaNormaliseSpec
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaMapSpec FlambdaValueSpec FlambdaSemanticsSpec FlambdaNormaliseSpec
   FlambdaCodeLetsSpec FlambdaForwardSpec.
 Import ListNotations.
 
@@ -272,12 +277,14 @@ Fixpoint have_kinds (G : kinds_in_scope) (args : list simple)
 
 (* The entry of [k] among the continuations in scope: that of
    FlambdaForwardSpec.forwarding, for a handler that gives as many
-   kinds as it has parameters. [handler] is the handler once the pass
-   has been through it, and [body] the body of the [Let_cont] of [k]. *)
+   kinds as it has parameters and states nothing of them beyond their
+   kinds. [handler] is the handler once the pass has been through it,
+   and [body] the body of the [Let_cont] of [k]. *)
 Definition kinded_entry (k : continuation) (params : list variable)
     (metadata : handler_metadata) (handler body : expr)
     : option (list variable * apply_cont) :=
   if Nat.eqb (length params) (length (hm_params_kinds metadata))
+     && subkinds_say_nothing (hm_params_subkinds metadata)
   then forwarding k params metadata handler body
   else None.
 

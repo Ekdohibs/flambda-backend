@@ -190,10 +190,11 @@ Proof.
         by (intros part Hin;
             exact (G_partial pcallee pargs parity part Hg (or_intror Hin))).
       clear Hpcallee Hg. revert pargs pargs' Hpargs Hall. fix IH 3.
-      intros args args' [ | w w' rest rest' [Hkind Hhead] Htail] Hall;
+      intros args args' [ | w w' rest rest' (Hkind & Hconst & Hhead) Htail]
+        Hall;
         constructor;
         [ | exact (IH _ _ Htail (fun part Hin => Hall part (or_intror Hin))) ].
-      split; [ exact Hkind | ].
+      split; [ exact Hkind | ]. split; [ exact Hconst | ].
       intros Husable1.
       destruct (Hall w (or_introl eq_refl) Husable1) as [Husable Hgw].
       exact (value_erased_transfer _ _ (Hhead Husable) Hgw).
@@ -284,7 +285,8 @@ Lemma value_erased_if_usable_transfer (v v' : value) :
   value_erased_if_usable rs v v' ->
   value_erased_if_usable rs1 v v'.
 Proof.
-  intros Hc [Hkind Hv]. split; [ exact Hkind | ].
+  intros Hc (Hkind & Hconst & Hv). split; [ exact Hkind | ].
+  split; [ exact Hconst | ].
   intros Hu1. destruct (Hc Hu1) as [Hu Hg].
   exact (value_erased_transfer _ _ (Hv Hu) Hg).
 Qed.
@@ -2018,6 +2020,23 @@ Proof.
              Hbind).
 Qed.
 
+(* The values that are left are of what is stated of the parameters
+   that are left. *)
+Lemma values_of_subkinds_dropped (statics : static_env) :
+  ∀ (places : list bool) (vs : list value) (sks : list param_subkind),
+    values_of_subkinds statics vs sks = true ->
+    values_of_subkinds statics (drop_regions places vs)
+      (drop_regions places sks)
+    = true.
+Proof.
+  induction places as [ | place places IH]; intros vs sks H; [ exact H | ].
+  destruct vs as [ | v vs], sks as [ | ps sks]; cbn [drop_regions];
+    try apply values_of_subkinds_no_values; try apply values_of_subkinds_nil.
+  rewrite values_of_subkinds_cons in H. apply andb_true_iff in H as [Hv Hvs].
+  destruct place; [ exact (IH vs sks Hvs) | ].
+  rewrite values_of_subkinds_cons, Hv. exact (IH vs sks Hvs).
+Qed.
+
 (* No value of an argument is of the kind [Region], in a state that has
    no poison constant of that kind. *)
 Lemma args_not_region (rs : region_state) (args : list simple)
@@ -2074,15 +2093,17 @@ Proof.
     try (exfalso;
          pose proof (simples_fault_mark_place rs _ [] Hfault Hmark) as H;
          discriminate H).
-  destruct h as [params [kinds is_exn] handler].
+  destruct h as [params [kinds subkinds is_exn] handler].
   unfold region_params, handler_kinds in Hfault.
   cbn [hm_params_kinds] in Hfault.
-  cbn [hm_params_kinds].
+  cbn [hm_params_kinds hm_params_subkinds].
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hvs; [ | exact I ].
   pose proof (args_not_region rs (ac_args ac) vs Hpoison Hargs Hvs)
     as Hnot_region.
   destruct (kinds_eqb (map (region_kind_of_value rs) vs) kinds) eqn:Hkinds;
+    [ | exact I ].
+  destruct (values_of_subkinds (live_statics rs) vs subkinds) eqn:Hstated;
     [ | exact I ].
   apply kinds_eqb_eq in Hkinds. subst kinds.
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
@@ -2123,9 +2144,12 @@ Proof.
     (eval_simples_dropped rs vars' (ac_args ac) Hvars _ vs Hbelow Hfault Hvs)
     as (vs' & Hvs' & Hrelated).
   rewrite Hvs'. unfold apply_continuation. rewrite <- Hc'.
-  cbn [erase_handler apply_cont_value hm_params_kinds].
+  cbn [erase_handler apply_cont_value hm_params_kinds hm_params_subkinds].
   rewrite (kinds_of_values_erased rs _ vs' Hrelated), dropped_kinds,
     kinds_eqb_refl.
+  rewrite
+    (values_of_subkinds_erased rs statics' (proj1 (proj2 (proj2 Hstatics))) _
+       vs' Hrelated _ (values_of_subkinds_dropped _ _ vs subkinds Hstated)).
   destruct
     (bind_params_dropped rs _ params vs vs' def_vars vars1' handler_vars
        (region_values_dead rs vs Hnot_region) Hrelated Hvars0 Hbind)
@@ -2135,7 +2159,8 @@ Proof.
   exact
     (state_erased_plain_next rs (region_conts_of recursive ++ rconts0) handler
        handler_vars bound' _ _ (state_statics (rs_state rs)) statics'
-       (state_heap (rs_state rs)) hp' (state_reads (rs_state rs)) Hh
+       (state_heap (rs_state rs)) hp' (state_reads (rs_state rs))
+       (handler_returns_no_region_body _ _ _ _ Hh)
        (conts_agree_rec rconts0 def_conts def_vars def_conts recursive
           recursive Hagree0)
        Hbound

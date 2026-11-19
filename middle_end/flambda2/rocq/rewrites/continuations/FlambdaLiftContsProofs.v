@@ -265,6 +265,7 @@ Lemma unalias_first_equivalent (j : continuation) (x p : variable)
     (sks : list param_subkind) (handler body : expr) :
   among x (p :: q) = false ->
   among p q = false ->
+  says_nothing_at sks 0 = true ->
   all_give_var j 0 x true body = true ->
   expr_equivalent
     (Let_cont_non_recursive j
@@ -282,7 +283,7 @@ Lemma unalias_first_equivalent (j : continuation) (x p : variable)
           (Let p kind (Simple (Var x)) handler))
        (drop_arg j 0 body)).
 Proof.
-  intros Hx Hfresh Hgive vars conts statics hp rd.
+  intros Hx Hfresh Hnothing Hgive vars conts statics hp rd.
   set (metadata :=
     {| hm_params_kinds := kind :: kinds;
        hm_params_subkinds := sks;
@@ -300,7 +301,7 @@ Proof.
     [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
   apply
     (site_equivalent j 0 x p kind (p :: q) metadata handler vars conts
-       eq_refl eq_refl Hx Hfresh).
+       eq_refl eq_refl Hx Hfresh Hnothing).
   apply (Rel_state_inside j 0 x p kind (p :: q) metadata handler vars conts
     true);
     [ apply agree_refl | reflexivity | exact Hgive | ].
@@ -325,6 +326,8 @@ Lemma rebound_alike (p p' : variable) (kind : flambda_kind)
 Proof.
   intros Hp Hp' [v [Hv Hkind]] vs statics hp rd. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+    simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
     simpl; [ | exact I ].
   destruct (bind_params q vs vars) as [bound | ] eqn:Hbind; simpl;
     [ | exact I ].
@@ -374,6 +377,8 @@ Proof.
   intros Hp Hp' Hfree vs statics hp rd. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (kind :: kinds)) eqn:Hkinds;
     simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs _);
+    simpl; [ | exact I ].
   destruct vs as [ | v vs]; simpl; [ exact I | ].
   apply kinds_eqb_eq in Hkinds. cbn [map] in Hkinds.
   injection Hkinds as Hkind _.
@@ -402,6 +407,7 @@ Lemma give_one_equivalent (j : continuation) (p : variable)
     (sks sks' : list param_subkind) (h rest : expr) (vars : env)
     (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
   drop_nth 0 sks' = sks ->
+  says_nothing_at sks' 0 = true ->
   among p q = false ->
   all_give_var j 0 p true (give j [p] rest) = true ->
   has_kind vars p kind ->
@@ -425,7 +431,7 @@ Lemma give_one_equivalent (j : continuation) (p : variable)
           (give j [p] rest))
        vars conts statics hp rd).
 Proof.
-  intros <- Hp Hgive Hkind.
+  intros <- Hnothing Hp Hgive Hkind.
   set (p' := fresh_name (p :: q ++ free_variables_of_expr h)).
   pose proof (fresh_name_fresh (p :: q ++ free_variables_of_expr h)) as Hfresh.
   fold p' in Hfresh. rewrite among_cons, among_app in Hfresh.
@@ -446,6 +452,7 @@ Proof.
     rewrite drop_arg_give in Hunalias. apply Hunalias.
     - rewrite among_cons, Hp, orb_false_r. apply Pos.eqb_neq. congruence.
     - exact Hq.
+    - exact Hnothing.
     - exact Hgive. }
   apply let_cont_handler_alike.
   exact (renamed_param_alike p p' kind q kinds sks' h vars conts Hp Hq Hnot).
@@ -464,6 +471,11 @@ Proof. destruct sks; reflexivity. Qed.
 
 Lemma drop_first_subkinds_behind (n : nat) (sks : list param_subkind) :
   drop_nth 0 (subkinds_behind (S n) sks) = subkinds_behind n sks.
+Proof. destruct sks; reflexivity. Qed.
+
+(* And nothing is stated of the first. *)
+Lemma first_subkinds_behind (n : nat) (sks : list param_subkind) :
+  says_nothing_at (subkinds_behind (S n) sks) 0 = true.
 Proof. destruct sks; reflexivity. Qed.
 
 (* Each of them given, the last first. *)
@@ -510,7 +522,8 @@ Proof.
       intros p0 Hin. apply Hall. right. exact Hin. }
     rewrite give_cons.
     apply give_one_equivalent;
-      [ apply drop_first_subkinds_behind | exact Hp | | exact Hkind ].
+      [ apply drop_first_subkinds_behind | apply first_subkinds_behind
+      | exact Hp | | exact Hkind ].
     rewrite <- give_cons.
     apply (only_applied_all_give_var j p all (map fst read) rest true true);
       [ auto | | exact Honly ].
@@ -648,6 +661,8 @@ Proof.
   apply let_cont_handler_alike. intros vs statics' hp' rd'. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
     eqn:Hkinds; simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata)); simpl;
+    [ | exact I ].
   destruct (bind_params params vs vars) as [bound | ] eqn:Hbind; simpl;
     [ | exact I ].
   apply kinds_eqb_eq in Hkinds. rewrite <- Hkinds in Honly |- *.

@@ -96,6 +96,9 @@
    of a non-recursive [Let_cont] of [k] ([unalias_param]):
    - that the handler is not an exception handler, and has a kind for
      the parameter;
+   - that the handler states nothing of the parameter beyond its kind
+     ([says_nothing_at]): the machine tests what is stated where the
+     handler is applied, and the [Let] tests the kind only;
    - that every mention of [k] in the body of the [Let_cont] is an
      application of [k] ([all_give_var]): no call returns or raises to
      [k], no trap action names it, and no [Let_cont] inside binds [k]
@@ -142,6 +145,15 @@ Import ListNotations.
 (* A list without its element at a position. *)
 Definition drop_nth {A : Type} (i : nat) (l : list A) : list A :=
   firstn i l ++ skipn (S i) l.
+
+(* What is stated of the parameters of a handler says nothing at a
+   position: every value of the kind passes the test there. A list
+   that is too short states nothing. *)
+Definition says_nothing_at (sks : list param_subkind) (i : nat) : bool :=
+  match nth_error sks i with
+  | Some ps => says_nothing (fst ps) (snd ps)
+  | None => true
+  end.
 
 (* The first answer that a function gives of an element of a list. *)
 Fixpoint first_answer {A B : Type} (f : A -> option B) (l : list A)
@@ -285,8 +297,9 @@ with drop_arg_in_handler (k : continuation) (i : nat)
    the application binds, and that is not a parameter of [h]. The new
    handler begins with a [Let] of the parameter to that variable, with
    the kind that [h] had for the parameter: the machine tests the kind
-   at the [Let] as it did where [h] was applied. The parameter is at no
-   other position of [h], where the [Let] would hide it. An exception
+   at the [Let] as it did where [h] was applied, and [h] states no
+   more than the kind of that parameter. The parameter is at no other
+   position of [h], where the [Let] would hide it. An exception
    handler is left as it is. *)
 Definition unalias_param (i : nat) (k : continuation)
     (h : continuation_handler) (body : expr)
@@ -301,6 +314,7 @@ Definition unalias_param (i : nat) (k : continuation)
            && all_give_var k i x true body
            && negb (among x params)
            && negb (among p (drop_nth i params))
+           && says_nothing_at (hm_params_subkinds metadata) i
         then
           Some
             (Handler (drop_nth i params)

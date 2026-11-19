@@ -209,6 +209,8 @@ Proof.
     intros (Hno & _ & _). simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs []) as [bound | ]; [ | discriminate ].
     intros [= <-]. exists body, bound. split; [ exact Hno | reflexivity ].
   - intros _. discriminate.
