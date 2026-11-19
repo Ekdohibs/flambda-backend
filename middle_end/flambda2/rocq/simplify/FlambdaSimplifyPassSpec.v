@@ -31,9 +31,10 @@
    together.
 
    This file is to be reviewed: every definition, and the
-   statements. The function is meant to be extracted and run by the
-   validation of middle_end/flambda2/tests/semantics/; nothing runs it
-   yet, and it has not been extracted.
+   statements. The validation of middle_end/flambda2/tests/semantics/
+   runs FlambdaSimplifyCarriedSpec.simplify_by_types_carried, which is
+   extracted and which that file states to be [simplify_by_types] of
+   every term.
 
    [simplify_expr tenv e] goes down the term [e] with the typing
    environment [tenv], which it extends at each binder as Simplify
@@ -180,7 +181,7 @@
    - There are no joins of the environments at the uses of a
      continuation, which Simplify has for the parameters of a
      non-recursive [Let_cont] and for the invariant parameters of a
-     recursive one, and no subkinds (FlambdaSimplifyHandlersSpec.v
+     recursive one, and no subkind is read (FlambdaSimplifyHandlersSpec.v
      says where the two part). So [simplify_expr] knows nothing of a
      parameter but its kind in every handler of a recursive
      [Let_cont], and in the handler of a non-recursive one whose

@@ -70,10 +70,10 @@
      - [Closures]: in full.
      - [String]: in full; a string is the list of its bytes.
      - [Array] is left out. Its [element_kind] is a
-       [Flambda_kind.With_subkind.t], and the model has no subkinds; the
-       machine has no arrays either. It is to be added as a constructor
-       when the terms have arrays; until then the converter must refuse
-       a type that has one.
+       [Flambda_kind.With_subkind.t], and the types here have no
+       subkinds. The machine has arrays (FlambdaValueSpec.v); the
+       grammar has no constructor for their types yet, and until it
+       has the converter must refuse a type that has one.
    - [head_of_kind_naked_immediate] is the record that
      [Head_of_kind_naked_immediate.descr] gives, [naked_immediates] and
      [inverse_relations], and not the three constructors that represent
@@ -1331,9 +1331,9 @@ with equation_names_of_env_extension (extension : env_extension)
    Not here: [tag_int8], [tag_int16] and their [alias_to] (the machine
    has no primitive that makes a tagged immediate of a small integer);
    [variant], [Row_like_for_blocks.create_exactly_multiple] and
-   [unknown_with_subkind] at a subkind that says something (the model
-   has no subkinds); the types of arrays; [check_equation], which
-   answers nothing. *)
+   [unknown_with_subkind] at a subkind that says something (the types
+   here have no subkinds); the types of arrays; [check_equation],
+   which answers nothing. *)
 
 (* [More_type_creators.unknown_like] and [bottom_like]. *)
 Definition unknown_like (t : flambda_type) : flambda_type :=

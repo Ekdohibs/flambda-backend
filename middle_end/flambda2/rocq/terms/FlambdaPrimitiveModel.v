@@ -104,12 +104,13 @@
    - [Block_kind.Values] has no list of the kinds of the fields. In the
      compiler each has a subkind, which Simplify takes an argument that
      is a variable to be of ([Simplify_variadic_primitive]). The model
-     has no subkinds: the conversion drops the subkind of each field,
-     and whether the field may be null, as it does of a parameter, and
-     must refuse a field that is not of kind [Value]. The tool reads
-     every field of a [Make_block] at block kind [Values] as any
-     value; this is provisional; decision D25 is open and is the
-     human's (the note above
+     has subkinds at parameters (FlambdaKindModel.subkind) and none in
+     the block kind of a [Make_block]: the conversion drops the subkind
+     of each field, and whether the field may be null, and must refuse
+     a field that is not of kind [Value]. The tool reads every field of
+     a [Make_block] at block kind [Values] as any value; this is
+     provisional; the part of decision D25 on the fields of a made
+     block is open and is the human's (the note above
      FlambdaPrimitiveSpec.eval_variadic_primitive).
    - A tag is any integer, where the compiler's [Tag.Scannable.t] is at
      least 0 and below 251. The field and the size of a [Block_load]

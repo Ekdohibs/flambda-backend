@@ -60,9 +60,10 @@
    for a parameter: the entry gives it the constant, and each turn
    the sum, which the term before boxes on the way round.
 
-   The model has no subkinds, so the pass goes by what the term
-   shows, as FlambdaUnboxVariantsSpec.unbox_variant_params does for a
-   join. For a recursive continuation that is alone in its [Let_cont]
+   The pass does not decide by the subkinds that a handler states of
+   its parameters: it goes by what the term shows, as
+   FlambdaUnboxVariantsSpec.unbox_variant_params does for a join. For
+   a recursive continuation that is alone in its [Let_cont]
    ([unbox_loop_reads]), a [Let] of the handler that reads a parameter
    becomes a parameter ([unbox_loop_read]) where:
 

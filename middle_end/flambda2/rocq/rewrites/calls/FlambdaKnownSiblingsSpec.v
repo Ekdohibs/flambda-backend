@@ -51,41 +51,57 @@
    the body of the caller, the term after kept it, and no rewrite
    brought the two together.
 
-   [inline_known_in_group] is
-   FlambdaInlineSiblingsSpec.inline_in_group with [inline_known_calls]
-   in the place of [inline_calls]. It goes through the bindings of a
-   group in order. The body of each piece of code is rewritten by
-   [inline_known_calls] with what the other bindings of the group make
-   known, those before it as they have just been rewritten and those
-   after it as they are: their code (FlambdaNormaliseSpec.codes_of),
-   and of each symbol that they bind whether it is a closure, and of
-   which code ([symbols_of]). So a call is inlined where
-   [inline_known_calls] would inline it had the other bindings of the
-   group been bound around the code: its callee is a symbol that the
-   group binds to a closure of the code called, that code is the code
-   of another binding of the group and is not among the code whose
-   calls are left ([kept]), and the call passes the tests of
-   FlambdaNormaliseSpec.inline_known_apply ([inlinable_b],
-   [call_agrees_b]). A binding of code binds no symbol, so the symbols
-   known are those of the whole group. The code of the binding itself
-   is not among what is known, so in a group whose code ids are
-   distinct, as those of a well-formed term are, a call of code to
-   itself is left. (If another binding of the group has the same code
-   id, the code of that one is known under the id. A group that binds
-   a code id twice has no meaning, and the statements are of every
-   term.) [inline_known_sibling_calls] does this at every group of a
-   term that is not in the body of code or in the handler of a
-   recursive continuation, as [inline_sibling_calls] does.
+   [inline_known_in_group] is FlambdaInlineSiblingsSpec.inline_in_group
+   with [inline_known_calls] in the place of [inline_calls]. It goes
+   through the bindings of a group in order. The body of each piece of
+   code is rewritten as [inline_known_calls] rewrites the body of code
+   that it meets (FlambdaNormaliseSpec.inline_known_calls_in_binding),
+   with what the other bindings of the group make known, those before
+   it as they have just been rewritten and those after it as they are:
+   their code (FlambdaNormaliseSpec.codes_of), and of each symbol that
+   they bind whether it is a closure, and of which code ([symbols_of]).
+   So a call is inlined where its callee is a symbol that the group
+   binds to a closure of the code called, that code is the code of
+   another binding of the group and is not among the code whose calls
+   are left ([kept]), and the call passes the tests of
+   FlambdaNormaliseSpec.inline_known_apply: [inlinable_b] and
+   [call_agrees_stated]. The second asks that the arities agree and
+   that each argument be known to be of what the code called states of
+   its parameter (decision D25, at parameters). What is known of an
+   argument that is a variable is read from the binders passed in the
+   body on the way to the call; the body starts with its parameters
+   known as what its own code states of them
+   (FlambdaStatedScopeSpec.code_stated). Of a symbol that the group
+   binds, or that is bound around the group, the pass knows what
+   FlambdaStatedScopeSpec.v knows of every symbol, that it is no null
+   and no poison, and no more: each body is started with the empty list
+   of FlambdaStatedSymbolsSpec.v. [inline_known_calls] knows more of
+   the symbols of a group bound around code, so a call that gives such
+   a symbol where the code called states more than that of its
+   parameter is left here, where [inline_known_calls] might inline it
+   had the other bindings of the group been bound around the code. Code
+   that states nothing of its parameters passes whatever is known. A
+   binding of code binds no symbol, so the symbols known are those of
+   the whole group. The code of the binding itself is not among what is
+   known, so in a group whose code ids are distinct, as those of a
+   well-formed term are, a call of code to itself is left. (If another
+   binding of the group has the same code id, the code of that one is
+   known under the id. A group that binds a code id twice has no
+   meaning, and the statements are of every term.)
+   [inline_known_sibling_calls] does this at every group of a term that
+   is not in the body of code or in the handler of a recursive
+   continuation, as [inline_sibling_calls] does.
 
-   Inside the body of code of a group the rewrite is
-   [inline_known_calls] itself, given what the other bindings of the
-   group make known. It goes into the handlers of the continuations
-   of the body, those of recursive ones too, and into the groups that
-   the body binds: the code of such an inner group is rewritten with
-   what is known around that group, and what follows the group with
-   its code and its symbols known as well. The code of an inner group
-   does not know the other code of that group: [inline_known_in_group]
-   is applied to no group that is in the body of code.
+   Inside the body of code of a group the rewrite is that of
+   [inline_known_calls], started as is said above and given what the
+   other bindings of the group make known. It goes into the handlers of
+   the continuations of the body, those of recursive ones too, and into
+   the groups that the body binds: the code of such an inner group is
+   rewritten with what is known around that group, and what follows the
+   group with its code and its symbols known as well. The code of an
+   inner group does not know the other code of that group:
+   [inline_known_in_group] is applied to no group that is in the body
+   of code.
 
    Why one binding at a time. When the body of code runs, the static
    environment binds the code and the symbols of its group as the
@@ -97,16 +113,18 @@
    Why it is an equivalence, where [inline_sibling_calls] refines.
    [inline_calls] inlines a direct call whatever its callee is. The
    call is undefined where the callee is not a closure of the code
-   called, or the arities of the call are not those of the code
-   (FlambdaSemanticsSpec.call_function), and the copy of the body is
-   not. [inline_known_calls] inlines only where neither can be: the
-   callee is a symbol known to be bound to a closure of the code
-   called, and the arities agree. Here that is known of the static
-   environment in which the body of the code runs, which is one that
-   the group has extended: it binds each symbol of the group to what
-   its binding says, and the code of each other binding to that code.
-   The rewrites of the term after are equivalences
-   (FlambdaValidateSpec.v), and this is one of them.
+   called, or the arities of the call are not those of the code, or an
+   argument is not of what the code states of its parameter
+   (FlambdaSemanticsSpec.call_function, [call_code]), and the copy of
+   the body need not be. [inline_known_calls] inlines only where none
+   of the three can be: the callee is a symbol known to be bound to a
+   closure of the code called, the arities agree, and each argument is
+   known to be of what the code states of its parameter. Here the first
+   is known of the static environment in which the body of the code
+   runs, which is one that the group has extended: it binds each symbol
+   of the group to what its binding says, and the code of each other
+   binding to that code. The rewrites of the term after are
+   equivalences (FlambdaValidateSpec.v), and this is one of them.
 
    The code whose calls are left ([kept]) is an argument, as for
    [inline_known_calls], and the statements hold whatever it is. The

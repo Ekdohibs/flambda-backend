@@ -127,8 +127,8 @@
      are of the machine of FlambdaSemanticsSpec.step, whose step for
      an [Apply_cont] does not read the trap action either. Simplify
      does not take a use with a trap action to be inlinable.
-   - The lifted constants, the extra parameters and arguments, and the
-     subkinds of the parameters are not modelled.
+   - The lifted constants and the extra parameters and arguments are
+     not modelled, and the subkinds of the parameters are not read.
 
    Renaming. That [arm_env], [use_env] and [leaf_uses] commute with
    renaming is in FlambdaSimplifyPassRenamingSpec.v, with the

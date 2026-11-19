@@ -443,8 +443,8 @@ Definition array_element_ok (kind : array_kind) (v : value) : bool :=
    gives [Invalid] where they cannot agree
    ([Simplify_variadic_primitive.simplify_make_array]); the only
    subkind that the array kinds of the model give is that of the
-   immediates, which is tested. Decision D25 is the same question for
-   [Make_block]. *)
+   immediates, which is tested. The part of decision D25 that is open
+   is the same question for [Make_block]. *)
 Definition array_made (kind : array_kind) (vs : list value)
     : option (list value) :=
   if forallb (array_element_ok kind) vs then Some vs else None.
@@ -1128,10 +1128,12 @@ Definition eval_binary_primitive (statics : static_env)
    That the subkind of a field has no bearing on what the program
    computes is not proved.
    The tool reads every field of a [Make_block] at block kind [Values]
-   as any value; this is provisional; decision D25 is open and is the
-   human's: whether the subkinds are dropped, as now, or come into the
-   model, and then whether a field that is not of its subkind makes
-   the block undefined. *)
+   as any value; this is provisional. Decision D25 is decided at
+   parameters (FlambdaSubkindSpec.v) and open for the fields of a made
+   block, where it is the human's: whether the subkinds of fields are
+   dropped, as now, or tested as those of parameters are, and then
+   whether a field that is not of its subkind makes the block
+   undefined. *)
 Definition eval_variadic_primitive (statics : static_env)
     (p : variadic_primitive) (vs : list value) : option value :=
   match p with
