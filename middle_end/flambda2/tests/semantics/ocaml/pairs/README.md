@@ -391,9 +391,13 @@ validated with that one import left. `hidden_included.ml` and
 `hidden_kept.ml` load the field of which the `.cmx` says nothing and
 pass it on, the first as a field of its own module block and the
 second in a block that it makes: the load has the symbol for its
-value, both runs are defined and return it, and the units are
-validated with that import left. `several_included.ml` is the same
-of a first unit all of whose fields are such.
+value, both runs are defined and return the unit's module block,
+which has that symbol in it (as a field for the first, in the block
+that the unit makes for the second), and the units are validated
+with that import left. `several_included.ml` is the same of a first
+unit all of whose fields are such: its module block has the four
+symbols as its fields, and it is validated with those four imports
+left.
 
 The block is bound in those units because the load is outside code
 and outside the handler of a recursive continuation: there the

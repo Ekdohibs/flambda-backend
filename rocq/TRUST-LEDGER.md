@@ -1805,8 +1805,11 @@ it gave back.
     `pairs/hidden_known_read.ml` is a unit that the rule turns.
     `pairs/hidden_included.ml`, `pairs/hidden_kept.ml` and
     `pairs/several_included.ml` load such a field outside code and
-    pass it on: both runs return the symbol of the field, and the
-    units are validated with that symbol an import left.
+    pass it on: both runs return the unit's own module block, which
+    has the symbol of the field in it (as a field for the first, in
+    a block that the unit makes for the second, and four such
+    symbols as its fields for the third), and the units are
+    validated with those symbols imports left.
     `pairs/hidden_in_function.ml` and `pairs/hidden_in_loop.ml` are
     units whose block stays unbound, for a load in the body of code
     and for one in the handler of a recursive continuation. The run
