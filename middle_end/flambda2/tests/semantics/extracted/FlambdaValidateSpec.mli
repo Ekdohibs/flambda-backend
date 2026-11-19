@@ -71,6 +71,7 @@ open FlambdaUnboxParamsSpec
 open FlambdaUnboxSpec
 open FlambdaUnboxTogetherSpec
 open FlambdaUnboxVariantsSpec
+open FlambdaUntagAtBinderSpec
 open FlambdaUntagParamsSpec
 open FlambdaUnusedContsSpec
 open FlambdaUnusedHeadStaticsSpec

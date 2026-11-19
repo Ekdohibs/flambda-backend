@@ -71,6 +71,7 @@ open FlambdaUnboxParamsSpec
 open FlambdaUnboxSpec
 open FlambdaUnboxTogetherSpec
 open FlambdaUnboxVariantsSpec
+open FlambdaUntagAtBinderSpec
 open FlambdaUntagParamsSpec
 open FlambdaUnusedContsSpec
 open FlambdaUnusedHeadStaticsSpec
@@ -439,17 +440,18 @@ let tidy_expr_before_stated s e =
        (follow_aliases_in_loops []
           (follow_aliases []
              (share_known_primitives
-                (inline_tail_conts
-                   (sink_let_conts
-                      (remove_unused_conts
-                         (merge_switches
-                            (collapse_switches
-                               (forward_applications
-                                  (fold_constants
-                                     (numbers_in_arms
-                                        (unalias_rec_params_under s
-                                           (unalias_params_under s
-                                              (give_scrutinees_under s e)))))))))))))))
+                (bind_untaggings
+                   (inline_tail_conts
+                      (sink_let_conts
+                         (remove_unused_conts
+                            (merge_switches
+                               (collapse_switches
+                                  (forward_applications
+                                     (fold_constants
+                                        (numbers_in_arms
+                                           (unalias_rec_params_under s
+                                              (unalias_params_under s
+                                                 (give_scrutinees_under s e))))))))))))))))
 
 (** val tidy_code_before_stated : stated_in_scope -> expr -> expr **)
 
@@ -478,17 +480,18 @@ let tidy_expr_after_stated s e =
     (follow_aliases_in_loops []
        (follow_aliases []
           (share_known_primitives
-             (inline_tail_conts_kinded
-                (sink_let_conts
-                   (remove_unused_conts
-                      (forward_to_arms_kinded
-                         (lift_handler_conts
-                            (forward_kinded
-                               (fold_constants
-                                  (numbers_in_arms
-                                     (unalias_rec_params_under s
-                                        (unalias_params_under s
-                                           (give_scrutinees_under s e))))))))))))))
+             (bind_untaggings
+                (inline_tail_conts_kinded
+                   (sink_let_conts
+                      (remove_unused_conts
+                         (forward_to_arms_kinded
+                            (lift_handler_conts
+                               (forward_kinded
+                                  (fold_constants
+                                     (numbers_in_arms
+                                        (unalias_rec_params_under s
+                                           (unalias_params_under s
+                                              (give_scrutinees_under s e)))))))))))))))
 
 (** val tidy_code_after_stated : stated_in_scope -> expr -> expr **)
 
