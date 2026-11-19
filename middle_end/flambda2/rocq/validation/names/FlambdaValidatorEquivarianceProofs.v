@@ -65,6 +65,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaParamAliasesSpec
   FlambdaForwardSpec FlambdaForwardJumpsSpec FlambdaForwardKindedSpec
   FlambdaForwardArmSpec
+  FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaInlineTailSpec FlambdaDeadParamsSpec
   FlambdaCodeLetsSpec
   FlambdaLoopifySpec
@@ -447,6 +448,38 @@ Theorem inline_tail_conts_equivariant :
   inline_tail_conts_equivariant_statement.
 Proof. exact inline_tail_conts_equivariant_aux. Qed.
 
+(* The second of the two rewrites reads what is known of the
+   arguments of the application that ends a run of [Let]s
+   (FlambdaInlineTailSpec.tail_args_stated), from the empty scope,
+   which a renaming leaves as it is. The scope is renamed by
+   FlambdaStatedScopeNamesProofs.rename_stated_in_scope, and the laws
+   of that file are given to the tactic. *)
+#[local] Instance stated_in_scope_renaming : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
+
+#[local] Hint Rewrite stated_of_named_equivariant are_stated_equivariant
+  : equivariance.
+
+Section Tail_args.
+
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_in_scope_cons_renamed : equivariance.
+
+Lemma tail_args_stated_equivariant (r : renaming)
+    (sks : list param_subkind) (body : expr) :
+  ∀ S : stated_in_scope,
+    tail_args_stated (rename_stated_in_scope r S) sks (rename_expr r body)
+    = tail_args_stated S sks body.
+Proof. equivariance. Qed.
+
+End Tail_args.
+
+Lemma tail_args_stated_of_nothing_equivariant (r : renaming)
+    (sks : list param_subkind) (body : expr) :
+  tail_args_stated [] sks (rename_expr r body) = tail_args_stated [] sks body.
+Proof. exact (tail_args_stated_equivariant r sks body []). Qed.
+#[local] Hint Rewrite tail_args_stated_of_nothing_equivariant : equivariance.
+
 (* Inlining a continuation at the end of its scope, where its handler
    gives one kind for each parameter. *)
 Lemma inline_tail_conts_kinded_equivariant_aux (r : renaming) (e : expr) :
@@ -489,7 +522,7 @@ Definition inline_tail_kinded_step (e : expr) : expr :=
   match e with
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     if Nat.eqb (length params) (length (hm_params_kinds metadata))
-       && subkinds_say_nothing (hm_params_subkinds metadata)
+       && tail_args_stated [] (hm_params_subkinds metadata) body
     then
       match inline_cont_at_tail k params metadata handler body with
       | Some inlined => inlined

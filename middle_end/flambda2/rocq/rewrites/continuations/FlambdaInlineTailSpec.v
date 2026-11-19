@@ -28,8 +28,8 @@
 (* The handler of a continuation put where the continuation is applied,
    at the end of its scope, as an equivalence.
 
-   This file is to be reviewed: [inline_tail_conts_kinded] and the
-   statement.
+   This file is to be reviewed: [tail_args_stated],
+   [inline_tail_conts_kinded] and the statement.
 
    FlambdaNormaliseSpec.inline_tail_conts puts the handler of a
    non-recursive continuation in place of the application of the
@@ -50,10 +50,15 @@
    the [Let]s may run.
 
    [inline_tail_conts_kinded] is the same pass where the handler gives
-   one kind for each parameter and states nothing of its parameters
-   beyond their kinds, and leaves the [Let_cont] alone otherwise: the
-   application tests what the handler states, and a [Let] tests a kind
-   only (decision D25, at parameters). It is an equivalence
+   one kind for each parameter and the arguments of the application
+   are known to be of what the handler states of its parameters, and
+   leaves the [Let_cont] alone otherwise: the application tests what
+   the handler states, and a [Let] tests a kind only (decision D25, at
+   parameters). What is known of an argument ([tail_args_stated]) is
+   read from the [Let]s of the run that the application ends, with
+   nothing known of a variable bound before the [Let_cont]
+   (FlambdaStatedScopeSpec.are_stated, from the empty scope); a
+   handler that states nothing passes. It is an equivalence
    ([inline_tail_conts_kinded_equivalent_statement]), under all
    environments: the application binds the parameters to the values of
    the arguments and runs the handler, and the [Let]s do the same, one
@@ -76,9 +81,24 @@
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
-From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaNormaliseSpec.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
+  FlambdaSemanticsSpec FlambdaNormaliseSpec FlambdaStatedScopeSpec.
 Import ListNotations.
+
+(* Whether the application that ends an expression, after [Let]s, has
+   arguments known to be of what a handler states of its parameters.
+   [S]: what is known of the variables bound around the expression; a
+   [Let] of the run adds what its defining expression makes. *)
+Fixpoint tail_args_stated (S : stated_in_scope) (sks : list param_subkind)
+    (body : expr) : bool :=
+  match body with
+  | Let x _ d body => tail_args_stated ((x, stated_of_named S d) :: S) sks body
+  | Let_static _ body => tail_args_stated S sks body
+  | Apply_cont ac => are_stated S (ac_args ac) sks
+  | Let_cont_non_recursive _ _ _ | Let_cont_recursive _ _ | Apply _
+  | Switch _ _ | Invalid =>
+    false
+  end.
 
 Fixpoint inline_tail_conts_kinded (e : expr) : expr :=
   match e with
@@ -92,7 +112,7 @@ Fixpoint inline_tail_conts_kinded (e : expr) : expr :=
       Let_cont_non_recursive k (Handler params metadata handler') body'
     in
     if Nat.eqb (length params) (length (hm_params_kinds metadata))
-       && subkinds_say_nothing (hm_params_subkinds metadata)
+       && tail_args_stated [] (hm_params_subkinds metadata) body'
     then
       match inline_cont_at_tail k params metadata handler' body' with
       | Some inlined => inlined

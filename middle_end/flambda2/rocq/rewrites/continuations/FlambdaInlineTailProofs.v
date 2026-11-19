@@ -37,7 +37,11 @@
    has no value (FlambdaApplyProofs.let_params_wrong), and where the
    values are not of the kinds of the handler
    (FlambdaApplyProofs.let_params_wrong_kinds), which is where the
-   handler must give one kind for each parameter. *)
+   handler must give one kind for each parameter. The application
+   tests what the handler states, and the [Let]s do not: the values
+   of the arguments are of it, by what is known of the variables that
+   the [Let]s of the run have bound, which holds of the environment at
+   each of them (FlambdaStatedScopeProofs.v). *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -45,7 +49,9 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaNominalSpec FlambdaNominalProofs FlambdaContextSpec
   FlambdaContextProofs FlambdaApplySpec FlambdaApplyProofs
-  FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaInlineTailSpec.
+  FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaStatedScopeSpec
+  FlambdaInlineTailSpec.
+From OxCamlFlambda2 Require FlambdaWellFormedProofs FlambdaStatedScopeProofs.
 Import ListNotations.
 
 Lemma expr_equivalent_refl (e : expr) : expr_equivalent e e.
@@ -59,11 +65,12 @@ Lemma inline_cont_at_tail_equivalent (k : continuation)
     (params : list variable) (metadata : handler_metadata) (handler : expr)
     (body : expr) :
   length params = length (hm_params_kinds metadata) ->
-  subkinds_say_nothing (hm_params_subkinds metadata) = true ->
-  ∀ inlined : expr,
+  ∀ (S : stated_in_scope) (inlined : expr),
+    tail_args_stated S (hm_params_subkinds metadata) body = true ->
     inline_cont_at_tail k params metadata handler body = Some inlined ->
     ∀ (vars def_vars : env) (conts : cont_env) (statics : static_env)
       (hp : heap) (rd : read_record),
+      stated_hold statics S vars ->
       (∀ x : variable,
         var_free_in_handler x (Handler params metadata handler) ->
         lookup x vars = lookup x def_vars) ->
@@ -74,12 +81,12 @@ Lemma inline_cont_at_tail_equivalent (k : continuation)
            statics hp rd)
         (State inlined vars conts statics hp rd).
 Proof.
-  intros Hkinds Hnothing.
+  intros Hkinds.
   induction body
     as [ x kind d body IH | bindings body IH | k' h body IH | handlers body IH
        | ap | ac | scrutinee arms | ];
-    intros inlined Heq vars def_vars conts statics hp rd Hagree; simpl in Heq;
-    try discriminate.
+    intros S inlined Hstated Heq vars def_vars conts statics hp rd Hhold Hagree;
+    simpl in Heq; try discriminate; cbn [tail_args_stated] in Hstated.
   - (* Let *)
     match type of Heq with
     | context [if ?free then _ else _] => destruct free eqn:Hfree
@@ -91,8 +98,13 @@ Proof.
       as [body' | ];
       [ | discriminate ].
     simpl in Heq. injection Heq as <-.
-    apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
-    apply (IH body' eq_refl). intros y Hy. simpl.
+    apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' Hexec _ ].
+    apply (IH _ body' Hstated eq_refl).
+    { apply FlambdaStatedScopeProofs.stated_hold_cons; [ exact Hhold | ].
+      exact
+        (FlambdaStatedScopeProofs.stated_of_named_sound statics hp hp' rd rd'
+           S vars d v Hhold Hexec). }
+    intros y Hy. simpl.
     destruct (Pos.eqb_spec y x) as [-> | _]; [ | exact (Hagree y Hy) ].
     apply var_free_in_handler_b_sound in Hy. congruence.
   - (* Let_static *)
@@ -101,9 +113,15 @@ Proof.
       [ | discriminate ].
     simpl in Heq. injection Heq as <-.
     apply let_static_equivalent_step.
-    destruct (eval_static_bindings vars bindings statics) as [extended | ];
-      [ | exact I ].
-    exact (IH body' eq_refl vars def_vars conts extended hp rd_ Hagree).
+    destruct (eval_static_bindings vars bindings statics) as [extended | ]
+      eqn:Hbindings; [ | exact I ].
+    apply (IH _ body' Hstated eq_refl vars def_vars conts extended hp rd);
+      [ | exact Hagree ].
+    exact
+      (FlambdaStatedScopeProofs.stated_hold_extend statics extended S vars
+         (FlambdaWellFormedProofs.eval_static_bindings_extend vars _ _ _
+            Hbindings)
+         Hhold).
   - (* Apply_cont *)
     destruct
       (Pos.eqb (ac_continuation ac) k
@@ -144,7 +162,9 @@ Proof.
             (step_apply_cont_handler _ _ _ _ _ rd_ vs params metadata handler
             def_vars conts []);
             [ exact Hargs | rewrite Hk; apply resolve_head | exact Htested
-            | exact (values_of_subkinds_nothing statics _ vs Hnothing)
+            | exact
+                (FlambdaStatedScopeProofs.are_stated_sound statics S vars
+                   (ac_args ac) _ vs Hhold Hstated Hargs)
             | exact Hbind ]. }
         apply (equivalent_trans _ (State handler bound conts statics hp rd)).
         { apply coincide_equivalent.
@@ -210,9 +230,10 @@ Proof.
           _ _ (not_many _) (inline_tail_conts_kinded_equivalent_aux body)). }
     destruct
       (Nat.eqb (length params) (length (hm_params_kinds metadata))
-       && subkinds_say_nothing (hm_params_subkinds metadata))
+       && tail_args_stated [] (hm_params_subkinds metadata)
+            (inline_tail_conts_kinded body))
       eqn:Hkinds; [ | exact Hlayers ].
-    apply andb_true_iff in Hkinds as [Hkinds Hnothing].
+    apply andb_true_iff in Hkinds as [Hkinds Hstated].
     apply Nat.eqb_eq in Hkinds.
     destruct
       (inline_cont_at_tail k params metadata
@@ -222,9 +243,10 @@ Proof.
       rd.
     eapply equivalent_trans;
       [ apply step_equivalent, step_let_cont_non_recursive | ].
-    apply (inline_cont_at_tail_equivalent k params metadata _ _ Hkinds
-      Hnothing inlined Hinline).
-    intros x _. reflexivity.
+    apply (inline_cont_at_tail_equivalent k params metadata _ _ Hkinds []
+      inlined Hstated Hinline);
+      [ apply FlambdaStatedScopeProofs.stated_hold_nil
+      | intros x _; reflexivity ].
   - exact (plug_equivalent (Let_cont_recursive_body handlers Hole) _ _
       (not_many _) (inline_tail_conts_kinded_equivalent_aux body)).
 Qed.
