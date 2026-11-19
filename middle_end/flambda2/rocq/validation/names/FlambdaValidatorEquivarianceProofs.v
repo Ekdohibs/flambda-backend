@@ -3283,10 +3283,13 @@ Definition rename_arm_forwards (r : renaming) (F : arm_forwards)
        (rename_continuation r (fst binding), rename_arm_entry r (snd binding)))
     F.
 
-(* The tactic is told how the two states of the pass are renamed. It
-   is given the laws of the entry kept of a continuation and of what
-   the pass does at an application of a continuation, which are by
-   hand: the tactic does not come to the end of the second. *)
+(* The tactic is told how the three states of the pass are renamed:
+   the kinds of the variables in scope, what is known of their values
+   (FlambdaStatedScopeNamesProofs.rename_stated_in_scope) and what is
+   kept of the continuations. It is given the laws of the entry kept
+   of a continuation and of what the pass does at an application of a
+   continuation, which are by hand: the tactic does not come to the
+   end of the second. *)
 Section Forward_to_arms.
 
 (* One pass over the goal for the laws of the database: enough here. *)
@@ -3294,10 +3297,14 @@ Section Forward_to_arms.
 
 #[local] Instance arm_kinds_in_scope_renaming : Renaming_of kinds_in_scope :=
   rename_kinds_in_scope.
+#[local] Instance arm_stated_in_scope_renaming
+  : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
 #[local] Instance arm_forwards_renaming : Renaming_of arm_forwards :=
   rename_arm_forwards.
 
-#[local] Hint Rewrite params_in_scope_equivariant : equivariance.
+#[local] Hint Rewrite params_in_scope_equivariant params_stated_equivariant
+  stated_of_named_equivariant : equivariance.
 
 Lemma lookup_rename_arm_forwards (r : renaming) (F : arm_forwards)
     (k : continuation) :
@@ -3324,18 +3331,18 @@ Proof.
   rewrite length_map, position_of_renamed.
   destruct
     (kinded
-     && negb
-          (Nat.eqb (length params) (length (hm_params_kinds metadata))
-           && subkinds_say_nothing (hm_params_subkinds metadata)));
+     && negb (Nat.eqb (length params) (length (hm_params_kinds metadata))));
     [ reflexivity | ].
   destruct (position_of p params); reflexivity.
 Qed.
 
 Lemma forward_to_arm_apply_cont_equivariant (r : renaming) (kinded : bool)
-    (G : kinds_in_scope) (F : arm_forwards) (ac : apply_cont) :
+    (G : kinds_in_scope) (St : stated_in_scope) (F : arm_forwards)
+    (ac : apply_cont) :
   forward_to_arm_apply_cont kinded (rename_kinds_in_scope r G)
-    (rename_arm_forwards r F) (rename_apply_cont r ac)
-  = rename_apply_cont r (forward_to_arm_apply_cont kinded G F ac).
+    (rename_stated_in_scope r St) (rename_arm_forwards r F)
+    (rename_apply_cont r ac)
+  = rename_apply_cont r (forward_to_arm_apply_cont kinded G St F ac).
 Proof.
   unfold forward_to_arm_apply_cont, arm_of_apply_cont.
   change (ac_continuation (rename_apply_cont r ac))
@@ -3365,12 +3372,14 @@ Proof.
     as [[params' target'] | ];
     [ | reflexivity ].
   cbn [rename_forward_entry option_map fst snd].
-  rewrite !length_map, !no_trap_action_renamed, have_kinds_equivariant.
+  rewrite !length_map, !no_trap_action_renamed, have_kinds_equivariant,
+    are_stated_equivariant.
   destruct
     (Nat.eqb (length (ac_args ac)) (length params') && no_trap_action ac
      && no_trap_action target'
      && (negb kinded
-         || have_kinds G (ac_args ac) (hm_params_kinds metadata)));
+         || (have_kinds G (ac_args ac) (hm_params_kinds metadata)
+             && are_stated St (ac_args ac) (hm_params_subkinds metadata))));
     [ apply forwarded_equivariant | reflexivity ].
 Qed.
 
@@ -3379,28 +3388,35 @@ Qed.
 #[local] Arguments arm_entry_of : simpl never.
 #[local] Arguments forward_to_arm_apply_cont : simpl never.
 
+(* A [Let] puts a pair before what is known: a renamed pair before the
+   renamed scope is the renaming of the pair before the scope. *)
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_in_scope_cons_renamed : equivariance.
+
 Lemma forward_to_arms_under_equivariant (r : renaming) (e : expr) :
-  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+  ∀ (kinded : bool) (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards),
     forward_to_arms_under kinded (rename_kinds_in_scope r G)
-      (rename_arm_forwards r F) (rename_expr r e)
-    = rename_expr r (forward_to_arms_under kinded G F e).
+      (rename_stated_in_scope r St) (rename_arm_forwards r F)
+      (rename_expr r e)
+    = rename_expr r (forward_to_arms_under kinded G St F e).
 Proof. equivariance. Qed.
 
 End Forward_to_arms.
 
 Lemma forward_to_arms_equivariant : rewrite_equivariant forward_to_arms.
 Proof.
-  intros r e. exact (forward_to_arms_under_equivariant r e false [] []).
+  intros r e. exact (forward_to_arms_under_equivariant r e false [] [] []).
 Qed.
 
 Lemma forward_to_arms_kinded_equivariant :
   rewrite_equivariant forward_to_arms_kinded.
 Proof.
-  intros r e. exact (forward_to_arms_under_equivariant r e true [] []).
+  intros r e. exact (forward_to_arms_under_equivariant r e true [] [] []).
 Qed.
 
 (* The kinded pass in the bodies of code, with the kinds of what a call
-   binds. *)
+   binds and what the code states of its parameters. *)
 Lemma forward_to_arms_in_binding_equivariant (r : renaming)
     (binding : static_binding) :
   forward_to_arms_in_binding (rename_static_binding r binding)
@@ -3413,19 +3429,20 @@ Proof.
   unfold code_in_scope.
   change [(rename_variable r my_closure, Value)]
     with (rename_kinds_in_scope r [(my_closure, Value)]).
-  rewrite params_in_scope_equivariant.
+  rewrite params_in_scope_equivariant, code_stated_equivariant.
   pose proof
     (forward_to_arms_under_equivariant r body true
        (params_in_scope params (unarize (cm_params_arity metadata))
           [(my_closure, Value)])
-       [])
+       (code_stated params my_closure metadata) [])
     as Hbody.
   cbn [rename_arm_forwards map] in Hbody.
   rewrite Hbody. reflexivity.
 Qed.
 
-(* The law of a binding, where the pass begins with those kinds and
-   nothing else, is given to the tactic. *)
+(* The law of a binding, where the pass begins with those kinds, with
+   what the code states and with nothing else, is given to the
+   tactic. *)
 Section Forward_to_arms_in_code.
 
 (* One pass over the goal for the laws of the database: enough here. *)

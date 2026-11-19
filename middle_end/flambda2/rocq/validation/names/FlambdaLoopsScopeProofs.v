@@ -1642,7 +1642,11 @@ Qed.
    continuation goes (FlambdaForwardArmSpec.v). The variables that an
    application may come to name are those of the arms that are not
    parameters of the handler, and the continuations those of the
-   arms. *)
+   arms. What the pass knows of the variables in scope
+   (FlambdaStatedScopeSpec.stated_in_scope) is any: it tells the pass
+   where to change an application, not what it puts. *)
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec.
+
 Definition arm_forward_variables (entry : continuation * option arm_entry)
     : list variable :=
   match snd entry with
@@ -1684,12 +1688,13 @@ Proof.
 Qed.
 
 Lemma forward_to_arm_apply_cont_scope (kinded : bool) (G : kinds_in_scope)
-    (F : arm_forwards) (ac : apply_cont) :
+    (St : stated_in_scope) (F : arm_forwards) (ac : apply_cont) :
   incl
-    (free_variables_of_apply_cont (forward_to_arm_apply_cont kinded G F ac))
+    (free_variables_of_apply_cont
+       (forward_to_arm_apply_cont kinded G St F ac))
     (free_variables_of_apply_cont ac ++ flat_map arm_forward_variables F)
   ∧ incl
-      (apply_cont_continuations (forward_to_arm_apply_cont kinded G F ac))
+      (apply_cont_continuations (forward_to_arm_apply_cont kinded G St F ac))
       (apply_cont_continuations ac ++ flat_map arm_forward_continuations F).
 Proof.
   unfold forward_to_arm_apply_cont, arm_of_apply_cont.
@@ -1762,29 +1767,32 @@ Proof.
 Qed.
 
 Fixpoint forward_to_arms_scoped_among (e : expr) :
-  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+  ∀ (kinded : bool) (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards),
     scoped_among (flat_map arm_forward_variables F)
       (flat_map arm_forward_continuations F) e
-      (forward_to_arms_under kinded G F e).
+      (forward_to_arms_under kinded G St F e).
 Proof.
   destruct e
     as [x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros kinded G F;
+    intros kinded G St F;
     cbn [forward_to_arms_under forward_to_arms_in_handler];
     cbv zeta.
   - apply scoped_among_let, forward_to_arms_scoped_among.
   - apply scoped_among_let_static, forward_to_arms_scoped_among.
   - pose proof
       (forward_to_arms_scoped_among handler kinded
-         (params_in_scope params (hm_params_kinds metadata) G) F)
+         (params_in_scope params (hm_params_kinds metadata) G)
+         (params_stated params (hm_params_subkinds metadata) St) F)
       as Hhandler.
     pose proof
-      (forward_to_arms_scoped_among body kinded G
+      (forward_to_arms_scoped_among body kinded G St
          ((k,
            arm_entry_of kinded params metadata
              (forward_to_arms_under kinded
-                (params_in_scope params (hm_params_kinds metadata) G) F
+                (params_in_scope params (hm_params_kinds metadata) G)
+                (params_stated params (hm_params_subkinds metadata) St) F
                 handler)
              body)
           :: F))
@@ -1797,7 +1805,8 @@ Proof.
       destruct
         (arm_entry_of kinded params metadata
            (forward_to_arms_under kinded
-              (params_in_scope params (hm_params_kinds metadata) G) F
+              (params_in_scope params (hm_params_kinds metadata) G)
+              (params_stated params (hm_params_subkinds metadata) St) F
               handler)
            body)
         as [[[[[params' metadata'] i] arms] body'] | ] eqn:Hentry;
@@ -1811,7 +1820,8 @@ Proof.
       destruct
         (arm_entry_of kinded params metadata
            (forward_to_arms_under kinded
-              (params_in_scope params (hm_params_kinds metadata) G) F
+              (params_in_scope params (hm_params_kinds metadata) G)
+              (params_stated params (hm_params_subkinds metadata) St) F
               handler)
            body)
         as [[[[[params' metadata'] i] arms] body'] | ] eqn:Hentry;
@@ -1834,7 +1844,7 @@ Proof.
       apply forward_to_arms_scoped_among.
   - apply scoped_among_refl.
   - intros _. scope.
-    destruct (forward_to_arm_apply_cont_scope kinded G F ac) as [Hv Hk].
+    destruct (forward_to_arm_apply_cont_scope kinded G St F ac) as [Hv Hk].
     split; [ reflexivity | split; assumption ].
   - intros _. scope. split; [ reflexivity | split ].
     + rewrite <- app_assoc. apply incl_app_app; [ apply incl_refl | ].
@@ -1843,19 +1853,21 @@ Proof.
            (fun arm => free_variables_of_apply_cont (snd arm))
            (fun arm => free_variables_of_apply_cont (snd arm))).
       intros arm. cbn [snd].
-      exact (proj1 (forward_to_arm_apply_cont_scope kinded G F (snd arm))).
+      exact
+        (proj1 (forward_to_arm_apply_cont_scope kinded G St F (snd arm))).
     + apply
         (incl_flat_map_under (fun arm => apply_cont_continuations (snd arm))
            (fun arm => apply_cont_continuations (snd arm))).
       intros arm. cbn [snd].
-      exact (proj2 (forward_to_arm_apply_cont_scope kinded G F (snd arm))).
+      exact
+        (proj2 (forward_to_arm_apply_cont_scope kinded G St F (snd arm))).
   - apply scoped_among_refl.
 Qed.
 
 Lemma forward_to_arms_scoped (e : expr) : scoped e (forward_to_arms e).
 Proof.
   apply scoped_among_none.
-  exact (forward_to_arms_scoped_among e false [] []).
+  exact (forward_to_arms_scoped_among e false [] [] []).
 Qed.
 
 Theorem forward_to_arms_keeps_scope : forward_to_arms_keeps_scope_statement.
