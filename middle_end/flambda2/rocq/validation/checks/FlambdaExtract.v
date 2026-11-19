@@ -74,7 +74,7 @@ From OxCamlFlambda2 Require Import FlambdaMapSpec FlambdaModel
   FlambdaValidateSpec FlambdaValidateKnowingSpec FlambdaValidateRelatedSpec
   FlambdaValidateReadingSpec FlambdaInlineCallsAtSpec
   FlambdaValidateInliningSpec FlambdaCopyLetsSpec
-  FlambdaValidateCopyingSpec.
+  FlambdaValidateCopyingSpec FlambdaValidateDemotedSpec.
 From OxCamlFlambda2Types Require Import FlambdaAliasesSpec.
 From OxCamlFlambda2Types Require Import FlambdaBindingTime.
 From OxCamlFlambda2Types Require Import FlambdaJoinEnv.
@@ -268,6 +268,7 @@ Separate Extraction
   FlambdaTypingEnv.Typing_env.get_canonical_simple_exn
   FlambdaTypingEnv.Typing_env.increment_scope
   FlambdaTypingEnv.Typing_env.mem
+  after_demoted
   all_among
   among
   before_copied
@@ -356,12 +357,16 @@ Separate Extraction
   unit_exn_handlers_well_formed
   validate_unit
   validate_unit_copying
+  validate_unit_demoted
   validate_unit_inlining
   validate_unit_knowing
   validate_unit_knowing_copying
+  validate_unit_knowing_demoted
   validate_unit_knowing_inlining
   validate_unit_knowing_reading
+  validate_unit_knowing_reading_demoted
   validate_unit_reading
+  validate_unit_reading_demoted
   validate_unit_related
   verdict_holds_from
   verdict_knowing_holds_from
