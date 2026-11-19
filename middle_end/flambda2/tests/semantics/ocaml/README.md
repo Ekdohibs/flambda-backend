@@ -1459,7 +1459,7 @@ before. What each shows, and what its validation uses besides:
 | Source | Steps | What the validator lacks |
 |--------|-------|--------------------------|
 | `chain_of_eighteen_in_functor.ml` | 25, 56 | more than sixteen liftings in turn: seventeen closures, each after the first calling the one before, and the block that holds them are eighteen values, each after the first made of the one before, and Simplify makes all eighteen symbols; the tool guesses sixteen liftings in turn at most, and says under the verdict that a search stopped there with another lifting to make, for the validation and for the second check. A bound of the tool's search, not of the model (item 3 of the list below; V3) |
-| `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has no subkinds (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
+| `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has the subkinds of parameters (decision D25), and the unboxing of the validation goes by what the term shows, not by what a parameter states (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
 | `pair_loop.ml` | 192, 85 | the same loads of the fields of a parameter of the function, which only its subkind justifies, at the entry of a loop, whose parameter Simplify unboxes from its subkind without looking at the uses (T6-7) |
 | `pair_of_unknowns_after_inlined_pair.ml` | 22, 10 | not validated; neither term passes the liftings' test of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that does not pass it (`FlambdaHeapFreeSpec.free_of_heap_fine`; a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below), with the second search of the liftings |
 | `partial_of_inlined_result.ml` | 14, 11 | as `partial_seen_once_inlined.ml`: the function given one argument is what an inlined call returns (item 4 of the list below) |
@@ -1592,10 +1592,15 @@ here.
 2. A pair that is a parameter of the function, unboxed where two
    branches meet (two units). One branch gives the parameter, and
    Simplify loads its fields at that use, which only the subkind of
-   the parameter justifies; the model has no subkinds, so the code
-   of the term after is less defined than that of the term before
-   and no rewrite of it can be proved (`pair_kept.ml`; discrepancy
-   T6-7). `pair_loop.ml` is the same at the entry of a loop, whose
+   the parameter justifies. The model has the subkinds of parameters
+   (decision D25, which is decided for them): a run is undefined
+   where the code is entered with a value that is not of what the
+   parameter states. The validation makes no such load: where it
+   unboxes the parameter of a continuation that branches meet at, it
+   goes by what the term shows and not by what a parameter states
+   (`FlambdaUnboxVariantsSpec.unbox_variant_params`), and the unit is
+   not validated (`pair_kept.ml`; discrepancy T6-7). `pair_loop.ml`
+   is the same at the entry of a loop, whose
    parameter Simplify unboxes from its subkind without looking at
    the uses. In `pair_kept.ml` the function is not recursive, so
    the validation also compares the two terms with its two calls
@@ -3481,15 +3486,22 @@ directory sets the variable; one of `../regions/` does.
     `nest_list_of_options.ml`, `or_two_variables_swapped.ml`,
     `project_record_two_levels.ml`, `same_field_chain_twice.ml`,
     `twice_nested_same_scrutinee.ml` and `var_twelve_mixed.ml`). What
-    the tool then makes of those kinds is provisional. The model has no
-    subkinds. For a `Make_block` at the block kind `Values`, the check
-    of the kind of a field in the conversion now requires the kind of
-    values, and drops the subkind of the field and whether it may be
-    null; the other checks of the conversion are unchanged (the two
-    notes at such a block in `convert_variadic_primitive` and
-    `convert_prim` of `../../tools/flsemantics.ml`). Whether the
-    subkinds of fields are dropped so or come into the model is decision
-    D25 (`middle_end/flambda2/rocq/DECISIONS.md`), which is open.
+    the tool then makes of those kinds is provisional. The model has
+    subkinds where a parameter of a continuation or of code states one:
+    a run is undefined where a handler is applied, or the body of code
+    is entered, with a value that is not of what the parameter states
+    (`FlambdaSubkindSpec.values_of_subkinds`; decision D25, which is
+    decided for parameters). The block kind of a `Make_block` has no
+    subkinds in the model. For a `Make_block` at the block kind
+    `Values`, the check of the kind of a field in the conversion now
+    requires the kind of values, and drops the subkind of the field and
+    whether it may be null; the other checks of the conversion are
+    unchanged (the two notes at such a block in
+    `convert_variadic_primitive` and `convert_prim` of
+    `../../tools/flsemantics.ml`). Whether the subkinds of the fields
+    of a block that is made are dropped so or come into the model is
+    the part of decision D25 (`middle_end/flambda2/rocq/DECISIONS.md`)
+    that is open.
     Nothing proves that the subkind of a field has no bearing on what
     the program computes: Simplify takes an argument that is a variable
     to be of the subkind of its field and makes the primitive `Invalid`

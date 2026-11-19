@@ -180,7 +180,10 @@ that the body then gives its return continuation are not looked at.
 
 Every value has a kind (`FlambdaValueSpec.kind_of_value`, C1's): that of
 its constant, and `Value` for everything allocated and for a symbol.
-The model has no subkinds.
+A value has no subkind. What a handler or code states of a parameter
+beyond its kind (`FlambdaKindModel.subkind`, decision D25) is tested
+of the value where the parameter is bound
+(`FlambdaSubkindSpec.values_of_subkinds`).
 
 ## 3. The check, and what it is not
 
