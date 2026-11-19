@@ -541,10 +541,12 @@ Proof. intros Hknow [Hcode _] id c Hid. apply Hcode, Hknow, Hid. Qed.
 Definition handlers_refine (ok : static_env -> Prop) (vars : env)
     (handlers handlers' : list (continuation * continuation_handler))
     : Prop :=
-  handlers_related (handler_refines_where ok) vars handlers handlers'
+  handlers_related (at_kinds (handler_refines_where ok)) vars handlers
+    handlers'
   ∧ handlers_related
-      (fun params kinds def_vars target source =>
-         handler_refines_where ok params kinds def_vars source target)
+      (at_kinds
+         (fun params kinds def_vars target source =>
+            handler_refines_where ok params kinds def_vars source target))
       vars handlers' handlers.
 
 (* Inlining leaves what binds something static as it is: what is inlined

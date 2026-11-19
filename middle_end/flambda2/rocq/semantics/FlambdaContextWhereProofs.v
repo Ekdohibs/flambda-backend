@@ -149,7 +149,8 @@ Proof.
     Hstep Hinv Hinv' Hhandler.
   exact
     (FlambdaContextProofs.let_cont_handler_refines_from inv Hstep _ _ _ _
-       (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
+       (at_kinds_forwards inv _ (handler_forwards inv))
+       (at_kinds_backwards inv _ (handler_backwards inv)) (code_forwards inv)
        (code_backwards inv) k params metadata handler handler' body vars
        conts statics hp rd_ Hinv Hinv' Hhandler Hhandler).
 Qed.
@@ -161,7 +162,8 @@ Proof.
     statics hp rd Hstep Hinv Hinv' Hbinds Hhandler.
   apply
     (let_cont_recursive_handlers_refine_from inv Hstep _ _ _ _
-       (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
+       (at_kinds_forwards inv _ (handler_forwards inv))
+       (at_kinds_backwards inv _ (handler_backwards inv)) (code_forwards inv)
        (code_backwards inv));
     [ exact Hinv | exact Hinv'
     | unfold handlers_bind_statics; rewrite !existsb_app; simpl;
@@ -180,7 +182,8 @@ Proof.
       Hcode.
   exact
     (FlambdaContextProofs.let_static_code_refines_from inv Hstep _ _ _ _
-       (handler_forwards inv) (handler_backwards inv) (code_forwards inv)
+       (at_kinds_forwards inv _ (handler_forwards inv))
+       (at_kinds_backwards inv _ (handler_backwards inv)) (code_forwards inv)
        (code_backwards inv) before id params my_closure ret exn metadata
        code_body code_body' after body vars conts statics hp rd_ Hinv Hinv'
          Hbinds
@@ -322,7 +325,8 @@ Proof.
       Hcode.
   exact
     (FlambdaContextProofs.let_static_code_refines_from inv Hstep _ _ _ _
-       (handler_forwards inv) (handler_backwards inv)
+       (at_kinds_forwards inv _ (handler_forwards inv))
+       (at_kinds_backwards inv _ (handler_backwards inv))
        (code_forwards_called inv) (code_backwards_called inv) before id
        params my_closure ret exn metadata code_body code_body' after body
        vars conts statics hp rd_ Hinv Hinv' Hbinds Hcode Hcode).
