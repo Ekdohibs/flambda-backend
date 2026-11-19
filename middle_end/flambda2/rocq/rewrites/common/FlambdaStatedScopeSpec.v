@@ -29,10 +29,12 @@
    around a point of a term.
 
    This file is to be reviewed: the definitions and the statements at
-   the end. Nothing asks these tests yet: they are for the rewrites of
-   the validation that take away the application of a handler or a
-   call, which as they are do nothing where the binder states anything
-   (FlambdaKindModel.subkinds_say_nothing). The proofs are in
+   the end. The tests are asked by the rewrites of the validation that
+   take away the application of a handler or a call (the inlining of
+   a handler at a tail, the inlining of a known call, the two
+   forwarders, the rewrites of a parameter that every application
+   gives one thing), which did nothing where the binder states
+   anything (FlambdaKindModel.subkinds_say_nothing). The proofs are in
    FlambdaStatedScopeProofs.v, which needs no review.
 
    The machine has no step where a handler is applied, or the body of

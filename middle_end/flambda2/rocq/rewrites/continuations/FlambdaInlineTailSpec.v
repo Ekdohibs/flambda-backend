@@ -71,7 +71,9 @@
 
    The compiler gives every parameter a kind, so on its terms the two
    passes differ only where the handler states something of a
-   parameter: this pass may then leave the [Let_cont] alone.
+   parameter that the argument is not known to be of: an argument
+   that is a variable bound before the [Let_cont] is known as nothing
+   here, whatever its own binder states.
 
    Renaming: the pass compares names by equality only and binds none
    that the term has not got, as [inline_tail_conts]. That statement is

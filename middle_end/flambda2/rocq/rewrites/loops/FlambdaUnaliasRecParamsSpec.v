@@ -98,8 +98,12 @@
    ([unalias_rec_from]), at every recursive [Let_cont] of the term,
    its body first; it goes into the handler of a non-recursive
    continuation. The handlers of recursive continuations and the
-   bodies of code are left as they are, as by
-   FlambdaUnaliasParamsSpec.unalias_params. As that pass, it goes
+   bodies of code are not gone into, as by
+   FlambdaUnaliasParamsSpec.unalias_params: the one handler of a
+   loop is changed by the step above (it loses the parameter, begins
+   with the [Let], and its applications of [k] lose the argument),
+   and nothing inside it is looked at for other loops. As that pass,
+   it goes
    down the term with what is known of the variables bound around
    each node ([unalias_rec_params_under]: a [Let] adds what its
    defining expression makes, the handler of a non-recursive
