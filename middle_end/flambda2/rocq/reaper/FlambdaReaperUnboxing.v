@@ -217,12 +217,14 @@
    wrapper [Invalid] (below). A call of code that keeps its calling
    convention gives the arguments that the code dep uses, the others
    being poison ([used_params]: [kept_code_mask]); a callee that is
-   unboxed there is a fatal error ("TO CHECK"); and code with
-   [never_returns] whose rebuilt body still has its return continuation
-   free is a fatal error ([check_never_returns]). The model rebuilds the
-   unit as before at these three errors (an [Invalid]); whether the
-   compiler stops is [rebuild_fails_u], which walks the unit as the
-   compiler rebuilds it ([rebuild_unit_unbox_repr_fixed_fails]).
+   unboxed there makes the call [Invalid] ("Unboxed callee ... cannot
+   actually be a function"; the fix stopped there with a fatal error
+   for a while, and no longer does); and code with [never_returns]
+   whose rebuilt body still has its return continuation free is a fatal
+   error ([check_never_returns]). The model rebuilds the unit as before
+   at these two errors (an [Invalid]); whether the compiler stops is
+   [rebuild_fails_u], which walks the unit as the compiler rebuilds it
+   ([rebuild_unit_unbox_repr_fixed_fails]).
    [Keep_unused] is the [Keep] of a parameter kept with no use, which the
    fix no longer distinguishes: the rebuild treats it as [Keep], and the
    statements read the mark (an earlier fix gave such a parameter poison,
@@ -2908,8 +2910,8 @@ Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
 
 (* [rebuild_apply]. A call whose callee does not change its calling
    convention is that of FlambdaReaperRebuild.rebuild_apply, but for an
-   unboxed callee, which makes it [Invalid] (in the fix, the fatal error
-   "TO CHECK"), and, in the mode of the fix, for the arguments
+   unboxed callee, which makes it [Invalid] (in the fix too), and, in the
+   mode of the fix, for the arguments
    ([kept_arguments_u]); one whose callee changes gives the parameters
    kept and the fields of those unboxed, a product for each group, and
    expects the results kept and the fields of those unboxed. *)
@@ -3202,12 +3204,12 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
     end
   end.
 
-(* The fatal errors of the fix at a call ([rebuild_apply]): an unboxed
-   callee of code that keeps its calling convention ("TO CHECK"), and the
-   arm of [make_apply_wrapper] ([wrapper_fails_u]) for a call that does
-   not [never_returns]. A call that the rebuild makes [Invalid] before
-   (a dead name, or the fatal error of another check) does not reach
-   them. *)
+(* The fatal error of the fix at a call ([rebuild_apply]): the arm of
+   [make_apply_wrapper] ([wrapper_fails_u]) for a call that does not
+   [never_returns]. A call that the rebuild makes [Invalid] before (a
+   dead name, an unboxed callee of code that keeps its calling
+   convention, or the fatal error of another check) does not reach
+   it. *)
 Definition apply_fails_u (en : unbox_env) (ap : apply_expr) : bool :=
   if simple_is_dead sol (ue_env en) (ap_callee ap)
      || existsb (simple_is_dead sol (ue_env en)) (ap_args ap)
@@ -3225,7 +3227,7 @@ Definition apply_fails_u (en : unbox_env) (ap : apply_expr) : bool :=
       match apply_change_u ap with
       | Not_changing_u =>
         match unboxed_of (ap_callee ap) with
-        | Some _ => true
+        | Some _ => false
         | None =>
           negb (apply_never_returns ap)
           && wrapper_fails_u apply_decisions

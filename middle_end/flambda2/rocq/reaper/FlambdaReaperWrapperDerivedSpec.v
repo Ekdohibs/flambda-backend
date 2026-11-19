@@ -82,17 +82,17 @@
      use, so its code cannot change its calling convention, and holds the
      result that the continuation unboxes only with no source
      ([cu0_result]): the call never returns.
-   - [unboxed_callee_fails_statement]: the error of an unboxed callee of a
-     call whose code keeps its calling convention ("TO CHECK" in the fix,
-     now "Unboxed callee ... cannot be applied without changing calling
-     convention") is reached. A block, of which a field is read, is also
-     called at unknown arity in an arm that is not taken; nothing in the
-     rules forbids to unbox it (a call reads the field of the call witness,
-     not a real field, and the seeds of the fix need a use with another
+   - [unboxed_callee_invalid_statement]: an unboxed callee of a call
+     whose code keeps its calling convention is reached, and the call is
+     rebuilt as [Invalid] ("Unboxed callee ... cannot actually be a
+     function"). A block, of which a field is read, is also called at
+     unknown arity in an arm that is not taken; nothing in the rules
+     forbids to unbox it (a call reads the field of the call witness, not
+     a real field, and the seeds of the fix need a use with another
      source or any source). The call, of no known code, keeps its calling
-     convention, and the rebuild of the fix stops; the model rebuilds the
-     call as [Invalid], and both the unit and the model's rebuilt unit
-     exit with 1.
+     convention; the rebuild of the fix does not stop (the fix stopped
+     there with a fatal error for a while, and no longer does), and both
+     the unit and its rebuilt unit exit with 1.
    - [check_never_returns_auto_statement]: [check_never_returns], the
      third error, is not reached by code that is used: the rebuilt body
      of code with a result of no source ([code_never_returns]) has its
@@ -225,7 +225,7 @@ Definition indirect_arm_needs_no_source_auto_derived_statement : Prop :=
       = false.
 
 (* ======================================================================== *)
-(* The fatal errors of the fix                                              *)
+(* An unboxed callee                                                        *)
 (* ======================================================================== *)
 
 (* A block [x10] whose field is read into [x11], which the unit returns,
@@ -309,7 +309,7 @@ Definition rebuilt : expr :=
 
 End UnboxedCalleeExample.
 
-Definition unboxed_callee_fails_statement : Prop :=
+Definition unboxed_callee_invalid_statement : Prop :=
   let F := UnboxedCalleeExample.facts in
   let T := UnboxedCalleeExample.tables in
   let e := UnboxedCalleeExample.unit_expr in
@@ -326,7 +326,7 @@ Definition unboxed_callee_fails_statement : Prop :=
       UnboxedCalleeExample.cannot_change UnboxedCalleeExample.code_deps
       UnboxedCalleeExample.dominated UnboxedCalleeExample.to_unbox
       UnboxedCalleeExample.tcr true e
-    = true
+    = false
   ∧ rebuild_unit_unbox_repr_fixed Examples.no_local F T
       UnboxedCalleeExample.cannot_change UnboxedCalleeExample.code_deps
       UnboxedCalleeExample.dominated UnboxedCalleeExample.to_unbox

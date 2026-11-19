@@ -529,7 +529,7 @@ Proof.
            Hfrag Hleast Hunbox Hcount Hkinds).
 Qed.
 
-Theorem unboxed_callee_fails : unboxed_callee_fails_statement.
+Theorem unboxed_callee_invalid : unboxed_callee_invalid_statement.
 Proof.
   hnf. split.
   { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).

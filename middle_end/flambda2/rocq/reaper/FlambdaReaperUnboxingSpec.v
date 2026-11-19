@@ -257,7 +257,7 @@
    keeps or deletes; a call some of whose results have no source
    ([never_returns]) is made one that never returns. A call of code
    that keeps its calling convention gives the arguments that the code
-   dep uses, and stops with a fatal error if its callee is unboxed; code
+   dep uses, and is [Invalid] if its callee is unboxed; code
    that never returns stops with a fatal error if its rebuilt body has
    its return continuation free. [rebuild_unit_unbox_repr_fixed_fails]
    says whether the compiler stops. The decisions of the continuations

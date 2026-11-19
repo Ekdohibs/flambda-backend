@@ -28,33 +28,36 @@
 
 (* The fatal errors of the fix proposed for the reaper, end to end: with
    the flag [Auto], a least solution and the tables derived from it, the
-   rebuild of the fix stops ([rebuild_unit_unbox_repr_fixed_fails] of
-   FlambdaReaperUnboxing.v) only at an unboxed callee of a call whose code
-   keeps its calling convention, which is reached
-   (FlambdaReaperWrapperDerivedSpec.unboxed_callee_fails_statement).
+   rebuild of the fix never stops ([rebuild_unit_unbox_repr_fixed_fails]
+   of FlambdaReaperUnboxing.v is [false]).
 
    This file is to be reviewed: the checks and the statement. The proofs
    are in FlambdaReaperFixFailsProofs.v, which needs no review.
 
-   - [fix_fails_only_by_unboxed_callee_statement]: if the rebuild of the
-     fix stops, a call that the rebuild makes ([unit_rebuilt_calls]) keeps
-     its calling convention and has an unboxed callee. The walk of
-     [rebuild_fails_u] reaches the calls of [unit_rebuilt_calls], under the
-     same decisions of their continuations, and the code of [unit_codes]
-     (code that is not used stops nothing where its [my_closure] is dead:
-     its body is [Invalid]). At a
-     call, the arm of [make_apply_wrapper] is not reached
-     ([fix_arm_never_returns_auto_derived_statement]; the continuation of
-     a call has no more parameters than the call has results, by
-     [conts_counted], so that the walk and the rebuild read the same
-     decisions); at code that is used, [check_never_returns] is not
-     ([check_never_returns_auto_statement]).
+   - [fix_never_fails_statement]. The walk of [rebuild_fails_u] reaches
+     the calls of [unit_rebuilt_calls], under the same decisions of their
+     continuations, and the code of [unit_codes] (code that is not used
+     stops nothing where its [my_closure] is dead: its body is
+     [Invalid]). At a call, the arm of [make_apply_wrapper] is not
+     reached ([fix_arm_never_returns_auto_derived_full_statement]; the
+     continuation of a call has no more parameters than the call has
+     results, by [conts_counted], so that the walk and the rebuild read
+     the same decisions); at code that is used, [check_never_returns] is
+     not ([check_never_returns_auto_statement]). An unboxed callee of a
+     call whose code keeps its calling convention makes the call
+     [Invalid] and stops nothing: the fix stopped there with a fatal
+     error, which the model and an OCaml program reached
+     (FlambdaReaperWrapperDerivedSpec.unboxed_callee_invalid_statement),
+     and its author made it [Invalid] again.
 
    The premises, besides those of these two statements:
-   - [one_group_unknown_calls]: every call of unknown arity of the term
-     has one group of arguments. The arm is proved of such calls only;
-     the compiler's calls of unknown arity have one group for each
-     argument, so that this leaves out those of several arguments.
+   - [unknown_calls_have_args]: every call of unknown arity of the term
+     has a group of arguments, of any number (the compiler's analysis
+     stops on a call with none). The arm is not reached at such a call:
+     the codes the chain of witnesses reaches cannot change their calling
+     convention, so that, where the continuation unboxes a result, no
+     source with a source of the last witness holds that result with a
+     source ([cu0_result]), and the call [never_returns].
    - [results_within_codes]: every call of the term that is not of
      unknown arity expects no more results than any code of the unit
      returns: a check of the term for the premise on the arity of the
@@ -64,27 +67,25 @@
      but for unboxed products).
    - [unused_code_dead]: the [my_closure] of code that is not used has no
      source, so that its body is [Invalid]. This is of the solution, not
-     of the term: its proof needs an inversion of the least solution on
-     the facts that reach that node (see S7.md).
+     of the term. FlambdaReaperUnusedCodeProofs.v proves it of a least
+     solution where the facts into that node, into the [my_closure] of
+     the code dep and into the nodes of the direct calls of the code have
+     the shape that the traversal gives them; that the traversal does so
+     where every variable is bound once is not proved (see S7.md).
 
-   [fix_fails_only_by_unboxed_callee_any_groups_statement]: the same,
-   with [unknown_calls_have_args] in place of [one_group_unknown_calls]:
-   every call of unknown arity has a group of arguments, of any number
-   (the compiler's analysis stops on a call with none). The arm is not
-   reached at such a call
-   ([fix_arm_never_returns_auto_derived_full_statement]): the codes the
-   chain of witnesses reaches cannot change their calling convention, so
-   that, where the continuation unboxes a result, no source with a source
-   of the last witness holds that result with a source ([cu0_result]),
-   and the call [never_returns]. [unused_code_dead] stays.
-   [one_group_unknown_calls_have_args_statement]: the new check is the
-   weaker.
+   [fix_fails_only_by_unboxed_callee_statement] and
+   [fix_fails_only_by_unboxed_callee_any_groups_statement], from before
+   the fix made the unboxed callee [Invalid] again: if the rebuild of the
+   fix stops, a call that the rebuild makes keeps its calling convention
+   and has an unboxed callee. They hold, as the rebuild does not stop;
+   the first with [one_group_unknown_calls] (every call of unknown arity
+   has one group of arguments) in place of [unknown_calls_have_args],
+   which is the weaker ([one_group_unknown_calls_have_args_statement]).
 
    [unboxed_callee_meets_premises_statement]: the unit of
-   [unboxed_callee_fails_statement], whose rebuild with the fix stops,
-   meets these premises and the others (proved there), so that the
-   statement is not vacuous; it meets [unknown_calls_have_args] too, the
-   weaker check. *)
+   [unboxed_callee_invalid_statement] meets these premises and the
+   others (proved there), so that they hold of a unit with an unboxed
+   callee of a call whose code keeps its calling convention. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -176,6 +177,34 @@ Definition unused_code_dead (S : solution) (e : expr) : bool :=
 (* The statement                                                            *)
 (* ======================================================================== *)
 
+Definition fix_never_fails_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (max_unbox_size : nat) (lambda_lifting preserve_direct_calls : bool)
+    (tcr : list node),
+    let F := traverse_unit Auto u e in
+    let S := solution_of_tables T in
+    let code_deps := unit_code_deps Auto u e in
+    let cannot_change := derive_cannot_change F T in
+    let dominated := derive_dominated T in
+    let to_unbox :=
+      derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+        lambda_lifting
+    in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    exn_handlers_well_formed e = true ->
+    unknown_calls_have_args e = true ->
+    results_within_codes e = true ->
+    unused_code_dead S e = true ->
+    rebuild_unit_unbox_repr_fixed_fails is_local F T cannot_change code_deps
+      dominated to_unbox tcr preserve_direct_calls e
+    = false.
+
+(* The statements from before the unboxed callee was [Invalid] again. *)
 Definition fix_fails_only_by_unboxed_callee_statement : Prop :=
   ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (max_unbox_size : nat) (lambda_lifting preserve_direct_calls : bool)
@@ -250,9 +279,8 @@ Definition one_group_unknown_calls_have_args_statement : Prop :=
   ∀ e : expr,
     one_group_unknown_calls e = true -> unknown_calls_have_args e = true.
 
-(* The unit at which the rebuild of the fix stops at an unboxed callee
-   meets the premises that [unboxed_callee_fails_statement] does not
-   state. *)
+(* The unit with an unboxed callee meets the premises that
+   [unboxed_callee_invalid_statement] does not state. *)
 Definition unboxed_callee_meets_premises_statement : Prop :=
   let e := UnboxedCalleeExample.unit_expr in
   exn_handlers_well_formed e = true
