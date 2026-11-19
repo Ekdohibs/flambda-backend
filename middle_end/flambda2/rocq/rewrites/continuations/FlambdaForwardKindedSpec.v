@@ -257,13 +257,22 @@
        | None -> x
 
    The pass in a body starts also with what is known of the symbols
-   where the code is bound ([forward_kinded_in_code_under] keeps it
-   going down the term). The body of code is entered under a static
-   environment that extends the one in which the code was bound, so
-   what was known of the symbols there is still so. The code of a
-   group of bindings is done with what is known above the group: the
-   symbols that the group itself binds are not counted, though they
-   are bound when the body runs.
+   once the group of bindings of the code is bound
+   ([forward_kinded_in_code_under] keeps it going down the term):
+   what was known above the group, and what the group itself makes
+   known of the symbols that it binds
+   (FlambdaStatedSymbolsSpec.statics_stated). One step of the machine
+   binds the code and the symbols of a group, and the body of the
+   code of the group is entered only under the static environment
+   that this step made or one that extends it: what the group makes
+   known is so where the body runs, as is what was known above the
+   group. The validation runs this pass after
+   FlambdaNormaliseSpec.merge_statics
+   (FlambdaValidateSpec.normalise_after_round), which joins a
+   [Let_static] with one that is its body, and not through a [Let]
+   or a [Let_cont] between the two: the code and a symbol that its
+   body gives can then be in one group, where the term had the
+   symbol bound in a group just above that of the code.
 
    Nothing is kept for the return continuation and the exception
    continuation of the code, which no [Let_cont] binds: an
@@ -426,7 +435,7 @@ Definition forward_kinded_equivalent_statement : Prop :=
 (* The pass in the body of a piece of code, with the kinds of what a
    call binds (FlambdaCodeLetsSpec.code_in_scope), what the code
    states of it (FlambdaStatedScopeSpec.code_stated), and what is
-   known of the symbols where the code is bound ([Y]). *)
+   known of the symbols once the group of the code is bound ([Y]). *)
 Definition forward_kinded_in_binding (Y : symbols_stated)
     (binding : static_binding) : static_binding :=
   match binding with
@@ -440,15 +449,15 @@ Definition forward_kinded_in_binding (Y : symbols_stated)
 
 (* The pass in the body of every piece of code that a term binds.
    [Y] is what is known of the symbols bound around the point: the
-   code of a group of bindings is done with what is known above the
-   group, and the body of the [Let_static] with what the group
-   adds. *)
+   code of a group of bindings and the body of its [Let_static] are
+   both done with what the group adds to it. *)
 Fixpoint forward_kinded_in_code_under (Y : symbols_stated) (e : expr)
     : expr :=
   match e with
   | Let x kind d body => Let x kind d (forward_kinded_in_code_under Y body)
   | Let_static bindings body =>
-    Let_static (map (forward_kinded_in_binding Y) bindings)
+    Let_static
+      (map (forward_kinded_in_binding (statics_stated bindings Y)) bindings)
       (forward_kinded_in_code_under (statics_stated bindings Y) body)
   | Let_cont_non_recursive k h body =>
     Let_cont_non_recursive k (forward_kinded_in_code_handler Y h)

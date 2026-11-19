@@ -55,12 +55,16 @@
 
    In the body of code the pass starts from the kinds of what a call
    binds, from what the code states of it and from what is known of
-   the symbols where the code is bound. Where the body is entered the
-   variables are so (FlambdaCodeLetsProofs.code_in_scope_hold,
+   the symbols once the group of the code is bound. Where the body is
+   entered the variables are so
+   (FlambdaCodeLetsProofs.code_in_scope_hold,
    FlambdaStatedScopeProofs.code_stated_bound): the machine enters
    code by a closure, with values that it has tested. And the static
-   environment of the entry extends the one in which the code was
-   bound, so what was known of the symbols holds in it. So the new
+   environment of the entry is the one that the step of the group
+   made, or extends it: what the group makes known of its symbols
+   holds in the first (FlambdaStatedSymbolsProofs.statics_stated_bound;
+   the group as rewritten makes the same known,
+   [statics_stated_forwarded]), and so in the others. So the new
    body refines the old one where it is entered under such a static
    environment, and the old one the new ([code_body_forwarded_refines],
    with FlambdaStatedContextProofs.code_refines_stated_where), and a
@@ -339,6 +343,7 @@ Proof.
     intros Y; simpl; try reflexivity.
   - apply forward_kinded_in_code_binds_statics.
   - rewrite forward_kinded_in_code_binds_statics. f_equal.
+    generalize (statics_stated bindings Y). intros Z.
     induction bindings
       as [ | [id [params my_closure ret exn metadata code_body] | id
              | sym const]
@@ -454,6 +459,22 @@ Proof.
       (apply Forall2_cons; [ apply Binding_same_where | assumption ]).
 Qed.
 
+(* A group of bindings with the bodies of its code rewritten makes
+   known of its symbols what the group does: only the bindings of
+   symbols are read. *)
+Lemma statics_stated_forwarded (Z : symbols_stated)
+    (bindings : list static_binding) :
+  ∀ Y : symbols_stated,
+    statics_stated (map (forward_kinded_in_binding Z) bindings) Y
+    = statics_stated bindings Y.
+Proof.
+  induction bindings
+    as [ | [id [params my_closure ret exn metadata code_body] | id
+           | sym const]
+           bindings IH];
+    intros Y; simpl; [ reflexivity | apply IH | apply IH | apply IH ].
+Qed.
+
 (* The pass that starts from what is known of some symbols is an
    equivalence under the static environments in which that holds. *)
 Fixpoint forward_kinded_in_code_equivalent_knowing (e : expr) :
@@ -471,36 +492,41 @@ Proof.
   - apply let_equivalent_step_exec; [ reflexivity | intros v hp' rd' _ _ ].
     apply forward_kinded_in_code_equivalent_knowing, Hsymbols.
   - (* the body under the static environment of the group as it is,
-       then the code of the group *)
-    destruct (bindings_forwarded_refine Y bindings) as [Hforwards Hbackwards].
+       then the code of the group: what the group makes known of its
+       symbols holds in the static environment that either group
+       makes *)
+    remember (statics_stated bindings Y) as Z eqn:HZ.
+    destruct (bindings_forwarded_refine Z bindings) as [Hforwards Hbackwards].
     pose proof
-      (related_bindings_equivalent_stated_where (symbols_hold_in Y)
-         (symbols_hold_in_extend Y) vars bindings
-         (map (forward_kinded_in_binding Y) bindings) statics Hforwards
+      (related_bindings_equivalent_stated_where (symbols_hold_in Z)
+         (symbols_hold_in_extend Z) vars bindings
+         (map (forward_kinded_in_binding Z) bindings) statics Hforwards
          Hbackwards)
       as Hrelated.
     apply let_static_equivalent_step.
     destruct (eval_static_bindings vars bindings statics) as [extended | ]
       eqn:Hbindings,
       (eval_static_bindings vars
-         (map (forward_kinded_in_binding Y) bindings) statics)
+         (map (forward_kinded_in_binding Z) bindings) statics)
         as [extended' | ] eqn:Hbindings';
       try contradiction; [ | exact I ].
-    pose proof
-      (symbols_hold_extend statics extended Y
-         (eval_static_bindings_extend vars _ _ _ Hbindings) Hsymbols)
-      as Hext.
-    pose proof
-      (symbols_hold_extend statics extended' Y
-         (eval_static_bindings_extend vars _ _ _ Hbindings') Hsymbols)
-      as Hext'.
+    assert (Hok : symbols_hold extended Z).
+    { rewrite HZ.
+      exact
+        (statics_stated_bound vars extended bindings statics Y Hbindings
+           (symbols_hold_extend statics extended Y
+              (eval_static_bindings_extend vars _ _ _ Hbindings) Hsymbols)). }
+    assert (Hok' : symbols_hold extended' Z).
+    { rewrite HZ, <- (statics_stated_forwarded Z bindings Y).
+      exact
+        (statics_stated_bound vars extended' _ statics Y Hbindings'
+           (symbols_hold_extend statics extended' Y
+              (eval_static_bindings_extend vars _ _ _ Hbindings') Hsymbols)). }
     apply (equivalent_trans _
-      (State (forward_kinded_in_code_under (statics_stated bindings Y) body)
-         vars conts extended hp rd)).
-    + apply forward_kinded_in_code_equivalent_knowing.
-      exact (statics_stated_bound vars extended bindings statics Y Hbindings
-        Hext).
-    + exact (Hrelated Hext Hext' _ vars conts hp rd).
+      (State (forward_kinded_in_code_under Z body) vars conts extended hp
+         rd)).
+    + apply forward_kinded_in_code_equivalent_knowing. exact Hok.
+    + exact (Hrelated Hok Hok' _ vars conts hp rd).
   - apply (equivalent_trans _
       (State
          (Let_cont_non_recursive k
