@@ -74,7 +74,18 @@
    rank of the result with no source gives it a name with no source, and
    both rebuilds drop it. What is left to apply the frame is a call given
    it as a continuation (in tail position) and the wrappers of the rebuilds
-   around calls. This file is to be reviewed for [applies_to] too. *)
+   around calls. This file is to be reviewed for [applies_to] too.
+
+   [dead_returns_not_live_statement]: for code that [code_never_returns],
+   with no premise on the arity of its returns, which the flow fragment
+   gives ([conts_counted]), no such [Apply_cont] or arm is live in the
+   sense of FlambdaReaperUnboxingRefinesCallsSpec.live_conts.
+
+   [unused_never_returns_example_statement]: with the least solution, under
+   [Auto], code may never return only because nothing uses it, and then a
+   call that returns may be in tail position in it: its return
+   continuation is live, and the check of [calls_code] fails with
+   [code_never_returns] for [nr]. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -83,6 +94,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaReaperGraphSpec
   FlambdaReaperTraversal FlambdaReaperSolution FlambdaReaperFlowSpec
   FlambdaReaperRebuild FlambdaReaperCallingConventions FlambdaReaperUnboxing.
+From OxCamlFlambda2 Require FlambdaReaperLeast FlambdaReaperLeastSpec
+  FlambdaReaperUnboxingRefinesCallsSpec.
 Import ListNotations.
 
 (* The list [l] with its element of rank [i] replaced by [x]; [l] if it has
@@ -252,3 +265,91 @@ Definition dead_return_dropped_statement : Prop :=
          rewrite_apply_cont (solution_of_tables T) en ac = None)
     ∧ (∀ (unboxed : list (node * unboxed_fields)) (en : unbox_env),
          rewrite_apply_cont_u (solution_of_tables T) unboxed en ac = None).
+
+(* The returns of code whose result has no source are not live
+   ([FlambdaReaperUnboxingRefinesCallsSpec.live_apply_cont]): an
+   [Apply_cont] to its return continuation, or an arm kept, gives as many
+   values as the code has results ([conts_counted]), so that
+   [dead_return_dropped_statement] applies to it. What is left of the
+   check of [calls_code] on such code is in its calls and in the arms that
+   [Keyed.compact] drops. *)
+Definition dead_returns_not_live_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (id : code_id) (c : code)
+    (ac : apply_cont),
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    In (id, c) (unit_codes e) ->
+    code_never_returns (solution_of_tables T) (unit_code_deps flag u e) id
+    = true ->
+    In ac (applies_to (code_return_continuation c) (code_body c)) ->
+    FlambdaReaperUnboxingRefinesCallsSpec.live_apply_cont
+      (solution_of_tables T) ac
+    = [].
+
+(* Code that nothing calls, taken to never return only for that: the code
+   50 calls the code 51, which returns, in tail position. The facts of
+   the call in 50 hold only where 50 is used ([cond_alias]), and nothing
+   uses it, so the result of 50 has no source in the least solution. The
+   call returns to the return continuation 3 of 50, which is then live:
+   with the code that never returns for [nr], the check of [calls_code]
+   fails. The fragment leaves the unit out by another row as well: the
+   callee [x42] of the call has no use. *)
+Module UnusedExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition metadata : code_metadata :=
+  make_code_metadata [Singleton Value] [Singleton Value].
+
+Definition call : apply_expr :=
+  {| ap_callee := Var 42; ap_call_kind := Direct 51; ap_args := [Var 40];
+     ap_continuation := 3; ap_exn_continuation := 4;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition body : expr :=
+  Let 42 Value (Closure_of_set 71 [(71, 51)] []) (Apply call).
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50 (Code [40] 41 3 4 metadata body);
+     Bind_code 51 (Code [43] 44 5 6 metadata (return_to 5 [int 0]))]
+    (return_to 1 [int 0]).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match FlambdaReaperLeast.compute_least no_local facts 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+End UnusedExample.
+
+Definition unused_never_returns_example_statement : Prop :=
+  let F := UnusedExample.facts in
+  let T := UnusedExample.tables in
+  let sol := solution_of_tables T in
+  let cds := UnusedExample.code_deps in
+  let e := UnusedExample.unit_expr in
+  FlambdaReaperLeastSpec.least_solution FlambdaReaperUnboxing.Examples.no_local
+    F T
+  ∧ in_flow_fragment e = true
+  ∧ well_formed_unit FlambdaReaperUnboxing.Examples.interface e = true
+  ∧ s_any_usage sol (Node_code_id 50%positive) = false
+  ∧ code_never_returns sol cds 50%positive = true
+  ∧ code_never_returns sol cds 51%positive = false
+  ∧ among 3%positive
+      (FlambdaReaperUnboxingRefinesCallsSpec.live_conts F sol cds
+         (bound_code_metadata e) UnusedExample.body)
+    = true
+  ∧ FlambdaReaperUnboxingRefinesCallsSpec.calls_unboxing_nr
+      (code_never_returns sol cds) F T [] cds [] [] e
+    = false
+  ∧ is_var_used sol 42%positive Value = false.

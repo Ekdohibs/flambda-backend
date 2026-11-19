@@ -68,6 +68,8 @@ From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaReaperWrapperProofs.
 From OxCamlFlambda2 Require Import FlambdaReaperRebuild
   FlambdaReaperUnboxing.
+From OxCamlFlambda2 Require FlambdaReaperLeast FlambdaReaperLeastSpec
+  FlambdaReaperLeastProofs FlambdaReaperUnboxingRefinesCallsSpec.
 Import ListNotations.
 Import FlambdaReaperFlowProofs.WithLocal.
 
@@ -947,4 +949,113 @@ Proof.
   split; [ exact Hex | split ].
   - intros en. unfold rewrite_apply_cont. rewrite Hex. reflexivity.
   - intros unboxed en. unfold rewrite_apply_cont_u. rewrite Hex. reflexivity.
+Qed.
+
+(* An [Apply_cont] to [k] that [applies_to] finds gives [k] as many values
+   as [conts_counted] counts. *)
+Lemma applies_to_counted (k : continuation) (n : nat) :
+  ∀ (e : expr) (ks : finite_map nat),
+    conts_counted ks e = true -> lookup k ks = Some n ->
+    ∀ ac : apply_cont, ac ∈ applies_to k e -> length (ac_args ac) = n.
+Proof.
+  assert (H :
+    (∀ (e : expr) (ks : finite_map nat),
+       conts_counted ks e = true -> lookup k ks = Some n ->
+       ∀ ac : apply_cont, ac ∈ applies_to k e -> length (ac_args ac) = n)
+    ∧ (∀ (h : continuation_handler) (ks : finite_map nat),
+         handler_conts_counted ks h = true -> lookup k ks = Some n ->
+         ∀ ac : apply_cont, ac ∈ handler_applies_to k h ->
+           length (ac_args ac) = n));
+    [ | exact (proj1 H) ].
+  apply FlambdaReaperFlowProofs.expr_handler_ind;
+    cbn [conts_counted handler_conts_counted applies_to handler_applies_to].
+  - intros x kind d body IH ks H. exact (IH ks H).
+  - intros bindings body _ IH ks H. exact (IH ks H).
+  - intros k' h body IHh IH ks H Hk ac Hac.
+    apply andb_true_iff in H as [Hh H].
+    apply in_app_or in Hac as [Hac | Hac]; [ exact (IHh ks Hh Hk ac Hac) | ].
+    destruct (Pos.eqb_spec k' k) as [_ | Hne]; [ destruct Hac | ].
+    refine (IH _ H _ ac Hac). rewrite lookup_other; [ exact Hk | ].
+    intros ->. apply Hne. reflexivity.
+  - intros handlers body IHh IH ks H Hk ac Hac.
+    apply andb_true_iff in H as [Hhs H].
+    destruct (existsb (fun '(k', _) => Pos.eqb k' k) handlers) eqn:Ex;
+      [ destruct Hac | ].
+    set (ks' := map (fun '(k0, h0) => (k0, length (handler_params h0)))
+                  handlers ++ ks) in *.
+    assert (Hk' : lookup k ks' = Some n).
+    { unfold ks'. clear - Hk Ex. rewrite lookup_app.
+      induction handlers as [ | [k0 h0] handlers IHl]; [ exact Hk | ].
+      cbn [existsb] in Ex. apply orb_false_iff in Ex as [Hk0 Ex].
+      cbn [map]. rewrite lookup_other; [ exact (IHl Ex) | ].
+      intros ->. rewrite Pos.eqb_refl in Hk0. discriminate Hk0. }
+    apply in_app_or in Hac as [Hac | Hac]; [ | exact (IH _ H Hk' ac Hac) ].
+    apply in_flat_map in Hac as ([k' h] & Hkh & Hac).
+    rewrite forallb_forall in Hhs.
+    exact (IHh k' h Hkh _ (Hhs _ Hkh) Hk' ac Hac).
+  - intros ap ks _ _ ac [].
+  - intros ac ks H Hk ac' Hac.
+    destruct (Pos.eqb_spec (ac_continuation ac) k) as [Heq | _];
+      [ | destruct Hac ].
+    destruct Hac as [<- | []]. unfold count_ok in H.
+    rewrite Heq, Hk in H. symmetry. apply Nat.eqb_eq. exact H.
+  - intros scrutinee arms ks H Hk ac Hac.
+    apply filter_In in Hac as [Hac Heq]. apply Pos.eqb_eq in Heq.
+    apply in_map_iff in Hac as ([z ac'] & <- & Hin).
+    apply (keyed_in_compact Z.eqb z_eqb_decides_equality) in Hin.
+    apply (keyed_lookup_in Z.eqb z_eqb_decides_equality) in Hin.
+    rewrite forallb_forall in H. specialize (H _ Hin).
+    cbn beta iota in H. unfold count_ok in H. cbn [snd] in Heq.
+    rewrite Heq, Hk in H. symmetry. apply Nat.eqb_eq. exact H.
+  - intros ks _ _ ac [].
+  - intros params metadata handler IH ks H. exact (IH ks H).
+Qed.
+
+Theorem dead_returns_not_live : dead_returns_not_live_statement.
+Proof.
+  intros flag is_local u e T id c ac Hfrag Hcheck Hin Hnr Hac.
+  unfold code_never_returns in Hnr.
+  destruct (lookup id (unit_code_deps flag u e)) as [cd | ] eqn:Hcd;
+    [ | discriminate Hnr ].
+  apply existsb_exists in Hnr as (r & Hr & Hrs).
+  apply negb_true_iff in Hrs.
+  destruct (In_nth_error _ _ Hr) as (i & Hi).
+  destruct (FlambdaReaperRebuildProofs.traverse_unit_keeps flag u e True false
+              Hfrag (or_introl I))
+    as (noted & deps & cds & He & _ & _ & _ & _ & Hnd & _ & _ & ->).
+  pose proof (proj1 (FlambdaReaperWrapperProofs.unit_codes_edges
+                       (graph_of_facts (traverse_unit flag u e)) noted deps
+                       (unit_code_deps flag u e) (unit_kept e) (unit_codes e)
+                       (static_names symbols_of_binding e) True False)
+                e None (unit_conts u) He id c Hin) as Hcodes.
+  destruct c as [params my_closure ret exn md body].
+  cbn [FlambdaReaperFlowProofs.code_edges] in Hcodes.
+  destruct Hcodes as (cd' & Hin' & _ & _ & _ & _ & Hlen & _ & _ & Hne & _
+                      & Hcc & _).
+  pose proof (lookup_nodup_in _ _ _ Hnd Hin') as Hcd'.
+  rewrite Hcd' in Hcd. injection Hcd as <-.
+  cbn [code_return_continuation code_body] in Hac |- *.
+  assert (Hk : lookup ret
+                 [(exn, 1); (ret, length (unarize (cm_result_arity md)))]
+               = Some (length (unarize (cm_result_arity md)))).
+  { rewrite lookup_other; [ apply lookup_head | exact (fun H => Hne H) ]. }
+  pose proof (applies_to_counted ret _ body _ Hcc Hk ac Hac) as Hargs.
+  assert (Hlt : i < length (ac_args ac)).
+  { rewrite Hargs, <- Hlen. apply nth_error_Some. rewrite Hi.
+    discriminate. }
+  destruct (dead_return_dropped flag is_local u e T id
+              (Code params my_closure ret exn md body) cd' i r ac Hfrag
+              Hcheck Hin Hcd' Hi Hrs Hac Hlt)
+    as [Hex _].
+  unfold FlambdaReaperUnboxingRefinesCallsSpec.live_apply_cont.
+  rewrite Hex. reflexivity.
+Qed.
+
+Theorem unused_never_returns_example :
+  unused_never_returns_example_statement.
+Proof.
+  cbv zeta. split.
+  - apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity.
+  - repeat split; vm_compute; reflexivity.
 Qed.
