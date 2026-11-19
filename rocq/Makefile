@@ -500,6 +500,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/statics/FlambdaUnusedStaticsSpec.v \
   validation/checks/FlambdaValidateCopyingProofs.v \
   validation/checks/FlambdaValidateCopyingSpec.v \
+  validation/checks/FlambdaValidateDemotedProofs.v \
+  validation/checks/FlambdaValidateDemotedSpec.v \
   validation/checks/FlambdaValidateImportsProofs.v \
   validation/names/FlambdaValidateImportsRenameProofs.v \
   validation/names/FlambdaValidateImportsRenameSpec.v \
