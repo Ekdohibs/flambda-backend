@@ -219,6 +219,8 @@ Definition bind_const_param (i : nat) (k : continuation)
           Some
             (Handler (drop_nth i params)
                {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+                  hm_params_subkinds :=
+                    drop_nth i (hm_params_subkinds metadata);
                   hm_is_exn_handler := false |}
                (Let p kind (Simple s) handler),
              drop_arg k i body)

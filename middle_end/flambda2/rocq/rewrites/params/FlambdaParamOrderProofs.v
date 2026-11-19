@@ -459,8 +459,8 @@ Section Site.
    which the [Let_cont] runs. *)
 Variables (k : continuation) (order : list nat)
   (params params' : list variable) (metadata : handler_metadata)
-  (kinds' : list flambda_kind) (handler : expr) (vars0 : env)
-  (conts0 : cont_env).
+  (kinds' : list flambda_kind) (subkinds' : list param_subkind)
+  (handler : expr) (vars0 : env) (conts0 : cont_env).
 
 Hypothesis Hdistinct : distinct params = true.
 Hypothesis Hkinds : length (hm_params_kinds metadata) = length params.
@@ -474,7 +474,10 @@ Definition order_site_closure : cont_value :=
 Definition order_site_closure_ordered : cont_value :=
   Closure
     (Handler params'
-       {| hm_params_kinds := kinds'; hm_is_exn_handler := false |} handler)
+       {| hm_params_kinds := kinds';
+          hm_params_subkinds := subkinds';
+          hm_is_exn_handler := false |}
+       handler)
     vars0 conts0 [].
 
 (* The handlers of a recursive [Let_cont] in the scope of [k]: none
@@ -971,13 +974,28 @@ Proof.
     [ apply step_equivalent, step_let_cont_non_recursive | ].
   apply (equivalent_trans _
     (State (order_args k (use_order params handler) body) vars
-       ((k, order_site_closure_ordered params' kinds' handler vars conts)
+       ((k,
+         order_site_closure_ordered params' kinds'
+           match
+             in_order (use_order params handler) (hm_params_subkinds metadata)
+           with
+           | Some subkinds' => subkinds'
+           | None => []
+           end
+           handler vars conts)
         :: conts)
        statics hp rd));
     [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
   apply
     (order_site_equivalent k (use_order params handler) params params' metadata
-       kinds' handler vars conts Hdistinct Hkinds Horder Hparams' Hkinds').
+       kinds'
+       match
+         in_order (use_order params handler) (hm_params_subkinds metadata)
+       with
+       | Some subkinds' => subkinds'
+       | None => []
+       end
+       handler vars conts Hdistinct Hkinds Horder Hparams' Hkinds').
   apply Order_state_in_scope; [ apply agree_refl | exact Happly | ].
   split; [ apply resolve_head | split; [ apply resolve_head | ] ].
   intros k1 Hne. rewrite !(resolve_other k1 k) by exact Hne. apply Order_same.

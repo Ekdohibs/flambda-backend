@@ -198,6 +198,11 @@ Lemma map_snd_rename_read (r : renaming)
 Proof. equivariance. Qed.
 #[local] Hint Rewrite map_snd_rename_read : equivariance.
 
+Lemma length_rename_read (r : renaming)
+    (read : list (variable * flambda_kind)) :
+  length (rename_read r read) = length read.
+Proof. unfold rename_read. apply length_map. Qed.
+
 Lemma read_params_equivariant (r : renaming) (e : expr)
     (params : list variable) :
   ∀ kinds : list flambda_kind,
@@ -245,7 +250,8 @@ Proof.
     try reflexivity.
   - (* a continuation of the handler *)
     rewrite !give_all_equivariant, !read_params_equivariant,
-      !map_fst_rename_read, map_snd_rename_read, only_applied_equivariant,
+      !map_fst_rename_read, map_snd_rename_read, length_rename_read,
+      only_applied_equivariant,
       !cont_free_b_equivariant_aux, <- map_app, distinct_variables_renamed.
     set (h' := give_all moved h).
     set (read := read_params params kinds h').

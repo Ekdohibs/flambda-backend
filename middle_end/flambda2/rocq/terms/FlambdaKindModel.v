@@ -35,14 +35,20 @@
    arithmetic is done on, and [Boxable_number.t], the numbers that have a
    boxed form.
 
-   What is left out: subkinds ([With_subkind]), the shapes of mixed blocks,
-   and [Standard_int_or_float]. Arities ([Flambda_arity.t]) are in
+   It has, last, the subkinds of the kind [Value]
+   ([With_subkind.Non_null_value_subkind.t]), for decision D25, at
+   parameters: see [subkind].
+
+   What is left out: the shapes of mixed blocks, and
+   [Standard_int_or_float]. Arities ([Flambda_arity.t]) are in
    FlambdaModel.v.
 
    A constructor is prefixed where the compiler's name is that of a
    constant (FlambdaModel.v) or of another kind here. *)
 
+From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
+Import ListNotations.
 
 (* [Flambda_kind.Naked_number_kind.t]. *)
 Inductive naked_number_kind : Type :=
@@ -139,3 +145,69 @@ Definition boxable_number_of_kind (k : flambda_kind)
   | Value | Region | Rec_info =>
     None
   end.
+
+Definition boxable_number_eq_dec
+    : ∀ n n' : boxable_number, {n = n'} + {n <> n'}.
+Proof. decide equality. Defined.
+
+Definition boxable_number_eqb (n n' : boxable_number) : bool :=
+  if boxable_number_eq_dec n n' then true else false.
+
+(* [Flambda_kind.With_subkind.Non_null_value_subkind.t]: what is known
+   of a value of kind [Value] that is not null, beyond its kind. A
+   variant is a tagged immediate among [consts], or a block whose tag is
+   among those of [non_consts]; for a tag that is determined, the block
+   has exactly the fields listed, each of its subkind and nullable or
+   not ([constructor_shape], with [full_kind list]). The compiler keeps
+   the tags in a map; here they are a list, of which the first entry
+   with a given tag counts. Left out: the subkinds of arrays and of a
+   block of floats, which are read as [Subkind_anything]; and the
+   fields of a constructor whose fields are not all values (a mixed
+   block), whose tag is kept and read as undetermined. Decision D25, at
+   parameters. *)
+Inductive subkind : Type :=
+  | Subkind_anything
+  | Subkind_tagged_immediate
+  | Subkind_boxed_number (n : boxable_number)
+  | Subkind_variant (consts : list Z) (non_consts : constructor_shapes)
+with constructor_shapes : Type :=
+  | Shapes_nil
+  | Shape_undetermined (tag : Z) (rest : constructor_shapes)
+  | Shape_determined (tag : Z) (fields : field_subkinds)
+      (rest : constructor_shapes)
+with field_subkinds : Type :=
+  | Fields_nil
+  | Fields_cons (nullable : bool) (sk : subkind) (rest : field_subkinds).
+
+Fixpoint subkind_eq_dec (sk sk' : subkind) {struct sk}
+    : {sk = sk'} + {sk <> sk'}
+with constructor_shapes_eq_dec (shapes shapes' : constructor_shapes)
+    {struct shapes} : {shapes = shapes'} + {shapes <> shapes'}
+with field_subkinds_eq_dec (sks sks' : field_subkinds) {struct sks}
+    : {sks = sks'} + {sks <> sks'}.
+Proof.
+  - decide equality;
+      [ apply boxable_number_eq_dec | apply (list_eq_dec Z.eq_dec) ].
+  - decide equality; apply Z.eq_dec.
+  - decide equality. decide equality.
+Defined.
+
+(* [Flambda_kind.With_subkind.t] without its kind: whether the value may
+   be null, and its subkind if it is not. *)
+Definition param_subkind : Type := (bool * subkind)%type.
+
+Definition param_subkind_eq_dec
+    : ∀ ps ps' : param_subkind, {ps = ps'} + {ps <> ps'}.
+Proof.
+  decide equality; [ apply subkind_eq_dec | decide equality ].
+Defined.
+
+Definition param_subkinds_eqb (sks sks' : list param_subkind) : bool :=
+  if list_eq_dec param_subkind_eq_dec sks sks' then true else false.
+
+(* [Flambda_kind.With_subkind.any_value], which says nothing. *)
+Definition any_value : param_subkind := (true, Subkind_anything).
+
+(* Whether every value of the kind is of the subkind. *)
+Definition says_nothing (nullable : bool) (sk : subkind) : bool :=
+  nullable && match sk with Subkind_anything => true | _ => false end.

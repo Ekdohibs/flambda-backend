@@ -2040,21 +2040,35 @@ Proof.
   destruct (list_eq_dec arity_component_eq_dec a a'); split; congruence.
 Qed.
 
+Lemma param_subkinds_eqb_eq (sks sks' : list param_subkind) :
+  param_subkinds_eqb sks sks' = true <-> sks = sks'.
+Proof.
+  unfold param_subkinds_eqb.
+  destruct (list_eq_dec param_subkind_eq_dec sks sks'); split; congruence.
+Qed.
+
 Lemma handler_metadata_eqb_eq (m m' : handler_metadata) :
   handler_metadata_eqb m m' = true <-> m = m'.
 Proof.
   unfold handler_metadata_eqb.
-  rewrite andb_true_iff, kinds_eqb_eq, Bool.eqb_true_iff.
-  destruct m, m'; simpl. split; [ intros [-> ->] | intros [= -> ->] ]; auto.
+  rewrite !andb_true_iff, kinds_eqb_eq, param_subkinds_eqb_eq,
+    Bool.eqb_true_iff.
+  destruct m, m'; simpl.
+  split; [ intros [[-> ->] ->]; reflexivity | intros [= -> -> ->] ].
+  repeat split.
 Qed.
 
 Lemma code_metadata_eqb_eq (m m' : code_metadata) :
   code_metadata_eqb m m' = true <-> m = m'.
 Proof.
   unfold code_metadata_eqb.
-  rewrite !andb_true_iff, !arity_eqb_eq, !Bool.eqb_true_iff.
+  rewrite !andb_true_iff, !arity_eqb_eq, !param_subkinds_eqb_eq,
+    !Bool.eqb_true_iff.
   destruct m, m'; simpl.
-  split; [ intros [[[-> ->] ->] ->] | intros [= -> -> -> ->] ]; auto.
+  split;
+    [ intros [[[[[-> ->] ->] ->] ->] ->]; reflexivity
+    | intros [= -> -> -> -> -> ->] ].
+  repeat split.
 Qed.
 
 Lemma kinds_eqb_refl (kinds : list flambda_kind) :

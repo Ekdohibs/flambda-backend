@@ -304,6 +304,10 @@ Definition untag_metadata (us : list nat) (metadata : handler_metadata)
        kept_from us 0 (hm_params_kinds metadata)
        ++ map (fun _ => untagged_kind)
             (rev (moved_from us 0 (hm_params_kinds metadata)));
+     hm_params_subkinds :=
+       kept_from us 0 (hm_params_subkinds metadata)
+       ++ map (fun _ => any_value)
+            (rev (moved_from us 0 (hm_params_subkinds metadata)));
      hm_is_exn_handler := hm_is_exn_handler metadata |}.
 
 (* The untagged variables in a handler: its untagged parameters, and

@@ -1666,6 +1666,7 @@ with erase_handler (conts : region_conts) (h : continuation_handler)
     in
     Handler (drop_regions places params)
       (Handler_metadata (drop_regions places (hm_params_kinds metadata))
+         (drop_regions places (hm_params_subkinds metadata))
          (hm_is_exn_handler metadata))
       (erase conts handler)
   end

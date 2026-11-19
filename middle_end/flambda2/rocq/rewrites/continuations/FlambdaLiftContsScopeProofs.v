@@ -269,6 +269,8 @@ Proof.
     { apply
         (take_params_scoped k j params q (map fst read) metadata mdj
            {| hm_params_kinds := map snd read ++ hm_params_kinds mdj;
+              hm_params_subkinds :=
+                subkinds_behind (length read) (hm_params_subkinds mdj);
               hm_is_exn_handler := false |}
            h' (give_all moved rest) body).
       intros p Hp. exact (read_params_among h' params _ p Hp). }

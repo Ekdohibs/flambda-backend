@@ -630,6 +630,8 @@ Definition site_handler : continuation_handler :=
 Definition site_handler_binding : continuation_handler :=
   Handler (drop_nth i params)
     {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+       hm_params_subkinds :=
+         drop_nth i (hm_params_subkinds metadata);
        hm_is_exn_handler := false |}
     (Let p kind (Simple s0) site_body).
 
@@ -1381,6 +1383,8 @@ Definition the_closure_binding (i : nat) (s0 : simple) (p : variable)
   Closure
     (Handler (drop_nth i params)
        {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+          hm_params_subkinds :=
+            drop_nth i (hm_params_subkinds metadata);
           hm_is_exn_handler := false |}
        (Let p kind (Simple s0) handler))
     vars0 conts0 [].
@@ -1425,6 +1429,8 @@ Lemma given_param_equivalent (i : nat) (k : continuation) (s : simple)
     (Let_cont_non_recursive k
        (Handler (drop_nth i params)
           {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+             hm_params_subkinds :=
+               drop_nth i (hm_params_subkinds metadata);
              hm_is_exn_handler := false |}
           (Let p kind (Simple s) handler))
        (drop_arg k i body)).

@@ -161,9 +161,9 @@ Qed.
 Lemma untag_metadata_nil (metadata : handler_metadata) :
   untag_metadata [] metadata = metadata.
 Proof.
-  destruct metadata as [kinds is_exn]. unfold untag_metadata.
-  cbn [hm_params_kinds hm_is_exn_handler].
-  rewrite kept_from_nil, moved_from_nil. cbn [rev map]. rewrite app_nil_r.
+  destruct metadata as [kinds subkinds is_exn]. unfold untag_metadata.
+  cbn [hm_params_kinds hm_params_subkinds hm_is_exn_handler].
+  rewrite !kept_from_nil, !moved_from_nil. cbn [rev map]. rewrite !app_nil_r.
   reflexivity.
 Qed.
 

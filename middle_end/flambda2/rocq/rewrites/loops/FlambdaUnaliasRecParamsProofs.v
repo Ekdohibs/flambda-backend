@@ -71,6 +71,8 @@ Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
        [(k,
          Handler (drop_nth i params)
            {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+              hm_params_subkinds :=
+                drop_nth i (hm_params_subkinds metadata);
               hm_is_exn_handler := false |}
            (Let p kind (Simple s) (drop_arg k i handler)))]
        (drop_arg k i body)).
@@ -79,6 +81,8 @@ Proof.
   set (h' :=
     Handler (drop_nth i params)
       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+         hm_params_subkinds :=
+           drop_nth i (hm_params_subkinds metadata);
          hm_is_exn_handler := false |}
       (Let p kind (Simple s) (drop_arg k i handler))).
   assert (Hstatics :

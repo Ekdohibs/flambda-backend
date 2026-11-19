@@ -294,7 +294,13 @@ Definition order_node (e : expr) : expr :=
       | Some params', Some kinds' =>
         Let_cont_non_recursive k
           (Handler params'
-             {| hm_params_kinds := kinds'; hm_is_exn_handler := false |}
+             {| hm_params_kinds := kinds';
+                hm_params_subkinds :=
+                  match in_order order (hm_params_subkinds metadata) with
+                  | Some subkinds' => subkinds'
+                  | None => []
+                  end;
+                hm_is_exn_handler := false |}
              handler)
           (order_args k order body)
       | _, _ => e
