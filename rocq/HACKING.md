@@ -1439,6 +1439,14 @@ not a proof.
   `extracted_rocq_library`). When a branch is merged, the
   integrator runs `make -C rocq all` on the result and commits what it
   regenerates, on top of the branch.
+  In a series that is cut for the record on the base that the integrator
+  names, the commit of the tool carries the regenerated files: run `make
+  -C rocq all` at that commit and add by name what it wrote. The
+  integrator makes no further commit of them: it checks them by a build
+  from nothing at the commit, which must write each generated file of
+  the commit again with the same bytes, and no generated file that the
+  commit has not got. On a branch that is not such a series, leave them
+  out as said above.
 - An extracted file that is no longer written. The extraction writes a
   file for each module that something extracted uses, and leaves every
   other file of the directory as it is. So when what is extracted no
@@ -1467,10 +1475,23 @@ not a proof.
   `.fl` example and its expected file), goes at the end of the branch,
   after the commit with the lines for the shared lists if there is one:
   one commit, or a short series in which each builds on the one before.
-  Every commit before that must pass `make -C rocq all` and
-  `make -C rocq assumptions`. The integrator does not fast-forward
-  those last commits: it applies them in order, and the first of them
-  as one commit with the regenerated files.
+  Every commit before that must pass `make -C rocq all` and `make -C
+  rocq assumptions`. At a freeze the integrator checks this commit by
+  commit. Where what the two targets read (the `.v` files,
+  `rocq/Makefile`, the `_CoqProject`, the generated files, the items of
+  the trust ledger) is not what it was at the parent, both targets are
+  run from nothing at the commit; where what the build and the tests
+  read is not what it was at the parent, the compiler and the tools are
+  built and the test aliases are run with the files of the commit. A
+  commit takes its parent's result only if it changes nothing but
+  documents that neither target, the build nor a test reads; a document
+  that one of them reads is not such a document, as the trust ledger is
+  not, whose items `make -C rocq assumptions` takes. Cut your series on
+  the base that the integrator names and run the same at each of your
+  commits before you send it: where the tree is the same, your run is
+  the one that counts. The integrator does not fast-forward those last
+  commits: it applies them in order, and the first of them as one commit
+  with the regenerated files.
 - Trusted and unverified: the conversion from Flambda terms to model
   terms, primitives and constants included. It must send each to the one
   of the same name, and refuse what the model has not got; read it in
@@ -1486,6 +1507,17 @@ not a proof.
   @middle_end/flambda2/tests/semantics/runtest` (after
   `make -s boot-compiler`). The expected output of `X.fl` is
   `X.expected`, beside it.
+  An exit status of 0 from a dune alias does not by itself show that the
+  actions ran. Asked in a build directory that has been used, dune runs
+  no action whose inputs it holds unchanged; `--force` runs again the
+  actions attached to the alias and not the rules that write what they
+  compare; and a shared cache, where one is on, can supply a result. A
+  run that is to count (at a cut, in a gate, in a tester's record) is
+  made in a build directory created for that run with
+  `DUNE_CACHE=disabled`; or its record gives evidence that the actions
+  in question were executed in that run and not restored from a cache. A
+  control that fails as it must is evidence for the actions that it
+  exercises and for no other.
 - To add an example, add `X.fl`, whose module symbol must match its name,
   and `X.expected`; `dune promote` writes the latter from what the tool
   printed. Nothing else is to be touched: there is no list of examples.
