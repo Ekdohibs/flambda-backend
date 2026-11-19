@@ -5,7 +5,6 @@ open FlambdaArmNumbersSpec
 open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
-open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
 open FlambdaCodeStatedSpec
 open FlambdaCompareOrderSpec
@@ -59,6 +58,7 @@ open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec
 open FlambdaSinkUsesSpec
+open FlambdaSlotsThroughSpec
 open FlambdaStatedScopeSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec

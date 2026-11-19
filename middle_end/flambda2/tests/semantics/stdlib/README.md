@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 25 of the 79 files, and "What a
+At this commit the driver validates 26 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -221,16 +221,22 @@ from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
 - validated: 7;
-- validated with its imports: 18, of which `stringLabels.ml` has a line
+- validated with its imports: 19, of which `stringLabels.ml` has a line
   under the verdict, "(asked of the term after with the exception
-  handlers that no call can raise to made ordinary continuations)";
-  of the twenty-five that are validated, with or without their imports,
-  four carry the mark of decision D65, a line under the verdict,
+  handlers that no call can raise to made ordinary continuations)", and
+  `set.ml` has two, "(with the calls of the closures that a Let makes
+  made direct in the rounds after each lifting)" and "(with what
+  my_closure is known to be from its code used in the rounds after each
+  lifting)", which record what the liftings of the attempt that
+  accepted the pair asked of their rounds (`../ocaml/README.md`, "What
+  the verdicts mean", says what each is, under "validated");
+  of the twenty-six that are validated, with or without their imports,
+  five carry the mark of decision D65, a line under the verdict,
   "(decision D65: the guards of the liftings pass by the finer tests
-  alone)": `camlinternalAtomic.ml`, `map.ml`, `semaphore.ml` and
-  `uchar.ml` ("What a verdict means for a file of the library" says
-  what it is);
-- compared, not validated: 5. Three have a line under the verdict:
+  alone)": `camlinternalAtomic.ml`, `map.ml`, `semaphore.ml`, `set.ml`
+  and `uchar.ml` ("What a verdict means for a file of the library"
+  says what it is);
+- compared, not validated: 4. Three have a line under the verdict:
   `option.ml`, `pqueue.ml` and `result.ml` have the line of a function
   slot named `partial_app_closure`, the name that Simplify gives the
   wrapper which it makes of a partial application;
@@ -242,8 +248,8 @@ this commit, and a commit that moves a stored file moves its row.)
   `moreLabels.ml` a test that the tool makes of the code that the
   `.cmx` files of the other units give it.
 
-The 79 sources have 29,925 lines; the twenty-five that are validated, with
-or without their imports, have 2,972.
+The 79 sources have 29,925 lines; the twenty-six that are validated, with
+or without their imports, have 4,151.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
@@ -322,7 +328,7 @@ mean".
 | `scanf.ml` | `stdlib__Scanf` | 1528 | not checked | a primitive: `String_load` |
 | `semaphore.ml` | `stdlib__Semaphore` | 89 | validated with its imports (decision D65: the guards of the liftings pass by the finer tests alone) |  |
 | `seq.ml` | `stdlib__Seq` | 719 | not checked | a primitive: `Atomic_exchange Field_index` |
-| `set.ml` | `stdlib__Set` | 1179 | compared, not validated (the second alias) |  |
+| `set.ml` | `stdlib__Set` | 1179 | validated with its imports (with the calls of the closures that a Let makes made direct in the rounds after each lifting) (with what my_closure is known to be from its code used in the rounds after each lifting) (decision D65: the guards of the liftings pass by the finer tests alone) (the second alias) |  |
 | `stack.ml` | `stdlib__Stack` | 74 | not checked | a static constant: `Unique_block` |
 | `stdLabels.ml` | `stdlib__StdLabels` | 30 | validated |  |
 | `std_exit.ml` | `std_exit` | 22 | not checked | a primitive: `Atomic_load Field_index` |
@@ -396,8 +402,9 @@ same head). `rocq/TRUST-LEDGER.md`, "Calls of C functions", says what is
 kept of a call of a C function and what a verdict of a function that
 calls one rests on.
 
-**The mark of decision D65.** Under the verdict of four files,
-`camlinternalAtomic.ml`, `map.ml`, `semaphore.ml` and `uchar.ml`, the driver
+**The mark of decision D65.** Under the verdict of five files,
+`camlinternalAtomic.ml`, `map.ml`, `semaphore.ml`, `set.ml` and
+`uchar.ml`, the driver
 prints "(decision D65: the guards of the liftings pass by the finer tests
 alone)". A lifting of the validation asks two tests of the term that it
 is given, of its exits and of its primitives of the heap. By decision D65
@@ -419,11 +426,11 @@ acceptance to rest on the finer tests. Of `camlinternalAtomic.ml`,
 `semaphore.ml` and `uchar.ml` it is known besides, from the stored files
 of the commit before the tool was given the finer tests, that each was
 "compared, not validated", with the line "related once lifted" under
-the verdict, and gained its verdict with them. `map.ml` has the mark at
-this commit, the first at which it is validated: its stored file of the
-commit before says "not validated", with no line under the verdict, and
-the stored files do not show whether the tests as they were would have
-been enough for it.
+the verdict, and gained its verdict with them. `map.ml` and `set.ml`
+have had the mark since the commits at which they were first validated:
+the stored file of each, at the commit before that one, says "not
+validated", with no line under the verdict, and the stored files do not
+show whether the tests as they were would have been enough for either.
 
 What it is not:
 

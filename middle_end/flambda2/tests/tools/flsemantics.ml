@@ -389,7 +389,7 @@ module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
 module Validate_inlining = Flambda2_rocq_semantics.FlambdaValidateInliningSpec
 module Validate_demoted = Flambda2_rocq_semantics.FlambdaValidateDemotedSpec
 module My_closure = Flambda2_rocq_semantics.FlambdaMyClosureSpec
-module Closure_of_code = Flambda2_rocq_semantics.FlambdaClosureOfCodeSpec
+module Slots_through = Flambda2_rocq_semantics.FlambdaSlotsThroughSpec
 module Unused_slots = Flambda2_rocq_semantics.FlambdaUnusedSlotsSpec
 module Float_code = Flambda2_rocq_semantics.FlambdaFloatCodeSpec
 module Loopify = Flambda2_rocq_semantics.FlambdaLoopifySpec
@@ -7373,7 +7373,7 @@ and validate_or_leave ~(demoted : bool)
      rounds which use what [my_closure] is known to be from its code
      (FlambdaValidateSpec.normalise_lifted_own) may do something to: a term that
      the search normalised after a lifting and that
-     FlambdaClosureOfCodeSpec.know_own_closures, which ends each of those
+     FlambdaSlotsThroughSpec.know_own_closures_through, which ends each of those
      rounds, changes. An asking whose liftings do not ask for those rounds sets
      it where it finds such a term, in a guess that it makes again from a search
      kept as in any other. An attempt notes what its own askings found
@@ -7771,7 +7771,7 @@ and validate_or_leave ~(demoted : bool)
               if (not own) && not !own_closures_to_know
               then
                 own_closures_to_know
-                  := Closure_of_code.know_own_closures next <> next;
+                  := Slots_through.know_own_closures_through next <> next;
               normalised := next :: !normalised;
               liftings_from banned (stage + 1) (lifting :: made) next
                 (remaining - 1))

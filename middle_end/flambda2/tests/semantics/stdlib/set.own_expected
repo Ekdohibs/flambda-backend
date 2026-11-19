@@ -402,6 +402,9 @@ returns [0: <fun>; <fun>]
   calls outside code: 0 before, 0 after
   the same
   calls outside code once those of known code are inlined: 0
-  not validated
+  validated with its imports, given the .cmx of 3 of them: the same once closures and blocks are lifted to symbols, the terms normalised and unused value slots removed
+  (with the calls of the closures that a Let makes made direct in the rounds after each lifting)
+  (with what my_closure is known to be from its code used in the rounds after each lifting)
+  (decision D65: the guards of the liftings pass by the finer tests alone)
   the check of regions: passes before, passes after
   the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

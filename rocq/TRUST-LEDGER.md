@@ -2462,10 +2462,13 @@ it gave back.
   nothing. Where a lifting asks for what `my_closure` is known to be
   from its code to be used after each of those rounds, the test of
   such a round is again that of the round that there was, asked of
-  the term that the round is given (`known_own_free_in`); that step
-  asks nothing, its law from the imports
-  (`FlambdaClosureOfCodeSpec.know_own_closures_refines_imports_statement`)
-  having no premise. The test computes
+  the term that the round is given (`known_own_free_in`); the step
+  that ends such a round, which is that use and then the read of the
+  value slots that the body of code reads through another closure
+  (`FlambdaSlotsThroughSpec.know_own_closures_through`), asks
+  nothing, its law from the imports
+  (`know_own_closures_through_refines_imports_statement`) having no
+  premise. The test computes
   those terms a second time, as the validation does; it is
   sufficient, not necessary. The rounds that follow the demotion
   are those of `FlambdaValidateSpec.demote_and_tidy_known`, and
@@ -3444,7 +3447,45 @@ checked by an extracted function, and `validate_unit_sound` and
   (`know_own_closures_program_refines_statement`,
   `know_own_closures_refines_imports_statement`,
   `know_own_closures_refines_observed_statement`), and not under
-  every environment. With the field unset the normalisation is the
+  every environment. The round then reads, in the term that those
+  rewrites give, the value slots that the body of code reads through
+  another closure (`FlambdaSlotsThroughSpec.read_slots_through`;
+  `know_own_closures_through` is the two in that order, and is what
+  the round applies). Here too nothing is guessed. In the body of
+  code that is no stub and whose `my_closure` is not also a
+  parameter, the projection of a value slot from a variable that a
+  `Let` of that body bound to the projection of a value slot from
+  another variable becomes the projection of a value slot of that
+  other variable, only where the other is known to be a closure of
+  a code, as the rewrites above know it, neither variable has been
+  bound again, and a test of the unit passes, asked of the term that
+  those rewrites give: the unit makes a set of closures with that
+  code at the function slot that the first projection names, and
+  every such set gives the first value slot a variable in sight that
+  a `Let` bound to a closure which that `Let` made, and that `Let`
+  gave the value slot read through it the very simple that the set
+  gives the value slot put in its place (`sets_through_give`, of the
+  sets as `sets_through` sees them; what a `Let` gave a value slot
+  is forgotten where a variable that it names is bound again). The
+  function slot that the projection replaced names is not looked
+  at. This rewrite too is the identity of a unit one of whose groups
+  does not bind its static sets whole. In a run that comes to the
+  projection replaced, where that projection has a value, the one
+  put in its place has that value (`projection_through_statement`);
+  if a run comes to such a projection and it has no value, the run
+  goes wrong there, and the run of the unit rewritten may end
+  (`read_slots_through_other_function_slot_run_statement`): the
+  rewrite refines and is no equivalence, and of a unit whose run
+  goes wrong nothing is said. It refines the unit run on its own, from
+  its imports, and followed by the same observers run from the
+  imports (`read_slots_through_program_refines_statement`,
+  `read_slots_through_refines_imports_statement`,
+  `read_slots_through_refines_observed_statement`), and not under
+  every environment. The laws of the two in that order are
+  `know_own_closures_through_program_refines_statement`,
+  `know_own_closures_through_refines_imports_statement` and
+  `know_own_closures_through_refines_observed_statement`, of the
+  same three runs. With the field unset the normalisation is the
   one that there was
   (`FlambdaValidateSpec.normalise_lifted_own_unset_statement`).
 - Which value slots Simplify removed from the static sets of closures

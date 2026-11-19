@@ -5,7 +5,6 @@ open FlambdaArmNumbersSpec
 open FlambdaBindConstParamsSpec
 open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
-open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
 open FlambdaCodeStatedSpec
 open FlambdaCompareOrderSpec
@@ -59,6 +58,7 @@ open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec
 open FlambdaSinkUsesSpec
+open FlambdaSlotsThroughSpec
 open FlambdaStatedScopeSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
@@ -359,7 +359,7 @@ let normalise_lifted_round_calling calling avoid kept e =
 
 let normalise_lifted_round_own calling own avoid kept e =
   let round = normalise_lifted_round_calling calling avoid kept e in
-  if own then know_own_closures round else round
+  if own then know_own_closures_through round else round
 
 (** val normalise_lifted_own : bool -> bool -> nat -> continuation list ->
     code_id list -> expr -> expr **)
