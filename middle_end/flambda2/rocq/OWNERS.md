@@ -215,6 +215,17 @@ design out; that is the request, not the change.
     step keeps; for the second pass of
     `FlambdaClosureOfCodeSpec.know_own_closures`; S4's once it is
     staffed)
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaSlotsThrough*` (in the body of
+    code, a value slot read through the closure that a closure of
+    known code holds in a value slot is read from that closure itself,
+    where every set of closures of the unit with the code gave the two
+    value slots one simple, with a property of states that a step
+    keeps; the closure of known code is `my_closure` or one that the
+    body projects from a closure so known; with
+    `FlambdaClosureOfCodeSpec.know_own_closures` before it, it is
+    extracted and ends a round of the validation where a lifting asks
+    for it, `FlambdaValidateSpec.normalise_lifted_round_own`; S4's once
+    it is staffed)
   - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the

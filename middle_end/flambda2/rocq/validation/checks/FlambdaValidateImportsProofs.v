@@ -59,7 +59,7 @@ From OxCamlFlambda2 Require FlambdaHoistStaticsProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 From OxCamlFlambda2 Require FlambdaCopyCodeProofs.
-From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec
   FlambdaStubCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec
@@ -656,8 +656,9 @@ Proof.
       (normalise_lifted_round_calling_unit_refines imports calling avoid
          kept e Hone)).
     destruct own; [ | apply refines_refl ].
-    exact (FlambdaClosureOfCodeProofs.know_own_closures_refines_imports
-             imports _). }
+    exact
+      (FlambdaSlotsThroughProofs.know_own_closures_through_refines_imports
+         imports _). }
   destruct
     (expr_eqb [] [] e (normalise_lifted_round_own calling own avoid kept e));
     [ exact Hround | ].

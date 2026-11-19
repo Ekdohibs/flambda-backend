@@ -43,7 +43,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaHoistStaticsSpec FlambdaHoistStaticsObservedSpec
   FlambdaHoistStaticsObservedProofs FlambdaValidateRelatedSpec.
 From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
-From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 Import ListNotations.
@@ -330,8 +330,11 @@ Proof.
 Qed.
 
 (* The same of the rounds that end with what the closures of the code
-   of the unit are known to be, where they are asked to: that step
-   refines the unit followed by what may follow a unit. *)
+   of the unit are known to be and then with the value slots that are
+   read through them
+   (FlambdaSlotsThroughSpec.know_own_closures_through), where they are
+   asked to: that step refines the unit followed by what may follow a
+   unit. *)
 Lemma iterate_lifted_own_refines_followed (calling own : bool)
     (rounds : nat) (avoid : list continuation) (kept : list code_id) :
   ∀ e : expr,
@@ -356,8 +359,9 @@ Proof.
       (normalise_lifted_round_calling_refines_followed calling avoid kept e
          Hone)).
     destruct own; [ | apply refines_refl ].
-    exact (FlambdaClosureOfCodeProofs.know_own_closures_refines_observed
-             imports [] conts _ Hobservers). }
+    exact
+      (FlambdaSlotsThroughProofs.know_own_closures_through_refines_observed
+         imports [] conts _ Hobservers). }
   destruct
     (expr_eqb [] [] e (normalise_lifted_round_own calling own avoid kept e));
     [ exact Hround | ].

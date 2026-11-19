@@ -119,6 +119,8 @@ From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
 From OxCamlFlambda2 Require FlambdaClosureCallsProofs.
 From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require Import FlambdaSlotsThroughSpec.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require FlambdaNeverReturnsProofs
   FlambdaNeverReturnsScopeProofs.
@@ -6284,6 +6286,24 @@ Lemma know_own_closures_rewrite_equivariant :
   rewrite_equivariant know_own_closures.
 Proof. exact FlambdaClosureOfCodeProofs.know_own_closures_equivariant. Qed.
 
+(* The same and then the value slots that are read through another
+   closure (FlambdaSlotsThroughSpec.know_own_closures_through): what
+   is put in the place of a projection there names a variable that
+   an earlier projection of the same body reads. *)
+Lemma know_own_closures_through_scope :
+  keeps_scope know_own_closures_through.
+Proof.
+  exact
+    (FlambdaScopedProofs.keeps_scope_intro know_own_closures_through
+       FlambdaSlotsThroughProofs.know_own_closures_through_names).
+Qed.
+
+Lemma know_own_closures_through_rewrite_equivariant :
+  rewrite_equivariant know_own_closures_through.
+Proof.
+  exact FlambdaSlotsThroughProofs.know_own_closures_through_equivariant.
+Qed.
+
 (* A round of FlambdaValidateSpec.normalise_lifted_own: the round of
    [normalise_lifted_calling] and then, where [own] is set, that. *)
 Lemma normalise_lifted_round_own_scope (calling own : bool)
@@ -6294,9 +6314,9 @@ Proof.
     [ | exact (normalise_lifted_round_calling_scope calling avoid kept) ].
   exact
     (keeps_scope_compose (normalise_lifted_round_calling calling avoid kept)
-       know_own_closures
+       know_own_closures_through
        (normalise_lifted_round_calling_scope calling avoid kept)
-       know_own_closures_scope).
+       know_own_closures_through_scope).
 Qed.
 
 Lemma normalise_lifted_round_own_up_to (calling own : bool)
@@ -6309,9 +6329,10 @@ Proof.
   exact
     (equivariant_up_to_avoiding_after
        (fun avoid => normalise_lifted_round_calling calling avoid kept)
-       know_own_closures
+       know_own_closures_through
        (fun avoid => normalise_lifted_round_calling_scope calling avoid kept)
-       know_own_closures_scope know_own_closures_rewrite_equivariant
+       know_own_closures_through_scope
+       know_own_closures_through_rewrite_equivariant
        (normalise_lifted_round_calling_up_to calling kept)).
 Qed.
 

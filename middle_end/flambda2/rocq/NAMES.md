@@ -43,7 +43,7 @@ places where it is still used are in the last table here.
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
 | The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters of a loop that every turn passes on taken away, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | The normalisation of the term before and that of a term in which something was lifted: up to the names that a round makes. `validate_unit`: where the code of the term before is closed | `FlambdaValidatorEquivarianceSpec.v` | N3 |
-| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself or of two different symbols, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the inlining of the direct calls that stand at chosen places, the copy of code for static sets of closures and for the sets of closures that a `Let` makes, the calls of the closures that a `Let` in sight makes made direct, what `my_closure` is known to be from its code used in the bodies of code, the read of a known block where it is sure to have a value, the removal of the unused allocations of constants and the constant put for the length of a mutable array that a `Let` in scope has made, in the term after | the `Spec` file of each pass | the owner of each |
+| Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself or of two different symbols, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the inlining of the direct calls that stand at chosen places, the copy of code for static sets of closures and for the sets of closures that a `Let` makes, the calls of the closures that a `Let` in sight makes made direct, what `my_closure` is known to be from its code used in the bodies of code, a value slot that the body of code reads through another closure read from the closure that holds both, the read of a known block where it is sure to have a value, the removal of the unused allocations of constants and the constant put for the length of a mutable array that a `Let` in scope has made, in the term after | the `Spec` file of each pass | the owner of each |
 | The second asking of the validation, `validate_unit_knowing`: where the code of the term before is closed | `FlambdaValidateKnowingSpec.v` | the owner of that file, N3 |
 | The tests that a verdict holds of a unit run from its imports: those that read static names alone, with no premise; those of a verdict, where the code of the term before is closed | `FlambdaValidateImportsRenameSpec.v` | N3 |
 | The second check of a unit, `validate_unit_related`: with no premise | `FlambdaValidateRelatedRenameSpec.v` | N3 |
@@ -1717,8 +1717,62 @@ in the rounds it comes after the round of
 `normalise_lifted_calling`, where the lifting asks for it
 (`FlambdaValidateSpec.normalise_lifted_round_own`,
 `normalise_lifted_own`; the field `own_closures_known`, which
-`rename_lifting` passes on, having no name in it), the
-move of code to the head of
+`rename_lifting` passes on, having no name in it),
+the read, from a closure whose code the body of code knows, of a
+value slot that the body reads through a closure that the first
+holds in another of its value slots
+(`FlambdaSlotsThroughSpec.read_slots_through`: in the body of code
+that is no stub and whose `my_closure` is not also a parameter, a
+variable bound to the projection, naming its function slot, of a
+value slot from another variable is remembered as that projection
+(`through_under_let`); the projection of a value slot from the
+variable so remembered becomes the projection from the first
+variable of a value slot of its own (`read_through`), where the
+first variable is known to be a closure of a code, as the second
+pass above knows it, and every set that the unit makes with that
+code at that function slot gave the first value slot a variable in
+sight that a `Let` bound to a closure which that `Let` made, and
+that `Let` gave the slot read through it the very simple that the
+set gives the slot put in its place (`sets_through_give`,
+`slot_through`); nothing else is rewritten, and the pass is the
+identity of a unit in which a group of static bindings does not
+bind its static sets of closures whole;
+`read_slots_through_equivariant_statement`, an equation with no
+premise, and `read_slots_through_names_statement`, that where the
+code of the unit is closed, the code of the result is closed and
+the result has no free variable or continuation that the unit has
+not; it binds nothing and makes no name; the projection that it
+puts in place names the variable that the first projection read,
+which the projection replaced did not name: a variable of the same
+body that has not been bound again between the two places, what is
+remembered of a variable, and as projected from it, being
+forgotten under a binder of it, the `Let` of it or a parameter of
+a handler (`through_without`); its test reads the sets that the
+unit makes, each with what is in sight where it is made
+(`sets_through`, `made_sight`: the variables that a `Let` above
+bound to a closure that the `Let` made, each with the simples that
+the `Let` gave its value slots), and compares, as they are
+written, the simple that such a `Let` gave a value slot with the
+simple that the set gives a value slot of its own; the two are
+written at two places, and what a `Let` gave a value slot is
+forgotten where a variable that it names is bound again, as the
+variable of the `Let` is no longer in sight where it is bound
+again (`made_under_let` of that file, `forget_in_made`), so the
+two simples are read under one binding of every variable that
+they name; what the
+test keeps is a value slot and no variable (`slot_through`), and
+of a variable known by a value slot it keeps the code of the
+closure in sight that it is, as the second pass above does, so
+there too nothing is concluded from the name of a variable outside
+its scope;
+the round applies it to what the use of `my_closure` gives:
+`know_own_closures_through` is the two in that order and is what
+`normalise_lifted_round_own` applies, with
+`know_own_closures_through_equivariant_statement` and
+`know_own_closures_through_names_statement`; that it keeps scope
+is a lemma of `FlambdaValidatorEquivarianceProofs.v` and not a
+statement),
+the move of code to the head of
 what it is in (`FlambdaFloatCodeSpec.v`), the binding first of the
 code of a unit (`FlambdaHoistCodeSpec.v`) and of its static bindings
 that need nothing from around them (`FlambdaHoistStaticsSpec.v`), the

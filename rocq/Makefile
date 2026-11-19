@@ -436,6 +436,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/continuations/FlambdaSinkUsesSpec.v \
   rewrites/closures/FlambdaSlotsOfCodeProofs.v \
   rewrites/closures/FlambdaSlotsOfCodeSpec.v \
+  rewrites/closures/FlambdaSlotsThroughProofs.v \
+  rewrites/closures/FlambdaSlotsThroughSpec.v \
   rewrites/common/FlambdaSpineWalkNamesProofs.v \
   rewrites/common/FlambdaSpineWalkNamesSpec.v \
   rewrites/common/FlambdaSpineWalkProofs.v \

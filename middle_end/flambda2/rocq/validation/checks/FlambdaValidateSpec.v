@@ -146,7 +146,12 @@
    the rounds are those that there were. Where the lifting says so,
    each of those rounds also uses, in the bodies of code, what
    [my_closure] is known to be from its code
-   (FlambdaClosureOfCodeSpec.know_own_closures;
+   (FlambdaClosureOfCodeSpec.know_own_closures), and then reads from
+   a closure whose code the body knows, [my_closure] or one that it
+   projects from such a closure, a value slot that the body reads
+   through the closure that the first holds in another of its value
+   slots, where every set with that code gave the two from one simple
+   (FlambdaSlotsThroughSpec.know_own_closures_through;
    [normalise_lifted_own]); where it does not, the rounds are again
    those that there were. Every round of that
    normalisation, after each
@@ -469,7 +474,7 @@ From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
-From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
+From OxCamlFlambda2 Require Import FlambdaSlotsThroughSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
@@ -1286,16 +1291,27 @@ Definition normalise_lifted_calling_unset_statement : Prop :=
    of [my_closure] that every set with its code gives a closure in
    sight of one code is direct too (FlambdaSlotsOfCodeSpec.v).
    Simplify does all three from the type that it gives [my_closure]
-   in the code of a set that it simplifies. The sets are those that
-   the term of the round makes, so a set that a lifting has made
-   static, or a round has changed, is counted as it then is. A call
-   that this makes direct is one that the next round may inline. The
-   round of [normalise_lifted_calling] is named here and not written
-   again. *)
+   in the code of a set that it simplifies. Then, in the term that
+   those give, a value slot that the body of code reads through the
+   closure that a closure of known code holds in one of its value
+   slots is read from that closure itself, where every set with its
+   code gave the two from one simple. The closure of known code is
+   [my_closure], or one that the body projects from a closure so
+   known, as the second pass of [know_own_closures] knows it
+   (FlambdaClosureOfCodeSpec.codes_under_read;
+   FlambdaSlotsThroughSpec.v, whose [know_own_closures_through] is
+   the two in that order). Simplify makes that read in the terms that
+   the file was written from; that it makes it wherever this does is
+   not said. [know_own_closures] is applied to the term that the
+   round gives, and [read_slots_through] computes its tests from the
+   term that it gives; so a set that a lifting has made static, or a
+   round has changed, is counted as it then is. A call that this
+   makes direct is one that the next round may inline. The round of
+   [normalise_lifted_calling] is named here and not written again. *)
 Definition normalise_lifted_round_own (calling own : bool)
     (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
   let round := normalise_lifted_round_calling calling avoid kept e in
-  if own then know_own_closures round else round.
+  if own then know_own_closures_through round else round.
 
 (* [normalise_lifted_calling] with those rounds. With [own] unset it
    is [normalise_lifted_calling], by computation

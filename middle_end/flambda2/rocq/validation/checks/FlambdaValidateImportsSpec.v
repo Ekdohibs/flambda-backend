@@ -512,8 +512,8 @@ Definition normalise_lifted_calling_free_in_unset_statement : Prop :=
    of one round of [normalise_lifted], asked of the term that the
    round is given, as in [known_calling_free_in]; the step that ends
    the round where [own] is set
-   (FlambdaClosureOfCodeSpec.know_own_closures) asks nothing, its law
-   from the imports having no premise. With [own] unset it is
+   (FlambdaSlotsThroughSpec.know_own_closures_through) asks nothing,
+   its law from the imports having no premise. With [own] unset it is
    [known_calling_free_in] ([known_own_free_in_unset_statement]). *)
 Fixpoint known_own_free_in (statics : static_env) (calling own : bool)
     (rounds : nat) (avoid : list continuation) (kept : list code_id)

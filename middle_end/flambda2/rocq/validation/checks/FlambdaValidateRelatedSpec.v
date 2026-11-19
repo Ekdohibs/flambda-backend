@@ -108,9 +108,12 @@
    it; each lifting given is applied without the two tests of the unit
    and followed by FlambdaValidateSpec.normalise_lifted_own (the
    rounds of [normalise_lifted], with the calls of the closures that
-   a [Let] makes made direct in them where the lifting says so, and
-   with what [my_closure] is known to be from its code used in them
-   where the lifting says so), and
+   a [Let] makes made direct in them where the lifting says so, and,
+   where the lifting says so, with what [my_closure] is known to be
+   from its code used in them and then with a value slot that a body
+   reads through a closure held by a closure of known code read from
+   that closure itself:
+   FlambdaSlotsThroughSpec.know_own_closures_through), and
    after the last the known value slots are read and what is known is
    used after the demotion, as there ([lifted_in_turn_observed]); the
    calls are taken on and the term tidied as there; the value slots

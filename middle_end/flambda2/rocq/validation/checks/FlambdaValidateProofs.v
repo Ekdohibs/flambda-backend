@@ -97,8 +97,7 @@ From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec
   FlambdaClosureCallsProofs.
-From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
-From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec
   FlambdaKnownSiblingsProofs.
@@ -1014,7 +1013,8 @@ Proof.
     apply (refines_trans _ _ _
       (normalise_lifted_round_calling_program_refines calling avoid kept e)).
     destruct own; [ | apply refines_refl ].
-    exact (FlambdaClosureOfCodeProofs.know_own_closures_program_refines _). }
+    exact
+      (FlambdaSlotsThroughProofs.know_own_closures_through_program_refines _). }
   induction rounds as [ | rounds IH]; intros e; cbn [iterate];
     [ apply refines_refl | ].
   cbv zeta.
