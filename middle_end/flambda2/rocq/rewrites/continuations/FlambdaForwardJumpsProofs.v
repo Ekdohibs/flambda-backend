@@ -51,7 +51,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaForwardJumpsSpec.
 From OxCamlFlambda2 Require Import FlambdaMapProofs.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaSubkindSpec
-  FlambdaStatedScopeSpec FlambdaStatedScopeProofs.
+  FlambdaStatedScopeSpec FlambdaStatedScopeProofs FlambdaStatedSymbolsSpec
+  FlambdaStatedSymbolsProofs.
 Import ListNotations.
 
 Fixpoint forward_jumps_binds_statics (e : expr) :
@@ -155,9 +156,9 @@ Proof.
 Qed.
 
 (* An application that goes on has no arguments. *)
-Lemma goes_jump (G : kinds_in_scope) (T : stated_in_scope)
+Lemma goes_jump (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
     (K : kinds_of_conts) (F : forwards) (ac : apply_cont) :
-  jumps K F -> goes true G T K F ac (forward_apply_cont F ac).
+  jumps K F -> goes true Y G T K F ac (forward_apply_cont F ac).
 Proof.
   intros Hjumps. unfold forward_apply_cont.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hk;
@@ -174,19 +175,19 @@ Proof.
   intros _. exists [], sks. split; [ exact Hkinds | ].
   destruct (ac_args ac); [ | discriminate Hlength ].
   split; [ intros vars _; exists []; split; reflexivity | ].
-  intros statics vars vs _ Hvs. injection Hvs as <-.
+  intros statics vars vs _ _ Hvs. injection Hvs as <-.
   destruct sks; reflexivity.
 Qed.
 
 Fixpoint forward_jumps_fwd (e : expr) :
-  ∀ (G : kinds_in_scope) (T : stated_in_scope) (K : kinds_of_conts)
-    (F : forwards),
-    safe F e -> jumps K F -> fwd true G T K F e (forward_jumps_under F e).
+  ∀ (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards),
+    safe F e -> jumps K F -> fwd true Y G T K F e (forward_jumps_under F e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros G T K F Hsafe Hjumps; simpl.
+    intros Y G T K F Hsafe Hjumps; simpl.
   - destruct (safe_let F x kind d body Hsafe) as [Hbody Hx].
     apply Fwd_let; [ exact Hx | apply forward_jumps_fwd; assumption ].
   - apply Fwd_let_static, forward_jumps_fwd; assumption.
@@ -196,7 +197,7 @@ Proof.
       (jump_entry_fits k params metadata
          (forward_jumps_under F handler) body)
       as (Hfits & Hvars & Hconts).
-    apply (Fwd_let_cont true G T K F k params metadata metadata handler
+    apply (Fwd_let_cont true Y G T K F k params metadata metadata handler
       (forward_jumps_under F handler)
       (jump_entry k params metadata (forward_jumps_under F handler)
          body));
@@ -254,12 +255,12 @@ Proof.
   assert (Hrel :
     state_fwd true (State e vars conts statics hp rd)
       (State (forward_jumps e) vars conts statics hp rd)).
-  { apply (State_fwd true [] [] [] []);
+  { apply (State_fwd true [] [] [] [] []);
       [ apply forward_jumps_fwd;
           [ apply safe_none; reflexivity
           | intros k params target Hsome; discriminate Hsome ]
       | intros k; apply Same_fwd | apply held_nil | apply kinds_hold_nil
-      | apply stated_hold_nil ]. }
+      | apply stated_hold_nil | apply symbols_hold_nil ]. }
   apply refines_antisymmetric.
   - exact (rounds_refines (state_fwd true) (fwd_round true) _ _ Hrel).
   - exact

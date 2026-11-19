@@ -119,10 +119,21 @@
      makes. Going down the term the pass keeps what is so known of
      the variables in scope (FlambdaStatedScopeSpec.stated_in_scope:
      [params_stated] for the parameters of a handler,
-     [stated_of_named] for a [Let]), and asks that each argument be
-     known, by it, to be of what the handler states of the parameter
-     it is given to (FlambdaStatedScopeSpec.are_stated). A handler
-     that states nothing of its parameters asks nothing;
+     [stated_of_named] for a [Let]), and what the [Let_static]s
+     passed on the way make known of the symbols that they bind
+     (FlambdaStatedSymbolsSpec.symbols_stated: [statics_stated]; a
+     symbol bound to a block of symbols and tagged immediates is
+     known as a block of that shape). It asks that each argument be
+     known, by them, to be of what the handler states of the
+     parameter it is given to
+     (FlambdaStatedSymbolsSpec.are_stated_knowing: a variable and a
+     constant as FlambdaStatedScopeSpec.are_stated has them, a symbol
+     by what is known of the symbols). The machine binds a symbol
+     once and its static environment only grows
+     (FlambdaStatedSymbolsSpec.statics_stated_hold_statement,
+     symbols_hold_extend_statement), so what a [Let_static] above an
+     application made known is so where the application runs. A
+     handler that states nothing of its parameters asks nothing;
    - the binding succeeds: the application has as many arguments as
      the handler has parameters, and the handler gives as many kinds
      ([kinded_entry]).
@@ -138,8 +149,9 @@
    action from none: the term before keeps it
    (FlambdaForwardSpec.forward_apply_cont_keeping), as Simplify does.
 
-   What the pass keeps, going down a term: the kinds of the variables
-   bound around the point ([G]) and what is known of them ([S]); for
+   What the pass keeps, going down a term: what is known of the
+   symbols bound around the point ([Y]); the kinds of the variables
+   bound around it ([G]) and what is known of them ([S]); for
    each continuation bound around it, the kinds that its handler
    gives its parameters and what it states of them ([K]); and the
    entries of FlambdaForwardSpec.forward_applications ([F]): for a
@@ -208,7 +220,10 @@
    - an argument that is not known to be of what the handler states of
      the parameter: the application may be undefined. What is known
      is read off the binders and is less than what is true: an
-     application is then left that could have gone on;
+     application is then left that could have gone on. A symbol that
+     no [Let_static] around the application binds, in the term or
+     in the body of code that the pass is in, is known as no null
+     only, and so is a variable that a [Let] binds to a symbol;
    - a trap action on the [Apply_cont] of the handler, but for the
      arm above;
    - recursive continuations are not forwarded, and an [Apply] that
@@ -241,6 +256,15 @@
        | Some v -> v + 1
        | None -> x
 
+   The pass in a body starts also with what is known of the symbols
+   where the code is bound ([forward_kinded_in_code_under] keeps it
+   going down the term). The body of code is entered under a static
+   environment that extends the one in which the code was bound, so
+   what was known of the symbols there is still so. The code of a
+   group of bindings is done with what is known above the group: the
+   symbols that the group itself binds are not counted, though they
+   are bound when the body runs.
+
    Nothing is kept for the return continuation and the exception
    continuation of the code, which no [Let_cont] binds: an
    application may be forwarded to them, and none of them is
@@ -264,7 +288,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaValueSpec FlambdaSemanticsSpec FlambdaNormaliseSpec
-  FlambdaCodeLetsSpec FlambdaForwardSpec FlambdaStatedScopeSpec.
+  FlambdaCodeLetsSpec FlambdaForwardSpec FlambdaStatedScopeSpec
+  FlambdaStatedSymbolsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -308,18 +333,19 @@ Definition kinded_entry (k : continuation) (params : list variable)
 (* An [Apply_cont] made to go where the handler of its continuation
    goes, if the [Apply_cont] of the handler has no trap action and its
    arguments have the kinds of the parameters and are known to be of
-   what the handler states of them. It keeps its own trap action, if
-   it has one. *)
-Definition forward_kinded_apply_cont (G : kinds_in_scope)
-    (S : stated_in_scope) (K : cont_kinds) (F : forwards) (ac : apply_cont)
-    : apply_cont :=
+   what the handler states of them, a symbol by what is known of the
+   symbols bound around the point ([Y]). It keeps its own trap action,
+   if it has one. *)
+Definition forward_kinded_apply_cont (Y : symbols_stated)
+    (G : kinds_in_scope) (S : stated_in_scope) (K : cont_kinds)
+    (F : forwards) (ac : apply_cont) : apply_cont :=
   match forward_of F (ac_continuation ac), lookup (ac_continuation ac) K with
   | Some (params, target), Some (kinds, sks) =>
     if
       Nat.eqb (length (ac_args ac)) (length params)
       && no_trap_action target
       && have_kinds G (ac_args ac) kinds
-      && are_stated S (ac_args ac) sks
+      && are_stated_knowing Y S (ac_args ac) sks
     then forwarded_keeping (ac_trap_action ac) params (ac_args ac) target
     else ac
   | _, _ => ac
@@ -330,63 +356,65 @@ Definition forward_kinded_apply_cont (G : kinds_in_scope)
    no parameters whose handler gives no kinds goes where the handler
    goes whatever the trap action of the handler, as
    FlambdaForwardSpec.forward_arm has it. *)
-Definition forward_kinded_arm (G : kinds_in_scope) (S : stated_in_scope)
-    (K : cont_kinds) (F : forwards) (ac : apply_cont) : apply_cont :=
+Definition forward_kinded_arm (Y : symbols_stated) (G : kinds_in_scope)
+    (S : stated_in_scope) (K : cont_kinds) (F : forwards) (ac : apply_cont)
+    : apply_cont :=
   match
     forward_of F (ac_continuation ac), lookup (ac_continuation ac) K,
     ac_args ac
   with
   | Some ([], target), Some ([], _), [] =>
     if no_trap_action ac then forwarded [] [] target
-    else forward_kinded_apply_cont G S K F ac
-  | _, _, _ => forward_kinded_apply_cont G S K F ac
+    else forward_kinded_apply_cont Y G S K F ac
+  | _, _, _ => forward_kinded_apply_cont Y G S K F ac
   end.
 
-Fixpoint forward_kinded_under (G : kinds_in_scope) (S : stated_in_scope)
-    (K : cont_kinds) (F : forwards) (e : expr) : expr :=
+Fixpoint forward_kinded_under (Y : symbols_stated) (G : kinds_in_scope)
+    (S : stated_in_scope) (K : cont_kinds) (F : forwards) (e : expr) : expr :=
   match e with
   | Let x kind d body =>
     Let x kind d
-      (forward_kinded_under ((x, kind) :: G) ((x, stated_of_named S d) :: S)
-         K F body)
+      (forward_kinded_under Y ((x, kind) :: G)
+         ((x, stated_of_named S d) :: S) K F body)
   | Let_static bindings body =>
-    Let_static bindings (forward_kinded_under G S K F body)
+    Let_static bindings
+      (forward_kinded_under (statics_stated bindings Y) G S K F body)
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     let kinds := hm_params_kinds metadata in
     let sks := hm_params_subkinds metadata in
     let handler :=
-      forward_kinded_under (params_in_scope params kinds G)
+      forward_kinded_under Y (params_in_scope params kinds G)
         (params_stated params sks S) K F handler
     in
     Let_cont_non_recursive k (Handler params metadata handler)
-      (forward_kinded_under G S ((k, (kinds, sks)) :: K)
+      (forward_kinded_under Y G S ((k, (kinds, sks)) :: K)
          ((k, kinded_entry k params metadata handler body) :: F) body)
   | Let_cont_recursive handlers body =>
     let F := map (fun '(k, _) => (k, None)) handlers ++ F in
     Let_cont_recursive
-      (map (fun '(k, h) => (k, forward_kinded_in_handler G S K F h))
+      (map (fun '(k, h) => (k, forward_kinded_in_handler Y G S K F h))
          handlers)
-      (forward_kinded_under G S K F body)
+      (forward_kinded_under Y G S K F body)
   | Apply _ | Invalid => e
-  | Apply_cont ac => Apply_cont (forward_kinded_apply_cont G S K F ac)
+  | Apply_cont ac => Apply_cont (forward_kinded_apply_cont Y G S K F ac)
   | Switch scrutinee arms =>
     Switch scrutinee
-      (map (fun arm => (fst arm, forward_kinded_arm G S K F (snd arm)))
+      (map (fun arm => (fst arm, forward_kinded_arm Y G S K F (snd arm)))
          arms)
   end
-with forward_kinded_in_handler (G : kinds_in_scope) (S : stated_in_scope)
-    (K : cont_kinds) (F : forwards) (h : continuation_handler)
-    : continuation_handler :=
+with forward_kinded_in_handler (Y : symbols_stated) (G : kinds_in_scope)
+    (S : stated_in_scope) (K : cont_kinds) (F : forwards)
+    (h : continuation_handler) : continuation_handler :=
   match h with
   | Handler params metadata handler =>
     Handler params metadata
-      (forward_kinded_under
+      (forward_kinded_under Y
          (params_in_scope params (hm_params_kinds metadata) G)
          (params_stated params (hm_params_subkinds metadata) S) K F handler)
   end.
 
 Definition forward_kinded (e : expr) : expr :=
-  forward_kinded_under [] [] [] [] e.
+  forward_kinded_under [] [] [] [] [] e.
 
 Definition forward_kinded_equivalent_statement : Prop :=
   ∀ e : expr, expr_equivalent e (forward_kinded e).
@@ -396,40 +424,50 @@ Definition forward_kinded_equivalent_statement : Prop :=
 (* ======================================================================== *)
 
 (* The pass in the body of a piece of code, with the kinds of what a
-   call binds (FlambdaCodeLetsSpec.code_in_scope) and what the code
-   states of it (FlambdaStatedScopeSpec.code_stated). *)
-Definition forward_kinded_in_binding (binding : static_binding)
-    : static_binding :=
+   call binds (FlambdaCodeLetsSpec.code_in_scope), what the code
+   states of it (FlambdaStatedScopeSpec.code_stated), and what is
+   known of the symbols where the code is bound ([Y]). *)
+Definition forward_kinded_in_binding (Y : symbols_stated)
+    (binding : static_binding) : static_binding :=
   match binding with
   | Bind_code id (Code params my_closure ret exn metadata body) =>
     Bind_code id
       (Code params my_closure ret exn metadata
-         (forward_kinded_under (code_in_scope params my_closure metadata)
+         (forward_kinded_under Y (code_in_scope params my_closure metadata)
             (code_stated params my_closure metadata) [] [] body))
   | Bind_deleted_code _ | Bind_symbol _ _ => binding
   end.
 
-Fixpoint forward_kinded_in_code (e : expr) : expr :=
+(* The pass in the body of every piece of code that a term binds.
+   [Y] is what is known of the symbols bound around the point: the
+   code of a group of bindings is done with what is known above the
+   group, and the body of the [Let_static] with what the group
+   adds. *)
+Fixpoint forward_kinded_in_code_under (Y : symbols_stated) (e : expr)
+    : expr :=
   match e with
-  | Let x kind d body => Let x kind d (forward_kinded_in_code body)
+  | Let x kind d body => Let x kind d (forward_kinded_in_code_under Y body)
   | Let_static bindings body =>
-    Let_static (map forward_kinded_in_binding bindings)
-      (forward_kinded_in_code body)
+    Let_static (map (forward_kinded_in_binding Y) bindings)
+      (forward_kinded_in_code_under (statics_stated bindings Y) body)
   | Let_cont_non_recursive k h body =>
-    Let_cont_non_recursive k (forward_kinded_in_code_handler h)
-      (forward_kinded_in_code body)
+    Let_cont_non_recursive k (forward_kinded_in_code_handler Y h)
+      (forward_kinded_in_code_under Y body)
   | Let_cont_recursive handlers body =>
     Let_cont_recursive
-      (map (fun '(k, h) => (k, forward_kinded_in_code_handler h)) handlers)
-      (forward_kinded_in_code body)
+      (map (fun '(k, h) => (k, forward_kinded_in_code_handler Y h)) handlers)
+      (forward_kinded_in_code_under Y body)
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
   end
-with forward_kinded_in_code_handler (h : continuation_handler)
-    : continuation_handler :=
+with forward_kinded_in_code_handler (Y : symbols_stated)
+    (h : continuation_handler) : continuation_handler :=
   match h with
   | Handler params metadata handler =>
-    Handler params metadata (forward_kinded_in_code handler)
+    Handler params metadata (forward_kinded_in_code_under Y handler)
   end.
+
+Definition forward_kinded_in_code (e : expr) : expr :=
+  forward_kinded_in_code_under [] e.
 
 Definition forward_kinded_in_code_equivalent_statement : Prop :=
   ∀ e : expr, expr_equivalent e (forward_kinded_in_code e).
