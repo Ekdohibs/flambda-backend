@@ -66,11 +66,19 @@
    ([ind_results]) and that every code of the unit fits
    ([ind_shape_targets], [ind_fits]). A parameter kept with no use
    (marked [Keep_unused]) is dead in the relation: the second rebuild
-   gives it what the first gives, or poison of its kind. A call is one
-   that may return ([apply_never_returns] is [false] in the fragment), so
-   that no code is related as code that never returns ([NRf]); a
-   continuation that the second term does not apply may be described by
-   [never_ksh] ([uc_never], [uc_never_ext]), for when it is.
+   gives it what the first gives, or poison of its kind. The code that
+   the fragment takes to never return ([nr], [NRf]) has its body related
+   at [never_ksh] ([code_K_of_body]): its return continuation is not live
+   in its body, and the free continuations of the second term are among
+   the live ones of the original ([uc_result], [live_conts]), so that the
+   return continuation is not free in the second body ([never_ret_dead],
+   [uc_never_shadow]). A call of such code that [apply_never_returns] is
+   related to the call that the second rebuild makes return to a handler
+   [Invalid] ([uc_result_never]: [uc_call_never], [uc_call_never_wraps]).
+   The second term then has fewer free continuations than the first, and
+   binds fewer statics: a handler that only the first keeps is described
+   by [never_ksh] ([uc_let_cont_never]). The statements with no such code
+   are those with [nr] empty.
    What the second rebuild keeps of an unboxed allocation, and the reads
    that it keeps of unboxed names, are as in
    FlambdaReaperUnboxingRefinesProofs.v, the closures among the uses of
@@ -502,6 +510,17 @@ Proof.
   apply Pos.eqb_eq in E. subst k0. right. split; [ exact Hk | reflexivity ].
 Qed.
 
+(* The same, [k] described by another shape before. *)
+Lemma uc_never_shadow (K : finite_map kshape) (p q : expr) (k : continuation)
+    (ksh : kshape) :
+  uc M dead CS NR ((k, ksh) :: K) p q -> k ∉ free_continuations_of_expr q ->
+  uc M dead CS NR ((k, never_ksh) :: K) p q.
+Proof.
+  intros Huc Hk.
+  apply (uc_agree _ _ _ (uc_never _ p q k Huc Hk)).
+  intros k' _. rewrite !lookup_cons. destruct (Pos.eqb k' k); reflexivity.
+Qed.
+
 End Agree2.
 
 (* ======================================================================== *)
@@ -810,6 +829,7 @@ Variable kept_slots : value_slot -> bool.
 Variable codes0 : list (code_id * code).
 Variable symbols : list symbol.
 Variable is_local : field -> bool.
+Variable nr : code_id -> bool.
 Hypothesis sol_closed : closed is_local (graph_of_facts F) sol.
 Hypothesis local_slots : is_local_slots_only is_local.
 Hypothesis fields_read : ∀ (x : variable) (fields : unboxed_fields)
@@ -879,8 +899,8 @@ Definition CSf (id : code_id) : option code_shape :=
   end.
 
 (* The code whose body is related with its return continuation out of the
-   relation: none, here. *)
-Definition NRf (id : code_id) : bool := false.
+   relation: the code that the fragment takes to never return. *)
+Definition NRf (id : code_id) : bool := nr id.
 
 Record cinv (C : finite_map (list pdesc * bool)) (en : rebuild_env)
     (enu : unbox_env) : Prop := {
@@ -905,12 +925,34 @@ Record cinv (C : finite_map (list pdesc * bool)) (en : rebuild_env)
           lookup k C = Some (ps, h) ∧ forallb pd_keep ps = true
 }.
 
+(* The two terms related, the second with fewer free continuations (it
+   drops the handler of a call that never returns) and binding fewer
+   statics, its free continuations among [fc0] (the live ones of the
+   original, [live_conts]). *)
 Definition uc_result (K : finite_map kshape) (fc0 : list continuation)
     (p q : expr) : Prop :=
   uc unboxed dead CSf NRf K p q
-  ∧ free_continuations_of_expr p = free_continuations_of_expr q
-  ∧ binds_statics p = binds_statics q
-  ∧ incl (free_continuations_of_expr p) fc0.
+  ∧ incl (free_continuations_of_expr q) (free_continuations_of_expr p)
+  ∧ (binds_statics q = true -> binds_statics p = true)
+  ∧ incl (free_continuations_of_expr q) fc0.
+
+Lemma orb_impl2 (a a' b b' : bool) :
+  (a' = true -> a = true) -> (b' = true -> b = true) ->
+  a' || b' = true -> a || b = true.
+Proof.
+  intros Ha Hb H. apply orb_true_iff in H as [H | H]; apply orb_true_iff;
+    [ left; exact (Ha H) | right; exact (Hb H) ].
+Qed.
+
+Lemma eq_incl_sym (l l' : list continuation) : l = l' -> incl l' l.
+Proof. intros ->. intros x Hx. exact Hx. Qed.
+
+Lemma incl_without_mono (b l l' : list continuation) :
+  incl l l' -> incl (without b l) (without b l').
+Proof.
+  intros H k Hk. apply in_without_iff in Hk as [Hk Hn].
+  apply in_without_iff. split; [ exact (H k Hk) | exact Hn ].
+Qed.
 
 Definition var_ok (z : variable) : Prop :=
   fresh z
@@ -920,8 +962,8 @@ Definition var_ok (z : variable) : Prop :=
 Lemma uc_result_invalid (K : finite_map kshape) (fc0 : list continuation) :
   uc_result K fc0 Invalid Invalid.
 Proof.
-  split; [ constructor | split; [ reflexivity | split; [ reflexivity | ] ] ].
-  intros k [].
+  split; [ constructor | split; [ intros k [] | ] ].
+  split; [ intros H; exact H | intros k [] ].
 Qed.
 
 (* A variable that the rebuild reads is used, so it is not one of those
@@ -1794,11 +1836,11 @@ Definition rebuild_ok_expr (e : expr) : Prop :=
     (C : finite_map (list pdesc * bool)) (ctx : option code_id)
     (ce : finite_map (list node)),
     cinv C en enu ->
-    calls_expr F sol cannot_change code_deps unit_code_ids codes unboxed
+    calls_expr F sol cannot_change code_deps unit_code_ids codes unboxed nr
       (env_kinds en) C e
     = true ->
     names_ok e -> edges ctx ce e ->
-    uc_result (K_of C) (free_continuations_of_expr e) (cc_rebuild en e)
+    uc_result (K_of C) (live_conts F sol code_deps codes e) (cc_rebuild en e)
       (u_rebuild enu e).
 
 Definition code_link (d : decision) (dcc : param_decision) : Prop :=
@@ -2389,9 +2431,35 @@ Qed.
 (* Code of the unit that keeps its calling convention, as the two rebuilds
    make it: the same parameters, and its return continuation with no mask
    in the first and the decisions of fixed arity in the second. *)
+(* The return continuation of code taken to never return is not free in the
+   second body: it is not live in the body ([calls_code]). *)
+Lemma never_ret_dead (id : code_id) (ret : continuation) (body q : expr) :
+  negb (nr id)
+  || negb (among ret (live_conts F sol code_deps codes body)) = true ->
+  incl (free_continuations_of_expr q) (live_conts F sol code_deps codes body)
+  -> NRf id = true -> ret ∉ free_continuations_of_expr q.
+Proof.
+  intros Hok Hincl Hnr Hin. unfold NRf in Hnr. rewrite Hnr in Hok.
+  apply Hincl, among_In in Hin. rewrite Hin in Hok. discriminate Hok.
+Qed.
+
+(* The body of code taken to never return, whose return continuation is
+   not free in the second, is related at [never_ksh]. *)
+Lemma code_K_of_body (id : code_id) (c c' : code) (cs : code_shape) :
+  uc unboxed dead CSf NRf (code_K c cs) (code_body c) (code_body c') ->
+  (NRf id = true ->
+   code_return_continuation c ∉ free_continuations_of_expr (code_body c')) ->
+  uc unboxed dead CSf NRf (code_K_of NRf id c cs) (code_body c)
+    (code_body c').
+Proof.
+  intros Huc Hnr. unfold code_K_of. destruct (NRf id); [ | exact Huc ].
+  unfold code_K_never. unfold code_K in Huc.
+  exact (uc_never_shadow _ _ _ _ _ _ _ _ _ Huc (Hnr eq_refl)).
+Qed.
+
 Lemma code_rebuilt_nc (id : code_id) (c : code) :
   rebuild_ok_expr (code_body c) ->
-  calls_code F sol cannot_change code_deps unit_code_ids codes unboxed id c
+  calls_code F sol cannot_change code_deps unit_code_ids codes unboxed nr id c
   = true ->
   (∀ z, z ∈ variables_in_code c -> var_ok z) ->
   (∀ k, k ∈ continuations_in_code c -> k <> ff ∧ k <> ffu) ->
@@ -2410,14 +2478,16 @@ Lemma code_rebuilt_nc (id : code_id) (c : code) :
   in
   (∃ cs : code_shape,
      code_frame unboxed dead CSf id ccc cu cs
-     ∧ uc unboxed dead CSf NRf (code_K ccc cs) (code_body ccc) (code_body cu))
-  ∧ free_continuations_of_code ccc = free_continuations_of_code cu
-  ∧ incl (free_continuations_of_code ccc) (free_continuations_of_code c).
+     ∧ uc unboxed dead CSf NRf (code_K_of NRf id ccc cs) (code_body ccc)
+         (code_body cu))
+  ∧ incl (free_continuations_of_code cu) (free_continuations_of_code ccc)
+  ∧ incl (free_continuations_of_code cu)
+      (live_conts_code F sol code_deps codes c).
 Proof.
   destruct c as [params mc ret exn md body].
   intros IH Hok Hvars Hconts Hedges Hnc. cbv zeta.
   cbn [metadata_of_code] in Hnc.
-  cbn [calls_code] in Hok.
+  cbn [calls_code] in Hok. apply andb_true_iff in Hok as [Hok Hnrb].
   destruct (lookup id codes) as [md' | ] eqn:Hcodes;
     [ | discriminate Hok ].
   apply andb_true_iff in Hok as [Hmd Hok].
@@ -2546,7 +2616,7 @@ Proof.
     unfold fields_of. destruct (Keyed.lookup _ _ _);
       [ discriminate Hmc | reflexivity ]. }
   assert (Hframe : ∀ body body' : expr,
-            binds_statics body' = binds_statics body ->
+            (binds_statics body' = true -> binds_statics body = true) ->
             code_frame unboxed dead CSf id
               (Code params mc ret exn md body)
               (Code params mc ret exn md body')
@@ -2570,8 +2640,8 @@ Proof.
     split; [ exact Hpk' | split; [ exact Hrel | exact Hfits ] ]. }
   destruct (existsb (fun '(x, kind) => is_dead_var sol x kind) bound)
     eqn:Hdead.
-  - split; [ | split; reflexivity || (intros k []) ].
-    eexists. split; [ apply Hframe; reflexivity | constructor ].
+  - split; [ | split; intros k [] ].
+    eexists. split; [ apply Hframe; intros H; exact H | constructor ].
   - destruct (IH _ _
                 [(ret, (rds, true)); (exn, ([Pdesc de true Value], false))]
                 (Some id) [(exn, [cd_exn cd']); (ret, cd_return cd')] Hci)
@@ -2584,10 +2654,12 @@ Proof.
       - intros k Hk. apply Hconts. right. right. exact Hk. }
     { exact Hbody_edges. }
     split; [ | split ].
-    + eexists. split; [ apply Hframe; symmetry; exact IHbs | ].
-      cbn [code_body]. exact IHuc.
-    + cbn [free_continuations_of_code]. f_equal. exact IHfc.
-    + intros k Hk. cbn [free_continuations_of_code] in Hk |- *.
+    + eexists. split; [ apply Hframe; exact IHbs | ].
+      apply code_K_of_body; [ cbn [code_body]; exact IHuc | ].
+      exact (never_ret_dead id ret body _ Hnrb IHincl).
+    + cbn [free_continuations_of_code]. apply incl_without_mono. exact IHfc.
+    + intros k Hk.
+      cbn [free_continuations_of_code live_conts_code] in Hk |- *.
       apply in_without_iff in Hk as [Hk Hne].
       apply in_without_iff. split; [ exact (IHincl k Hk) | exact Hne ].
 Qed.
@@ -2595,7 +2667,7 @@ Qed.
 (* Code of the unit, as the two rebuilds make it. *)
 Lemma code_rebuilt (id : code_id) (c : code) :
   rebuild_ok_expr (code_body c) ->
-  calls_code F sol cannot_change code_deps unit_code_ids codes unboxed id c
+  calls_code F sol cannot_change code_deps unit_code_ids codes unboxed nr id c
   = true ->
   (∀ z, z ∈ variables_in_code c -> var_ok z) ->
   (∀ k, k ∈ continuations_in_code c -> k <> ff ∧ k <> ffu) ->
@@ -2611,9 +2683,11 @@ Lemma code_rebuilt (id : code_id) (c : code) :
   in
   (∃ cs : code_shape,
      code_frame unboxed dead CSf id ccc cu cs
-     ∧ uc unboxed dead CSf NRf (code_K ccc cs) (code_body ccc) (code_body cu))
-  ∧ free_continuations_of_code ccc = free_continuations_of_code cu
-  ∧ incl (free_continuations_of_code ccc) (free_continuations_of_code c).
+     ∧ uc unboxed dead CSf NRf (code_K_of NRf id ccc cs) (code_body ccc)
+         (code_body cu))
+  ∧ incl (free_continuations_of_code cu) (free_continuations_of_code ccc)
+  ∧ incl (free_continuations_of_code cu)
+      (live_conts_code F sol code_deps codes c).
 Proof.
   intros IH Hok Hvars Hconts Hedges.
   destruct (code_change_u sol cannot_change code_deps unit_code_ids unboxed id
@@ -2624,7 +2698,7 @@ Proof.
   destruct c as [params mc ret exn md body].
   intros IH Hok Hvars Hconts Hedges Hch0. cbv zeta.
   cbn [metadata_of_code] in Hch0.
-  cbn [calls_code] in Hok.
+  cbn [calls_code] in Hok. apply andb_true_iff in Hok as [Hok Hnrb].
   destruct (lookup id codes) as [md' | ] eqn:Hcodes;
     [ | discriminate Hok ].
   apply andb_true_iff in Hok as [Hmd Hok].
@@ -2770,7 +2844,7 @@ Proof.
   destruct (existsb (fun '(x, kind) => is_dead_var sol x kind) bound)
     eqn:Hdead.
   - (* Both bodies are [Invalid]. *)
-    split; [ | split; reflexivity || (intros k []) ].
+    split; [ | split; intros k [] ].
     + eexists. split.
       * split; [ exact Hcs | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
@@ -2786,7 +2860,7 @@ Proof.
         split; [ reflexivity | split; [ exact Hmcf | ] ].
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
-        split; [ reflexivity | ].
+        split; [ intros H; exact H | ].
         exists sh, pk, pk'. split; [ exact Hpk | ].
         split; [ cbn [code_params decision_params app];
                  rewrite flat_map_decision_params; exact Hpk' | ].
@@ -2819,14 +2893,16 @@ Proof.
         split; [ reflexivity | split; [ exact Hmcf | ] ].
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
-        split; [ cbn [code_body]; symmetry; exact IHbs | ].
+        split; [ cbn [code_body]; exact IHbs | ].
         exists sh, pk, pk'. split; [ exact Hpk | ].
         split; [ cbn [code_params decision_params app];
                  rewrite flat_map_decision_params; exact Hpk' | ].
         split; [ exact Hrel | exact Hfits ].
-      * cbn [code_body]. exact IHuc.
-    + cbn [free_continuations_of_code]. f_equal. exact IHfc.
-    + intros k Hk. cbn [free_continuations_of_code] in Hk |- *.
+      * apply code_K_of_body; [ cbn [code_body]; exact IHuc | ].
+        exact (never_ret_dead id ret body _ Hnrb IHincl).
+    + cbn [free_continuations_of_code]. apply incl_without_mono. exact IHfc.
+    + intros k Hk.
+      cbn [free_continuations_of_code live_conts_code] in Hk |- *.
       apply in_without_iff in Hk as [Hk Hne].
       apply in_without_iff. split; [ exact (IHincl k Hk) | exact Hne ].
 Qed.
@@ -2906,7 +2982,8 @@ Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
      Bind_code id c ∈ bindings -> rebuild_ok_expr (code_body c)) ->
   cinv C en enu ->
   forallb
-    (calls_binding F sol cannot_change code_deps unit_code_ids codes unboxed)
+    (calls_binding F sol cannot_change code_deps unit_code_ids codes unboxed
+       nr)
     bindings
   = true ->
   (∀ z, z ∈ flat_map variables_in_binding bindings -> var_ok z) ->
@@ -2928,16 +3005,16 @@ Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
       bindings
   in
   uc_bindings unboxed dead CSf NRf bcc bu
-  ∧ flat_map free_continuations_of_binding bcc
-    = flat_map free_continuations_of_binding bu
+  ∧ incl (flat_map free_continuations_of_binding bu)
+      (flat_map free_continuations_of_binding bcc)
   ∧ existsb binding_binds bcc = existsb binding_binds bu
-  ∧ incl (flat_map free_continuations_of_binding bcc)
-      (flat_map free_continuations_of_binding bindings).
+  ∧ incl (flat_map free_continuations_of_binding bu)
+      (flat_map (live_conts_binding F sol code_deps codes) bindings).
 Proof.
   intros IHcode Hci Hok Hvars Hconts Hedges. cbv zeta.
   induction bindings as [ | b bs IHbs].
   - split; [ constructor | ].
-    split; [ reflexivity | split; [ reflexivity | intros k [] ] ].
+    split; [ intros k [] | split; [ reflexivity | intros k [] ] ].
   - cbn [forallb] in Hok. apply andb_true_iff in Hok as [Hb Hbs].
     destruct Hedges as [Hb_edges Hbs_edges].
     destruct (IHbs (fun id c Hin => IHcode id c (or_intror Hin)) Hbs)
@@ -2962,22 +3039,22 @@ Proof.
         cbn [app].
         split; [ apply (uc_bindings_code _ _ _ _ _ _ _ cs); assumption | ].
         cbn [flat_map free_continuations_of_binding existsb binding_binds
-             orb app].
-        split; [ f_equal; [ exact Hcfc | exact Hfc ] | ].
+             orb app live_conts_binding].
+        split; [ apply incl_app_app; [ exact Hcfc | exact Hfc ] | ].
         split; [ reflexivity | ].
         intros k Hk. apply in_app_or in Hk as [Hk | Hk]; apply in_or_app;
           [ left; exact (Hcincl k Hk) | right; exact (Hincl k Hk) ].
       * cbn [app].
         split; [ apply uc_bindings_deleted; exact Hub | ].
         cbn [flat_map free_continuations_of_binding existsb binding_binds
-             orb app].
+             orb app live_conts_binding].
         split; [ exact Hfc | split; [ exact Hbb | ] ].
         intros k Hk. apply in_or_app. right. exact (Hincl k Hk).
     + rewrite cc_rebuild_binding_deleted, u_rebuild_binding_deleted.
       cbn [app].
       split; [ apply uc_bindings_deleted; exact Hub | ].
       cbn [flat_map free_continuations_of_binding existsb binding_binds orb
-           app].
+           app live_conts_binding].
       split; [ exact Hfc | split; [ exact Hbb | ] ].
       intros k Hk. exact (Hincl k Hk).
     + cbn [calls_binding] in Hb.
@@ -2996,10 +3073,10 @@ Proof.
         { cbn [local_binding2]. apply rebuild_fields_plain2;
             [ exact (ci_kinds_ok _ _ _ Hci) | exact Hfields ]. }
         cbn [flat_map free_continuations_of_binding existsb binding_binds
-             orb app].
+             orb app live_conts_binding].
         split; [ exact Hfc | split; [ reflexivity | ] ].
         intros k Hk. exact (Hincl k Hk).
-      * cbn [app]. split; [ exact Hub | ].
+      * cbn [app live_conts_binding]. split; [ exact Hub | ].
         split; [ exact Hfc | split; [ exact Hbb | ] ].
         intros k Hk. exact (Hincl k Hk).
 Qed.
@@ -3064,7 +3141,8 @@ Proof.
                     Hk' Hlk Ht) | ].
   pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & He').
   cbn [free_continuations_of_expr binds_statics].
-  rewrite Hk, Hk', He'. split; [ reflexivity | split; [ reflexivity | ] ].
+  rewrite Hk, Hk', He'.
+  split; [ intros x Hx; exact Hx | split; [ intros H; exact H | ] ].
   rewrite He, Hk0. intros x Hx. exact Hx.
 Qed.
 
@@ -3104,7 +3182,8 @@ Proof.
   rewrite fc_wrap by (try exact Hw; rewrite He'; intros H; apply Hwe;
                       symmetry; exact H).
   cbn [free_continuations_of_expr binds_statics].
-  rewrite Hk, He'. split; [ reflexivity | split; [ reflexivity | ] ].
+  rewrite Hk, He'.
+  split; [ intros x Hx; exact Hx | split; [ intros H; exact H | ] ].
   rewrite He, Hk0. intros x Hx. exact Hx.
 Qed.
 
@@ -3134,9 +3213,88 @@ Proof.
                            symmetry; exact H).
   rewrite (fc_wrap w) by (try exact Hw; rewrite He'; intros H; apply Hwe;
                           symmetry; exact H).
-  rewrite He'. split; [ reflexivity | split; [ reflexivity | ] ].
+  rewrite He'.
+  split; [ intros x Hx; exact Hx | split; [ intros H; exact H | ] ].
   rewrite He. cbn [free_continuations_of_expr]. rewrite Hk0.
   intros x Hx. exact Hx.
+Qed.
+
+(* The call of the first run, as [make_apply_wrapper] makes it: the call,
+   or the call returning to a wrapper. *)
+Definition call_or_wrap (p : expr) (ap : apply_expr) : Prop :=
+  p = Apply ap
+  ∨ ∃ (cps : list variable) (cmd : handler_metadata) (cargs : list simple),
+      p = wrap ff cps cmd (ap_continuation ap) cargs
+            (Apply (with_continuation ap ff)).
+
+Lemma make_apply_wrapper_cases (en : rebuild_env) (ap : apply_expr) :
+  call_or_wrap (make_apply_wrapper ff en ap) ap.
+Proof.
+  unfold call_or_wrap, make_apply_wrapper.
+  destruct (lookup _ (env_conts en)) as [mask | ]; [ | left; reflexivity ].
+  destruct (forallb _ mask); [ left; reflexivity | right ].
+  do 3 eexists. reflexivity.
+Qed.
+
+Lemma make_apply_wrapper_cc_cases (en : rebuild_env) (ap : apply_expr)
+    (fd : list (param_decision * flambda_kind)) :
+  call_or_wrap (make_apply_wrapper_cc ff en ap fd) ap.
+Proof.
+  unfold call_or_wrap, make_apply_wrapper_cc. cbv zeta.
+  destruct (forallb _ _); [ left; reflexivity | right ].
+  do 3 eexists. reflexivity.
+Qed.
+
+(* A call of code taken to never return, which [apply_never_returns]: the
+   second run gives it a handler [Invalid]. *)
+Lemma uc_result_never (K : finite_map kshape) (fc0 : list continuation)
+    (ap ap' : apply_expr) (cs : code_shape) (id : code_id) (p : expr)
+    (enu : unbox_env) (fd : list (decision * flambda_kind)) :
+  call_rel unboxed dead CSf ap ap' cs ->
+  exn_call_rel unboxed dead K (cs_exn cs) ap ap' ->
+  ap_call_kind ap = Direct id -> CSf id = Some cs -> NRf id = true ->
+  ff <> ap_exn_continuation ap -> ffu <> ap_exn_continuation ap ->
+  call_or_wrap p ap ->
+  incl [ap_exn_continuation ap] fc0 ->
+  uc_result K fc0 p (make_apply_wrapper_u true ffu enu ap' fd true).
+Proof.
+  intros Hcall Hexn Hkind Hcs Hnr Hffe Hffue Hp Hfc0.
+  pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & He').
+  unfold make_apply_wrapper_u. cbv zeta. cbn [andb].
+  set (wps := map fst (wrapper_params (freshen_decisions fd ffu))).
+  set (wmd := make_handler_metadata
+                (map snd (wrapper_params (freshen_decisions fd ffu)))).
+  assert (Hfcq : free_continuations_of_expr
+                   (Let_cont_non_recursive ffu (Handler wps wmd Invalid)
+                      (Apply (with_continuation ap' ffu)))
+                 = [ap_exn_continuation ap]).
+  { cbn [free_continuations_of_expr free_continuations_of_handler app
+         ap_continuation ap_exn_continuation with_continuation].
+    rewrite He'. unfold without. cbn [filter].
+    rewrite !among_cons, Pos.eqb_refl. cbn [orb negb].
+    rewrite (proj2 (Pos.eqb_neq _ _) (fun H => Hffue (eq_sym H))).
+    reflexivity. }
+  assert (Hin : ∀ q,
+             ap_exn_continuation ap ∈ free_continuations_of_expr q ->
+             incl [ap_exn_continuation ap] (free_continuations_of_expr q)).
+  { intros q Hq x [<- | []]. exact Hq. }
+  split; [ | split; [ | split ] ].
+  - destruct Hp as [-> | (cps & cmd & cargs & ->)].
+    + exact (uc_call_never unboxed dead CSf NRf K ap
+               (with_continuation ap' ffu) cs id ffu wps wmd Hcall Hexn Hkind
+               Hcs Hnr eq_refl Hffue).
+    + exact (uc_call_never_wraps unboxed dead CSf NRf K
+               (with_continuation ap ff) (with_continuation ap' ffu) cs id ff
+               cps cmd (ap_continuation ap) cargs ffu wps wmd Hcall Hexn Hkind
+               Hcs Hnr eq_refl eq_refl Hffe Hffue).
+  - rewrite Hfcq. apply Hin.
+    destruct Hp as [-> | (cps & cmd & cargs & ->)];
+      [ right; left; reflexivity | ].
+    rewrite fc_wrap;
+      [ right; left; reflexivity | reflexivity
+      | intros H; exact (Hffe (eq_sym H)) ].
+  - cbn [binds_statics handler_binds_statics orb]. intros H. discriminate H.
+  - rewrite Hfcq. exact Hfc0.
 Qed.
 
 Lemma singletons_snd {A : Type} (l : list (A * flambda_kind)) :
@@ -4789,7 +4947,7 @@ Qed.
 Lemma call_rebuilt_nc (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) :
   cinv C en enu ->
-  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed
+  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed nr
     (env_kinds en) C ap
   = true ->
   (∀ z, z ∈ variables_in_apply ap -> fresh z) ->
@@ -4797,10 +4955,14 @@ Lemma call_rebuilt_nc (en : rebuild_env) (enu : unbox_env)
   code_id_actually_called F sol ap <> None ->
   apply_change_u F sol cannot_change code_deps unit_code_ids codes unboxed ap
   = Not_changing_u ->
-  uc_result (K_of C) (free_continuations_of_expr (Apply ap))
+  uc_result (K_of C) (live_conts F sol code_deps codes (Apply ap))
     (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hok Hfresh Hff Hffu Hsome Hac.
+  change (live_conts F sol code_deps codes (Apply ap))
+    with (if apply_never_returns F sol code_deps codes ap
+          then [ap_exn_continuation ap]
+          else free_continuations_of_expr (Apply ap)).
   destruct ap as [callee ckind args k exn extra AA RA].
   cbn [ap_callee ap_call_kind ap_args ap_continuation ap_exn_continuation
        ap_exn_extra_args ap_args_arity ap_return_arity] in *.
@@ -4818,7 +4980,6 @@ Proof.
     [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hnr].
-  apply negb_true_iff in Hnr.
   apply andb_true_iff in Hok as [Hok Hfused].
   apply andb_true_iff in Hok as [_ Hfplain].
   destruct (lookup id codes) as [md | ] eqn:Hcodes; [ | discriminate Hrest ].
@@ -4865,8 +5026,9 @@ Proof.
   assert (Hmask_u : kept_code_mask F sol code_deps codes ap
                     = Some (map (s_has_usage sol) (cd_params cd)))
     by (unfold kept_code_mask; rewrite Hcalled, Hcodes, Hcd; reflexivity).
-  assert (Hnr_ap : apply_never_returns F sol code_deps codes ap = false)
-    by (unfold apply_never_returns; rewrite Hcalled, Hcodes; exact Hnr).
+  assert (Hnr_ap : apply_never_returns F sol code_deps codes ap
+                   = code_never_returns sol code_deps id)
+    by (unfold apply_never_returns; rewrite Hcalled, Hcodes; reflexivity).
   destruct (cm_is_tupled md
             || existsb is_unbox
                  (fixed_arity_decisions sol unboxed (cd_return cd)
@@ -4878,7 +5040,6 @@ Proof.
   set (kinds_r := unarize (cm_result_arity md)) in *.
   set (rd := fixed_arity_decisions sol unboxed (cd_return cd) kinds_r) in *.
   set (rds := pdescs_of rd (map (fun _ => true) rd) kinds_r) in *.
-  destruct (lookup k C) as [[kps [ | ]] | ] eqn:HCk; try discriminate Hret.
   assert (Hfx : fields_of unboxed f = None).
   { cbn in Hfplain. apply negb_true_iff in Hfplain.
     unfold Keyed.is_bound in Hfplain. unfold fields_of.
@@ -4964,6 +5125,16 @@ Proof.
     reflexivity. }
   assert (Hexn_ok : exn_call_rel unboxed dead (K_of C) (cs_exn cs) ap1 ap1u)
     by exact (Hexrel ap1 ap1u eq_refl eq_refl eq_refl).
+  destruct (code_never_returns sol code_deps id) eqn:Hnrc.
+  { (* A call of code that never returns. *)
+    cbn [negb orb] in Hnr.
+    refine (uc_result_never (K_of C) _ ap1 ap1u cs id _ _ _ Hcall Hexn_ok
+              eq_refl HCS Hnr _ _ (make_apply_wrapper_cases en ap1) _).
+    - intros H. exact (Hff (eq_sym H)).
+    - intros H. exact (Hffu (eq_sym H)).
+    - intros x Hx. exact Hx. }
+  cbn [orb] in Hret.
+  destruct (lookup k C) as [[kps [ | ]] | ] eqn:HCk; try discriminate Hret.
   assert (HKk : lookup k (K_of C)
                 = Some (Kshape (flat_map pshape_of kps)
                           (flat_map kept_kind kps) true))
@@ -5254,13 +5425,13 @@ Qed.
 Lemma call_rebuilt_ind (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) :
   cinv C en enu ->
-  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed
+  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed nr
     (env_kinds en) C ap
   = true ->
   (∀ z, z ∈ variables_in_apply ap -> fresh z) ->
   ap_exn_continuation ap <> ff -> ap_exn_continuation ap <> ffu ->
   code_id_actually_called F sol ap = None ->
-  uc_result (K_of C) (free_continuations_of_expr (Apply ap))
+  uc_result (K_of C) (live_conts F sol code_deps codes (Apply ap))
     (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hok Hfresh Hff Hffu Hcalled.
@@ -5283,6 +5454,11 @@ Proof.
   apply andb_true_iff in Hind as [Hind Halen].
   apply andb_true_iff in Hind as [Hind Hnr].
   apply negb_true_iff in Hnr.
+  change (live_conts F sol code_deps codes (Apply ap))
+    with (if apply_never_returns F sol code_deps codes ap
+          then [ap_exn_continuation ap]
+          else free_continuations_of_expr (Apply ap)).
+  rewrite Hnr.
   apply andb_true_iff in Hind as [Hfplain Hfused].
   apply Nat.eqb_eq in Halen.
   unfold masked_args_ok in Hmask.
@@ -5405,12 +5581,12 @@ Qed.
 Lemma call_rebuilt (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) :
   cinv C en enu ->
-  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed
+  call_ok F sol cannot_change code_deps unit_code_ids codes unboxed nr
     (env_kinds en) C ap
   = true ->
   (∀ z, z ∈ variables_in_apply ap -> fresh z) ->
   ap_exn_continuation ap <> ff -> ap_exn_continuation ap <> ffu ->
-  uc_result (K_of C) (free_continuations_of_expr (Apply ap))
+  uc_result (K_of C) (live_conts F sol code_deps codes (Apply ap))
     (cc_rebuild en (Apply ap)) (u_rebuild enu (Apply ap)).
 Proof.
   intros Hci Hok Hfresh Hff Hffu.
@@ -5424,6 +5600,10 @@ Proof.
     as [ | pd0 rd0] eqn:Hac;
     [ exact (call_rebuilt_nc en enu C ap Hci Hok Hfresh Hff Hffu Hsome Hac)
     | ].
+  change (live_conts F sol code_deps codes (Apply ap))
+    with (if apply_never_returns F sol code_deps codes ap
+          then [ap_exn_continuation ap]
+          else free_continuations_of_expr (Apply ap)).
   destruct ap as [callee ckind args k exn extra AA RA].
   cbn [ap_callee ap_call_kind ap_args ap_continuation ap_exn_continuation
        ap_exn_extra_args ap_args_arity ap_return_arity] in *.
@@ -5441,7 +5621,6 @@ Proof.
     [ | exfalso; exact (Hsome eq_refl) ].
   apply andb_true_iff in Hok as [Hok Hrest].
   apply andb_true_iff in Hok as [Hok Hnr].
-  apply negb_true_iff in Hnr.
   apply andb_true_iff in Hok as [Hok Hfused].
   apply andb_true_iff in Hok as [_ Hfplain].
   destruct (lookup id codes) as [md | ] eqn:Hcodes; [ | discriminate Hrest ].
@@ -5503,7 +5682,6 @@ Proof.
   set (rds := pdescs_of (decisions_u sol unboxed (cd_return cd) kinds_r)
                 (map is_kept (decisions_of sol (cd_return cd) kinds_r))
                 kinds_r) in *.
-  destruct (lookup k C) as [[kps [ | ]] | ] eqn:HCk; try discriminate Hret.
   unfold cc_rebuild, u_rebuild. cbn [rebuild_expr_cc rebuild_expr_u].
   assert (Hfx : fields_of unboxed f = None).
   { cbn in Hfplain. apply negb_true_iff in Hfplain.
@@ -5517,8 +5695,9 @@ Proof.
     clear -Hci. induction args as [ | a args IH]; [ reflexivity | ].
     simpl. rewrite IH, (simple_is_dead_kinds _ _ a (ci_kinds _ _ _ Hci)).
     reflexivity. }
-  assert (Hnr_ap : apply_never_returns F sol code_deps codes ap = false)
-    by (unfold apply_never_returns; rewrite Hcalled, Hcodes; exact Hnr).
+  assert (Hnr_ap : apply_never_returns F sol code_deps codes ap
+                   = code_never_returns sol code_deps id)
+    by (unfold apply_never_returns; rewrite Hcalled, Hcodes; reflexivity).
   unfold rebuild_apply_cc, apply_calling_convention_change.
   rewrite Hcalled. unfold get_calling_convention_change.
   rewrite Hcodes, Hchc'.
@@ -5624,6 +5803,16 @@ Proof.
     reflexivity. }
   assert (Hexn_ok : exn_call_rel unboxed dead (K_of C) (cs_exn cs) ap_cc ap_u)
     by exact (Hexrel ap_cc ap_u eq_refl eq_refl eq_refl).
+  destruct (code_never_returns sol code_deps id) eqn:Hnrc.
+  { (* A call of code that never returns. *)
+    cbn [negb orb] in Hnr.
+    refine (uc_result_never (K_of C) _ ap_cc ap_u cs id _ _ _ Hcall Hexn_ok
+              eq_refl HCS Hnr _ _ (make_apply_wrapper_cc_cases en ap_cc _) _).
+    - intros H. exact (Hff (eq_sym H)).
+    - intros H. exact (Hffu (eq_sym H)).
+    - intros x Hx. exact Hx. }
+  cbn [orb] in Hret.
+  destruct (lookup k C) as [[kps [ | ]] | ] eqn:HCk; try discriminate Hret.
   assert (HKk : lookup k (K_of C)
                 = Some (Kshape (flat_map pshape_of kps)
                           (flat_map kept_kind kps) true))
@@ -5734,7 +5923,7 @@ Lemma rebuild_uc :
          (ce : finite_map (list node)) (is_exn : bool),
          cinv C en enu ->
          calls_handler F sol cannot_change code_deps unit_code_ids codes
-           unboxed (env_kinds en) C (handler_pdescs sol unboxed is_exn h) h
+           unboxed nr (env_kinds en) C (handler_pdescs sol unboxed is_exn h) h
          = true ->
          names_ok_h h ->
          FlambdaReaperFlowProofs.handler_edges (graph_of_facts F) noted deps
@@ -5761,7 +5950,8 @@ Lemma rebuild_uc :
                = handler_decisions true sol unboxed is_exn h
              ∧ map pd_keep (handler_pdescs sol unboxed is_exn h)
                = handler_mask sol is_exn h
-             ∧ uc_result (K_of C) (free_continuations_of_handler h) hp hu).
+             ∧ uc_result (K_of C) (live_conts_handler F sol code_deps codes h)
+                 hp hu).
 Proof.
   apply FlambdaReaperFlowProofs.expr_handler_ind.
   - (* Let *)
@@ -5778,7 +5968,7 @@ Proof.
     specialize (IH (bind_variables en [(x, kind)])
                   (ubind_variables enu [(x, kind)]) C ctx ce Hci'
                   Hbody Hnb Hbody_edges).
-    cbn [free_continuations_of_expr]. unfold cc_rebuild, u_rebuild in *.
+    cbn [live_conts]. unfold cc_rebuild, u_rebuild in *.
     cbn [rebuild_expr_cc rebuild_expr_u].
     unfold is_pending_projection.
     rewrite (ci_proj _ _ _ Hci), (ci_proj_u _ _ _ Hci).
@@ -6060,9 +6250,10 @@ Proof.
     { exact Hb_edges. }
     rewrite cc_rebuild_let_static, u_rebuild_let_static.
     split; [ apply uc_static; [ exact Hub | exact IHuc ] | ].
-    cbn [free_continuations_of_expr binds_statics].
-    split; [ f_equal; [ exact Hbfc | exact IHfc ] | ].
-    split; [ f_equal; [ exact Hbbs | exact IHbs ] | ].
+    cbn [free_continuations_of_expr binds_statics live_conts].
+    split; [ apply incl_app_app; [ exact Hbfc | exact IHfc ] | ].
+    split; [ apply orb_impl2; [ intros H; rewrite Hbbs; exact H
+                              | exact IHbs ] | ].
     intros k Hk.
     apply in_app_or in Hk as [Hk | Hk]; apply in_or_app;
       [ left; exact (Hbincl k Hk) | right; exact (IHincl k Hk) ].
@@ -6107,24 +6298,17 @@ Proof.
         assumption. }
     { exact Hbody_edges. }
     rewrite cc_rebuild_let_cont, u_rebuild_let_cont. fold is_exn. cbv zeta.
-    assert (Hfc' :
-      free_continuations_of_expr
-        (u_rebuild
-           (ubind_continuations enu
-              [(k, handler_decisions true sol unboxed is_exn h)])
-           body)
-      = free_continuations_of_expr
-          (cc_rebuild (bind_continuations en [(k, handler_mask sol is_exn h)])
-             body))
-      by (symmetry; exact IHfc).
-    rewrite Hfc'.
-    destruct (among k (free_continuations_of_expr
-                         (cc_rebuild
-                            (bind_continuations en
-                               [(k, handler_mask sol is_exn h)])
-                            body)))
-      eqn:Hk.
-    + rewrite Hp, Hu. destruct Hhres as (Hhuc & Hhfc & Hhbs & Hhincl).
+    cbn [live_conts].
+    set (pb := cc_rebuild (bind_continuations en
+                             [(k, handler_mask sol is_exn h)]) body) in *.
+    set (qb := u_rebuild (ubind_continuations enu
+                            [(k, handler_decisions true sol unboxed is_exn h)])
+                 body) in *.
+    destruct (among k (free_continuations_of_expr qb)) eqn:Hkq.
+    + (* Both keep the handler. *)
+      assert (Hkp : among k (free_continuations_of_expr pb) = true)
+        by (apply among_In, IHfc, among_In; exact Hkq).
+      rewrite Hkp, Hp, Hu. destruct Hhres as (Hhuc & Hhfc & Hhbs & Hhincl).
       split.
       { apply (uc_let_cont unboxed dead CSf NRf (K_of C) k
                  (flat_map pshape_of ps) ps_c ps_u md md' hp hu);
@@ -6132,37 +6316,47 @@ Proof.
         cbn [K_of map] in IHuc. rewrite Hkinds. exact IHuc. }
       cbn [free_continuations_of_expr free_continuations_of_handler
            binds_statics handler_binds_statics].
-      split; [ f_equal; [ exact Hhfc | f_equal; exact IHfc ] | ].
-      split; [ f_equal; [ exact Hhbs | exact IHbs ] | ].
+      split; [ apply incl_app_app;
+               [ exact Hhfc | apply incl_without_mono; exact IHfc ] | ].
+      split; [ exact (orb_impl2 _ _ _ _ Hhbs IHbs) | ].
       intros k' Hk'.
       apply in_app_or in Hk' as [Hk' | Hk']; apply in_or_app;
         [ left; exact (Hhincl k' Hk') | right ].
       apply in_without_iff in Hk' as [Hk' Hne].
       apply in_without_iff. split; [ exact (IHincl k' Hk') | exact Hne ].
-    + split; [ | split; [ exact IHfc | split; [ exact IHbs | ] ] ].
-      * apply (uc_agree unboxed dead CSf NRf _ _ _ IHuc). intros k' Hk'.
-        cbn [K_of map]. rewrite lookup_cons.
-        destruct (Pos.eqb k' k) eqn:E; [ | reflexivity ].
-        apply Pos.eqb_eq in E. subst k'. exfalso.
-        assert (Ht : among k
-                       (free_continuations_of_expr
-                          (cc_rebuild
-                             (bind_continuations en
-                                [(k, handler_mask sol is_exn h)])
-                             body))
-                     = true) by (apply among_In; exact Hk').
-        rewrite Ht in Hk. discriminate.
-      * intros k' Hk'. cbn [free_continuations_of_expr]. apply in_or_app.
-        right. apply in_without_iff. split; [ exact (IHincl k' Hk') | ].
-        intros [Heq | []]. subst k'.
-        assert (Ht : among k
-                       (free_continuations_of_expr
-                          (cc_rebuild
-                             (bind_continuations en
-                                [(k, handler_mask sol is_exn h)])
-                             body))
-                     = true) by (apply among_In; exact Hk').
-        rewrite Ht in Hk. discriminate.
+    + assert (Hknq : k ∉ free_continuations_of_expr qb)
+        by (intros Hin; apply among_In in Hin; rewrite Hin in Hkq;
+            discriminate Hkq).
+      assert (Hincl' : incl (free_continuations_of_expr qb)
+                         (without [k] (live_conts F sol code_deps codes body))).
+      { intros k' Hk'. apply in_without_iff.
+        split; [ exact (IHincl k' Hk') | ].
+        intros [Heq | []]. subst k'. exact (Hknq Hk'). }
+      destruct (among k (free_continuations_of_expr pb)) eqn:Hkp.
+      * (* Only the first keeps the handler: the second dropped it, the call
+           that returns to it never returning. *)
+        rewrite Hp. destruct Hhres as (_ & _ & Hhbs & _).
+        split.
+        { apply uc_let_cont_never. cbn [K_of map] in IHuc.
+          exact (uc_never_shadow unboxed dead CSf NRf _ _ _ _ _ IHuc Hknq). }
+        cbn [free_continuations_of_expr free_continuations_of_handler
+             binds_statics handler_binds_statics].
+        split; [ | split ].
+        -- intros k' Hk'. apply in_or_app. right. apply in_without_iff.
+           split; [ exact (IHfc k' Hk') | ].
+           intros [Heq | []]. subst k'. exact (Hknq Hk').
+        -- intros H. apply orb_true_iff. right. exact (IHbs H).
+        -- intros k' Hk'. apply in_or_app. right. exact (Hincl' k' Hk').
+      * (* Neither keeps it. *)
+        split; [ | split; [ exact IHfc | split; [ exact IHbs | ] ] ].
+        -- apply (uc_agree unboxed dead CSf NRf _ _ _ IHuc). intros k' Hk'.
+           cbn [K_of map]. rewrite lookup_cons.
+           destruct (Pos.eqb k' k) eqn:E; [ | reflexivity ].
+           apply Pos.eqb_eq in E. subst k'. exfalso.
+           assert (Ht : among k (free_continuations_of_expr pb) = true)
+             by (apply among_In; exact Hk').
+           rewrite Ht in Hkp. discriminate Hkp.
+        -- intros k' Hk'. apply in_or_app. right. exact (Hincl' k' Hk').
   - (* Let_cont_recursive *)
     intros handlers body IHh IH en enu C ctx ce Hci Hloc
       [Hvars Hconts] Hedges.
@@ -6176,7 +6370,7 @@ Proof.
                 handlers) in *.
     assert (Hhs' : ∀ k h, (k, h) ∈ handlers ->
               calls_handler F sol cannot_change code_deps unit_code_ids codes
-                unboxed (env_kinds en) (D ++ C)
+                unboxed nr (env_kinds en) (D ++ C)
                 (handler_pdescs sol unboxed false h) h
               = true)
       by (intros k h Hin; exact (Hhs _ Hin)).
@@ -6259,17 +6453,20 @@ Proof.
                            (handler_pdescs sol unboxed false h))
                         true))
              hs)
-        ∧ handlers_bind_statics hps = handlers_bind_statics hus
-        ∧ flat_map (fun '(_, h) => free_continuations_of_handler h) hps
-          = flat_map (fun '(_, h) => free_continuations_of_handler h) hus
+        ∧ (handlers_bind_statics hus = true ->
+           handlers_bind_statics hps = true)
+        ∧ incl (flat_map (fun '(_, h) => free_continuations_of_handler h) hus)
+            (flat_map (fun '(_, h) => free_continuations_of_handler h) hps)
         ∧ incl (flat_map (fun '(_, h) => free_continuations_of_handler h)
-                  hps)
-            (flat_map (fun '(_, h) => free_continuations_of_handler h) hs)
+                  hus)
+            (flat_map
+               (fun '(_, h) => live_conts_handler F sol code_deps codes h)
+               hs)
         ∧ map fst hps = map fst hus
         ∧ map fst hps = map fst hs).
     { induction hs as [ | [k h] hs IHhs]; intros Hsub; cbv zeta.
       - cbn [map flat_map]. split; [ apply uc_handlers_nil | ].
-        split; [ reflexivity | split; [ reflexivity | ] ].
+        split; [ intros H; exact H | split; [ intros ? [] | ] ].
         split; [ intros ? [] | split; reflexivity ].
       - destruct IHhs as (Hub_hs & Hbs_hs & Hfc_hs & Hincl_hs & Hfst_hs
                           & Hfst_hs').
@@ -6292,8 +6489,8 @@ Proof.
         { rewrite <- Hkinds. apply uc_handlers_cons; assumption. }
         unfold handlers_bind_statics in *. cbn [existsb map fst].
         cbn [free_continuations_of_handler handler_binds_statics].
-        split; [ f_equal; [ exact Hhbs | exact Hbs_hs ] | ].
-        split; [ f_equal; [ exact Hhfc | exact Hfc_hs ] | ].
+        split; [ exact (orb_impl2 _ _ _ _ Hhbs Hbs_hs) | ].
+        split; [ apply incl_app_app; [ exact Hhfc | exact Hfc_hs ] | ].
         split.
         { intros x Hx. apply in_app_or in Hx as [Hx | Hx]; apply in_or_app;
             [ left; exact (Hhincl x Hx) | right; exact (Hincl_hs x Hx) ]. }
@@ -6317,16 +6514,18 @@ Proof.
     rewrite HK in Hub_hs, IHuc.
     split; [ apply (uc_let_cont_rec unboxed dead CSf NRf (K_of C) S);
              assumption | ].
-    cbn [free_continuations_of_expr binds_statics].
+    cbn [free_continuations_of_expr binds_statics live_conts].
     unfold handlers_bind_statics in Hbs_hs.
-    split; [ f_equal; [ exact Hfst_hs | f_equal; [ exact Hfc_hs
-                                                  | exact IHfc ] ] | ].
-    split; [ f_equal; [ exact Hbs_hs | exact IHbs ] | ].
+    split.
+    { rewrite <- Hfst_hs. apply incl_without_mono, incl_app_app;
+        [ exact Hfc_hs | exact IHfc ]. }
+    split; [ exact (orb_impl2 _ _ _ _ Hbs_hs IHbs) | ].
     intros k Hk. apply in_without_iff in Hk as [Hk Hne].
     apply in_without_iff. split.
     + apply in_app_or in Hk as [Hk | Hk]; apply in_or_app;
         [ left; exact (Hincl_hs k Hk) | right; exact (IHincl k Hk) ].
-    + intros H. apply Hne. exact (eq_ind_r (fun l => k ∈ l) H Hfst_hs').
+    + intros H. apply Hne. rewrite <- Hfst_hs.
+      exact (eq_ind_r (fun l => k ∈ l) H Hfst_hs').
   - (* Apply *)
     intros ap en enu C ctx ce Hci Hloc [Hvars Hconts] _.
     cbn [calls_expr] in Hloc. cbn [variables_of continuations_of] in Hvars,
@@ -6348,10 +6547,10 @@ Proof.
       rewrite Hp, Hu; [ exact (uc_result_invalid _ _) | ].
     split; [ constructor; exact Hrel | ].
     destruct Hrel as (Hk & Htrap & _).
-    cbn [free_continuations_of_expr binds_statics].
+    cbn [free_continuations_of_expr binds_statics live_conts].
     unfold apply_cont_continuations. rewrite Hk, Htrap.
-    split; [ reflexivity | split; [ reflexivity | ] ].
-    unfold rewrite_apply_cont in Hp.
+    split; [ intros x Hx; exact Hx | split; [ intros H; exact H | ] ].
+    unfold rewrite_apply_cont in Hp. unfold live_apply_cont.
     destruct (existsb _ _); [ discriminate Hp | ]. injection Hp as <-.
     intros k Hk'. exact Hk'.
   - (* Switch *)
@@ -6375,14 +6574,17 @@ Proof.
     assert (Harm_ok : ∀ (d : Z) (ac : apply_cont), (d, ac) ∈ arms ->
               apply_cont_ok2 sol unboxed (env_kinds en) C ac = true
               ∧ (∀ z, z ∈ variables_in_apply_cont ac -> fresh z)
-              ∧ incl (apply_cont_continuations ac)
-                  (free_continuations_of_expr (Switch scrutinee arms))).
+              ∧ (existsb (simple_has_no_source sol) (ac_args ac) = false ->
+                 incl (apply_cont_continuations ac)
+                   (live_conts F sol code_deps codes
+                      (Switch scrutinee arms)))).
     { intros d ac Hin. split; [ | split ].
       - rewrite forallb_forall in Harms. exact (Harms _ Hin).
       - intros z Hz. apply Hfr0. apply in_or_app. right.
         apply in_flat_map. exists (d, ac). split; [ exact Hin | exact Hz ].
-      - intros k Hk. cbn [free_continuations_of_expr]. apply in_flat_map.
-        exists (d, ac). split; [ exact Hin | exact Hk ]. }
+      - intros Hns k Hk. cbn [live_conts]. apply in_flat_map.
+        exists (d, ac). split; [ exact Hin | ]. cbn [snd].
+        unfold live_apply_cont. rewrite Hns. exact Hk. }
     assert (Harms' :
       ∀ l : list (Z * apply_cont),
         (∀ (d : Z) (ac : apply_cont), (d, ac) ∈ l -> (d, ac) ∈ arms) ->
@@ -6390,8 +6592,8 @@ Proof.
           (fun arm arm' : Z * apply_cont =>
              fst arm' = fst arm
              ∧ ac_rel2 unboxed dead (K_of C) (snd arm) (snd arm')
-             ∧ incl (apply_cont_continuations (snd arm))
-                 (free_continuations_of_expr (Switch scrutinee arms)))
+             ∧ incl (apply_cont_continuations (snd arm'))
+                 (live_conts F sol code_deps codes (Switch scrutinee arms)))
           (flat_map
              (fun '(d, ac) =>
                 match rewrite_apply_cont sol en ac with
@@ -6414,9 +6616,12 @@ Proof.
         rewrite Hp, Hu; [ exact Hrest | ].
       constructor; [ | exact Hrest ].
       split; [ reflexivity | split; [ exact Hrel | ] ].
-      unfold rewrite_apply_cont in Hp.
-      destruct (existsb _ _); [ discriminate Hp | ]. injection Hp as <-.
-      exact Hinc. }
+      cbn [snd]. rewrite (ac_rel2_conts _ _ _ Hrel).
+      assert (Hns : existsb (simple_has_no_source sol) (ac_args ac) = false).
+      { unfold rewrite_apply_cont in Hp.
+        destruct (existsb _ _); [ discriminate Hp | reflexivity ]. }
+      unfold rewrite_apply_cont in Hp. rewrite Hns in Hp.
+      injection Hp as <-. exact (Hinc Hns). }
     pose proof (Harms' _ Hcompact) as Hrel.
     rewrite (rewrite_simple_kinds sol_u (ue_env enu) en scrutinee
                (ci_kinds _ _ _ Hci)).
@@ -6433,8 +6638,8 @@ Proof.
       constructor; [ destruct Harm as (Ha & Hb & _); split; assumption | ].
       clear -Hrel. induction Hrel as [ | a a' l l' (Ha & Hb & _) _ IH ];
         constructor; [ split; assumption | exact IH ]. }
-    split; [ | split; [ reflexivity | ] ].
-    + cbn [free_continuations_of_expr flat_map].
+    split; [ | split; [ intros H; exact H | ] ].
+    + apply eq_incl_sym. cbn [free_continuations_of_expr flat_map].
       destruct Harm as (_ & Hac & _).
       f_equal; [ symmetry; exact (ac_rel2_conts _ _ _ Hac) | ].
       clear -Hrel. induction Hrel as [ | a a' l l' (_ & Hac & _) _ IH ];
@@ -6577,11 +6782,12 @@ Qed.
 Lemma rebuild_unbox_modes_refines_cc
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
-    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool) :
+    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
+    (nr : code_id -> bool) :
   is_local_slots_only is_local ->
   in_flow_fragment e = true ->
   check_closed is_local (traverse_unit flag u e) T = true ->
-  calls_unboxing (traverse_unit flag u e) T cannot_change
+  calls_unboxing_nr nr (traverse_unit flag u e) T cannot_change
     (unit_code_deps flag u e) dominated to_unbox e
   = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
@@ -6594,7 +6800,7 @@ Lemma rebuild_unbox_modes_refines_cc
 Proof.
   intros Hslots Hfragment Hclosed Hcalls Hcheck.
   set (F := traverse_unit flag u e) in *.
-  unfold calls_unboxing in Hcalls.
+  unfold calls_unboxing_nr in Hcalls.
   apply andb_true_iff in Hcalls as [Hcalls Huses].
   pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
     as [Hdistinct Hfresh].
@@ -6749,7 +6955,8 @@ Proof.
                      unboxed
                      (FlambdaNameAbstractionSpec.fresh_name (names_of e))
                      next dead noted deps cds (unit_kept e) (unit_codes e)
-                     (static_names symbols_of_binding e) is_local Hcl Hslots
+                     (static_names symbols_of_binding e) is_local nr Hcl
+                     Hslots
                      Hfields_read Hreads_found Hdead)
               e empty_env empty_unbox_env [] None (unit_conts u))
     as (Huc & _).
@@ -6777,43 +6984,68 @@ Proof.
   - exact (uc_refines unboxed Hdistinct dead _ _ _ _ Huc).
 Qed.
 
+Theorem rebuild_unbox_fixed_refines_cc_never_returns :
+  rebuild_unbox_fixed_refines_cc_never_returns_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox pdc nr.
+  exact (rebuild_unbox_modes_refines_cc flag is_local u e T
+           cannot_change dominated to_unbox pdc nr).
+Qed.
+
 Theorem rebuild_unbox_fixed_refines_cc :
   rebuild_unbox_fixed_refines_cc_statement.
 Proof.
   intros flag is_local u e T cannot_change dominated to_unbox pdc.
-  exact (rebuild_unbox_modes_refines_cc flag is_local u e T
-           cannot_change dominated to_unbox pdc).
+  exact (rebuild_unbox_fixed_refines_cc_never_returns flag is_local u e T
+           cannot_change dominated to_unbox pdc (fun _ => false)).
 Qed.
 
 Theorem rebuild_unbox_fixed_tail_refines_cc :
   rebuild_unbox_fixed_tail_refines_cc_statement.
 Proof. exact rebuild_unbox_fixed_refines_cc. Qed.
 
-Theorem rebuild_unbox_fixed_refines_observably_local :
-  rebuild_unbox_fixed_refines_observably_local_statement.
+Theorem rebuild_unbox_fixed_local_never_returns :
+  rebuild_unbox_fixed_local_never_returns_statement.
 Proof.
-  intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
+  intros flag is_local u e T cannot_change dominated to_unbox pdc nr Hslots
     Hfrag Hany Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid Hcalls Hcheck.
   exact (refines_observably_refines _ _ _
            (FlambdaReaperCallingConventionsProofs
             .rebuild_cc_refines_observably_local
               flag is_local u e T cannot_change pdc Hslots Hfrag Hany
               Hrk Hwf Hone Hclosed Hlrs Hexact Hccc Hwid)
-           (rebuild_unbox_fixed_refines_cc flag is_local u e T cannot_change
-              dominated to_unbox pdc Hslots Hfrag Hclosed Hcalls Hcheck)).
+           (rebuild_unbox_fixed_refines_cc_never_returns flag is_local u e T
+              cannot_change dominated to_unbox pdc nr Hslots Hfrag Hclosed
+              Hcalls Hcheck)).
+Qed.
+
+Theorem rebuild_unbox_fixed_refines_observably_local :
+  rebuild_unbox_fixed_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox pdc.
+  exact (rebuild_unbox_fixed_local_never_returns flag is_local u e T
+           cannot_change dominated to_unbox pdc (fun _ => false)).
+Qed.
+
+Theorem rebuild_unbox_fixed_observably_never_returns :
+  rebuild_unbox_fixed_observably_never_returns_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox pdc nr Hslots
+    Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hcalls Hcheck.
+  exact (rebuild_unbox_fixed_local_never_returns flag is_local u e T
+           cannot_change dominated to_unbox pdc nr Hslots Hfrag Hany Hrk Hwf
+           Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hcalls Hcheck).
 Qed.
 
 Theorem rebuild_unbox_fixed_refines_observably :
   rebuild_unbox_fixed_refines_observably_statement.
 Proof.
-  intros flag is_local u e T cannot_change dominated to_unbox pdc Hslots
-    Hproj Hfrag Hany Hrk Hwf Hone Hclosed Hexact Hccc Hwid Hcalls Hcheck.
-  exact (rebuild_unbox_fixed_refines_observably_local flag is_local u e T
-           cannot_change dominated to_unbox pdc Hslots Hfrag Hany Hrk Hwf
-           Hone Hclosed
-           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
-              is_local u e T Hslots Hproj)
-           Hexact Hccc Hwid Hcalls Hcheck).
+  intros flag is_local u e T cannot_change dominated to_unbox pdc.
+  exact (rebuild_unbox_fixed_observably_never_returns flag is_local u e T
+           cannot_change dominated to_unbox pdc (fun _ => false)).
 Qed.
 
 Theorem rebuild_unbox_fixed_tail_refines_observably_local :
@@ -7102,4 +7334,55 @@ Proof.
     try assumption.
   - intros f Hf. discriminate Hf.
   - left. intros f. reflexivity.
+Qed.
+
+Theorem never_returns_example : never_returns_example_statement.
+Proof.
+  assert (Hcalls : calls_unboxing_nr NeverExample.nr NeverExample.facts
+                     NeverExample.tables NeverExample.cannot_change
+                     NeverExample.code_deps [] [] NeverExample.unit_expr
+                   = true)
+    by (vm_compute; reflexivity).
+  assert (Hreads : check_unboxed_reads NeverExample.facts
+                     NeverExample.tables [] []
+                   = true)
+    by (vm_compute; reflexivity).
+  assert (Hfixed :
+    rebuild_unit_unbox_fixed NeverExample.facts NeverExample.tables
+      NeverExample.cannot_change NeverExample.code_deps [] [] true
+      NeverExample.unit_expr
+    = NeverExample.rebuilt)
+    by (vm_compute; reflexivity).
+  assert (Hprem :
+    in_flow_fragment NeverExample.unit_expr = true
+    ∧ any_kind_arguments NeverExample.unit_expr = true
+    ∧ results_kinded [] [] NeverExample.unit_expr = true
+    ∧ well_formed_unit Examples.interface NeverExample.unit_expr = true
+    ∧ exits_one_value Examples.interface NeverExample.unit_expr = true
+    ∧ check_closed Examples.no_local NeverExample.facts NeverExample.tables
+      = true
+    ∧ check_field_used_exact Examples.no_local NeverExample.facts
+        NeverExample.tables
+      = true
+    ∧ check_cc_closed NeverExample.facts NeverExample.tables
+        NeverExample.cannot_change
+      = true
+    ∧ FlambdaReaperCallingConventionsSpec.check_apply_widgets
+        NeverExample.facts NeverExample.tables
+      = true)
+    by (vm_compute; repeat split).
+  destruct Hprem as (Hfrag & Hany & Hrk & Hwf & Hone & Hclosed & Hexact
+                     & Hccc & Hwid).
+  assert (Hslots : is_local_slots_only Examples.no_local)
+    by (intros f Hf; discriminate Hf).
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exact Hcalls | split; [ exact Hreads | ] ].
+  split; [ exact Hfixed | ].
+  rewrite <- Hfixed.
+  apply (rebuild_unbox_fixed_observably_never_returns Auto Examples.no_local
+           Examples.interface NeverExample.unit_expr NeverExample.tables
+           NeverExample.cannot_change [] [] true NeverExample.nr);
+    try assumption.
+  left. intros f. reflexivity.
 Qed.

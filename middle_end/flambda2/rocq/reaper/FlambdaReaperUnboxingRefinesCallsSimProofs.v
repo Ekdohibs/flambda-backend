@@ -81,7 +81,10 @@
    the call is of such code). A handler that the first run binds and the
    second does not, as the second drops the handler of such a call, is
    described by [never_ksh] in the first run alone ([uc_let_cont_never],
-   [conts_rel_never_l]). *)
+   [conts_rel_never_l]). The second run may so drop a handler that binds
+   statics: [code_frame] and [uc_let_cont_rec] ask only that the second
+   run's code and handlers bind statics where the first run's do, the
+   first run being undefined otherwise. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -475,7 +478,8 @@ Definition code_frame (id : code_id) (c c' : code) (cs : code_shape)
   ∧ among (code_my_closure c) (field_variables M) = false
   ∧ code_return_continuation c' = code_return_continuation c
   ∧ code_exn_continuation c' = code_exn_continuation c
-  ∧ binds_statics (code_body c') = binds_statics (code_body c)
+  ∧ (binds_statics (code_body c') = true ->
+     binds_statics (code_body c) = true)
   ∧ ∃ (sh : list pshape) (pk pk' : list (variable * flambda_kind)),
       code_params c = map fst pk ∧ code_params c' = map fst pk'
       ∧ params_rel2 sh pk pk' ∧ Forall2 fits (cs_params cs) sh.
@@ -552,7 +556,8 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
       (handlers handlers' : list (continuation * continuation_handler))
       (body body' : expr) :
     uc_handlers (S ++ K) handlers handlers' S ->
-    handlers_bind_statics handlers = handlers_bind_statics handlers' ->
+    (handlers_bind_statics handlers' = true ->
+     handlers_bind_statics handlers = true) ->
     uc (S ++ K) body body' ->
     uc K (Let_cont_recursive handlers body)
       (Let_cont_recursive handlers' body')
@@ -1126,6 +1131,10 @@ Qed.
 (* ======================================================================== *)
 (* Related environments                                                     *)
 (* ======================================================================== *)
+
+Lemma impl_false (b b' : bool) : (b' = true -> b = true) -> b = false ->
+  b' = false.
+Proof. intros H Hb. destruct b'; [ rewrite (H eq_refl) in Hb | ]; easy. Qed.
 
 Section Envs.
 
@@ -2000,8 +2009,9 @@ Proof.
                       & Hmcf & Hmcv & Hret_eq & Hexn_eq' & Hbs & sh & pk & pk'
                       & Hpk & Hpk' & Hps & Hfits).
   destruct (Hkeepa Hkeeps) as [Hpa1 Hra1].
-  unfold call_code in Hcall |- *. rewrite Hbs.
-  destruct (binds_statics (code_body c)); [ discriminate Hcall | ].
+  unfold call_code in Hcall |- *.
+  destruct (binds_statics (code_body c)) eqn:Hbc; [ discriminate Hcall | ].
+  rewrite (impl_false _ _ Hbs eq_refl).
   rewrite Hpa, Hra', <- Hpa1, <- Hra1.
   destruct (negb
               (kinds_eqb (map kind_of_value vs) (unarize ra)
@@ -2438,8 +2448,9 @@ Proof.
   unfold arguments_for_code. rewrite Htup, Htup'. cbn beta iota.
   unfold shape_of_code_call.
   rewrite Hlenc, Hlen, Nat.eqb_refl, Haa, Hpa, Nat.eqb_refl.
-  cbn beta iota. unfold call_code. rewrite Hbs.
-  destruct (binds_statics (code_body c)); [ exact I | ].
+  cbn beta iota. unfold call_code.
+  destruct (binds_statics (code_body c)) eqn:Hbc; [ exact I | ].
+  rewrite (impl_false _ _ Hbs eq_refl).
   destruct (kinds_eqb (map kind_of_value vs) (unarize (ap_args_arity ap))
             && kinds_per_parameter_eqb
                  (unarize_per_parameter (ap_args_arity ap))
@@ -2916,8 +2927,7 @@ Proof.
     right. left. eexists.
     split.
     { rewrite step_let_cont_recursive.
-      destruct (handlers_bind_statics handlers') eqn:Hb';
-        [ congruence | reflexivity ]. }
+      rewrite (impl_false _ _ Hstat eq_refl). reflexivity. }
     left. exists (S ++ K). split; [ exact Hbody | split; [ exact Hvars | ] ].
     split; [ apply rec_closures_rel2; assumption | ].
     split; [ exact Hst | repeat split ].

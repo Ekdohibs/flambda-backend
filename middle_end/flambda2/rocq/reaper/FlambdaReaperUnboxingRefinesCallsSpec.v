@@ -63,6 +63,14 @@
    the rebuilt unit refines the unit up to observation. It is that
    statement composed with the first.
 
+   [rebuild_unbox_fixed_refines_cc_never_returns_statement],
+   [rebuild_unbox_fixed_observably_never_returns_statement] and
+   [rebuild_unbox_fixed_local_never_returns_statement]: the three
+   statements with calls of code that never returns, for the fragment
+   that takes the code [nr] to never return ([calls_unboxing_nr]), any
+   [nr]. The three statements are these with no such code
+   ([calls_unboxing]).
+
    [rebuild_unbox_fixed_tail_refines_cc_statement],
    [rebuild_unbox_fixed_tail_refines_observably_statement] and
    [rebuild_unbox_fixed_tail_refines_observably_local_statement]: the
@@ -83,8 +91,17 @@
    code that keeps its calling convention, whose result has no use, of
    code that keeps its result, stays in tail position
    ([tail_example_statement]). A call that [never_returns] is made one
-   that never returns (a wrapper [Invalid]); the fragment has no such
-   call ([apply_never_returns]).
+   that never returns (a wrapper [Invalid]): [calls_unboxing] has no such
+   call ([apply_never_returns]); [calls_unboxing_nr nr] has them, of the
+   code [nr].
+
+   [never_returns_example_statement]: a unit whose code 50 calls itself
+   in tail position, so that its result has no source, and which calls
+   it, returning to a handler, with the tables of the least solution: it
+   is not of [calls_unboxing], it is of [calls_unboxing_nr] with the code
+   50, the fix makes both calls return to a handler [Invalid] and drops
+   the handler of the unit, and the rebuilt unit refines the unit up to
+   observation.
 
    [fixed_call_example_statement], [fixed_wrapper_example_statement]: the
    units of FlambdaReaperUnboxingRefinesSpec.CallExample (a call of code
@@ -162,14 +179,19 @@
      exception continuation, which the first rebuild keeps with no mask
      too, is described by the decision of a continuation of fixed arity
      ([code_exn_decision]): kept, with a use or with none; not
-     unboxed.
+     unboxed. The return continuation of code of [nr] is not live in its
+     body ([live_conts]): every [Apply_cont] and arm to it gives a name
+     with no source (both rebuilds drop it), every call that returns to
+     it [apply_never_returns], and no call raises to it.
    - Calls ([call_ok]) of code that is known: direct, of the code they
      are known to call ([code_id_actually_called]), or of known arity, at
      the arities of that code (any number of groups of parameters and of
      results), by a variable that is used and not unboxed, of code whose
      results all have a source ([code_never_returns]), returning to a
      handler of the term or, in tail position, to the return continuation
-     of the code they are in. The exception continuation of a call
+     of the code they are in; or of code of [nr], with no condition on
+     where they return (the fix makes them return to a handler
+     [Invalid]). The exception continuation of a call
      ([exn_cont_ok]) is a way out of the unit, to which the callee raises
      an exception with a use, or the exception continuation of the code
      the call is in, both with no extra argument; or a handler of the
@@ -321,6 +343,10 @@ Variable code_deps : finite_map code_dep.
 Variable unit_code_ids : list code_id.
 Variable codes : finite_map code_metadata.
 Variable unboxed : list (node * unboxed_fields).
+(* The code that the fragment takes to never return: its return
+   continuation is not live in its body ([calls_code]). A call of code
+   whose result has no source is of such code ([call_ok]). *)
+Variable nr : code_id -> bool.
 
 (* The decision of a parameter agrees with what the change of calling
    conventions keeps and with its kind: a parameter unboxed to some
@@ -631,13 +657,55 @@ Definition ind_call_ok (kinds : finite_map flambda_kind)
      | _ => false
      end.
 
+(* The continuations that the rebuild with unboxing may leave free in a
+   term: as [free_continuations_of_expr], but for an [Apply_cont] (or an
+   arm) that gives a name with no source, which both rebuilds drop
+   ([rewrite_apply_cont_u]), and the continuation of a call that
+   [apply_never_returns], which returns to a handler [Invalid]. *)
+Definition live_apply_cont (ac : apply_cont) : list continuation :=
+  if existsb (simple_has_no_source sol) (ac_args ac) then []
+  else apply_cont_continuations ac.
+
+Fixpoint live_conts (e : expr) : list continuation :=
+  match e with
+  | Let _ _ _ body => live_conts body
+  | Let_static bindings body =>
+    flat_map live_conts_binding bindings ++ live_conts body
+  | Let_cont_non_recursive k h body =>
+    live_conts_handler h ++ without [k] (live_conts body)
+  | Let_cont_recursive handlers body =>
+    without (map fst handlers)
+      (flat_map (fun '(_, h) => live_conts_handler h) handlers
+       ++ live_conts body)
+  | Apply ap =>
+    if apply_never_returns F sol code_deps codes ap
+    then [ap_exn_continuation ap]
+    else [ap_continuation ap; ap_exn_continuation ap]
+  | Apply_cont ac => live_apply_cont ac
+  | Switch _ arms => flat_map (fun arm => live_apply_cont (snd arm)) arms
+  | Invalid => []
+  end
+with live_conts_handler (h : continuation_handler) : list continuation :=
+  match h with
+  | Handler _ _ handler => live_conts handler
+  end
+with live_conts_binding (binding : static_binding) : list continuation :=
+  match binding with
+  | Bind_code _ c => live_conts_code c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with live_conts_code (c : code) : list continuation :=
+  match c with
+  | Code _ _ ret exn _ body => without [ret; exn] (live_conts body)
+  end.
+
 Definition call_ok (kinds : finite_map flambda_kind)
     (C : finite_map (list pdesc * bool)) (ap : apply_expr) : bool :=
   match ap_callee ap, code_id_actually_called F sol ap with
   | Var f, Some id =>
     kind_calls (ap_call_kind ap) id && plain_simple unboxed (Var f)
     && is_var_used sol f Value
-    && negb (code_never_returns sol code_deps id)
+    && (negb (code_never_returns sol code_deps id) || nr id)
     && match lookup id codes with
        | Some metadata =>
          match code_pdescs id metadata with
@@ -673,10 +741,11 @@ Definition call_ok (kinds : finite_map flambda_kind)
               | Not_changing_u => kept_args_ok f ap
               | Changing_u _ _ => true
               end
-           && match lookup (ap_continuation ap) C with
-              | Some (kps, true) => forallb2 result_ok kps rds
-              | _ => false
-              end
+           && (code_never_returns sol code_deps id
+               || match lookup (ap_continuation ap) C with
+                  | Some (kps, true) => forallb2 result_ok kps rds
+                  | _ => false
+                  end)
          | None => false
          end
        | None => false
@@ -787,6 +856,7 @@ with calls_code (id : code_id) (c : code) {struct c} : bool :=
             end
        | None => false
        end
+    && (negb (nr id) || negb (among ret (live_conts body)))
   end.
 
 End Fragment.
@@ -803,15 +873,25 @@ Definition check_unboxed_uses (F : facts) (T : tables)
     (f_accessor F).
 
 (* The unit [e] is of the fragment, for the unboxing that the tables give
-   from its graph [F], and the table [cannot_change]. *)
-Definition calls_unboxing (F : facts) (T : tables) (cannot_change : list node)
-    (code_deps : finite_map code_dep) (dominated : list (node * node))
-    (to_unbox : list node) (e : expr) : bool :=
+   from its graph [F], the table [cannot_change], and the code [nr] taken
+   to never return. *)
+Definition calls_unboxing_nr (nr : code_id -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node) (e : expr)
+    : bool :=
   let unboxed := fst (unit_unboxed_fields F T dominated to_unbox e) in
   calls_expr F (solution_of_tables T) (fun n => mem_node n cannot_change)
     code_deps (static_names code_ids_bound e) (bound_code_metadata e) unboxed
-    [] [] e
+    nr [] [] e
   && check_unboxed_uses F T unboxed.
+
+(* With no code taken to never return: every call of code of the unit is
+   of code whose results all have a source. *)
+Definition calls_unboxing (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) : bool :=
+  calls_unboxing_nr (fun _ => false) F T cannot_change code_deps dominated
+    to_unbox e.
 
 (* The rebuild with unboxing in the mode of the fix, with no change of
    representation. *)
@@ -908,6 +988,79 @@ Definition rebuild_unbox_fixed_tail_refines_observably_statement : Prop :=
 
 Definition rebuild_unbox_fixed_tail_refines_observably_local_statement : Prop :=
   rebuild_unbox_fixed_refines_observably_local_statement.
+
+(* The three statements above with calls of code that never returns: the
+   fragment takes the code [nr] to never return ([calls_unboxing_nr]).
+   The statements above are these with no such code. *)
+Definition rebuild_unbox_fixed_refines_cc_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    calls_unboxing_nr nr (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_fixed_observably_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    calls_unboxing_nr nr (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_fixed_local_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    calls_unboxing_nr nr (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
 
 (* ======================================================================== *)
 (* Examples                                                                 *)
@@ -1244,3 +1397,86 @@ Definition escaping_argument_calls_statement : Prop :=
   ∧ calls_unboxing F T cc cd dom (to_unbox false) e = false
   ∧ program_refines_observably e
       (rebuild_unit_unbox_fixed F T cc cd dom (to_unbox true) true e).
+
+(* A call of code that never returns: the code 50 calls itself through its
+   closure in tail position, so that its result has no source; the unit
+   calls it, returning to the handler 20. *)
+Module NeverExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition call (callee : variable) (id : code_id) (args : list simple)
+    (k exn : continuation) : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Direct id; ap_args := args;
+     ap_continuation := k; ap_exn_continuation := exn;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+Definition metadata : code_metadata :=
+  make_code_metadata [Singleton Value] [Singleton Value].
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4 metadata (Apply (call 41 50 [Var 40] 3 4)))]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [30] (make_handler_metadata [Value]) (return_to 1 [int 0]))
+          (Apply (call 60 50 [int 5] 20 2)))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match compute_least no_local facts 40 with
+  | Some T => T
+  | None => empty_tables
+  end.
+
+Definition cannot_change : list node := [c 50].
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The code taken to never return. *)
+Definition nr (id : code_id) : bool := Pos.eqb id 50.
+
+(* A call of 50 returning to the handler [Invalid] 61. *)
+Definition invalid_call (callee : variable) (args : list simple)
+    (exn : continuation) : expr :=
+  Let_cont_non_recursive 61
+    (Handler [61] (make_handler_metadata [Value]) Invalid)
+    (Apply (call callee 50 args 61 exn)).
+
+(* The unit rebuilt in the mode of the fix: both calls return to a handler
+   [Invalid], the handler 20 is dropped, and the argument of the call in
+   50, with no use, is poison. *)
+Definition rebuilt : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [40] 41 3 4 metadata
+          (invalid_call 41 [Const (Poison Value)] 4))]
+    (Let 60 Value (Closure_of_set 70 [(70, 50)] [])
+       (invalid_call 60 [int 5] 2)).
+
+End NeverExample.
+
+Definition never_returns_example_statement : Prop :=
+  code_never_returns (solution_of_tables NeverExample.tables)
+    NeverExample.code_deps 50%positive
+  = true
+  ∧ calls_unboxing NeverExample.facts NeverExample.tables
+      NeverExample.cannot_change NeverExample.code_deps [] []
+      NeverExample.unit_expr
+    = false
+  ∧ calls_unboxing_nr NeverExample.nr NeverExample.facts NeverExample.tables
+      NeverExample.cannot_change NeverExample.code_deps [] []
+      NeverExample.unit_expr
+    = true
+  ∧ check_unboxed_reads NeverExample.facts NeverExample.tables [] [] = true
+  ∧ rebuild_unit_unbox_fixed NeverExample.facts NeverExample.tables
+      NeverExample.cannot_change NeverExample.code_deps [] [] true
+      NeverExample.unit_expr
+    = NeverExample.rebuilt
+  ∧ program_refines_observably NeverExample.unit_expr NeverExample.rebuilt.
