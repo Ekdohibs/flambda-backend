@@ -38,8 +38,10 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaStaticSpec FlambdaStaticProofs FlambdaCompareSpec
   FlambdaTupledSpec FlambdaTupledProofs FlambdaPartialApplicationSpec
   FlambdaPartialApplicationProofs FlambdaStatedScopeSpec
+  FlambdaStatedSymbolsSpec
   FlambdaStatedContextProofs FlambdaNormaliseSpec.
-From OxCamlFlambda2 Require FlambdaHeapProofs FlambdaStatedScopeProofs.
+From OxCamlFlambda2 Require FlambdaHeapProofs FlambdaStatedScopeProofs
+  FlambdaStatedSymbolsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -1759,17 +1761,19 @@ Variable kept : list code_id.
 
 Lemma inline_known_apply_equivalent (S : stated_in_scope)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (ap : apply_expr)
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (ap : apply_expr)
     (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
       (rd : read_record) :
   statics_know known_code statics ->
   statics_know_symbols known_symbols statics ->
+  symbols_hold statics Y ->
   stated_hold statics S vars ->
   equivalent (State (Apply ap) vars conts statics hp rd)
-    (State (inline_known_apply S kept known_code known_symbols ap) vars conts
-       statics hp rd).
+    (State (inline_known_apply S kept known_code known_symbols Y ap) vars
+       conts statics hp rd).
 Proof.
-  intros Hcode Hsymbols Hhold. unfold inline_known_apply.
+  intros Hcode Hsymbols HY Hhold. unfold inline_known_apply.
   destruct (ap_callee ap) as [x | s | const] eqn:Hcallee;
     try apply equivalent_refl.
   destruct (ap_call_kind ap) as [called | | code_ids] eqn:Hkind;
@@ -1781,7 +1785,7 @@ Proof.
   destruct
     (negb (among called kept)
      && (Pos.eqb code called && inlinable_b ap c
-         && call_agrees_stated S ap c))
+         && call_agrees_stated Y S ap c))
     eqn:Hcheck;
     [ | apply equivalent_refl ].
   apply andb_true_iff in Hcheck as [_ Hcheck].
@@ -1803,36 +1807,41 @@ Proof.
     | exact Hreturn_arity | exact Hparams_kinds | ].
   intros vs Hvs.
   exact
-    (FlambdaStatedScopeProofs.are_stated_sound statics S vars (ap_args ap) _
-       vs Hhold Hstated Hvs).
+    (FlambdaStatedSymbolsProofs.are_stated_knowing_sound statics Y S vars
+       (ap_args ap) _ vs HY Hhold Hstated Hvs).
 Qed.
 
 Definition statics_know_both (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (statics : static_env)
-    : Prop :=
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (statics : static_env) : Prop :=
   statics_know known_code statics
-  ∧ statics_know_symbols known_symbols statics.
+  ∧ statics_know_symbols known_symbols statics
+  ∧ symbols_hold statics Y.
 
 Lemma statics_know_both_extend (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id))
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
     (statics statics' : static_env) :
-  statics_know_both known_code known_symbols statics ->
+  statics_know_both known_code known_symbols Y statics ->
   statics_extend statics statics' ->
-  statics_know_both known_code known_symbols statics'.
+  statics_know_both known_code known_symbols Y statics'.
 Proof.
-  intros [Hcode Hsymbols] Hextend. split.
+  intros [Hcode [Hsymbols HY]] Hextend. split; [ | split ].
   - exact (statics_know_extend known_code statics statics' Hcode Hextend).
   - intros s code Hs. destruct (Hsymbols s code Hs) as [slots Hclosure].
     exists slots. revert Hclosure. simpl.
     destruct (lookup s (static_values statics)) as [allocated | ] eqn:Hlookup;
       [ | discriminate ].
     rewrite (proj2 Hextend s allocated Hlookup). auto.
+  - exact
+      (FlambdaStatedSymbolsProofs.symbols_hold_extend statics statics' Y
+         Hextend HY).
 Qed.
 
 Lemma inline_known_apply_binds_statics (S : stated_in_scope)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (ap : apply_expr) :
-  binds_statics (inline_known_apply S kept known_code known_symbols ap)
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (ap : apply_expr) :
+  binds_statics (inline_known_apply S kept known_code known_symbols Y ap)
   = false.
 Proof.
   unfold inline_known_apply.
@@ -1843,7 +1852,7 @@ Proof.
   destruct
     (negb (among called kept)
      && (Pos.eqb code called && inlinable_b ap c
-         && call_agrees_stated S ap c))
+         && call_agrees_stated Y S ap c))
     eqn:Hcheck;
     [ | reflexivity ].
   apply andb_true_iff in Hcheck as [_ Hcheck].
@@ -1855,14 +1864,15 @@ Qed.
 
 Fixpoint inline_known_calls_binds_statics (e : expr) :
   ∀ (S : stated_in_scope) (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)),
-    binds_statics (inline_known_calls_under S kept known_code known_symbols e)
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated),
+    binds_statics
+      (inline_known_calls_under S kept known_code known_symbols Y e)
     = binds_statics e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k h body | handlers body
        | ap | ac | scrutinee arms | ];
-    intros S known_code known_symbols; simpl; try reflexivity.
+    intros S known_code known_symbols Y; simpl; try reflexivity.
   - apply inline_known_calls_binds_statics.
   - rewrite inline_known_calls_binds_statics. f_equal.
     induction bindings as [ | [id c | id | sym const] bindings IH]; simpl;
@@ -1878,14 +1888,14 @@ Qed.
 
 Lemma inline_known_calls_handlers_bind_statics (S : stated_in_scope)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id))
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
     (handlers : list (continuation * continuation_handler)) :
   handlers_bind_statics
     (map
        (fun '(k, h) =>
           (k,
            inline_known_calls_in_handler_under S kept known_code
-             known_symbols h))
+             known_symbols Y h))
        handlers)
   = handlers_bind_statics handlers.
 Proof.
@@ -1899,21 +1909,21 @@ Qed.
    those that know the code and the symbols, and under which what is
    known of the variables around the [Let_cont] holds of them. *)
 Definition statics_know_stated (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (S : stated_in_scope)
-    (vars : env) (statics : static_env) : Prop :=
-  statics_know_both known_code known_symbols statics
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (S : stated_in_scope) (vars : env) (statics : static_env) : Prop :=
+  statics_know_both known_code known_symbols Y statics
   ∧ stated_hold statics S vars.
 
 Lemma statics_know_stated_extend (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (S : stated_in_scope)
-    (vars : env) (statics statics' : static_env) :
-  statics_know_stated known_code known_symbols S vars statics ->
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (S : stated_in_scope) (vars : env) (statics statics' : static_env) :
+  statics_know_stated known_code known_symbols Y S vars statics ->
   statics_extend statics statics' ->
-  statics_know_stated known_code known_symbols S vars statics'.
+  statics_know_stated known_code known_symbols Y S vars statics'.
 Proof.
   intros [Hboth Hhold] Hextend. split.
   - exact
-      (statics_know_both_extend known_code known_symbols _ _ Hboth Hextend).
+      (statics_know_both_extend known_code known_symbols Y _ _ Hboth Hextend).
   - exact
       (FlambdaStatedScopeProofs.stated_hold_extend statics statics' S vars
          Hextend Hhold).
@@ -1921,20 +1931,22 @@ Qed.
 
 Fixpoint inline_known_calls_equivalent_knowing (e : expr) :
   ∀ (S : stated_in_scope) (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
     statics_know known_code statics ->
     statics_know_symbols known_symbols statics ->
+    symbols_hold statics Y ->
     stated_hold statics S vars ->
     equivalent (State e vars conts statics hp rd)
-      (State (inline_known_calls_under S kept known_code known_symbols e)
+      (State (inline_known_calls_under S kept known_code known_symbols Y e)
          vars conts statics hp rd).
 Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body
          | ap | ac | scrutinee arms | ];
-      intros S known_code known_symbols vars conts statics hp rd Hcode
-        Hsymbols Hhold;
+      intros S known_code known_symbols Y vars conts statics hp rd Hcode
+        Hsymbols HY Hhold;
       simpl; try apply equivalent_refl.
     + apply let_equivalent_step_exec;
         [ reflexivity | intros v hp' rd' Hexec _ ].
@@ -1948,13 +1960,15 @@ Proof.
          null, which is what is known in it. *)
       assert (Hrefine :
         let bindings' :=
-          map (inline_known_calls_in_binding kept known_code known_symbols)
+          map
+            (inline_known_calls_in_binding_knowing kept known_code
+               known_symbols Y)
             bindings
         in
-        bindings_refine_stated (statics_know_both known_code known_symbols)
+        bindings_refine_stated (statics_know_both known_code known_symbols Y)
           bindings bindings'
         ∧ bindings_refine_stated
-            (statics_know_both known_code known_symbols) bindings' bindings).
+            (statics_know_both known_code known_symbols Y) bindings' bindings).
       { induction bindings
           as [ | [id [params my_closure ret exn metadata code_body] | id
                  | sym const]
@@ -1968,7 +1982,7 @@ Proof.
               [ apply inline_known_calls_binds_statics
               | symmetry; apply inline_known_calls_binds_statics
               | intros vs callee callee_vars conts' statics' hp' rd'
-                  [Hcode' Hsymbols'] _ Hclosure Hvs Hbind;
+                  [Hcode' [Hsymbols' HY']] _ Hclosure Hvs Hbind;
                 pose proof
                   (FlambdaStatedScopeProofs.code_stated_bound statics' params
                      my_closure metadata vs callee callee_vars Hclosure Hvs
@@ -1986,15 +2000,17 @@ Proof.
           repeat split;
             (apply Forall2_cons; [ apply Binding_same_where | assumption ]). }
       remember
-        (map (inline_known_calls_in_binding kept known_code known_symbols)
+        (map
+           (inline_known_calls_in_binding_knowing kept known_code
+              known_symbols Y)
            bindings)
         as bindings' eqn:Hdef.
       clear Hdef. simpl in Hrefine.
       destruct Hrefine as [Hforwards Hbackwards].
       pose proof
         (related_bindings_equivalent_stated_where
-           (statics_know_both known_code known_symbols)
-           (statics_know_both_extend known_code known_symbols) vars bindings
+           (statics_know_both known_code known_symbols Y)
+           (statics_know_both_extend known_code known_symbols Y) vars bindings
            bindings' statics Hforwards Hbackwards)
         as Hrelated.
       apply let_static_equivalent_step.
@@ -2003,11 +2019,11 @@ Proof.
         (eval_static_bindings vars bindings' statics) as [extended' | ]
           eqn:Hbindings';
         try contradiction; [ | exact I ].
-      assert (Hok : statics_know_both known_code known_symbols statics)
-        by (split; assumption).
-      pose proof (statics_know_both_extend known_code known_symbols _ _
+      assert (Hok : statics_know_both known_code known_symbols Y statics)
+        by (split; [ | split ]; assumption).
+      pose proof (statics_know_both_extend known_code known_symbols Y _ _
         Hok (eval_static_bindings_extend vars _ _ _ Hbindings)) as Hext.
-      pose proof (statics_know_both_extend known_code known_symbols _ _
+      pose proof (statics_know_both_extend known_code known_symbols Y _ _
         Hok (eval_static_bindings_extend vars _ _ _ Hbindings')) as Hext'.
       apply (equivalent_trans _ (State body vars conts extended' hp rd)).
       * exact (Hrelated Hext Hext' body vars conts hp rd).
@@ -2016,6 +2032,12 @@ Proof.
              statics extended' Hcode Hbindings').
         -- exact (eval_static_bindings_know_symbols vars bindings'
              known_symbols statics extended' Hsymbols Hbindings').
+        -- exact
+             (FlambdaStatedSymbolsProofs.statics_stated_bound vars extended'
+                bindings' statics Y Hbindings'
+                (FlambdaStatedSymbolsProofs.symbols_hold_extend statics
+                   extended' Y
+                   (eval_static_bindings_extend vars _ _ _ Hbindings') HY)).
         -- exact
              (FlambdaStatedScopeProofs.stated_hold_extend statics extended' S
                 vars (eval_static_bindings_extend vars _ _ _ Hbindings')
@@ -2027,7 +2049,7 @@ Proof.
               (Handler params metadata
                  (inline_known_calls_under
                     (params_stated params (hm_params_subkinds metadata) S)
-                    kept known_code known_symbols handler))
+                    kept known_code known_symbols Y handler))
               body)
            vars conts statics hp rd)).
       * (* The handler is compared where it is entered: there its
@@ -2035,11 +2057,11 @@ Proof.
            it, around what was known at the [Let_cont]. *)
         apply refines_antisymmetric;
           apply (let_cont_handler_refines_stated_where
-            (statics_know_stated known_code known_symbols S vars)
-            (statics_know_stated_extend known_code known_symbols S vars));
-          try (split; [ split; assumption | assumption ]);
+            (statics_know_stated known_code known_symbols Y S vars)
+            (statics_know_stated_extend known_code known_symbols Y S vars));
+          try (split; [ split; [ | split ]; assumption | assumption ]);
           intros vs handler_vars conts' statics' hp' rd'
-            [[Hcode' Hsymbols'] Hhold'] _ Hvs Hbind;
+            [[Hcode' [Hsymbols' HY']] Hhold'] _ Hvs Hbind;
           apply equivalent_refines; [ | apply equivalent_sym ];
           apply inline_known_calls_equivalent_knowing; try assumption;
           exact
@@ -2054,7 +2076,7 @@ Proof.
                  (fun '(k, h) =>
                     (k,
                      inline_known_calls_in_handler_under S kept known_code
-                       known_symbols h))
+                       known_symbols Y h))
                  handlers)
               body)
            vars conts statics hp rd)).
@@ -2064,14 +2086,14 @@ Proof.
               (fun '(k, h) =>
                  (k,
                   inline_known_calls_in_handler_under S kept known_code
-                    known_symbols h))
+                    known_symbols Y h))
               handlers
           in
           handlers_refine_stated
-            (statics_know_stated known_code known_symbols S vars) vars
+            (statics_know_stated known_code known_symbols Y S vars) vars
             handlers handlers'
           ∧ handlers_refine_stated
-              (statics_know_stated known_code known_symbols S vars) vars
+              (statics_know_stated known_code known_symbols Y S vars) vars
               handlers' handlers).
         { induction handlers
             as [ | [k [params metadata handler]] handlers IH];
@@ -2081,7 +2103,7 @@ Proof.
             repeat split; (apply Forall2_cons; [ | assumption ]);
               (split; [ reflexivity | ]); apply Handler_related;
               intros vs handler_vars conts' statics' hp' rd'
-                [[Hcode' Hsymbols'] Hhold'] _ Hvs Hbind;
+                [[Hcode' [Hsymbols' HY']] Hhold'] _ Hvs Hbind;
               pose proof
                 (FlambdaStatedScopeProofs.params_stated_bound statics' params
                    vs _ S vars handler_vars Hhold' Hvs Hbind)
@@ -2093,9 +2115,10 @@ Proof.
         destruct Hhandlers as [Hforwards Hbackwards].
         apply refines_antisymmetric;
           apply (let_cont_recursive_handlers_refine_stated_where
-            (statics_know_stated known_code known_symbols S vars)
-            (statics_know_stated_extend known_code known_symbols S vars));
-          try assumption; try (split; [ split; assumption | assumption ]);
+            (statics_know_stated known_code known_symbols Y S vars)
+            (statics_know_stated_extend known_code known_symbols Y S vars));
+          try assumption;
+          try (split; [ split; [ | split ]; assumption | assumption ]);
           first
             [ apply inline_known_calls_handlers_bind_statics
             | symmetry; apply inline_known_calls_handlers_bind_statics ].
@@ -2113,6 +2136,7 @@ Proof.
   apply inline_known_calls_equivalent_knowing.
   - intros id c Hlookup. discriminate Hlookup.
   - intros s code Hlookup. discriminate Hlookup.
+  - apply FlambdaStatedSymbolsProofs.symbols_hold_nil.
   - apply FlambdaStatedScopeProofs.stated_hold_nil.
 Qed.
 
