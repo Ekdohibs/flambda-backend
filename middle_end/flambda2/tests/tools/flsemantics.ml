@@ -1669,6 +1669,17 @@ let convert_params_subkinds (params : Bound_parameters.t) =
   in
   if Kinds.subkinds_say_nothing subkinds then [] else subkinds
 
+(* What code states of its results, one to a result of its arity with the
+   unboxed products taken apart; or none where nothing is stated of any of them.
+   The machine tests no result against it. A comparison of the validation reads
+   it: of two pieces of code that it pairs, the one of the term made from the
+   term after may state of a result no more than the one of the term made from
+   the term before does
+   (FlambdaCompareOrderSpec.code_metadata_says_at_least). *)
+let convert_result_subkinds (arity : _ Flambda_arity.t) =
+  let subkinds = List.map convert_subkind (Flambda_arity.unarize arity) in
+  if Kinds.subkinds_say_nothing subkinds then [] else subkinds
+
 let convert_bound_var (bound_var : Bound_var.t) =
   let var = Bound_var.var bound_var in
   Variables.find var, convert_kind (Variable.kind var)
@@ -2473,7 +2484,9 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
            in
            let metadata =
              { metadata with
-               cm_params_subkinds = convert_params_subkinds params
+               cm_params_subkinds = convert_params_subkinds params;
+               cm_result_subkinds =
+                 convert_result_subkinds (Code0.result_arity code)
              }
            in
            if Code0.stub code

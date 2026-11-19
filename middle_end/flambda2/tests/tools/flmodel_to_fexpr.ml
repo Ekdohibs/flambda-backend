@@ -57,10 +57,10 @@
    continuation sort but that of an exception handler, no inlining attribute,
    size 0 for code, code that is not recursive, allocation on the heap, the mode
    of the heap for an assignment. Subkinds are written where parameters state
-   them and nowhere else: what code states of its results is not written, and
-   the conversion gives none. Code gets a region variable and a depth variable
-   of its own, as the syntax asks for them; a call or an allocation in code
-   names that region.
+   them, and where code states them of its results, in the arity of its results;
+   and nowhere else. Code gets a region variable and a depth variable of its
+   own, as the syntax asks for them; a call or an allocation in code names that
+   region.
 
    What is covered: the terms that the conversion makes today. A term that is
    outside them, or that fexpr has no way to write, raises [Not_printable] with
@@ -74,20 +74,20 @@
    set's symbols, of which there is at least one; - a closure bound at another
    kind than [Value]; - code whose parameters are not as many as the kinds of
    its arity; - a handler whose parameters are not as many as its kinds; - a
-   parameter that states something beside a kind that is not the kind of values;
-   - a variant one of whose constructors has its fields stated and has none,
-   which the text cannot say (after [of] the parser asks for a field, or for the
-   word [any]); - a static boxed number whose contents are not a number that can
-   be boxed, or are a variable whose binder is not in sight (the model does not
-   say which number a boxed number holds; it is read off the kind of the
-   variable); - a value slot of kind [Region] or [Rec_info]; - a direct call of
-   tupled code: the model's gives the code a tuple, and fexpr's gives it its
-   arguments as the code takes them; - a call of known arity that lists code
-   ids, which the text cannot say. The two indirect kinds are written as the
-   compiler's printer writes them: a call of known arity with its arities, and a
-   call of unknown arity with none, or with the word [unknown_arity] and its
-   arities where they are not one value for each argument and one value
-   returned.
+   parameter, or a result of code, that states something beside a kind that is
+   not the kind of values; - a variant one of whose constructors has its fields
+   stated and has none, which the text cannot say (after [of] the parser asks
+   for a field, or for the word [any]); - a static boxed number whose contents
+   are not a number that can be boxed, or are a variable whose binder is not in
+   sight (the model does not say which number a boxed number holds; it is read
+   off the kind of the variable); - a value slot of kind [Region] or [Rec_info];
+   - a direct call of tupled code: the model's gives the code a tuple, and
+   fexpr's gives it its arguments as the code takes them; - a call of known
+   arity that lists code ids, which the text cannot say. The two indirect kinds
+   are written as the compiler's printer writes them: a call of known arity with
+   its arities, and a call of unknown arity with none, or with the word
+   [unknown_arity] and its arities where they are not one value for each
+   argument and one value returned.
 
    The arity of the arguments of a direct call is written, and the form of
    [Is_int], with the word [generic] for the test that works on any value; the
@@ -725,6 +725,42 @@ let kinded_parameters params kinds subkinds : F.kinded_parameter list =
   in
   go params kinds subkinds
 
+(* The arity of the results of code with what the code states of them. The list
+   of what is stated is of the results with the unboxed products taken apart, in
+   order; where it has no entry for a result, nothing is stated of it. *)
+let arity_with_subkinds (arity : Model.arity)
+    (subkinds : Kinds.param_subkind list) : F.arity =
+  let rec component (c : Model.arity_component) subkinds :
+      F.kind_with_subkind * Kinds.param_subkind list =
+    match c with
+    | Singleton k ->
+      let (nullable, sk), subkinds =
+        match subkinds with
+        | [] -> Kinds.any_value, []
+        | ps :: subkinds -> ps, subkinds
+      in
+      let kind : F.kind_with_subkind =
+        match (k : Kinds.flambda_kind) with
+        | Value -> value_of_subkind nullable sk
+        | Naked_number _ | Region | Rec_info ->
+          if Kinds.says_nothing nullable sk
+          then kind k
+          else not_printable "a subkind beside a kind that is not a value kind"
+      in
+      kind, subkinds
+    | Unboxed_product cs ->
+      let cs, subkinds = components cs subkinds in
+      Unboxed_product cs, subkinds
+  and components cs subkinds =
+    match cs with
+    | [] -> [], subkinds
+    | c :: cs ->
+      let c, subkinds = component c subkinds in
+      let cs, subkinds = components cs subkinds in
+      c :: cs, subkinds
+  in
+  fst (components arity subkinds)
+
 let bind_parameters env params kinds = List.fold_left2 bind env params kinds
 
 let value_slots env (slots : (Model.value_slot * Model.simple) list) :
@@ -1185,7 +1221,10 @@ and code env id (Model.Code (params, my_closure, ret, exn, metadata, body)) :
   { id = code_id id;
     newer_version_of = None;
     param_arity = Some (arity metadata.cm_params_arity);
-    ret_arity = Some (arity metadata.cm_result_arity);
+    ret_arity =
+      Some
+        (arity_with_subkinds metadata.cm_result_arity
+           metadata.cm_result_subkinds);
     recursive = Nonrecursive;
     inline = None;
     params_and_body =
