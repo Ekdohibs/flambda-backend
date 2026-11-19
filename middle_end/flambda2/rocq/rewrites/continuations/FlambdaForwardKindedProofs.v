@@ -30,28 +30,33 @@
 
    The relation between a term and its result is that of
    FlambdaForwardProofs.v, taken strict, with the kinds that the pass
-   keeps: an application that goes on has arguments that are known to
-   have the kinds of the parameters, and its entry is for a handler
-   that gives as many kinds as it has parameters. The first run then
-   takes its step where the application is: the arguments have values
-   of those kinds (FlambdaNormaliseProofs.kinds_hold,
-   [have_kinds_sound]), the test of kinds passes
-   and the parameters are bound. So the first run is undefined only
-   where the second is, the rounds of FlambdaForwardProofs.v are read
-   both ways ([fwd_round], [fwd_round_back]), and each term refines
-   the other. That holds under any variables that have the kinds the
-   pass starts from ([forward_kinded_under_equivalent_bound]).
+   keeps and what it knows of the variables in scope: an application
+   that goes on has arguments that are known to have the kinds of the
+   parameters and to be of what the handler states of them, and its
+   entry is for a handler that gives as many kinds as it has
+   parameters. The first run then takes its step where the
+   application is: the arguments have values of those kinds
+   (FlambdaNormaliseProofs.kinds_hold, [have_kinds_sound]) that are
+   of what is stated (FlambdaStatedScopeProofs.are_stated_sound,
+   [are_stated_args]), the two tests of the machine pass and the
+   parameters are bound. So the first run is undefined only where the
+   second is, the rounds of FlambdaForwardProofs.v are read both ways
+   ([fwd_round], [fwd_round_back]), and each term refines the other.
+   That holds under any variables that have the kinds the pass starts
+   from and are of what it starts from knowing, under the static
+   environment of the state ([forward_kinded_under_equivalent_held]).
 
    In the body of code the pass starts from the kinds of what a call
-   binds, and a call binds the variables of
-   FlambdaCodeLetsSpec.code_in_scope so
-   (FlambdaCodeLetsProofs.code_in_scope_hold). So the new body
-   refines the old one where it runs, and the old one the new, and a
-   group of static bindings may have the bodies of its code replaced,
-   one piece of code at a time
-   (FlambdaContextProofs.let_static_code_refines_where), as in
-   FlambdaCodeLetsProofs.v. The rest is the induction of
-   FlambdaNormaliseProofs.rewrite_code_equivalent. *)
+   binds and from what the code states of it, and where the body is
+   entered the variables are so
+   (FlambdaCodeLetsProofs.code_in_scope_hold,
+   FlambdaStatedScopeProofs.code_stated_bound): the machine enters
+   code by a closure, with values that it has tested. So the new body
+   refines the old one where it is entered, and the old one the new,
+   and a group of static bindings may have the bodies of its code
+   replaced, one piece of code at a time
+   (FlambdaContextProofs.let_static_code_refines_stated). The rest is
+   the induction of FlambdaNormaliseProofs.rewrite_code_equivalent. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -62,16 +67,19 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaParamAliasesSpec FlambdaParamAliasesProofs FlambdaLoopLetsSpec
   FlambdaLoopLetsProofs FlambdaCodeLetsSpec FlambdaCodeLetsProofs
   FlambdaForwardSpec FlambdaForwardKindedSpec FlambdaForwardProofs.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaValueSpec
+  FlambdaSubkindSpec FlambdaStatedScopeSpec FlambdaStatedScopeProofs.
 Import ListNotations.
 
 Fixpoint forward_kinded_binds_statics (e : expr) :
-  ∀ (G : kinds_in_scope) (K : cont_kinds) (F : forwards),
-    binds_statics (forward_kinded_under G K F e) = binds_statics e.
+  ∀ (G : kinds_in_scope) (T : stated_in_scope) (K : cont_kinds)
+    (F : forwards),
+    binds_statics (forward_kinded_under G T K F e) = binds_statics e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros G K F; simpl; try reflexivity.
+    intros G T K F; simpl; try reflexivity.
   - apply forward_kinded_binds_statics.
   - rewrite forward_kinded_binds_statics. reflexivity.
   - rewrite !forward_kinded_binds_statics. reflexivity.
@@ -105,6 +113,15 @@ Proof.
     split; reflexivity.
 Qed.
 
+(* Arguments known to be of what is stated have values that are. *)
+Lemma are_stated_args (T : stated_in_scope) (args : list simple)
+    (sks : list param_subkind) :
+  are_stated T args sks = true -> args_are_stated T args sks.
+Proof.
+  intros Hstated statics vars vs Hhold Hvs.
+  exact (are_stated_sound statics T vars args sks vs Hhold Hstated Hvs).
+Qed.
+
 (* The entry that the pass makes is a strict one for the handler, which
    the body leaves alone. *)
 Lemma kinded_entry_fits (k : continuation) (params : list variable)
@@ -119,14 +136,9 @@ Lemma kinded_entry_fits (k : continuation) (params : list variable)
       binds_cont k0 body = false).
 Proof.
   unfold kinded_entry.
-  destruct
-    (Nat.eqb (length params) (length (hm_params_kinds metadata))
-     && subkinds_say_nothing (hm_params_subkinds metadata))
-    eqn:Hentry.
-  - apply andb_true_iff in Hentry as [Hlength Hnothing].
-    apply forwarding_fits. intros _.
-    split; [ apply Nat.eqb_eq, Hlength | ].
-    intros statics vs _. apply values_of_subkinds_nothing, Hnothing.
+  destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)))
+    eqn:Hlength.
+  - apply forwarding_fits. intros _. apply Nat.eqb_eq, Hlength.
   - split; [ exact I | ].
     split; [ intros x (params0 & target & Hsome & _)
            | intros k0 (params0 & target & Hsome & _) ];
@@ -134,41 +146,47 @@ Proof.
 Qed.
 
 (* An application that the pass forwards has arguments of the kinds of
-   the parameters. *)
-Lemma goes_forward_kinded (G : kinds_in_scope) (K : cont_kinds) (F : forwards)
-    (ac : apply_cont) :
-  goes true G K F ac (forward_kinded_apply_cont G K F ac).
+   the parameters, which are of what the handler states of them. *)
+Lemma goes_forward_kinded (G : kinds_in_scope) (T : stated_in_scope)
+    (K : cont_kinds) (F : forwards) (ac : apply_cont) :
+  goes true G T K F ac (forward_kinded_apply_cont G T K F ac).
 Proof.
   unfold forward_kinded_apply_cont.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hk;
     [ | apply Goes_same ].
-  destruct (lookup (ac_continuation ac) K) as [kinds | ] eqn:Hkinds;
+  destruct (lookup (ac_continuation ac) K) as [[kinds sks] | ] eqn:Hkinds;
     [ | apply Goes_same ].
   destruct
     (Nat.eqb (length (ac_args ac)) (length params) && no_trap_action target
-     && have_kinds G (ac_args ac) kinds)
+     && have_kinds G (ac_args ac) kinds
+     && are_stated T (ac_args ac) sks)
     eqn:Hcheck; [ | apply Goes_same ].
+  apply andb_true_iff in Hcheck as [Hcheck Hstated].
   apply andb_true_iff in Hcheck as [Hcheck Hhave].
   apply andb_true_iff in Hcheck as [Hlength _].
   apply Nat.eqb_eq in Hlength.
   apply Goes_keeping; [ exact Hk | exact Hlength | ].
-  intros _. exists kinds.
-  split; [ exact Hkinds | exact (have_kinds_sound G _ kinds Hhave) ].
+  intros _. exists kinds, sks.
+  split; [ exact Hkinds | ].
+  split;
+    [ exact (have_kinds_sound G _ kinds Hhave)
+    | exact (are_stated_args T _ sks Hstated) ].
 Qed.
 
 (* The same of an arm. Its case more is an application of no arguments
    to a continuation of no parameters whose handler gives no kinds:
    there is nothing to know of kinds, and it goes on with the trap
    action of the handler. *)
-Lemma goes_forward_kinded_arm (G : kinds_in_scope) (K : cont_kinds)
-    (F : forwards) (ac : apply_cont) :
-  goes true G K F ac (forward_kinded_arm G K F ac).
+Lemma goes_forward_kinded_arm (G : kinds_in_scope) (T : stated_in_scope)
+    (K : cont_kinds) (F : forwards) (ac : apply_cont) :
+  goes true G T K F ac (forward_kinded_arm G T K F ac).
 Proof.
   unfold forward_kinded_arm.
   destruct (forward_of F (ac_continuation ac))
     as [[[ | p params] target] | ] eqn:Hk;
     try apply goes_forward_kinded.
-  destruct (lookup (ac_continuation ac) K) as [[ | kind kinds] | ] eqn:Hkinds;
+  destruct (lookup (ac_continuation ac) K) as [[[ | kind kinds] sks] | ]
+    eqn:Hkinds;
     try apply goes_forward_kinded.
   destruct (ac_args ac) as [ | arg args] eqn:Hargs;
     try apply goes_forward_kinded.
@@ -176,18 +194,21 @@ Proof.
   replace (forwarded [] [] target) with (forwarded [] (ac_args ac) target)
     by (rewrite Hargs; reflexivity).
   apply Goes_on; [ exact Hk | rewrite Hargs; reflexivity | ].
-  intros _. exists []. split; [ exact Hkinds | ].
-  rewrite Hargs. exact (have_kinds_sound G [] [] eq_refl).
+  intros _. exists [], sks. split; [ exact Hkinds | ].
+  rewrite Hargs. split; [ exact (have_kinds_sound G [] [] eq_refl) | ].
+  intros statics vars vs _ Hvs. injection Hvs as <-.
+  destruct sks; reflexivity.
 Qed.
 
 Fixpoint forward_kinded_fwd (e : expr) :
-  ∀ (G : kinds_in_scope) (K : cont_kinds) (F : forwards),
-    safe F e -> fwd true G K F e (forward_kinded_under G K F e).
+  ∀ (G : kinds_in_scope) (T : stated_in_scope) (K : cont_kinds)
+    (F : forwards),
+    safe F e -> fwd true G T K F e (forward_kinded_under G T K F e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros G K F Hsafe; simpl.
+    intros G T K F Hsafe; simpl.
   - destruct (safe_let F x kind d body Hsafe) as [Hbody Hx].
     apply Fwd_let; [ exact Hx | apply forward_kinded_fwd, Hbody ].
   - apply Fwd_let_static, forward_kinded_fwd. exact Hsafe.
@@ -195,11 +216,13 @@ Proof.
       as (Hhandler & Hbody & Hparams & Hk).
     set (handler' :=
       forward_kinded_under
-        (params_in_scope params (hm_params_kinds metadata) G) K F handler).
+        (params_in_scope params (hm_params_kinds metadata) G)
+        (params_stated params (hm_params_subkinds metadata) T) K F handler).
     destruct (kinded_entry_fits k params metadata handler' body)
       as (Hfits & Hvars & Hconts).
-    apply (Fwd_let_cont true G K F k params metadata metadata handler handler'
-      (kinded_entry k params metadata handler' body));
+    apply
+      (Fwd_let_cont true G T K F k params metadata metadata handler handler'
+         (kinded_entry k params metadata handler' body));
       [ apply forward_kinded_fwd, Hhandler | reflexivity
       | exact Hparams | exact Hk | exact Hfits | ].
     apply forward_kinded_fwd, safe_cons; assumption.
@@ -246,18 +269,26 @@ Proof.
   - apply Fwd_invalid.
 Qed.
 
-(* The pass that starts from some kinds is an equivalence under the
-   variables that have them. *)
-Lemma forward_kinded_under_equivalent_bound (G : kinds_in_scope) (e : expr) :
-  expr_equivalent_bound G e (forward_kinded_under G [] [] e).
+(* The pass that starts from some kinds and from what is known of some
+   variables is an equivalence under the variables that have those
+   kinds and are of what is known, under the static environment of
+   the state. *)
+Lemma forward_kinded_under_equivalent_held (G : kinds_in_scope)
+    (T : stated_in_scope) (e : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  kinds_hold G vars ->
+  stated_hold statics T vars ->
+  equivalent (State e vars conts statics hp rd)
+    (State (forward_kinded_under G T [] [] e) vars conts statics hp rd).
 Proof.
-  intros vars conts statics hp rd Hhold.
+  intros Hhold Hstated.
   assert (Hrel :
     state_fwd true (State e vars conts statics hp rd)
-      (State (forward_kinded_under G [] [] e) vars conts statics hp rd)).
-  { apply (State_fwd true G [] []);
+      (State (forward_kinded_under G T [] [] e) vars conts statics hp rd)).
+  { apply (State_fwd true G T [] []);
       [ apply forward_kinded_fwd, safe_none; reflexivity
-      | intros k; apply Same_fwd | apply held_nil | exact Hhold ]. }
+      | intros k; apply Same_fwd | apply held_nil | exact Hhold
+      | exact Hstated ]. }
   apply refines_antisymmetric.
   - exact (rounds_refines (state_fwd true) (fwd_round true) _ _ Hrel).
   - exact
@@ -269,8 +300,8 @@ Theorem forward_kinded_equivalent : forward_kinded_equivalent_statement.
 Proof.
   intros e vars conts statics hp rd.
   exact
-    (forward_kinded_under_equivalent_bound [] e vars conts statics hp
-       rd_ (kinds_hold_nil vars)).
+    (forward_kinded_under_equivalent_held [] [] e vars conts statics hp rd
+       (kinds_hold_nil vars) (stated_hold_nil statics vars)).
 Qed.
 
 (* ======================================================================== *)
@@ -300,22 +331,48 @@ Proof.
 Qed.
 
 (* The body of code and the body as rewritten refine each other where
-   the code runs. *)
+   the code is entered: by a closure, with values of the kinds of its
+   arity that are of what it states of its parameters. *)
 Lemma code_body_forwarded_refines (params : list variable)
     (my_closure : variable) (metadata : code_metadata) (body : expr) :
-  code_refines_where always params my_closure metadata body
-    (forward_kinded_under (code_in_scope params my_closure metadata) [] []
-       body)
-  ∧ code_refines_where always params my_closure metadata
-      (forward_kinded_under (code_in_scope params my_closure metadata) [] []
-         body)
+  code_refines_stated params my_closure metadata body
+    (forward_kinded_under (code_in_scope params my_closure metadata)
+       (code_stated params my_closure metadata) [] [] body)
+  ∧ code_refines_stated params my_closure metadata
+      (forward_kinded_under (code_in_scope params my_closure metadata)
+         (code_stated params my_closure metadata) [] [] body)
       body.
 Proof.
-  split; intros vs callee callee_vars conts statics hp rd _ Hkinds Hvalue Hbind;
-    apply equivalent_refines; [ | apply equivalent_sym ];
-    apply forward_kinded_under_equivalent_bound,
-      (code_in_scope_hold params my_closure metadata vs callee callee_vars
-         Hkinds Hvalue Hbind).
+  assert (Hboth :
+    ∀ (vs : list value) (callee : value) (callee_vars : env)
+      (conts : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record),
+      map kind_of_value vs = unarize (cm_params_arity metadata) ->
+      closure_of statics callee <> None ->
+      values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+      bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+      equivalent (State body callee_vars conts statics hp rd)
+        (State
+           (forward_kinded_under (code_in_scope params my_closure metadata)
+              (code_stated params my_closure metadata) [] [] body)
+           callee_vars conts statics hp rd)).
+  { intros vs callee callee_vars conts statics hp rd Hkinds Hclosure Hstated
+      Hbind.
+    apply forward_kinded_under_equivalent_held.
+    - destruct (closure_of statics callee) as [[id slots] | ] eqn:Hof;
+        [ | contradiction ].
+      exact
+        (code_in_scope_hold params my_closure metadata vs callee callee_vars
+           Hkinds (closure_of_kind _ _ _ _ Hof) Hbind).
+    - exact
+        (code_stated_bound statics params my_closure metadata vs callee
+           callee_vars Hclosure Hstated Hbind). }
+  split; intros vs callee callee_vars conts statics hp rd Hkinds Hclosure
+    Hstated Hbind;
+    [ apply equivalent_refines | apply equivalent_refines, equivalent_sym ];
+    exact
+      (Hboth vs callee callee_vars conts statics hp rd Hkinds Hclosure Hstated
+         Hbind).
 Qed.
 
 (* A group of static bindings with the bodies of its code rewritten, one
@@ -342,10 +399,9 @@ Proof.
     destruct
       (code_body_forwarded_refines params my_closure metadata code_body)
       as [Hthere Hback].
-    apply refines_antisymmetric;
-      apply (let_static_code_refines_where always always_extend);
+    apply refines_antisymmetric; apply let_static_code_refines_stated;
       first
-        [ exact I | exact Hthere | exact Hback
+        [ exact Hthere | exact Hback
         | apply forward_kinded_binds_statics
         | symmetry; apply forward_kinded_binds_statics ].
   - specialize (IH (done ++ [forward_kinded_in_binding binding])).

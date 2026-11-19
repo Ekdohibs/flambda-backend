@@ -3097,15 +3097,17 @@ Qed.
 #[local] Ltac eqv_database ::= eqv_database_by_autorewrite.
 
 (* The same where the arguments are known to have the kinds of the
-   parameters (FlambdaForwardKindedSpec.v). The kinds of the variables
-   in scope are renamed with the variables; those that the handlers
-   of the continuations in scope give their parameters are kept by
-   continuation, and a renaming acts on the continuations. *)
+   parameters and to be of what is stated of them
+   (FlambdaForwardKindedSpec.v). The kinds of the variables in scope,
+   and what is known of them, are renamed with the variables; the
+   kinds that the handlers of the continuations in scope give their
+   parameters, and what they state of them, are kept by continuation,
+   and a renaming acts on the continuations. *)
 Definition rename_cont_kinds (r : renaming) (K : cont_kinds) : cont_kinds :=
   map (fun entry => (rename_continuation r (fst entry), snd entry)) K.
 
-(* The tactic is told how the three states of the pass are renamed. It
-   is given the laws of what the pass does at an application of a
+(* The tactic is told how the auxiliary inputs of the pass are renamed.
+   It is given the laws of what the pass does at an application of a
    continuation and at an arm, and of the entry kept of a continuation,
    which are by hand for the time of compiling. *)
 Section Forward_kinded.
@@ -3115,9 +3117,19 @@ Section Forward_kinded.
   rename_cont_kinds.
 #[local] Instance forwards_renaming : Renaming_of forwards :=
   rename_forwards.
+#[local] Instance forward_stated_renaming : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
 
 #[local] Hint Rewrite kind_of_simple_in_scope_equivariant
   params_in_scope_equivariant : equivariance.
+
+(* What is known of the variables in scope is renamed by
+   FlambdaStatedScopeNamesProofs.rename_stated_in_scope, whose laws are
+   given to the tactic, with the law that keeps a renamed pair before
+   a renamed scope as the renaming of the longer scope. *)
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_of_named_equivariant are_stated_equivariant
+  params_stated_equivariant stated_in_scope_cons_renamed : equivariance.
 
 (* One pass over the goal for the laws of the database: enough here. *)
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
@@ -3142,17 +3154,17 @@ Lemma kinded_entry_equivariant (r : renaming) (k : continuation)
   = rename_forward_entry r (kinded_entry k params metadata handler body).
 Proof.
   unfold kinded_entry. rewrite length_map.
-  destruct
-    (Nat.eqb (length params) (length (hm_params_kinds metadata))
-     && subkinds_say_nothing (hm_params_subkinds metadata));
+  destruct (Nat.eqb (length params) (length (hm_params_kinds metadata)));
     [ apply forwarding_equivariant | reflexivity ].
 Qed.
 
 Lemma forward_kinded_apply_cont_equivariant (r : renaming)
-    (G : kinds_in_scope) (K : cont_kinds) (F : forwards) (ac : apply_cont) :
+    (G : kinds_in_scope) (S : stated_in_scope) (K : cont_kinds)
+    (F : forwards) (ac : apply_cont) :
   forward_kinded_apply_cont (rename_kinds_in_scope r G)
-    (rename_cont_kinds r K) (rename_forwards r F) (rename_apply_cont r ac)
-  = rename_apply_cont r (forward_kinded_apply_cont G K F ac).
+    (rename_stated_in_scope r S) (rename_cont_kinds r K)
+    (rename_forwards r F) (rename_apply_cont r ac)
+  = rename_apply_cont r (forward_kinded_apply_cont G S K F ac).
 Proof.
   unfold forward_kinded_apply_cont.
   change (ac_continuation (rename_apply_cont r ac))
@@ -3161,13 +3173,16 @@ Proof.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ];
     [ | reflexivity ].
   cbn [rename_forward_entry option_map fst snd].
-  destruct (lookup (ac_continuation ac) K) as [kinds | ]; [ | reflexivity ].
+  destruct (lookup (ac_continuation ac) K) as [[kinds sks] | ];
+    [ | reflexivity ].
   change (ac_args (rename_apply_cont r ac))
     with (map (rename_simple r) (ac_args ac)).
-  rewrite !length_map, !no_trap_action_renamed, have_kinds_equivariant.
+  rewrite !length_map, !no_trap_action_renamed, have_kinds_equivariant,
+    are_stated_equivariant.
   destruct
     (Nat.eqb (length (ac_args ac)) (length params) && no_trap_action target
-     && have_kinds G (ac_args ac) kinds);
+     && have_kinds G (ac_args ac) kinds
+     && are_stated S (ac_args ac) sks);
     [ | reflexivity ].
   change (ac_trap_action (rename_apply_cont r ac))
     with (option_map (rename_trap_action r) (ac_trap_action ac)).
@@ -3175,12 +3190,12 @@ Proof.
 Qed.
 
 Lemma forward_kinded_arm_equivariant (r : renaming) (G : kinds_in_scope)
-    (K : cont_kinds) (F : forwards) (ac : apply_cont) :
-  forward_kinded_arm (rename_kinds_in_scope r G) (rename_cont_kinds r K)
-    (rename_forwards r F) (rename_apply_cont r ac)
-  = rename_apply_cont r (forward_kinded_arm G K F ac).
+    (S : stated_in_scope) (K : cont_kinds) (F : forwards) (ac : apply_cont) :
+  forward_kinded_arm (rename_kinds_in_scope r G) (rename_stated_in_scope r S)
+    (rename_cont_kinds r K) (rename_forwards r F) (rename_apply_cont r ac)
+  = rename_apply_cont r (forward_kinded_arm G S K F ac).
 Proof.
-  pose proof (forward_kinded_apply_cont_equivariant r G K F ac) as Hgeneral.
+  pose proof (forward_kinded_apply_cont_equivariant r G S K F ac) as Hgeneral.
   unfold forward_kinded_arm.
   change (ac_continuation (rename_apply_cont r ac))
     with (rename_continuation r (ac_continuation ac)).
@@ -3190,13 +3205,13 @@ Proof.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hof;
     cbn [rename_forward_entry option_map fst snd].
   - destruct params as [ | p params],
-      (lookup (ac_continuation ac) K) as [[ | kind kinds] | ],
+      (lookup (ac_continuation ac) K) as [[[ | kind kinds] sks] | ],
       (ac_args ac) as [ | arg args] eqn:Hargs;
       cbn [map]; try exact Hgeneral.
     rewrite no_trap_action_renamed.
     destruct (no_trap_action ac);
       [ exact (forwarded_equivariant r [] [] target) | exact Hgeneral ].
-  - destruct (lookup (ac_continuation ac) K) as [[ | kind kinds] | ],
+  - destruct (lookup (ac_continuation ac) K) as [[[ | kind kinds] sks] | ],
       (ac_args ac);
       exact Hgeneral.
 Qed.
@@ -3209,21 +3224,23 @@ Qed.
 #[local] Arguments forward_kinded_arm : simpl never.
 
 Lemma forward_kinded_under_equivariant (r : renaming) (e : expr) :
-  ∀ (G : kinds_in_scope) (K : cont_kinds) (F : forwards),
-    forward_kinded_under (rename_kinds_in_scope r G) (rename_cont_kinds r K)
+  ∀ (G : kinds_in_scope) (S : stated_in_scope) (K : cont_kinds)
+    (F : forwards),
+    forward_kinded_under (rename_kinds_in_scope r G)
+      (rename_stated_in_scope r S) (rename_cont_kinds r K)
       (rename_forwards r F) (rename_expr r e)
-    = rename_expr r (forward_kinded_under G K F e).
+    = rename_expr r (forward_kinded_under G S K F e).
 Proof. equivariance. Qed.
 
 End Forward_kinded.
 
 Lemma forward_kinded_equivariant : rewrite_equivariant forward_kinded.
 Proof.
-  intros r e. exact (forward_kinded_under_equivariant r e [] [] []).
+  intros r e. exact (forward_kinded_under_equivariant r e [] [] [] []).
 Qed.
 
 (* The same in the bodies of code, with the kinds of what a call
-   binds. *)
+   binds and what the code states of it. *)
 Lemma forward_kinded_in_binding_equivariant (r : renaming)
     (binding : static_binding) :
   forward_kinded_in_binding (rename_static_binding r binding)
@@ -3236,19 +3253,19 @@ Proof.
   unfold code_in_scope.
   change [(rename_variable r my_closure, Value)]
     with (rename_kinds_in_scope r [(my_closure, Value)]).
-  rewrite params_in_scope_equivariant.
+  rewrite params_in_scope_equivariant, code_stated_equivariant.
   pose proof
     (forward_kinded_under_equivariant r body
        (params_in_scope params (unarize (cm_params_arity metadata))
           [(my_closure, Value)])
-       [] [])
+       (code_stated params my_closure metadata) [] [])
     as Hbody.
   cbn [rename_cont_kinds rename_forwards map] in Hbody.
   rewrite Hbody. reflexivity.
 Qed.
 
-(* The law of a binding, where the pass begins with those kinds and
-   nothing else, is given to the tactic. *)
+(* The law of a binding, with the initial knowledge used for its code
+   body, is given to the tactic. *)
 Section Forward_kinded_in_code.
 
 (* One pass over the goal for the laws of the database: enough here. *)
