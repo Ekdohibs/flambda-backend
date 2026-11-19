@@ -850,6 +850,34 @@ all: layout $(SOURCES:.v=.vo) claims
 # another, are errors with the name of the folder. The lines of _CoqProject
 # there, which an editor reads, must be the flags of FLAGS: the same
 # directories under the same libraries. The recipe itself does not run Rocq.
+#
+# Every .v file of the sources begins with a header. For a file of
+# FLAMBDA2_TRANSCRIBED, which is established as a transcription of a file
+# of the compiler, it is the header of that file: the recipe asks that its
+# first 26 lines be not the licence header of the other .v files and that
+# the lines of comment at its head have the word License, and does not
+# compare them with the file of the compiler. Every other .v file begins
+# with the licence header: its first 26 lines are the first 26 lines of
+# rocq/OxCamlLogic.v. A file that begins otherwise is an error here, with
+# its name, and so is a name of FLAMBDA2_TRANSCRIBED that no file has.
+# The files looked at are the .v files that are in the five directories
+# of the sources, and not those of the lists above, so that a file that
+# no list names is looked at too.
+FLAMBDA2_TRANSCRIBED := \
+  rewrites/lets/FlambdaIdentitiesSpec.v \
+  types/aliases/FlambdaEnvAliases.v \
+  types/env/FlambdaBindingTime.v \
+  types/env/FlambdaTypingEnv.v \
+  types/grammar/FlambdaTypeGrammar.v \
+  types/grammar/FlambdaTypeProject.v \
+  types/join/FlambdaJoinEnv.v \
+  types/join/FlambdaJoinTypes.v \
+  types/meet/FlambdaExpandHead.v \
+  types/meet/FlambdaMeet.v \
+  types/meet/FlambdaMeetEnv.v \
+  types/meet/FlambdaMeetGrammar.v \
+  types/provers/FlambdaProvers.v \
+  types/provers/FlambdaReify.v
 FLAMBDA2_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2) \
   $(FLAMBDA2_EXTRACT))
 FLAMBDA2_TYPES_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2_TYPES))
@@ -917,6 +945,54 @@ layout:
 	      "flags of rocq/Makefile (< Makefile, > _CoqProject):" >&2; \
 	    diff "$$layout_dir/flags" "$$layout_dir/project" | grep '^[<>]' >&2; \
 	  fi; \
+	  printf '%s\n' $(FLAMBDA2_TRANSCRIBED) | LC_ALL=C sort \
+	    > "$$layout_dir/transcribed"; \
+	  LC_ALL=C comm -23 "$$layout_dir/transcribed" "$$layout_dir/found" \
+	    > "$$layout_dir/gone"; \
+	  if [ -s "$$layout_dir/gone" ]; then bad=1; \
+	    echo "error: FLAMBDA2_TRANSCRIBED of rocq/Makefile names files" \
+	      "that are not under $(FLAMBDA2_DIR):" >&2; \
+	    sed 's/^/  /' "$$layout_dir/gone" >&2; \
+	  fi; \
+	  head -n 26 $(STDLIB_DIR)/OxCamlLogic.v > "$$layout_dir/header" \
+	    || { echo "error: head failed on OxCamlLogic.v" >&2; exit 1; }; \
+	  for f in $$(LC_ALL=C comm -13 "$$layout_dir/transcribed" \
+	        "$$layout_dir/found" | sed 's,^,$(FLAMBDA2_DIR)/,') \
+	      $(STDLIB_DIR)/*.v $(BACKEND_DIR)/*.v $(SSA_DIR)/*.v \
+	      $(LOOP_DIR)/*.v; do \
+	    head -n 26 "$$f" > "$$layout_dir/head" \
+	      || { echo "error: head failed on $$f" >&2; exit 1; }; \
+	    s=0; cmp -s "$$layout_dir/head" "$$layout_dir/header" || s=$$?; \
+	    case $$s in \
+	      0) ;; \
+	      1) bad=1; \
+	        echo "error: $$f: its first 26 lines are not the licence" \
+	          "header of the .v files (the first 26 lines of" \
+	          "rocq/OxCamlLogic.v), and it is not a file of" \
+	          "FLAMBDA2_TRANSCRIBED" >&2;; \
+	      *) echo "error: cmp failed on $$f (status $$s)" >&2; exit 1;; \
+	    esac; \
+	  done; \
+	  for f in $$(LC_ALL=C comm -12 "$$layout_dir/transcribed" \
+	        "$$layout_dir/found" | sed 's,^,$(FLAMBDA2_DIR)/,'); do \
+	    head -n 26 "$$f" > "$$layout_dir/head" \
+	      || { echo "error: head failed on $$f" >&2; exit 1; }; \
+	    s=0; cmp -s "$$layout_dir/head" "$$layout_dir/header" || s=$$?; \
+	    case $$s in \
+	      1) ;; \
+	      0) bad=1; \
+	        echo "error: $$f: it is a file of FLAMBDA2_TRANSCRIBED and" \
+	          "begins with the licence header of the other .v files, not" \
+	          "with the header of the file that it transcribes" >&2;; \
+	      *) echo "error: cmp failed on $$f (status $$s)" >&2; exit 1;; \
+	    esac; \
+	    sed -n '/^(\*.*\*)$$/!q;p' "$$f" > "$$layout_dir/box" \
+	      || { echo "error: sed failed on $$f" >&2; exit 1; }; \
+	    if ! grep -q 'License' "$$layout_dir/box"; then bad=1; \
+	      echo "error: $$f: it is a file of FLAMBDA2_TRANSCRIBED and the" \
+	        "lines of comment at its head have not the word License" >&2; \
+	    fi; \
+	  done; \
 	  [ $$bad = 0 ]
 
 # The review document, rocq/review.pdf: ROCQ-REVIEW-GUIDE.md, in parts, with

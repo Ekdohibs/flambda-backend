@@ -1,29 +1,38 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                   Mark Shinwell, Jane Street Europe                    *)
+(*                                                                        *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes, definition by definition and with the compiler's
+   names, parts of two files of this repository. From
+   middle_end/flambda2/types/env/binding_time.ml: the type of binding times,
+   an integer, with its [equal]; the order [strictly_earlier]; the first
+   binding times; [succ]; and the module [With_name_mode]. From
+   middle_end/flambda2/nominal/name_mode.ml: the type of name modes, its
+   three values, its predicates, [compare_partial_order] and [equal]. The
+   comment below says what is left out and what differs.
+
+   The header above is that of
+   middle_end/flambda2/types/env/binding_time.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/nominal/name_mode.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2019 OCamlPro SAS                                          *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
+   *)
 
 (* Binding times and name modes: when a name of a typing environment was
    bound, and where it may occur.

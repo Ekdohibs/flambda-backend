@@ -1,29 +1,37 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                        Basile Clément, OCamlPro                        *)
+(*                                                                        *)
+(*   Copyright 2013--2025 OCamlPro SAS                                    *)
+(*   Copyright 2014--2025 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes into Gallina the functions of the compiler's
+   join_env.ml, the environment side of the n-way join of typing
+   environments, in the order of that file and with its names; its last
+   definition transcribes the n-way entry of join_levels.ml. The comment
+   below lists what is here against join_env.ml and the differences from
+   the OCaml.
+
+   The header above is that of
+   middle_end/flambda2/types/env/join_env.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/join_levels.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   *)
 
 
 (* The environment side of the n-way join of typing environments.

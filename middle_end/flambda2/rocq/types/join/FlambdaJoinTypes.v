@@ -1,29 +1,35 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes the functions of
+   middle_end/flambda2/types/meet_and_n_way_join.ml that join types:
+   [n_way_join], the functions that it calls and their helpers, each written
+   again in Gallina under the name that the compiler gives it and in the
+   order of the compiler's file; and, in
+   [n_way_join_function_slot_indexed_product], the test of kinds that
+   [Product.Function_slot_indexed.create] of
+   middle_end/flambda2/types/grammar/type_grammar.ml makes. The head comment
+   below says what the model has of each function and what is left out.
+
+   The header above is that of
+   middle_end/flambda2/types/meet_and_n_way_join.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/grammar/type_grammar.ml,
+     whose header is the same. *)
 
 
 (* The n-way join of types: the functions of

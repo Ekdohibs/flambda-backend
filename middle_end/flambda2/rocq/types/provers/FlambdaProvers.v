@@ -1,29 +1,50 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2018--2021 OCamlPro SAS                                    *)
+(*   Copyright 2018--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes into Rocq a file of the compiler,
+   middle_end/flambda2/types/provers.ml. Its types and its functions are
+   written again here for the types of the model; the head comment below
+   lists what is here with its lines of that file, what is not here, and how
+   the definitions differ from the compiler's. Two things here are of two
+   other files of the compiler. The type [descr_oub] and the function
+   [descr_oub_of_expanded] are the type and the function
+   [Expanded_type.descr_oub], lines 424 to 501 of
+   middle_end/flambda2/types/expand_head.ml. The test [tag_is_scannable] is
+   the function [Tag.Scannable.of_tag], lines 98 and 99 of
+   middle_end/flambda2/kinds/tag.ml.
+
+   The header above is that of
+   middle_end/flambda2/types/provers.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/expand_head.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+   - middle_end/flambda2/kinds/tag.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+   *)
 
 
 
@@ -39,6 +60,7 @@
    middle_end/flambda2/rocq/requests/T6-provers.md.
 
    What is here, of provers.ml (the lines are of that file):
+   - [is_bottom], [expand_head] and [wrong_kind] (lines 31 to 39);
    - the three types of answer, [meet_shortcut], [proof_of_property]
      and [generic_proof], each in a module of its name so that their
      constructors are told apart ([Proof_of_property.Proved],
@@ -75,12 +97,12 @@
      [prove_tagging_of_simple], [meet_tagging_of_simple] (935 to 991);
    - [meet_boxed_number_containing_simple] and the nine functions
      defined with it, [meet_boxed_float32_containing_simple] to
-     [meet_boxed_mask_containing_simple] (992 to 1110).
+     [meet_boxed_mask_containing_simple] (993 to 1110);
    - [variant_like_proof], [prove_variant_like_generic_value],
      [meet_variant_like], [prove_variant_like] (522 to 580);
    - [prove_unique_tag_and_size_value], [prove_unique_tag_and_size],
      [prove_unique_fully_constructed_immutable_heap_block] (697 to
-     752);
+     750);
    - [meet_block_field_simple_value], [meet_block_field_simple] (1112
      to 1157);
    - [prove_single_closures_entry_generic_value],
@@ -90,7 +112,7 @@
    - [meet_project_function_slot_simple_value],
      [meet_project_function_slot_simple],
      [meet_project_value_slot_simple_value],
-     [meet_project_value_slot_simple] (1159 to 1212);
+     [meet_project_value_slot_simple] (1159 to 1211);
    - [prove_physical_equality] (1297 to 1624);
    - [prove_alloc_mode_of_boxed_number_value],
      [prove_alloc_mode_of_boxed_number],
