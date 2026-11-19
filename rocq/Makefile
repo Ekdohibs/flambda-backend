@@ -441,6 +441,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/common/FlambdaStatedScopeNamesProofs.v \
   rewrites/common/FlambdaStatedScopeProofs.v \
   rewrites/common/FlambdaStatedScopeSpec.v \
+  rewrites/common/FlambdaStatedSymbolsNamesProofs.v \
+  rewrites/common/FlambdaStatedSymbolsProofs.v \
+  rewrites/common/FlambdaStatedSymbolsSpec.v \
   rewrites/common/FlambdaStatedContextProofs.v \
   wellformed/FlambdaStaticsInScopeProofs.v \
   wellformed/FlambdaStaticsInScopeSpec.v \
