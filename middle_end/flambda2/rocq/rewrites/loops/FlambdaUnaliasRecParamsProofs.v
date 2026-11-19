@@ -33,8 +33,11 @@
    FlambdaUnaliasParamsProofs.v, which is proved for a loop too: the
    closure of the continuation holds itself, and in its handler the
    applications give the parameter, which holds what the simple given
-   from outside held where the [Let_cont] was run. The pass is then by
-   the context lemmas of FlambdaContextProofs.v. *)
+   from outside held where the [Let_cont] was run, which is of what
+   the handler states of the parameter: what is known of the variables
+   bound around the [Let_cont] says so, and holds where the [Let_cont]
+   runs. The pass is then an induction on the term under what is known
+   of the variables in scope (FlambdaStatedContextProofs.v). *)
 
 From Stdlib Require Import ZArith List Bool Arith Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -42,6 +45,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaSimulationProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedParamsProofs
+  FlambdaStatedScopeSpec FlambdaStatedContextProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require FlambdaWellFormedProofs.
@@ -56,7 +60,8 @@ Import ListNotations.
    binder on the way binds and which is none of the other parameters
    of the handler, and that every application in the handler gives
    the parameter itself, is taken away and bound at the head of the
-   handler. *)
+   handler: under the environments where the value of the simple is of
+   what the handler states of the parameter. *)
 Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
     (p : variable) (kind : flambda_kind) (params : list variable)
     (metadata : handler_metadata) (handler body : expr) :
@@ -64,23 +69,28 @@ Lemma loop_param_equivalent (i : nat) (k : continuation) (s : simple)
   nth_error (hm_params_kinds metadata) i = Some kind ->
   simple_among s (drop_nth i params) = false ->
   among p (drop_nth i params) = false ->
-  says_nothing_at (hm_params_subkinds metadata) i = true ->
   all_give_simple k i s true body = true ->
   all_give_simple k i (Var p) true handler = true ->
-  expr_equivalent
-    (Let_cont_recursive [(k, Handler params metadata handler)] body)
-    (Let_cont_recursive
-       [(k,
-         Handler (drop_nth i params)
-           {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
-              hm_params_subkinds :=
-                drop_nth i (hm_params_subkinds metadata);
-              hm_is_exn_handler := false |}
-           (Let p kind (Simple s) (drop_arg k i handler)))]
-       (drop_arg k i body)).
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    given_is_stated statics vars (hm_params_subkinds metadata) i s ->
+    equivalent
+      (State (Let_cont_recursive [(k, Handler params metadata handler)] body)
+         vars conts statics hp rd)
+      (State
+         (Let_cont_recursive
+            [(k,
+              Handler (drop_nth i params)
+                {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+                   hm_params_subkinds :=
+                     drop_nth i (hm_params_subkinds metadata);
+                   hm_is_exn_handler := false |}
+                (Let p kind (Simple s) (drop_arg k i handler)))]
+            (drop_arg k i body))
+         vars conts statics hp rd).
 Proof.
-  intros Hparam Hkind Hs Hfresh Hnothing Hgive Hturns vars conts statics hp
-    rd.
+  intros Hparam Hkind Hs Hfresh Hgive Hturns vars conts statics hp rd
+    Hstated.
   set (h' :=
     Handler (drop_nth i params)
       {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
@@ -118,9 +128,7 @@ Proof.
           rewrite step_let_cont_recursive, Hstatics; reflexivity ].
     apply
       (simple_site_equivalent true k i s p kind params metadata handler vars
-         conts statics Hparam Hkind Hs Hfresh
-         (says_nothing_given_is_stated _ _ _ _ _ Hnothing)
-         (fun _ => Hturns));
+         conts statics Hparam Hkind Hs Hfresh Hstated (fun _ => Hturns));
       [ | apply FlambdaWellFormedProofs.statics_extend_refl ].
     apply (Rel_state_in_scope true k i s p kind params metadata handler vars
       conts s true);
@@ -134,11 +142,11 @@ Qed.
 (* The rewrite                                                              *)
 (* ======================================================================== *)
 
-Lemma unalias_rec_param_equivalent (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) (h' : continuation_handler)
-    (body' : expr) :
-  unalias_rec_param i k h body = Some (h', body') ->
-  expr_equivalent (Let_cont_recursive [(k, h)] body)
+Lemma unalias_rec_param_equivalent (S : stated_in_scope) (i : nat)
+    (k : continuation) (h : continuation_handler) (body : expr)
+    (h' : continuation_handler) (body' : expr) :
+  unalias_rec_param S i k h body = Some (h', body') ->
+  expr_equivalent_stated S (Let_cont_recursive [(k, h)] body)
     (Let_cont_recursive [(k, h')] body').
 Proof.
   destruct h as [params metadata handler]. unfold unalias_rec_param.
@@ -151,82 +159,91 @@ Proof.
      && all_give_var k i p true handler
      && negb (among x (drop_nth i params))
      && negb (among p (drop_nth i params))
-     && says_nothing_at (hm_params_subkinds metadata) i)
+     && is_stated_at S (hm_params_subkinds metadata) i (Var x))
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
-  apply andb_true_iff in Hcond as [Hcond Hnothing].
+  apply andb_true_iff in Hcond as [Hcond Hstated].
   apply andb_true_iff in Hcond as [Hcond Hfresh].
   apply andb_true_iff in Hcond as [Hcond Hx].
   apply andb_true_iff in Hcond as [Hcond Hturns].
   apply andb_true_iff in Hcond as [_ Hgive].
   apply negb_true_iff in Hfresh, Hx.
   rewrite all_give_var_simple in Hgive, Hturns.
-  exact (loop_param_equivalent i k (Var x) p kind params metadata handler
-    body Hparam Hkind Hx Hfresh Hnothing Hgive Hturns).
+  intros vars conts statics hp rd Hhold.
+  exact
+    (loop_param_equivalent i k (Var x) p kind params metadata handler body
+       Hparam Hkind Hx Hfresh Hgive Hturns vars conts statics hp rd_
+       (is_stated_at_given_is_stated statics S vars _ i (Var x) Hhold
+          Hstated)).
 Qed.
 
-Lemma unalias_rec_from_equivalent (i : nat) :
+Lemma unalias_rec_from_equivalent (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
-    expr_equivalent (Let_cont_recursive [(k, h)] body)
-      (Let_cont_recursive [(k, fst (unalias_rec_from i k h body))]
-         (snd (unalias_rec_from i k h body))).
+    expr_equivalent_stated S (Let_cont_recursive [(k, h)] body)
+      (Let_cont_recursive [(k, fst (unalias_rec_from S i k h body))]
+         (snd (unalias_rec_from S i k h body))).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [unalias_rec_from].
-  - intros vars conts statics hp rd. apply equivalent_refl.
-  - destruct (unalias_rec_param i k h body) as [[h' body'] | ] eqn:Hparam;
+  - apply expr_equivalent_stated_refl.
+  - destruct (unalias_rec_param S i k h body) as [[h' body'] | ] eqn:Hparam;
       [ | apply IH ].
-    exact (expr_equivalent_trans _ _ _
-      (unalias_rec_param_equivalent i k h body h' body' Hparam)
+    exact (expr_equivalent_stated_trans S _ _ _
+      (unalias_rec_param_equivalent S i k h body h' body' Hparam)
       (IH k h' body')).
 Qed.
 
-(* Each layer is a context around what the induction gives; then the
-   parameters of a recursive [Let_cont] of one continuation are looked
-   at. *)
-Fixpoint unalias_rec_params_equivalent_aux (e : expr) :
-  expr_equivalent e (unalias_rec_params e).
+(* Each layer under what is known there, by the laws of
+   FlambdaStatedContextProofs.v; then the parameters of a recursive
+   [Let_cont] of one continuation are looked at. *)
+Fixpoint unalias_rec_params_under_equivalent (e : expr) :
+  ∀ S : stated_in_scope,
+    expr_equivalent_stated S e (unalias_rec_params_under S e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    cbn [unalias_rec_params];
-    try (intros vars conts statics hp rd; apply equivalent_refl).
-  - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
-      (unalias_rec_params_equivalent_aux body)).
-  - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)
-      (unalias_rec_params_equivalent_aux body)).
-  - apply (expr_equivalent_trans _
+    intros S; cbn [unalias_rec_params_under];
+    try apply expr_equivalent_stated_refl.
+  - apply let_equivalent_stated, unalias_rec_params_under_equivalent.
+  - apply let_static_equivalent_stated, unalias_rec_params_under_equivalent.
+  - apply (expr_equivalent_stated_trans S _
       (Let_cont_non_recursive k
-         (Handler params metadata (unalias_rec_params handler)) body)).
-    + exact (plug_equivalent
-        (Let_cont_non_recursive_handler k params metadata Hole body) _ _
-        (not_many _) (unalias_rec_params_equivalent_aux handler)).
-    + exact (plug_equivalent
-        (Let_cont_non_recursive_body k
-           (Handler params metadata (unalias_rec_params handler)) Hole)
-        _ _ (not_many _) (unalias_rec_params_equivalent_aux body)).
+         (Handler params metadata
+            (unalias_rec_params_under
+               (params_stated params (hm_params_subkinds metadata) S)
+               handler))
+         body)).
+    + apply let_cont_handler_equivalent_stated,
+        unalias_rec_params_under_equivalent.
+    + apply let_cont_body_equivalent_stated,
+        unalias_rec_params_under_equivalent.
   - assert (Hbody :
-      expr_equivalent (Let_cont_recursive handlers body)
-        (Let_cont_recursive handlers (unalias_rec_params body))).
-    { exact (plug_equivalent (Let_cont_recursive_body handlers Hole) _ _
-        (not_many _) (unalias_rec_params_equivalent_aux body)). }
+      expr_equivalent_stated S (Let_cont_recursive handlers body)
+        (Let_cont_recursive handlers (unalias_rec_params_under S body))).
+    { apply let_cont_recursive_body_equivalent_stated,
+        unalias_rec_params_under_equivalent. }
     destruct handlers
       as [ | [k [params metadata handler]] [ | second handlers]];
       try exact Hbody.
     pose proof
-      (unalias_rec_from_equivalent (length params) k
-         (Handler params metadata handler) (unalias_rec_params body))
+      (unalias_rec_from_equivalent S (length params) k
+         (Handler params metadata handler) (unalias_rec_params_under S body))
       as Hfrom.
     destruct
-      (unalias_rec_from (length params) k (Handler params metadata handler)
-         (unalias_rec_params body))
+      (unalias_rec_from S (length params) k
+         (Handler params metadata handler) (unalias_rec_params_under S body))
       as [h' body'].
-    exact (expr_equivalent_trans _ _ _ Hbody Hfrom).
+    exact (expr_equivalent_stated_trans S _ _ _ Hbody Hfrom).
 Qed.
 
 Theorem unalias_rec_params_equivalent :
   unalias_rec_params_equivalent_statement.
-Proof. exact unalias_rec_params_equivalent_aux. Qed.
+Proof.
+  intros e.
+  exact
+    (expr_equivalent_of_stated _ _
+       (unalias_rec_params_under_equivalent e [])).
+Qed.
 
 (* ======================================================================== *)
 (* An example                                                               *)

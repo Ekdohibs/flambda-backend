@@ -29,9 +29,10 @@
    the loop is given one variable for, is that variable: a
    normalisation that is an equivalence.
 
-   This file is to be reviewed: [unalias_rec_param], [unalias_rec_from]
-   and [unalias_rec_params], which are extracted and run by the
-   validation of middle_end/flambda2/tests/semantics/
+   This file is to be reviewed: [unalias_rec_param], [unalias_rec_from],
+   [unalias_rec_params_under] and [unalias_rec_params], which are
+   extracted and run by the validation of
+   middle_end/flambda2/tests/semantics/
    (FlambdaValidateSpec.tidy_expr_before, tidy_expr_after and
    arms_expr_before apply the pass), and the statement.
 
@@ -58,8 +59,11 @@
    parameter is taken away: every application loses the argument, and
    the handler begins with a [Let] of [p] to [x], with the kind that
    the handler had for the parameter. The other tests: the handler
-   is no exception handler, it states nothing of the parameter beyond
-   its kind (FlambdaUnaliasParamsSpec.says_nothing_at), and neither
+   is no exception handler, [x] is known to be of what the handler
+   states of the parameter (FlambdaStatedScopeSpec.is_stated_at, from
+   what is known of the variables bound around the [Let_cont]; a
+   handler that states nothing of the parameter beyond its kind asks
+   nothing of [x]; decision D25, at parameters), and neither
    [x] nor [p] is one of the other parameters. [x] may be [p]: the
    loop that a function has
    become has the names of the parameters of the function for its
@@ -86,15 +90,21 @@
    machine tests the kind of
    a value where a handler is applied, and the [Let] tests the same
    kind of the same value; it tests there too what the handler states
-   of each parameter, which for this one is nothing: the two runs
-   stop or go on together at every entry.
+   of each parameter, and the value given for this one, which is at
+   every entry what [x] held where the [Let_cont] was run, is known
+   to be of it: the two runs stop or go on together at every entry.
 
    The pass is that step for each position, the last first
    ([unalias_rec_from]), at every recursive [Let_cont] of the term,
    its body first; it goes into the handler of a non-recursive
    continuation. The handlers of recursive continuations and the
    bodies of code are left as they are, as by
-   FlambdaUnaliasParamsSpec.unalias_params.
+   FlambdaUnaliasParamsSpec.unalias_params. As that pass, it goes
+   down the term with what is known of the variables bound around
+   each node ([unalias_rec_params_under]: a [Let] adds what its
+   defining expression makes, the handler of a non-recursive
+   continuation what it states of its parameters);
+   [unalias_rec_params] is that from nothing known.
 
    Not done: an application in the handler that gives [x], the
    variable from outside, which would be as sound; a parameter that
@@ -108,10 +118,12 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaSemanticsSpec FlambdaUnaliasParamsSpec.
+  FlambdaMapSpec FlambdaSemanticsSpec FlambdaUnaliasParamsSpec
+  FlambdaStatedScopeSpec.
 Import ListNotations.
 
-Definition unalias_rec_param (i : nat) (k : continuation)
+Definition unalias_rec_param (S : stated_in_scope) (i : nat)
+    (k : continuation)
     (h : continuation_handler) (body : expr)
     : option (continuation_handler * expr) :=
   match h with
@@ -125,7 +137,7 @@ Definition unalias_rec_param (i : nat) (k : continuation)
            && all_give_var k i p true handler
            && negb (among x (drop_nth i params))
            && negb (among p (drop_nth i params))
-           && says_nothing_at (hm_params_subkinds metadata) i
+           && is_stated_at S (hm_params_subkinds metadata) i (Var x)
         then
           Some
             (Handler (drop_nth i params)
@@ -143,35 +155,41 @@ Definition unalias_rec_param (i : nat) (k : continuation)
   end.
 
 (* The same for every position below [i], the last first. *)
-Fixpoint unalias_rec_from (i : nat) (k : continuation)
+Fixpoint unalias_rec_from (S : stated_in_scope) (i : nat) (k : continuation)
     (h : continuation_handler) (body : expr)
     : continuation_handler * expr :=
   match i with
   | O => (h, body)
-  | S i =>
-    match unalias_rec_param i k h body with
-    | Some (h', body') => unalias_rec_from i k h' body'
-    | None => unalias_rec_from i k h body
+  | Datatypes.S i =>
+    match unalias_rec_param S i k h body with
+    | Some (h', body') => unalias_rec_from S i k h' body'
+    | None => unalias_rec_from S i k h body
     end
   end.
 
 (* The pass: every recursive [Let_cont] of a term that binds one
-   continuation, its body first. *)
-Fixpoint unalias_rec_params (e : expr) {struct e} : expr :=
+   continuation, its body first, with what is known of the variables
+   bound around each. *)
+Fixpoint unalias_rec_params_under (S : stated_in_scope) (e : expr)
+    {struct e} : expr :=
   match e with
-  | Let x kind d body => Let x kind d (unalias_rec_params body)
+  | Let x kind d body =>
+    Let x kind d
+      (unalias_rec_params_under ((x, stated_of_named S d) :: S) body)
   | Let_static bindings body =>
-    Let_static bindings (unalias_rec_params body)
+    Let_static bindings (unalias_rec_params_under S body)
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     Let_cont_non_recursive k
-      (Handler params metadata (unalias_rec_params handler))
-      (unalias_rec_params body)
+      (Handler params metadata
+         (unalias_rec_params_under
+            (params_stated params (hm_params_subkinds metadata) S) handler))
+      (unalias_rec_params_under S body)
   | Let_cont_recursive handlers body =>
-    let body := unalias_rec_params body in
+    let body := unalias_rec_params_under S body in
     match handlers with
     | [(k, Handler params metadata handler)] =>
       let '(h, body) :=
-        unalias_rec_from (length params) k
+        unalias_rec_from S (length params) k
           (Handler params metadata handler) body
       in
       Let_cont_recursive [(k, h)] body
@@ -179,6 +197,10 @@ Fixpoint unalias_rec_params (e : expr) {struct e} : expr :=
     end
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
   end.
+
+(* The same from nothing known. *)
+Definition unalias_rec_params (e : expr) : expr :=
+  unalias_rec_params_under [] e.
 
 (* The result behaves as the term does, under all environments. *)
 Definition unalias_rec_params_equivalent_statement : Prop :=

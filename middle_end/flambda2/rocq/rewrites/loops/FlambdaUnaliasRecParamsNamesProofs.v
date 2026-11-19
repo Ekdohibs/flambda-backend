@@ -48,6 +48,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaNominalSpec FlambdaNominalProofs
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
+  FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasParamsNamesProofs FlambdaUnaliasRecParamsSpec
   FlambdaEquivarianceTactic.
@@ -63,17 +64,42 @@ Import ListNotations.
    taken: the proof passes with it in half the time. *)
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
-Lemma unalias_rec_params_renamed : rewrite_equivariant unalias_rec_params.
+(* The pass goes down the term with what is known of the variables in
+   scope, which is renamed by
+   FlambdaStatedScopeNamesProofs.rename_stated_in_scope; the laws of
+   that file are given to the tactic, with the law of the test at a
+   variable (FlambdaUnaliasParamsNamesProofs.v), and the pass is the
+   case of nothing known, which a renaming leaves as it is. *)
+#[local] Instance stated_in_scope_renaming : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
+
+#[local] Hint Rewrite stated_of_named_equivariant params_stated_equivariant
+  : equivariance.
+
+Section Under.
+
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_in_scope_cons_renamed : equivariance.
+
+Lemma unalias_rec_params_under_equivariant (r : renaming) (e : expr) :
+  ∀ S : stated_in_scope,
+    unalias_rec_params_under (rename_stated_in_scope r S) (rename_expr r e)
+    = rename_expr r (unalias_rec_params_under S e).
 Proof. equivariance. Qed.
+
+End Under.
+
+Lemma unalias_rec_params_renamed : rewrite_equivariant unalias_rec_params.
+Proof. intros r e. exact (unalias_rec_params_under_equivariant r e []). Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
 (* ======================================================================== *)
 
-Lemma unalias_rec_param_scoped (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) (h' : continuation_handler)
-    (body' : expr) :
-  unalias_rec_param i k h body = Some (h', body') ->
+Lemma unalias_rec_param_scoped (S : stated_in_scope) (i : nat)
+    (k : continuation) (h : continuation_handler) (body : expr)
+    (h' : continuation_handler) (body' : expr) :
+  unalias_rec_param S i k h body = Some (h', body') ->
   scoped (Let_cont_recursive [(k, h)] body)
     (Let_cont_recursive [(k, h')] body').
 Proof.
@@ -88,7 +114,7 @@ Proof.
      && all_give_var k i p true handler
      && negb (among x (drop_nth i params))
      && negb (among p (drop_nth i params))
-     && says_nothing_at (hm_params_subkinds metadata) i)
+     && is_stated_at S (hm_params_subkinds metadata) i (Var x))
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
   apply andb_true_iff in Hcond as [Hcond _].
@@ -122,53 +148,59 @@ Proof.
   - apply incl_without, incl_app_app; assumption.
 Qed.
 
-Lemma unalias_rec_from_scoped (i : nat) :
+Lemma unalias_rec_from_scoped (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
     scoped (Let_cont_recursive [(k, h)] body)
-      (Let_cont_recursive [(k, fst (unalias_rec_from i k h body))]
-         (snd (unalias_rec_from i k h body))).
+      (Let_cont_recursive [(k, fst (unalias_rec_from S i k h body))]
+         (snd (unalias_rec_from S i k h body))).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [unalias_rec_from];
     [ apply scoped_refl | ].
-  destruct (unalias_rec_param i k h body) as [[h' body'] | ] eqn:Hparam;
+  destruct (unalias_rec_param S i k h body) as [[h' body'] | ] eqn:Hparam;
     [ | apply IH ].
   exact
-    (scoped_trans _ _ _ (unalias_rec_param_scoped i k h body h' body' Hparam)
+    (scoped_trans _ _ _
+       (unalias_rec_param_scoped S i k h body h' body' Hparam)
        (IH k h' body')).
 Qed.
 
-Fixpoint unalias_rec_params_scoped (e : expr) :
-  scoped e (unalias_rec_params e).
+Fixpoint unalias_rec_params_under_scoped (e : expr) :
+  ∀ S : stated_in_scope, scoped e (unalias_rec_params_under S e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    cbn [unalias_rec_params]; try apply scoped_refl.
-  - apply scoped_let; [ apply incl_refl | apply unalias_rec_params_scoped ].
+    intros S; cbn [unalias_rec_params_under]; try apply scoped_refl.
+  - apply scoped_let;
+      [ apply incl_refl | apply unalias_rec_params_under_scoped ].
   - apply scoped_let_static;
-      [ apply scoped_bindings_refl | apply unalias_rec_params_scoped ].
+      [ apply scoped_bindings_refl | apply unalias_rec_params_under_scoped ].
   - apply scoped_let_cont;
-      [ apply scoped_handler_intro, unalias_rec_params_scoped
-      | apply unalias_rec_params_scoped ].
+      [ apply scoped_handler_intro, unalias_rec_params_under_scoped
+      | apply unalias_rec_params_under_scoped ].
   - assert (Hbody :
       scoped (Let_cont_recursive handlers body)
-        (Let_cont_recursive handlers (unalias_rec_params body))).
+        (Let_cont_recursive handlers (unalias_rec_params_under S body))).
     { apply scoped_let_cont_recursive;
         [ reflexivity | apply scoped_handlers_refl
-        | apply unalias_rec_params_scoped ]. }
+        | apply unalias_rec_params_under_scoped ]. }
     destruct handlers
       as [ | [k [params metadata handler]] [ | second handlers]];
       try exact Hbody.
     pose proof
-      (unalias_rec_from_scoped (length params) k
-         (Handler params metadata handler) (unalias_rec_params body))
+      (unalias_rec_from_scoped S (length params) k
+         (Handler params metadata handler) (unalias_rec_params_under S body))
       as Hfrom.
     destruct
-      (unalias_rec_from (length params) k (Handler params metadata handler)
-         (unalias_rec_params body))
+      (unalias_rec_from S (length params) k
+         (Handler params metadata handler) (unalias_rec_params_under S body))
       as [h' body'].
     exact (scoped_trans _ _ _ Hbody Hfrom).
 Qed.
+
+Lemma unalias_rec_params_scoped (e : expr) :
+  scoped e (unalias_rec_params e).
+Proof. exact (unalias_rec_params_under_scoped e []). Qed.
 
 Lemma unalias_rec_params_scope : keeps_scope unalias_rec_params.
 Proof. apply keeps_scope_intro, unalias_rec_params_scoped. Qed.
