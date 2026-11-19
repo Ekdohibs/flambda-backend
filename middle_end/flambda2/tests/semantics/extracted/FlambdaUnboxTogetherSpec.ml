@@ -98,6 +98,12 @@ let together_metadata boxed us metadata =
         (map
            (fun _ -> unboxed_kind boxed)
            (rev (moved_from us O metadata.hm_params_kinds)));
+    hm_params_subkinds =
+      app
+        (kept_from us O (stated_of_params metadata))
+        (map
+           (fun _ -> any_value)
+           (rev (moved_from us O (stated_of_params metadata))));
     hm_is_exn_handler = metadata.hm_is_exn_handler
   }
 

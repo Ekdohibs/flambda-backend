@@ -2,6 +2,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaStatedScopeSpec
 open FlambdaUnaliasParamsSpec
 open List
 
@@ -112,14 +113,17 @@ let bind_const_param i k h body =
         match o with
         | Some s ->
           if
-            ((is_plain s && negb metadata.hm_is_exn_handler)
-            && all_give k i s body)
-            && negb (among p (drop_nth i params))
+            (((is_plain s && negb metadata.hm_is_exn_handler)
+             && all_give k i s body)
+            && negb (among p (drop_nth i params)))
+            && is_stated_at [] metadata.hm_params_subkinds i s
           then
             Some
               ( Handler
                   ( drop_nth i params,
                     { hm_params_kinds = drop_nth i metadata.hm_params_kinds;
+                      hm_params_subkinds =
+                        drop_nth i metadata.hm_params_subkinds;
                       hm_is_exn_handler = false
                     },
                     Let (p, kind, Simple s, handler) ),

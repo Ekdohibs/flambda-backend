@@ -2,7 +2,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
-open FlambdaSpineWalkSpec
+open FlambdaStatedScopeSpec
 open List
 open ListDef
 
@@ -33,6 +33,7 @@ val drop_arg_in_handler :
   continuation -> nat -> continuation_handler -> continuation_handler
 
 val unalias_param :
+  stated_in_scope ->
   nat ->
   continuation ->
   continuation_handler ->
@@ -40,12 +41,13 @@ val unalias_param :
   (continuation_handler * expr) option
 
 val unalias_from :
+  stated_in_scope ->
   nat ->
   continuation ->
   continuation_handler ->
   expr ->
   continuation_handler * expr
 
-val unalias_node : expr -> expr
+val unalias_node : stated_in_scope -> expr -> expr
 
-val unalias_params : expr -> expr
+val unalias_params_under : stated_in_scope -> expr -> expr

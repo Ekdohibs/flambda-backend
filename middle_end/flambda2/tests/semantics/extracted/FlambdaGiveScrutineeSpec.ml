@@ -4,6 +4,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaStatedScopeSpec
 open FlambdaUnaliasParamsSpec
 open FlambdaUnusedContsSpec
 open List
@@ -203,42 +204,52 @@ let rec first_scrutinee k i current = function
 and handler_first_scrutinee k i current = function
   | Handler (_, _, handler) -> first_scrutinee k i current handler
 
-(** val give_first : variable list -> nat -> continuation ->
+(** val give_first : stated_in_scope -> variable list -> nat -> continuation ->
     continuation_handler -> expr -> expr **)
 
-let rec give_first xs i k h body =
+let rec give_first s xs i k h body =
   match xs with
   | [] -> body
   | x :: xs0 -> (
     let body' = give_scrutinee x k i None body in
-    match unalias_param i k h body' with
+    match unalias_param s i k h body' with
     | Some _ -> body'
-    | None -> give_first xs0 i k h body)
+    | None -> give_first s xs0 i k h body)
 
-(** val give_at : nat -> continuation -> continuation_handler -> expr -> expr **)
+(** val give_at : stated_in_scope -> nat -> continuation -> continuation_handler
+    -> expr -> expr **)
 
-let give_at i k h body =
+let give_at s i k h body =
   match first_scrutinee k i [] body with
-  | Some xs -> give_first xs i k h body
+  | Some xs -> give_first s xs i k h body
   | None -> body
 
-(** val give_from : nat -> continuation -> continuation_handler -> expr -> expr
-    **)
+(** val give_from : stated_in_scope -> nat -> continuation ->
+    continuation_handler -> expr -> expr **)
 
-let rec give_from i k h body =
-  match i with O -> body | S i0 -> give_from i0 k h (give_at i0 k h body)
+let rec give_from s i k h body =
+  match i with O -> body | S i0 -> give_from s i0 k h (give_at s i0 k h body)
 
-(** val give_scrutinees : expr -> expr **)
+(** val give_scrutinees_under : stated_in_scope -> expr -> expr **)
 
-let rec give_scrutinees e =
+let rec give_scrutinees_under s e =
   match e with
-  | Let (x, kind, d, body) -> Let (x, kind, d, give_scrutinees body)
-  | Let_static (bindings, body) -> Let_static (bindings, give_scrutinees body)
+  | Let (x, kind, d, body) ->
+    Let (x, kind, d, give_scrutinees_under ((x, stated_of_named s d) :: s) body)
+  | Let_static (bindings, body) ->
+    Let_static (bindings, give_scrutinees_under s body)
   | Let_cont_non_recursive (k, handler0, body) ->
     let (Handler (params, metadata, handler)) = handler0 in
-    let h = Handler (params, metadata, give_scrutinees handler) in
+    let h =
+      Handler
+        ( params,
+          metadata,
+          give_scrutinees_under
+            (params_stated params metadata.hm_params_subkinds s)
+            handler )
+    in
     Let_cont_non_recursive
-      (k, h, give_from (length params) k h (give_scrutinees body))
+      (k, h, give_from s (length params) k h (give_scrutinees_under s body))
   | Let_cont_recursive (handlers, body) ->
-    Let_cont_recursive (handlers, give_scrutinees body)
+    Let_cont_recursive (handlers, give_scrutinees_under s body)
   | _ -> e

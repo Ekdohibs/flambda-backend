@@ -1,4 +1,5 @@
 open Datatypes
+open FlambdaCompareOrderSpec
 open FlambdaCompareSpec
 open FlambdaFloatCodeSpec
 open FlambdaGuardScopeSpec
@@ -194,7 +195,7 @@ let lifted_holds_from statics rounds unused slots g ls kept before after =
   in
   (head_removal_free_in statics unused tidied
   && lifted_free_in statics rounds (unit_continuations ls) ls kept before0)
-  && (expr_eqb [] []
+  && (expr_says_at_least [] []
         (order_statics_as
            (float_code (with_code_first after0))
            (float_code lifted))

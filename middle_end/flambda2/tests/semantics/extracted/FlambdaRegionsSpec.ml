@@ -7,6 +7,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaPrimitiveModel
 open FlambdaSemanticsSpec
+open FlambdaSubkindSpec
 open FlambdaValueSpec
 open List
 open ListDef
@@ -763,25 +764,28 @@ let region_apply_cont rs ac =
     | Some vs ->
       if kinds_eqb (map (region_kind_of_value rs) vs) metadata.hm_params_kinds
       then
-        match bind_params params vs def_vars with
-        | Some handler_vars ->
-          Region_step
-            { rs_state =
-                { state_expr = handler;
-                  state_vars = handler_vars;
-                  state_conts =
-                    app (rec_closures recursive def_vars def_conts) def_conts;
-                  state_statics = s.state_statics;
-                  state_heap = s.state_heap;
-                  state_reads = s.state_reads
-                };
-              rs_frames = rs.rs_frames;
-              rs_base = rs.rs_base;
-              rs_next = rs.rs_next;
-              rs_counts = rs.rs_counts;
-              rs_cells = rs.rs_cells
-            }
-        | None -> Region_undefined No_plain_step
+        if values_of_subkinds (live_statics rs) vs metadata.hm_params_subkinds
+        then
+          match bind_params params vs def_vars with
+          | Some handler_vars ->
+            Region_step
+              { rs_state =
+                  { state_expr = handler;
+                    state_vars = handler_vars;
+                    state_conts =
+                      app (rec_closures recursive def_vars def_conts) def_conts;
+                    state_statics = s.state_statics;
+                    state_heap = s.state_heap;
+                    state_reads = s.state_reads
+                  };
+                rs_frames = rs.rs_frames;
+                rs_base = rs.rs_base;
+                rs_next = rs.rs_next;
+                rs_counts = rs.rs_counts;
+                rs_cells = rs.rs_cells
+              }
+          | None -> Region_undefined No_plain_step
+        else Region_undefined No_plain_step
       else Region_undefined No_plain_step
     | None -> Region_undefined No_plain_step)
   | _ -> plain_step rs
@@ -1152,6 +1156,7 @@ and erase_handler conts = function
     Handler
       ( drop_regions places params,
         { hm_params_kinds = drop_regions places metadata.hm_params_kinds;
+          hm_params_subkinds = drop_regions places metadata.hm_params_subkinds;
           hm_is_exn_handler = metadata.hm_is_exn_handler
         },
         erase conts handler )
@@ -1183,6 +1188,18 @@ let takes_no_region conts k =
   match lookup k conts with
   | Some places -> negb (existsb (fun place -> place) places)
   | None -> true
+
+(** val regions_state_nothing : bool list -> param_subkind list -> bool **)
+
+let rec regions_state_nothing places sks =
+  match places with
+  | [] -> true
+  | place :: places0 -> (
+    match sks with
+    | [] -> true
+    | ps :: sks0 ->
+      (negb place || says_nothing (fst ps) (snd ps))
+      && regions_state_nothing places0 sks0)
 
 (** val calls_return_no_region : region_conts -> expr -> bool **)
 
@@ -1218,8 +1235,11 @@ let rec calls_return_no_region conts = function
 (** val handler_returns_no_region : region_conts -> continuation_handler -> bool
     **)
 
-and handler_returns_no_region conts = function
-  | Handler (_, _, handler) -> calls_return_no_region conts handler
+and handler_returns_no_region conts h =
+  match h with
+  | Handler (_, _, handler) ->
+    regions_state_nothing (region_params h) (handler_params_subkinds h)
+    && calls_return_no_region conts handler
 
 (** val binding_returns_no_region : static_binding -> bool **)
 

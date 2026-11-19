@@ -406,28 +406,43 @@ let no_exn_extra_args ap =
 
 type handler_metadata =
   { hm_params_kinds : flambda_kind list;
+    hm_params_subkinds : param_subkind list;
     hm_is_exn_handler : bool
   }
 
 (** val make_handler_metadata : flambda_kind list -> handler_metadata **)
 
 let make_handler_metadata params_kinds =
-  { hm_params_kinds = params_kinds; hm_is_exn_handler = false }
+  { hm_params_kinds = params_kinds;
+    hm_params_subkinds = [];
+    hm_is_exn_handler = false
+  }
 
 (** val make_exn_handler_metadata : flambda_kind list -> handler_metadata **)
 
 let make_exn_handler_metadata params_kinds =
-  { hm_params_kinds = params_kinds; hm_is_exn_handler = true }
+  { hm_params_kinds = params_kinds;
+    hm_params_subkinds = [];
+    hm_is_exn_handler = true
+  }
 
 (** val handler_metadata_eqb : handler_metadata -> handler_metadata -> bool **)
 
 let handler_metadata_eqb m m' =
-  kinds_eqb m.hm_params_kinds m'.hm_params_kinds
+  (kinds_eqb m.hm_params_kinds m'.hm_params_kinds
+  && param_subkinds_eqb m.hm_params_subkinds m'.hm_params_subkinds)
   && eqb m.hm_is_exn_handler m'.hm_is_exn_handler
+
+(** val subkinds_behind : nat -> param_subkind list -> param_subkind list **)
+
+let subkinds_behind n sks =
+  match sks with [] -> [] | _ :: _ -> app (repeat any_value n) sks
 
 type code_metadata =
   { cm_params_arity : arity;
+    cm_params_subkinds : param_subkind list;
     cm_result_arity : arity;
+    cm_result_subkinds : param_subkind list;
     cm_is_tupled : bool;
     cm_is_stub : bool
   }
@@ -436,7 +451,9 @@ type code_metadata =
 
 let make_code_metadata params_arity result_arity =
   { cm_params_arity = params_arity;
+    cm_params_subkinds = [];
     cm_result_arity = result_arity;
+    cm_result_subkinds = [];
     cm_is_tupled = false;
     cm_is_stub = false
   }
@@ -445,7 +462,9 @@ let make_code_metadata params_arity result_arity =
 
 let make_tupled_code_metadata params_arity result_arity =
   { cm_params_arity = params_arity;
+    cm_params_subkinds = [];
     cm_result_arity = result_arity;
+    cm_result_subkinds = [];
     cm_is_tupled = true;
     cm_is_stub = false
   }
@@ -454,7 +473,9 @@ let make_tupled_code_metadata params_arity result_arity =
 
 let stub_code_metadata m =
   { cm_params_arity = m.cm_params_arity;
+    cm_params_subkinds = m.cm_params_subkinds;
     cm_result_arity = m.cm_result_arity;
+    cm_result_subkinds = m.cm_result_subkinds;
     cm_is_tupled = m.cm_is_tupled;
     cm_is_stub = true
   }
@@ -462,8 +483,10 @@ let stub_code_metadata m =
 (** val code_metadata_eqb : code_metadata -> code_metadata -> bool **)
 
 let code_metadata_eqb m m' =
-  ((arity_eqb m.cm_params_arity m'.cm_params_arity
-   && arity_eqb m.cm_result_arity m'.cm_result_arity)
+  ((((arity_eqb m.cm_params_arity m'.cm_params_arity
+     && param_subkinds_eqb m.cm_params_subkinds m'.cm_params_subkinds)
+    && arity_eqb m.cm_result_arity m'.cm_result_arity)
+   && param_subkinds_eqb m.cm_result_subkinds m'.cm_result_subkinds)
   && eqb m.cm_is_tupled m'.cm_is_tupled)
   && eqb m.cm_is_stub m'.cm_is_stub
 
@@ -544,6 +567,16 @@ let code_is_stub = function
 (** val code_params_kinds : code -> flambda_kind list **)
 
 let code_params_kinds c = unarize (code_params_arity c)
+
+(** val handler_params_subkinds : continuation_handler -> param_subkind list **)
+
+let handler_params_subkinds = function
+  | Handler (_, metadata, _) -> metadata.hm_params_subkinds
+
+(** val code_params_subkinds : code -> param_subkind list **)
+
+let code_params_subkinds = function
+  | Code (_, _, _, _, metadata, _) -> metadata.cm_params_subkinds
 
 (** val code_body : code -> expr **)
 

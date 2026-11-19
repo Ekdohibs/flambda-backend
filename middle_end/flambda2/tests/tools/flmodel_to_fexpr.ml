@@ -56,9 +56,11 @@
    What the model has not got is given the value that says least: no
    continuation sort but that of an exception handler, no inlining attribute,
    size 0 for code, code that is not recursive, allocation on the heap, the mode
-   of the heap for an assignment, no subkinds. Code gets a region variable and a
-   depth variable of its own, as the syntax asks for them; a call or an
-   allocation in code names that region.
+   of the heap for an assignment. Subkinds are written where parameters state
+   them and nowhere else: what code states of its results is not written, and
+   the conversion gives none. Code gets a region variable and a depth variable
+   of its own, as the syntax asks for them; a call or an allocation in code
+   names that region.
 
    What is covered: the terms that the conversion makes today. A term that is
    outside them, or that fexpr has no way to write, raises [Not_printable] with
@@ -71,7 +73,11 @@
    it: the closures of one static set next to each other, in the order of the
    set's symbols, of which there is at least one; - a closure bound at another
    kind than [Value]; - code whose parameters are not as many as the kinds of
-   its arity; - a static boxed number whose contents are not a number that can
+   its arity; - a handler whose parameters are not as many as its kinds; - a
+   parameter that states something beside a kind that is not the kind of values;
+   - a variant one of whose constructors has its fields stated and has none,
+   which the text cannot say (after [of] the parser asks for a field, or for the
+   word [any]); - a static boxed number whose contents are not a number that can
    be boxed, or are a variable whose binder is not in sight (the model does not
    say which number a boxed number holds; it is read off the kind of the
    variable); - a value slot of kind [Region] or [Rec_info]; - a direct call of
@@ -656,11 +662,68 @@ let continuation env k : F.continuation =
   then Special Error
   else Named (continuation_id k)
 
-let kinded_parameters params kinds : F.kinded_parameter list =
-  List.map2
-    (fun param k : F.kinded_parameter ->
-      { param = variable param; kind = Some (kind k) })
-    params kinds
+(* A subkind as fexpr writes it. Decision D25, at parameters. *)
+let rec subkind (sk : Kinds.subkind) : F.subkind =
+  match sk with
+  | Subkind_anything -> Anything
+  | Subkind_tagged_immediate -> Tagged_immediate
+  | Subkind_boxed_number Boxable_naked_float32 -> Boxed_float32
+  | Subkind_boxed_number Boxable_naked_float -> Boxed_float
+  | Subkind_boxed_number Boxable_naked_int32 -> Boxed_int32
+  | Subkind_boxed_number Boxable_naked_int64 -> Boxed_int64
+  | Subkind_boxed_number Boxable_naked_nativeint -> Boxed_nativeint
+  | Subkind_boxed_number Boxable_naked_vec128 -> Boxed_vec128
+  | Subkind_boxed_number Boxable_naked_vec256 -> Boxed_vec256
+  | Subkind_boxed_number Boxable_naked_vec512 -> Boxed_vec512
+  | Subkind_boxed_number Boxable_naked_mask -> Boxed_mask
+  | Subkind_variant (consts, shapes) ->
+    Variant
+      { consts = List.map int64_of_z consts; non_consts = non_consts shapes }
+
+and non_consts (shapes : Kinds.constructor_shapes) =
+  match shapes with
+  | Shapes_nil -> []
+  | Shape_undetermined (tag, rest) -> (int_of_z tag, None) :: non_consts rest
+  | Shape_determined (_, Fields_nil, _) ->
+    not_printable "a constructor of a variant with fields stated and none"
+  | Shape_determined (tag, (Fields_cons _ as fields), rest) ->
+    (int_of_z tag, Some (field_subkinds fields)) :: non_consts rest
+
+and value_of_subkind nullable sk : F.kind_with_subkind =
+  if nullable then Nullable_value (subkind sk) else Value (subkind sk)
+
+and field_subkinds (fields : Kinds.field_subkinds) : F.kind_with_subkind list =
+  match fields with
+  | Fields_nil -> []
+  | Fields_cons (nullable, sk, rest) ->
+    value_of_subkind nullable sk :: field_subkinds rest
+
+(* The parameters with their kinds and what the binder states of them. Where the
+   list of what is stated has no entry for a parameter, nothing is stated of it:
+   a value may be null. A subkind is of a value. *)
+let kinded_parameters params kinds subkinds : F.kinded_parameter list =
+  let rec go params kinds (subkinds : Kinds.param_subkind list) =
+    match params, kinds with
+    | [], [] -> []
+    | param :: params, k :: kinds ->
+      let (nullable, sk), subkinds =
+        match subkinds with
+        | [] -> Kinds.any_value, []
+        | ps :: subkinds -> ps, subkinds
+      in
+      let kind : F.kind_with_subkind =
+        match (k : Kinds.flambda_kind) with
+        | Value -> value_of_subkind nullable sk
+        | Naked_number _ | Region | Rec_info ->
+          if Kinds.says_nothing nullable sk
+          then kind k
+          else not_printable "a subkind beside a kind that is not a value kind"
+      in
+      ({ param = variable param; kind = Some kind } : F.kinded_parameter)
+      :: go params kinds subkinds
+    | _, _ -> not_printable "parameters that are not as many as their kinds"
+  in
+  go params kinds subkinds
 
 let bind_parameters env params kinds = List.fold_left2 bind env params kinds
 
@@ -1013,7 +1076,7 @@ and handler env k (Model.Handler (params, metadata, handler)) :
     not_printable
       "a handler whose parameters are not as many as the kinds it gives them";
   { name = continuation_id k;
-    params = kinded_parameters params kinds;
+    params = kinded_parameters params kinds metadata.hm_params_subkinds;
     sort = (if metadata.hm_is_exn_handler then Some Exn else None);
     cold = false;
     handler = expr (bind_parameters env params kinds) handler
@@ -1126,7 +1189,7 @@ and code env id (Model.Code (params, my_closure, ret, exn, metadata, body)) :
     recursive = Nonrecursive;
     inline = None;
     params_and_body =
-      { params = kinded_parameters params kinds;
+      { params = kinded_parameters params kinds metadata.cm_params_subkinds;
         closure_var = variable my_closure;
         region_vars = Not_alloc_stack { alloc_region = region };
         depth_var = depth_of_code id;

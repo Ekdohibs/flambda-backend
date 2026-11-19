@@ -7,6 +7,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaPrimitiveModel
 open FlambdaSemanticsSpec
+open FlambdaSubkindSpec
 open FlambdaValueSpec
 open List
 open ListDef
@@ -263,6 +264,8 @@ val erase_binding : static_binding -> static_binding
 val erase_code : code -> code
 
 val takes_no_region : region_conts -> continuation -> bool
+
+val regions_state_nothing : bool list -> param_subkind list -> bool
 
 val calls_return_no_region : region_conts -> expr -> bool
 

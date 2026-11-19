@@ -41,6 +41,8 @@ val untag_named : variable list -> named -> named
 
 val untag_params_list : nat list -> variable list -> variable list
 
+val stated_of_params : handler_metadata -> param_subkind list
+
 val untag_metadata : nat list -> handler_metadata -> handler_metadata
 
 val untagged_under : nat list -> variable list -> variable list -> variable list

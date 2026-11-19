@@ -2,6 +2,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaStatedScopeSpec
 open FlambdaUnaliasParamsSpec
 open List
 

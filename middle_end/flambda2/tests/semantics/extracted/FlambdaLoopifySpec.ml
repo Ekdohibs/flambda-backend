@@ -97,7 +97,10 @@ and loop_safe_handler my_closure ret exn self = function
 let loop_handler self c =
   Handler
     ( code_params c,
-      make_handler_metadata (code_params_kinds c),
+      { hm_params_kinds = code_params_kinds c;
+        hm_params_subkinds = code_params_subkinds c;
+        hm_is_exn_handler = false
+      },
       loop_calls (code_my_closure c) (code_params_arity c)
         (code_return_continuation c)
         (code_exn_continuation c) self (code_body c) )

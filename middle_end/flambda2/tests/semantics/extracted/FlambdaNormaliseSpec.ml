@@ -11,6 +11,8 @@ open FlambdaNominalSpec
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open FlambdaSemanticsSpec
+open FlambdaStatedScopeSpec
+open FlambdaStatedSymbolsSpec
 open FlambdaTupledSpec
 open FlambdaValueSpec
 open List
@@ -642,24 +644,27 @@ let rec symbols_of bindings known =
       | _ -> symbols_of bindings0 ((s, None) :: known))
     | _ -> symbols_of bindings0 known)
 
-(** val call_agrees_b : apply_expr -> code -> bool **)
+(** val call_agrees_stated : symbols_stated -> stated_in_scope -> apply_expr ->
+    code -> bool **)
 
-let call_agrees_b ap c =
-  (kinds_per_parameter_eqb
-     (unarize_per_parameter ap.ap_args_arity)
-     (unarize_per_parameter (code_params_arity c))
-  && arity_eqb ap.ap_return_arity (code_result_arity c))
-  && Nat.eqb (length (code_params c)) (length (code_params_kinds c))
+let call_agrees_stated y s ap c =
+  ((kinds_per_parameter_eqb
+      (unarize_per_parameter ap.ap_args_arity)
+      (unarize_per_parameter (code_params_arity c))
+   && arity_eqb ap.ap_return_arity (code_result_arity c))
+  && Nat.eqb (length (code_params c)) (length (code_params_kinds c)))
+  && are_stated_knowing y s ap.ap_args (code_params_subkinds c)
 
-(** val inline_known_apply : code_id list -> (code_id * code) list -> (symbol *
-    code_id option) list -> apply_expr -> expr **)
+(** val inline_known_apply : stated_in_scope -> code_id list -> (code_id * code)
+    list -> (symbol * code_id option) list -> symbols_stated -> apply_expr ->
+    expr **)
 
-let inline_known_apply kept known_code known_symbols ap =
+let inline_known_apply s kept known_code known_symbols y ap =
   match ap.ap_callee with
-  | Symbol s -> (
+  | Symbol s0 -> (
     match ap.ap_call_kind with
     | Direct called -> (
-      match lookup s known_symbols with
+      match lookup s0 known_symbols with
       | Some o -> (
         match o with
         | Some code0 -> (
@@ -668,7 +673,7 @@ let inline_known_apply kept known_code known_symbols ap =
             if
               negb (among called kept)
               && (Pos.eqb code0 called && inlinable_b ap c)
-              && call_agrees_b ap c
+              && call_agrees_stated y s ap c
             then
               inlined_body c
                 (inline_renaming
@@ -683,63 +688,82 @@ let inline_known_apply kept known_code known_symbols ap =
     | _ -> Apply ap)
   | _ -> Apply ap
 
-(** val inline_known_calls : code_id list -> (code_id * code) list -> (symbol *
-    code_id option) list -> expr -> expr **)
+(** val inline_known_calls_under : stated_in_scope -> code_id list -> (code_id *
+    code) list -> (symbol * code_id option) list -> symbols_stated -> expr ->
+    expr **)
 
-let rec inline_known_calls kept known_code known_symbols e =
+let rec inline_known_calls_under s kept known_code known_symbols y e =
   match e with
   | Let (x, kind, d, body) ->
-    Let (x, kind, d, inline_known_calls kept known_code known_symbols body)
+    Let
+      ( x,
+        kind,
+        d,
+        inline_known_calls_under
+          ((x, stated_of_named s d) :: s)
+          kept known_code known_symbols y body )
   | Let_static (bindings, body) ->
     let bindings0 =
-      map (inline_known_calls_in_binding kept known_code known_symbols) bindings
+      map
+        (inline_known_calls_in_binding_knowing kept known_code known_symbols y)
+        bindings
     in
     Let_static
       ( bindings0,
-        inline_known_calls kept
+        inline_known_calls_under s kept
           (codes_of bindings0 known_code)
           (symbols_of bindings0 known_symbols)
+          (statics_stated bindings0 y)
           body )
   | Let_cont_non_recursive (k, h, body) ->
     Let_cont_non_recursive
       ( k,
-        inline_known_calls_in_handler kept known_code known_symbols h,
-        inline_known_calls kept known_code known_symbols body )
+        inline_known_calls_in_handler_under s kept known_code known_symbols y h,
+        inline_known_calls_under s kept known_code known_symbols y body )
   | Let_cont_recursive (handlers, body) ->
     Let_cont_recursive
       ( map
           (fun pat ->
             let k, h = pat in
-            k, inline_known_calls_in_handler kept known_code known_symbols h)
+            ( k,
+              inline_known_calls_in_handler_under s kept known_code
+                known_symbols y h ))
           handlers,
-        inline_known_calls kept known_code known_symbols body )
-  | Apply ap -> inline_known_apply kept known_code known_symbols ap
+        inline_known_calls_under s kept known_code known_symbols y body )
+  | Apply ap -> inline_known_apply s kept known_code known_symbols y ap
   | _ -> e
 
-(** val inline_known_calls_in_handler : code_id list -> (code_id * code) list ->
-    (symbol * code_id option) list -> continuation_handler ->
-    continuation_handler **)
+(** val inline_known_calls_in_handler_under : stated_in_scope -> code_id list ->
+    (code_id * code) list -> (symbol * code_id option) list -> symbols_stated ->
+    continuation_handler -> continuation_handler **)
 
-and inline_known_calls_in_handler kept known_code known_symbols = function
+and inline_known_calls_in_handler_under s kept known_code known_symbols y =
+  function
   | Handler (params, metadata, handler) ->
     Handler
       ( params,
         metadata,
-        inline_known_calls kept known_code known_symbols handler )
+        inline_known_calls_under
+          (params_stated params metadata.hm_params_subkinds s)
+          kept known_code known_symbols y handler )
 
-(** val inline_known_calls_in_binding : code_id list -> (code_id * code) list ->
-    (symbol * code_id option) list -> static_binding -> static_binding **)
+(** val inline_known_calls_in_binding_knowing : code_id list -> (code_id * code)
+    list -> (symbol * code_id option) list -> symbols_stated -> static_binding
+    -> static_binding **)
 
-and inline_known_calls_in_binding kept known_code known_symbols binding =
+and inline_known_calls_in_binding_knowing kept known_code known_symbols y
+    binding =
   match binding with
   | Bind_code (id, c) ->
-    Bind_code (id, inline_known_calls_in_code kept known_code known_symbols c)
+    Bind_code
+      (id, inline_known_calls_in_code_knowing kept known_code known_symbols y c)
   | _ -> binding
 
-(** val inline_known_calls_in_code : code_id list -> (code_id * code) list ->
-    (symbol * code_id option) list -> code -> code **)
+(** val inline_known_calls_in_code_knowing : code_id list -> (code_id * code)
+    list -> (symbol * code_id option) list -> symbols_stated -> code -> code **)
 
-and inline_known_calls_in_code kept known_code known_symbols = function
+and inline_known_calls_in_code_knowing kept known_code known_symbols y =
+  function
   | Code (params, my_closure, ret, exn, metadata, body) ->
     Code
       ( params,
@@ -747,7 +771,21 @@ and inline_known_calls_in_code kept known_code known_symbols = function
         ret,
         exn,
         metadata,
-        inline_known_calls kept known_code known_symbols body )
+        inline_known_calls_under
+          (code_stated params my_closure metadata)
+          kept known_code known_symbols y body )
+
+(** val inline_known_calls_in_binding : code_id list -> (code_id * code) list ->
+    (symbol * code_id option) list -> static_binding -> static_binding **)
+
+let inline_known_calls_in_binding kept known_code known_symbols binding =
+  inline_known_calls_in_binding_knowing kept known_code known_symbols [] binding
+
+(** val inline_known_calls : code_id list -> (code_id * code) list -> (symbol *
+    code_id option) list -> expr -> expr **)
+
+let inline_known_calls kept known_code known_symbols e =
+  inline_known_calls_under [] kept known_code known_symbols [] e
 
 (** val binds_code : static_binding -> bool **)
 

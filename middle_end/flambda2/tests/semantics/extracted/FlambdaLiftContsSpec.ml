@@ -151,6 +151,8 @@ let rec lift_spine body params kinds moved handler =
                 ( app ps q,
                   { hm_params_kinds =
                       app (map snd read) metadata.hm_params_kinds;
+                    hm_params_subkinds =
+                      subkinds_behind (length read) metadata.hm_params_subkinds;
                     hm_is_exn_handler = false
                   },
                   h0 ) )

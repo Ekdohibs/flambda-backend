@@ -152,6 +152,7 @@ val no_exn_extra_args : apply_expr -> bool
 
 type handler_metadata =
   { hm_params_kinds : flambda_kind list;
+    hm_params_subkinds : param_subkind list;
     hm_is_exn_handler : bool
   }
 
@@ -161,9 +162,13 @@ val make_exn_handler_metadata : flambda_kind list -> handler_metadata
 
 val handler_metadata_eqb : handler_metadata -> handler_metadata -> bool
 
+val subkinds_behind : nat -> param_subkind list -> param_subkind list
+
 type code_metadata =
   { cm_params_arity : arity;
+    cm_params_subkinds : param_subkind list;
     cm_result_arity : arity;
+    cm_result_subkinds : param_subkind list;
     cm_is_tupled : bool;
     cm_is_stub : bool
   }
@@ -223,6 +228,10 @@ val code_is_tupled : code -> bool
 val code_is_stub : code -> bool
 
 val code_params_kinds : code -> flambda_kind list
+
+val handler_params_subkinds : continuation_handler -> param_subkind list
+
+val code_params_subkinds : code -> param_subkind list
 
 val code_body : code -> expr
 

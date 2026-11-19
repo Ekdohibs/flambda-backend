@@ -7,6 +7,8 @@ open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
 open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
+open FlambdaCodeStatedSpec
+open FlambdaCompareOrderSpec
 open FlambdaCompareSpec
 open FlambdaCopyCodeSpec
 open FlambdaCseSpec
@@ -45,6 +47,7 @@ open FlambdaNormaliseSpec
 open FlambdaParamAliasesSpec
 open FlambdaReadsAfterSpec
 open FlambdaRecHandlersSpec
+open FlambdaRecHandlersStatedSpec
 open FlambdaRecoverComparisonSpec
 open FlambdaRenameApartSpec
 open FlambdaSameComparisonSpec
@@ -56,6 +59,7 @@ open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec
 open FlambdaSinkUsesSpec
+open FlambdaStatedScopeSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
 open FlambdaTwinParamsSpec
@@ -101,7 +105,9 @@ val normalise_code_params : expr -> expr
 
 val normalise_params_round : expr -> expr
 
-val arms_expr_before : expr -> expr
+val arms_expr_before_stated : stated_in_scope -> expr -> expr
+
+val arms_code_before_stated : stated_in_scope -> expr -> expr
 
 val arms_code_before : expr -> expr
 
@@ -161,7 +167,9 @@ val place_conts : expr -> expr
 
 val placed : expr -> expr
 
-val tidy_expr_before : expr -> expr
+val tidy_expr_before_stated : stated_in_scope -> expr -> expr
+
+val tidy_code_before_stated : stated_in_scope -> expr -> expr
 
 val tidy_code_before : expr -> expr
 
@@ -169,7 +177,9 @@ val tidy_before_round : expr -> expr
 
 val tidied_before : nat -> expr -> expr
 
-val tidy_expr_after : expr -> expr
+val tidy_expr_after_stated : stated_in_scope -> expr -> expr
+
+val tidy_code_after_stated : stated_in_scope -> expr -> expr
 
 val tidy_code_after : expr -> expr
 

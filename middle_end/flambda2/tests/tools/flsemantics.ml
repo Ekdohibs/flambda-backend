@@ -801,22 +801,22 @@ let convert_binary_primitive (p : P.binary_primitive) :
    [Invalid] ([Simplify_variadic_primitive]). The model's [Make_block] has no
    such annotation: the model does not check a field against its subkind. So the
    check of the kinds of the fields of a [Make_block] at block kind [Values]
-   drops their subkinds, as those of parameters are dropped: it asks that there
-   be as many kinds as arguments and that each field be of kind [Value],
-   whatever its subkind and whether or not it may be null. A field of another
-   kind is refused. This is the check of the kinds only: the other conditions
-   under which a block is converted (how it is marked, and for a block with an
-   identity that it has an argument) are tested apart from it.
+   drops their subkinds, where those of parameters are kept ([convert_subkind]):
+   it asks that there be as many kinds as arguments and that each field be of
+   kind [Value], whatever its subkind and whether or not it may be null. A field
+   of another kind is refused. This is the check of the kinds only: the other
+   conditions under which a block is converted (how it is marked, and for a
+   block with an identity that it has an argument) are tested apart from it.
 
-   The model has no subkinds, so a verdict is of the two terms without them.
-   What is not proved is that the subkind of a field has no bearing on what the
-   program computes: Simplify reads it, and by a reading of the source the
-   translation to Cmm does not when it makes the block. Two things follow. The
-   conversion can give a defined construction in the model where Simplify makes
-   it [Invalid] for a field's subkind. And the subkinds of the two terms are not
-   compared: a field may have another in the term after. A term read from a text
-   that does not write these kinds has lost them before it comes here
-   (discrepancy V2-2).
+   The block kind of the model's [Make_block] has no subkinds, so a verdict is
+   of the two terms without those of their fields. What is not proved is that
+   the subkind of a field has no bearing on what the program computes: Simplify
+   reads it, and by a reading of the source the translation to Cmm does not when
+   it makes the block. Two things follow. The conversion can give a defined
+   construction in the model where Simplify makes it [Invalid] for a field's
+   subkind. And the subkinds of the fields of the two terms are not compared: a
+   field may have another in the term after. A term read from a text that does
+   not write these kinds has lost them before it comes here (discrepancy V2-2).
 
    A [Make_array] is converted here when it is [Immutable] and its elements are
    of kind [Value]: it is the model's [Make_immutable_array], which makes a
@@ -830,10 +830,11 @@ let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
   (* CR mshinwell: a block made in a region is converted as one made on the
      heap; see [region_variables]. *)
   (* CR mshinwell: the subkind of each field, and whether it may be null, are
-     dropped, as they are of a parameter: every field is read as any value. So
-     a wrong subkind of a field is not seen, as one of a parameter is not: the
-     model does not check a field against its subkind, and the subkinds of the
-     two terms are not compared. This is provisional. Decision D25. *)
+     dropped: every field is read as any value. So a wrong subkind of a field
+     is not seen: the model does not check a field against its subkind, as it
+     checks a parameter, and the subkinds of the fields of the two terms are
+     not compared. This is provisional. Decision D25, of the fields of a made
+     block, which is open. *)
     when List.compare_length_with kinds num_args = 0
          && List.for_all
               (fun kind ->
@@ -1272,9 +1273,9 @@ let known_arity_call_met : bool ref = ref false
    the call returns to; the exception continuation and its extra arguments. The
    comparison of two terms compares each of these (FlambdaCompareSpec.apply_eqb,
    and call_kind_eqb for the code ids). What is not kept: the allocation mode of
-   the call and the region that it names; the subkinds of the arities, as
-   everywhere; the position, the inlining attribute and the debugging
-   information.
+   the call and the region that it names; the subkinds of the arities (a call of
+   the model has kinds alone); the position, the inlining attribute and the
+   debugging information.
 
    The callee, and the words after "validated". In a term that the compiler
    makes, the callee of such a call is a symbol of the compilation unit of
@@ -1587,6 +1588,86 @@ let convert_params_kinds (params : Bound_parameters.t) =
       let kind = Bound_parameter.kind param in
       convert_kind (Flambda_kind.With_subkind.kind kind))
     (Bound_parameters.to_list params)
+
+(* The subkinds of parameters, which the model keeps beside their kinds: what
+   the machine tests of a value where a parameter binds it. The subkinds of
+   arrays and of a block of floats are not in the model: they are given as
+   saying nothing of a value but whether it may be null. A constructor whose
+   fields are not all values, or of whose fields nothing is stated, keeps its
+   tag, and nothing is said of its fields. A kind that is not a value kind has
+   no subkind. Decision D25, at parameters. *)
+let rec convert_subkind (kind : Flambda_kind.With_subkind.t) :
+    Kinds.param_subkind =
+  match Flambda_kind.With_subkind.kind kind with
+  | Naked_number _ | Region | Rec_info -> true, Kinds.Subkind_anything
+  | Value -> (
+    let nullable =
+      match Flambda_kind.With_subkind.nullable kind with
+      | Nullable -> true
+      | Non_nullable -> false
+    in
+    let boxed n = nullable, Kinds.Subkind_boxed_number n in
+    match Flambda_kind.With_subkind.non_null_value_subkind kind with
+    | Anything -> nullable, Subkind_anything
+    | Tagged_immediate -> nullable, Subkind_tagged_immediate
+    | Boxed_float32 -> boxed Boxable_naked_float32
+    | Boxed_float -> boxed Boxable_naked_float
+    | Boxed_int32 -> boxed Boxable_naked_int32
+    | Boxed_int64 -> boxed Boxable_naked_int64
+    | Boxed_nativeint -> boxed Boxable_naked_nativeint
+    | Boxed_vec128 -> boxed Boxable_naked_vec128
+    | Boxed_vec256 -> boxed Boxable_naked_vec256
+    | Boxed_vec512 -> boxed Boxable_naked_vec512
+    | Boxed_mask -> boxed Boxable_naked_mask
+    | Variant { consts; non_consts } ->
+      let consts =
+        List.map
+          (fun i -> z_of_int (Target_ocaml_int.to_int i))
+          (Target_ocaml_int.Set.elements consts)
+      in
+      let shapes =
+        List.fold_right
+          (fun ( tag,
+                 (shape :
+                   Flambda_kind.With_subkind.Non_null_value_subkind
+                   .constructor_shape) ) rest : Kinds.constructor_shapes ->
+            let tag = z_of_int (Tag.Scannable.to_int tag) in
+            match shape with
+            | Determined (Scannable Value_only, fields) ->
+              Shape_determined (tag, convert_field_subkinds fields, rest)
+            | Undetermined
+            | Determined ((Scannable (Mixed_record _) | Float_record), _) ->
+              Shape_undetermined (tag, rest))
+          (Tag.Scannable.Map.bindings non_consts)
+          Kinds.Shapes_nil
+      in
+      nullable, Subkind_variant (consts, shapes)
+    | Float_block _ | Float_array | Immediate_array | Value_array
+    | Generic_array | Unboxed_float32_array | Untagged_int_array
+    | Untagged_int8_array | Untagged_int16_array | Unboxed_int32_array
+    | Unboxed_int64_array | Unboxed_nativeint_array | Unboxed_vec128_array
+    | Unboxed_vec256_array | Unboxed_vec512_array | Unboxed_mask_array
+    | Unboxed_product_array ->
+      nullable, Subkind_anything)
+
+and convert_field_subkinds (fields : Flambda_kind.With_subkind.t list) :
+    Kinds.field_subkinds =
+  List.fold_right
+    (fun field rest : Kinds.field_subkinds ->
+      let nullable, subkind = convert_subkind field in
+      Fields_cons (nullable, subkind, rest))
+    fields Kinds.Fields_nil
+
+(* The subkinds of parameters, one to a parameter; or none where nothing is
+   stated of any of them, which is what FlambdaModel.make_handler_metadata gives
+   a handler, so that such a handler and a converted one compare equal. *)
+let convert_params_subkinds (params : Bound_parameters.t) =
+  let subkinds =
+    List.map
+      (fun param -> convert_subkind (Bound_parameter.kind param))
+      (Bound_parameters.to_list params)
+  in
+  if Kinds.subkinds_say_nothing subkinds then [] else subkinds
 
 let convert_bound_var (bound_var : Bound_var.t) =
   let var = Bound_var.var bound_var in
@@ -1904,9 +1985,10 @@ and convert_handler ~invariant_params (handler : Flambda.Continuation_handler.t)
       let kinds = convert_params_kinds params in
       Model.Handler
         ( convert_params params,
-          (if is_exn_handler
-           then Model.make_exn_handler_metadata kinds
-           else Model.make_handler_metadata kinds),
+          { hm_params_kinds = kinds;
+            hm_params_subkinds = convert_params_subkinds params;
+            hm_is_exn_handler = is_exn_handler
+          },
           convert_expr handler ))
 
 and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
@@ -2216,7 +2298,7 @@ and convert_prim (prim : P.t) : Model.named =
   (* CR mshinwell: the subkind of each field, and whether it may be null, are
      dropped, as in [convert_variadic_primitive]: every field is read as any
      value, and a wrong subkind of a field is not seen. This is provisional.
-     Decision D25. *)
+     Decision D25, of the fields of a made block, which is open. *)
     when List.compare_lengths kinds args = 0
          && List.for_all
               (fun kind ->
@@ -2388,6 +2470,11 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
              if is_tupled
              then Model.make_tupled_code_metadata params_arity result_arity
              else Model.make_code_metadata params_arity result_arity
+           in
+           let metadata =
+             { metadata with
+               cm_params_subkinds = convert_params_subkinds params
+             }
            in
            if Code0.stub code
            then Model.stub_code_metadata metadata
@@ -8774,6 +8861,14 @@ and validate_or_leave ~(demoted : bool)
      else "validated")
     ^ given
   in
+  (* "The same" in these lines is by the comparison at which the validation
+     accepted the pair (FlambdaCompareOrderSpec.expr_says_at_least; decision
+     D25, at parameters). That comparison is of a term made from the term before
+     with a term made from the term after, by the rewrites that come before it
+     in the validation; the two need not be the two terms that the tool
+     converted. The two terms compared at that step are the same up to bound
+     names but for what handlers and code state of their parameters, and code of
+     its results, of which the second states no more than the first. *)
   Format.printf "  %s@."
     (match validation with
     | Same_up_to_bound_names -> validated ^ ": the same up to bound names"
@@ -9591,7 +9686,9 @@ let drop_ghost_regions (e : Model.expr) : Model.expr =
         Handler
           ( drop_at handler_params handler_params,
             { metadata with
-              hm_params_kinds = drop_at handler_params metadata.hm_params_kinds
+              hm_params_kinds = drop_at handler_params metadata.hm_params_kinds;
+              hm_params_subkinds =
+                drop_at handler_params metadata.hm_params_subkinds
             },
             rewrite body )
     in

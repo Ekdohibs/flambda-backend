@@ -7,6 +7,8 @@ open FlambdaBlockLoadSpec
 open FlambdaClosureCallsSpec
 open FlambdaClosureOfCodeSpec
 open FlambdaCodeLetsSpec
+open FlambdaCodeStatedSpec
+open FlambdaCompareOrderSpec
 open FlambdaCompareSpec
 open FlambdaCopyCodeSpec
 open FlambdaCseSpec
@@ -45,6 +47,7 @@ open FlambdaNormaliseSpec
 open FlambdaParamAliasesSpec
 open FlambdaReadsAfterSpec
 open FlambdaRecHandlersSpec
+open FlambdaRecHandlersStatedSpec
 open FlambdaRecoverComparisonSpec
 open FlambdaRenameApartSpec
 open FlambdaSameComparisonSpec
@@ -56,6 +59,7 @@ open FlambdaShortcutSpec
 open FlambdaSimplifyCarriedSpec
 open FlambdaSinkContsSpec
 open FlambdaSinkUsesSpec
+open FlambdaStatedScopeSpec
 open FlambdaStaticsOrderSpec
 open FlambdaStubCallsSpec
 open FlambdaTwinParamsSpec
@@ -192,22 +196,28 @@ let normalise_params_round e =
   rewrite_code_in_scope normalise_code_params_knowing no_facts
     (normalise_code_params (merge_tables e))
 
-(** val arms_expr_before : expr -> expr **)
+(** val arms_expr_before_stated : stated_in_scope -> expr -> expr **)
 
-let arms_expr_before e =
+let arms_expr_before_stated s e =
   remove_unused_conts
     (forward_applications
-       (forward_to_arms (lift_handler_conts (unalias_rec_params e))))
+       (forward_to_arms (lift_handler_conts (unalias_rec_params_under s e))))
+
+(** val arms_code_before_stated : stated_in_scope -> expr -> expr **)
+
+let arms_code_before_stated s body =
+  arms_expr_before_stated s
+    (rewrite_rec_handlers_stated arms_expr_before_stated s body)
 
 (** val arms_code_before : expr -> expr **)
 
-let arms_code_before body =
-  arms_expr_before (rewrite_rec_handlers arms_expr_before body)
+let arms_code_before body = arms_code_before_stated [] body
 
 (** val first_phase_round : expr -> expr **)
 
 let first_phase_round e =
-  rewrite_code arms_code_before (arms_code_before (normalise_params_round e))
+  rewrite_code_stated arms_code_before_stated
+    (arms_code_before (normalise_params_round e))
 
 (** val demote_and_tidy : nat -> expr -> expr **)
 
@@ -421,9 +431,9 @@ let place_conts e =
 
 let placed e = rewrite_code place_conts (place_conts e)
 
-(** val tidy_expr_before : expr -> expr **)
+(** val tidy_expr_before_stated : stated_in_scope -> expr -> expr **)
 
-let tidy_expr_before e =
+let tidy_expr_before_stated s e =
   remove_unused_defined_lets []
     (remove_unused_lets
        (follow_aliases_in_loops []
@@ -437,26 +447,33 @@ let tidy_expr_before e =
                                (forward_applications
                                   (fold_constants
                                      (numbers_in_arms
-                                        (unalias_rec_params
-                                           (unalias_params (give_scrutinees e)))))))))))))))
+                                        (unalias_rec_params_under s
+                                           (unalias_params_under s
+                                              (give_scrutinees_under s e)))))))))))))))
+
+(** val tidy_code_before_stated : stated_in_scope -> expr -> expr **)
+
+let tidy_code_before_stated s body =
+  rewrite_rec_handlers_stated tidy_expr_before_stated s
+    (tidy_expr_before_stated s body)
 
 (** val tidy_code_before : expr -> expr **)
 
-let tidy_code_before body =
-  rewrite_rec_handlers tidy_expr_before (tidy_expr_before body)
+let tidy_code_before body = tidy_code_before_stated [] body
 
 (** val tidy_before_round : expr -> expr **)
 
-let tidy_before_round e = rewrite_code tidy_code_before (tidy_code_before e)
+let tidy_before_round e =
+  rewrite_code_stated tidy_code_before_stated (tidy_code_before e)
 
 (** val tidied_before : nat -> expr -> expr **)
 
 let tidied_before rounds e =
   groups_up (iterate rounds tidy_before_round (placed e))
 
-(** val tidy_expr_after : expr -> expr **)
+(** val tidy_expr_after_stated : stated_in_scope -> expr -> expr **)
 
-let tidy_expr_after e =
+let tidy_expr_after_stated s e =
   remove_unused_defined_lets_in_loops []
     (follow_aliases_in_loops []
        (follow_aliases []
@@ -469,19 +486,25 @@ let tidy_expr_after e =
                             (forward_kinded
                                (fold_constants
                                   (numbers_in_arms
-                                     (unalias_rec_params
-                                        (unalias_params (give_scrutinees e))))))))))))))
+                                     (unalias_rec_params_under s
+                                        (unalias_params_under s
+                                           (give_scrutinees_under s e))))))))))))))
+
+(** val tidy_code_after_stated : stated_in_scope -> expr -> expr **)
+
+let tidy_code_after_stated s body =
+  rewrite_rec_handlers_stated tidy_expr_after_stated s
+    (tidy_expr_after_stated s body)
 
 (** val tidy_code_after : expr -> expr **)
 
-let tidy_code_after body =
-  rewrite_rec_handlers tidy_expr_after (tidy_expr_after body)
+let tidy_code_after body = tidy_code_after_stated [] body
 
 (** val tidy_after_round : expr -> expr **)
 
 let tidy_after_round e =
   remove_unused_defined_lets_in_code
-    (rewrite_code tidy_code_after (tidy_code_after e))
+    (rewrite_code_stated tidy_code_after_stated (tidy_code_after e))
 
 (** val tidied_after : nat -> expr -> expr **)
 
@@ -526,7 +549,7 @@ type validation =
     lifting list -> code_id list -> expr -> expr -> validation **)
 
 let validate_unit rounds unused slots g ls kept before after =
-  if expr_eqb [] [] before after
+  if expr_says_at_least [] [] before after
   then Same_up_to_bound_names
   else
     let before0 =
@@ -538,22 +561,22 @@ let validate_unit rounds unused slots g ls kept before after =
       tidied_before rounds
         (with_returns taken (normalise_before rounds kept before0))
     in
-    if expr_eqb [] [] (order_statics_as after0 normalised) after0
+    if expr_says_at_least [] [] (order_statics_as after0 normalised) after0
     then Same_once_normalised
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as after0 (without_statics unused normalised))
         after0
     then Same_once_unused_statics_removed
     else
       let after1 = without_head_statics unused after0 in
       if
-        expr_eqb [] []
+        expr_says_at_least [] []
           (order_statics_as after1 (without_statics unused normalised))
           after1
       then Same_once_head_statics_removed
       else if
-        expr_eqb [] []
+        expr_says_at_least [] []
           (order_statics_as
              (float_code (with_code_first after1))
              (float_code
@@ -566,7 +589,7 @@ let validate_unit rounds unused slots g ls kept before after =
           (float_code (with_code_first after1))
       then Same_once_lifted
       else if
-        expr_eqb [] []
+        expr_says_at_least [] []
           (order_statics_as
              (with_statics_first ls after1)
              (with_statics_first ls

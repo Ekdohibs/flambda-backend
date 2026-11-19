@@ -1,11 +1,12 @@
 (* A function makes a block that cannot change, and the text says more of its
    fields than that each is any value: the first is an immediate, and the
-   second an immediate that may be null. The model has no such kinds, and the
-   conversion drops that much of the kind of a field, as it does of a
-   parameter (decision D25, which is open: this is provisional). So the unit
-   is run and validated. A tool that takes a block only where the kind of
-   every field is that of any value says of this unit that it is not checked,
-   which is not what the expected file says. *)
+   second an immediate that may be null. The block kind of the model's
+   Make_block has no such kinds, and the conversion drops that much of the
+   kind of a field, where it keeps it of a parameter (decision D25, which is
+   open for the fields of a made block: this is provisional). So the unit is
+   run and validated. A tool that takes a block only where the kind of every
+   field is that of any value says of this unit that it is not checked, which
+   is not what the expected file says. *)
 let code inline(never) loopify(never) size(20)
       work_0 (x : imm tagged)
         my_closure &my_alloc_region my_depth

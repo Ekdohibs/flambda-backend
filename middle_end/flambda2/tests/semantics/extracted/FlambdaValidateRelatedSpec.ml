@@ -1,6 +1,6 @@
 open Datatypes
 open FlambdaBindersSpec
-open FlambdaCompareSpec
+open FlambdaCompareOrderSpec
 open FlambdaFloatCodeSpec
 open FlambdaImportsSpec
 open FlambdaKnownSlotsSpec
@@ -85,14 +85,14 @@ let validate_unit_related imports rounds unused slots g ls kept before after =
      && head_removal_free_in statics unused tidied)
     && lifted_observed_free_in statics rounds (unit_continuations ls) ls kept
          source)
-    && (expr_eqb [] []
+    && (expr_says_at_least [] []
           (order_statics_as
              (float_code (with_code_first target))
              (float_code lifted))
           (float_code (with_code_first target))
        || (statics_first_free_in statics ls target
           && statics_first_free_in statics ls lifted)
-          && expr_eqb [] []
+          && expr_says_at_least [] []
                (order_statics_as
                   (with_statics_first ls target)
                   (with_statics_first ls lifted))

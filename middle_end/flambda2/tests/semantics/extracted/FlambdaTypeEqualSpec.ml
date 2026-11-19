@@ -66,10 +66,6 @@ let relation_eqb relation relation' =
 
 let naked_number_kind_eqb k k' = kind_eqb (Naked_number k) (Naked_number k')
 
-(** val boxable_number_eqb : boxable_number -> boxable_number -> bool **)
-
-let boxable_number_eqb k k' = kind_eqb (unboxed_kind k) (unboxed_kind k')
-
 (** val is_null_eqb : is_null -> is_null -> bool **)
 
 let is_null_eqb is_null0 is_null' =

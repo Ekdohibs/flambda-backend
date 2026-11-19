@@ -1,0 +1,11 @@
+subkind_return_not_immediate.fl:
+  before Simplify (5 steps): undefined
+  after Simplify (6 steps): undefined
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  anything goes, as the run before is undefined
+  calls outside code once those of known code are inlined: 0
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair: the same once normalised
+  the term before is undefined in the model, so the validation says nothing of this unit

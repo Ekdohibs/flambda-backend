@@ -8,6 +8,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
+open FlambdaSubkindSpec
 open FlambdaValueSpec
 open List
 open ListDef

@@ -27,8 +27,6 @@ val relation_eqb : Relation.t -> Relation.t -> bool
 
 val naked_number_kind_eqb : naked_number_kind -> naked_number_kind -> bool
 
-val boxable_number_eqb : boxable_number -> boxable_number -> bool
-
 val is_null_eqb : is_null -> is_null -> bool
 
 val block_shape_eqb : block_shape -> block_shape -> bool

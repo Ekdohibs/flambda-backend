@@ -74,10 +74,10 @@ let used_params is_exn_handler params handler =
 let keep_kinds mask metadata =
   match mask with
   | Some mask0 ->
-    let kinds = keep mask0 metadata.hm_params_kinds in
-    if metadata.hm_is_exn_handler
-    then make_exn_handler_metadata kinds
-    else make_handler_metadata kinds
+    { hm_params_kinds = keep mask0 metadata.hm_params_kinds;
+      hm_params_subkinds = keep mask0 metadata.hm_params_subkinds;
+      hm_is_exn_handler = metadata.hm_is_exn_handler
+    }
   | None -> metadata
 
 (** val used_params_in_loop : continuation -> continuation_handler -> expr ->

@@ -9,6 +9,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaNormaliseSpec
 open FlambdaSemanticsSpec
+open FlambdaStatedScopeSpec
 open List
 open ListDef
 open PeanoNat
@@ -27,17 +28,24 @@ val arm_entry_of :
 val arm_of_apply_cont :
   arm_forwards ->
   apply_cont ->
-  ((variable list * flambda_kind list) * apply_cont) option
+  ((variable list * (flambda_kind list * param_subkind list)) * apply_cont)
+  option
 
 val forward_to_arm_apply_cont :
-  bool -> kinds_in_scope -> arm_forwards -> apply_cont -> apply_cont
+  bool ->
+  kinds_in_scope ->
+  stated_in_scope ->
+  arm_forwards ->
+  apply_cont ->
+  apply_cont
 
 val forward_to_arms_under :
-  bool -> kinds_in_scope -> arm_forwards -> expr -> expr
+  bool -> kinds_in_scope -> stated_in_scope -> arm_forwards -> expr -> expr
 
 val forward_to_arms_in_handler :
   bool ->
   kinds_in_scope ->
+  stated_in_scope ->
   arm_forwards ->
   continuation_handler ->
   continuation_handler
