@@ -42,6 +42,19 @@
    pass is then the walk of that rewrite
    (FlambdaSpineWalkProofs.walk_spine_equivalent).
 
+   The first run tests the values given at all the positions, the
+   second at all but the one taken away. The site is proved where the
+   value of the simple given, under the variables of the [Let_cont],
+   is of what the handler states at that position under the static
+   environment of the [Let_cont] ([given_is_stated]): every
+   application gives the parameter that value, and what a value is of
+   it is still of under a static environment that has grown
+   (FlambdaStatedScopeProofs.value_at_extend). So the two runs are
+   related from a state whose static environment extends that of the
+   [Let_cont] ([site_rel_from]), which a step keeps. A handler that
+   states nothing at the position asks nothing here
+   ([says_nothing_given_is_stated]).
+
    The one parameter is proved for a parameter that every application
    gives one simple, a variable, a symbol or a constant
    ([all_give_simple]): the check of the pass is the case of a variable
@@ -68,7 +81,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaSimulationProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedParamsProofs
-  FlambdaSpineWalkSpec FlambdaSpineWalkProofs FlambdaUnaliasParamsSpec.
+  FlambdaSpineWalkSpec FlambdaSpineWalkProofs FlambdaWellFormedSpec
+  FlambdaWellFormedProofs FlambdaStatedScopeSpec FlambdaUnaliasParamsSpec.
+From OxCamlFlambda2 Require FlambdaStatedScopeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -254,24 +269,59 @@ Proof.
     apply andb_true_iff in H as [Hv Hvs]. rewrite Hv. exact (IH _ _ Hvs).
 Qed.
 
-(* And where nothing is stated at that position the two tests are the
-   same. *)
-Lemma values_of_subkinds_drop_nth_nothing (statics : static_env) (i : nat) :
+(* And where the value at that position is of what is stated there the
+   two tests are the same. *)
+Lemma values_of_subkinds_drop_nth_stated (statics : static_env) (i : nat) :
   ∀ (sks : list param_subkind) (vs : list value),
-    says_nothing_at sks i = true ->
+    (∀ (ps : param_subkind) (v : value),
+      nth_error sks i = Some ps ->
+      nth_error vs i = Some v ->
+      value_at statics ps v = true) ->
     values_of_subkinds statics (drop_nth i vs) (drop_nth i sks)
     = values_of_subkinds statics vs sks.
 Proof.
-  unfold says_nothing_at.
-  induction i as [ | i IH]; intros [ | ps sks] [ | v vs] Hnothing;
-    cbn [nth_error] in Hnothing;
+  induction i as [ | i IH]; intros [ | ps sks] [ | v vs] Hstated;
+    cbn [nth_error] in Hstated;
     rewrite ?drop_nth_nil, ?drop_nth_zero, ?drop_nth_succ,
       ?values_of_subkinds_no_values;
     try reflexivity.
-  - rewrite values_of_subkinds_cons, value_at_eq,
-      (says_nothing_any statics _ _ v Hnothing).
+  - rewrite values_of_subkinds_cons, (Hstated ps v eq_refl eq_refl).
     reflexivity.
-  - rewrite !values_of_subkinds_cons, (IH _ _ Hnothing). reflexivity.
+  - rewrite !values_of_subkinds_cons, (IH _ _ Hstated). reflexivity.
+Qed.
+
+(* The value of a simple under some variables, where it has one, is of
+   what a list states at a position, under a static environment. *)
+Definition given_is_stated (statics : static_env) (vars : env)
+    (sks : list param_subkind) (i : nat) (s : simple) : Prop :=
+  ∀ (ps : param_subkind) (v : value),
+    nth_error sks i = Some ps ->
+    eval_simple vars s = Some v ->
+    value_at statics ps v = true.
+
+(* Every value is of what says nothing. *)
+Lemma says_nothing_given_is_stated (statics : static_env) (vars : env)
+    (sks : list param_subkind) (i : nat) (s : simple) :
+  says_nothing_at sks i = true -> given_is_stated statics vars sks i s.
+Proof.
+  unfold says_nothing_at. intros Hnothing ps v Hps _.
+  rewrite Hps in Hnothing. rewrite value_at_eq.
+  exact (says_nothing_any statics _ _ v Hnothing).
+Qed.
+
+(* What is known of the variables in scope says as much as the list
+   at the position (FlambdaStatedScopeSpec.is_stated_at), and holds. *)
+Lemma is_stated_at_given_is_stated (statics : static_env)
+    (S : stated_in_scope) (vars : env) (sks : list param_subkind) (i : nat)
+    (s : simple) :
+  stated_hold statics S vars ->
+  is_stated_at S sks i s = true ->
+  given_is_stated statics vars sks i s.
+Proof.
+  intros Hhold Hstated ps v Hps Hv.
+  exact
+    (FlambdaStatedScopeProofs.is_stated_at_sound statics S vars sks i ps s v
+       Hhold Hstated Hps Hv).
 Qed.
 
 Definition agree (vars vars' : env) : Prop :=
@@ -640,21 +690,24 @@ Section Site.
 (* Whether the continuation is the one continuation of a recursive
    [Let_cont]; the continuation, the position of the parameter, the
    variable, the symbol or the constant that every application outside
-   the handler gives it, and the handler; the variables and the
-   continuations under which the [Let_cont] runs. In the handler of a
-   loop every application gives the parameter. The simple is none of
-   the parameters that are left; it may be the variable that has the
-   name of the parameter itself. *)
+   the handler gives it, and the handler; the variables, the
+   continuations and the static environment under which the
+   [Let_cont] runs. In the handler of a loop every application gives
+   the parameter. The simple is none of the parameters that are left;
+   it may be the variable that has the name of the parameter itself.
+   Its value where the [Let_cont] runs is of what the handler states
+   of the parameter. *)
 Variables (loop : bool) (k : continuation) (i : nat) (s0 : simple)
   (p : variable) (kind : flambda_kind) (params : list variable)
   (metadata : handler_metadata) (handler : expr) (vars0 : env)
-  (conts0 : cont_env).
+  (conts0 : cont_env) (statics0 : static_env).
 
 Hypothesis Hparam : nth_error params i = Some p.
 Hypothesis Hkind : nth_error (hm_params_kinds metadata) i = Some kind.
 Hypothesis Hx : simple_among s0 (drop_nth i params) = false.
 Hypothesis Hfresh : among p (drop_nth i params) = false.
-Hypothesis Hnothing : says_nothing_at (hm_params_subkinds metadata) i = true.
+Hypothesis Hstated :
+  given_is_stated statics0 vars0 (hm_params_subkinds metadata) i s0.
 Hypothesis Hturns :
   loop = true -> all_give_simple k i (Var p) true handler = true.
 
@@ -1054,9 +1107,12 @@ Definition pending (s u' : state) : Prop :=
 
 (* The application of [k], which gives a simple that holds what the
    simple given from outside held: the first run to all the arguments,
-   the second to all but one. *)
+   the second to all but one. The static environment extends that of
+   the [Let_cont], so the value given is still of what the handler
+   states of the parameter, and the two tests are the same. *)
 Lemma site_applied (given : simple) (vars : env) (rest : list value)
     (statics : static_env) (hp : heap) (rd : read_record) (args : list simple) :
+  statics_extend statics0 statics ->
   nth_error args i = Some given ->
   eval_simple vars given = eval_simple vars0 s0 ->
   eval_simples vars (drop_nth i args) = Some rest ->
@@ -1089,7 +1145,7 @@ Lemma site_applied (given : simple) (vars : env) (rest : list value)
              ∧ agree bound0 ((p, v) :: bound)
              ∧ eval_simple vars0 s0 = Some v).
 Proof.
-  intros Hnth Hgiven Hrest first. rewrite apply_the_closure_binding.
+  intros Hext Hnth Hgiven Hrest first. rewrite apply_the_closure_binding.
   destruct (eval_simple vars given) as [v | ] eqn:Hv.
   - (* the simple has a value *)
     destruct (eval_simples_with_nth i args vars given v rest Hnth Hv Hrest)
@@ -1103,7 +1159,17 @@ Proof.
     rewrite <- map_drop_nth in Hkinds.
     pose proof (bind_params_drop_nth i params vs vars0 p v Hparam Hnth_v
       Hfresh) as Hbind.
-    rewrite (values_of_subkinds_drop_nth_nothing statics i _ vs Hnothing).
+    assert (Hat :
+      ∀ (ps : param_subkind) (v' : value),
+        nth_error (hm_params_subkinds metadata) i = Some ps ->
+        nth_error vs i = Some v' ->
+        value_at statics ps v' = true).
+    { intros ps v' Hps Hv'. rewrite Hnth_v in Hv'. injection Hv' as <-.
+      apply
+        (FlambdaStatedScopeProofs.value_at_extend statics0 statics ps v Hext),
+        (Hstated ps v Hps).
+      congruence. }
+    rewrite (values_of_subkinds_drop_nth_stated statics i _ vs Hat).
     destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
       [ | left; split;
           destruct (kinds_eqb _ _); reflexivity ].
@@ -1208,13 +1274,14 @@ Qed.
    of [k]. *)
 Lemma unalias_step (s s' : state) :
   site_rel s s' ->
+  statics_extend statics0 (state_statics s) ->
   result_related site_rel (step s) (step s')
   ∨ ∃ u' : state, step s' = Step u' ∧ pending s u'.
 Proof.
   intros
     [e vars vars' conts conts' statics hp rd Hvars Hconts
     | given ok e vars vars' conts conts' statics hp rd Hvars Hok Hgive
-        (Hk & Hk' & Hconts)].
+        (Hk & Hk' & Hconts)] Hext; cbn [state_statics] in Hext.
   - (* outside the scope of [k] *)
     left.
     destruct e as [y kind1 d body | bindings body | k1 hh body
@@ -1343,8 +1410,8 @@ Proof.
         destruct (eval_simples vars (drop_nth i (ac_args ac))) as [rest | ]
           eqn:Hrest.
         -- destruct
-             (site_applied given vars rest statics hp rd (ac_args ac) Hnth Hok
-                Hrest)
+             (site_applied given vars rest statics hp rd (ac_args ac) Hext
+                Hnth Hok Hrest)
              as [[Hfirst Hsecond]
                 | (bound & Hsecond
                    & [[Hfirst Hnext]
@@ -1383,53 +1450,81 @@ Proof.
     + left. rewrite !step_invalid. exact I.
 Qed.
 
-(* The second run answers the first with one step or two. *)
-Lemma site_refines (s s' : state) : site_rel s s' -> refines s s'.
+(* Two related states whose static environment extends that of the
+   [Let_cont]. A step keeps the second part
+   (FlambdaWellFormedProofs.step_extends_statics). *)
+Definition site_rel_from (s s' : state) : Prop :=
+  site_rel s s' ∧ statics_extend statics0 (state_statics s).
+
+Lemma extends_step (s t : state) :
+  statics_extend statics0 (state_statics s) ->
+  step s = Step t ->
+  statics_extend statics0 (state_statics t).
 Proof.
-  apply (stuttering_refines site_rel (fun _ vs vs' => vs' = vs));
+  intros Hext Hstep.
+  exact (statics_extend_trans _ _ _ Hext (step_extends_statics s t Hstep)).
+Qed.
+
+(* The second run answers the first with one step or two. *)
+Lemma site_refines (s s' : state) : site_rel_from s s' -> refines s s'.
+Proof.
+  apply (stuttering_refines site_rel_from (fun _ vs vs' => vs' = vs));
     [ | intros last vs vs' Hsame; exact Hsame ].
-  clear s s'. intros s s' Hrel.
-  destruct (unalias_step s s' Hrel)
+  clear s s'. intros s s' [Hrel Hext].
+  destruct (unalias_step s s' Hrel Hext)
     as [Hlock
        | (u' & Hstep' & [[Hs Hu] | (t & t'' & Hs & Hu & Hrel')])].
-  - destruct (step s) as [t | k1 vs hp1 rd1 | ],
+  - destruct (step s) as [t | k1 vs hp1 rd1 | ] eqn:Hstep,
       (step s') as [t' | k1' vs' hp1' rd1' | ] eqn:Hs';
       simpl in Hlock; try contradiction; unfold answered.
-    + exists 0, t'. split; [ simpl; rewrite Hs'; reflexivity | exact Hlock ].
+    + exists 0, t'. split; [ simpl; rewrite Hs'; reflexivity | ].
+      split; [ exact Hlock | exact (extends_step s t Hext Hstep) ].
     + destruct Hlock as (<- & <- & <- & <-). exists vs. auto.
     + exact I.
   - rewrite Hs. exact I.
-  - rewrite Hs. exists 1, t''. split; [ | exact Hrel' ].
+  - rewrite Hs. exists 1, t''.
+    split;
+      [ | split; [ exact Hrel' | exact (extends_step s t Hext Hs) ] ].
     simpl. rewrite Hstep', Hu. reflexivity.
 Qed.
 
 (* The first run answers the second, which takes one step more at an
    application of [k]. *)
-Lemma site_refined (s s' : state) : site_rel s s' -> refines s' s.
+Lemma site_refined (s s' : state) : site_rel_from s s' -> refines s' s.
 Proof.
   intros Hrel.
   apply
-    (lagging_refines (fun a b => site_rel b a) (fun u a => pending a u));
+    (lagging_refines (fun a b => site_rel_from b a)
+       (fun u a =>
+          pending a u ∧ statics_extend statics0 (state_statics a)));
     [ | | exact Hrel ]; clear s s' Hrel.
-  - intros s' s Hrel.
-    destruct (unalias_step s s' Hrel) as [Hlock | (u' & Hstep' & Hpending)].
-    + destruct (step s) as [t | k1 vs hp1 rd1 | ],
+  - intros s' s [Hrel Hext].
+    destruct (unalias_step s s' Hrel Hext)
+      as [Hlock | (u' & Hstep' & Hpending)].
+    + destruct (step s) as [t | k1 vs hp1 rd1 | ] eqn:Hstep,
         (step s') as [t' | k1' vs' hp1' rd1' | ];
         simpl in Hlock; try contradiction.
-      * left. exists t. auto.
+      * left. exists t.
+        split; [ reflexivity | ].
+        split; [ exact Hlock | exact (extends_step s t Hext Hstep) ].
       * destruct Hlock as (<- & <- & <- & <-). reflexivity.
       * exact I.
-    + rewrite Hstep'. right. exact Hpending.
-  - intros u' s [[Hs Hu] | (t & t'' & Hs & Hu & Hrel')].
+    + rewrite Hstep'. right. split; [ exact Hpending | exact Hext ].
+  - intros u' s [[[Hs Hu] | (t & t'' & Hs & Hu & Hrel')] Hext].
     + rewrite Hu. exact I.
-    + rewrite Hu. exists t. auto.
+    + rewrite Hu. exists t.
+      split; [ exact Hs | ].
+      split; [ exact Hrel' | exact (extends_step s t Hext Hs) ].
 Qed.
 
-Lemma simple_site_equivalent (s s' : state) : site_rel s s' -> equivalent s s'.
+Lemma simple_site_equivalent (s s' : state) :
+  site_rel s s' ->
+  statics_extend statics0 (state_statics s) ->
+  equivalent s s'.
 Proof.
-  intros Hrel.
-  exact (refines_antisymmetric s s' (site_refines s s' Hrel)
-    (site_refined s s' Hrel)).
+  intros Hrel Hext.
+  exact (refines_antisymmetric s s' (site_refines s s' (conj Hrel Hext))
+    (site_refined s s' (conj Hrel Hext))).
 Qed.
 
 End Site.
@@ -1478,7 +1573,60 @@ Definition state_rel (k : continuation) (i : nat) (s0 : simple)
 (* A parameter that every application of a continuation gives one
    simple, which no binder on the way binds and which is not a
    parameter of the handler, is taken away and bound at the head of
-   the handler. *)
+   the handler: under the environments where the value of the simple
+   is of what the handler states of the parameter. *)
+Lemma given_param_equivalent_stated (i : nat) (k : continuation) (s : simple)
+    (p : variable) (kind : flambda_kind) (params : list variable)
+    (metadata : handler_metadata) (handler body : expr) :
+  nth_error params i = Some p ->
+  nth_error (hm_params_kinds metadata) i = Some kind ->
+  simple_among s params = false ->
+  among p (drop_nth i params) = false ->
+  all_give_simple k i s true body = true ->
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    given_is_stated statics vars (hm_params_subkinds metadata) i s ->
+    equivalent
+      (State
+         (Let_cont_non_recursive k (Handler params metadata handler) body)
+         vars conts statics hp rd)
+      (State
+         (Let_cont_non_recursive k
+            (Handler (drop_nth i params)
+               {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+                  hm_params_subkinds :=
+                    drop_nth i (hm_params_subkinds metadata);
+                  hm_is_exn_handler := false |}
+               (Let p kind (Simple s) handler))
+            (drop_arg k i body))
+         vars conts statics hp rd).
+Proof.
+  intros Hparam Hkind Hs Hfresh Hgive vars conts statics hp rd Hstated.
+  apply (equivalent_trans _
+    (State body vars
+       ((k, the_closure params metadata handler vars conts) :: conts)
+       statics hp rd));
+    [ apply step_equivalent, step_let_cont_non_recursive | ].
+  apply (equivalent_trans _
+    (State (drop_arg k i body) vars
+       ((k, the_closure_binding i s p kind params metadata handler vars conts)
+        :: conts)
+       statics hp rd));
+    [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
+  apply
+    (simple_site_equivalent false k i s p kind params metadata handler vars
+       conts statics Hparam Hkind (simple_among_drop_nth_false i s params Hs)
+       Hfresh Hstated (not_a_loop _));
+    [ | apply statics_extend_refl ].
+  apply (Rel_state_in_scope false k i s p kind params metadata handler vars
+    conts s true);
+    [ apply agree_refl | reflexivity | exact Hgive | ].
+  split; [ apply resolve_head | split; [ apply resolve_head | ] ].
+  intros k1 Hne. rewrite !(resolve_other k1 k) by exact Hne. apply Rel_same.
+Qed.
+
+(* The same under all environments, where the handler states nothing
+   of the parameter. *)
 Lemma given_param_equivalent (i : nat) (k : continuation) (s : simple)
     (p : variable) (kind : flambda_kind) (params : list variable)
     (metadata : handler_metadata) (handler body : expr) :
@@ -1500,26 +1648,10 @@ Lemma given_param_equivalent (i : nat) (k : continuation) (s : simple)
        (drop_arg k i body)).
 Proof.
   intros Hparam Hkind Hs Hfresh Hnothing Hgive vars conts statics hp rd.
-  apply (equivalent_trans _
-    (State body vars
-       ((k, the_closure params metadata handler vars conts) :: conts)
-       statics hp rd));
-    [ apply step_equivalent, step_let_cont_non_recursive | ].
-  apply (equivalent_trans _
-    (State (drop_arg k i body) vars
-       ((k, the_closure_binding i s p kind params metadata handler vars conts)
-        :: conts)
-       statics hp rd));
-    [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
   apply
-    (simple_site_equivalent false k i s p kind params metadata handler vars
-       conts Hparam Hkind (simple_among_drop_nth_false i s params Hs) Hfresh
-       Hnothing (not_a_loop _)).
-  apply (Rel_state_in_scope false k i s p kind params metadata handler vars
-    conts s true);
-    [ apply agree_refl | reflexivity | exact Hgive | ].
-  split; [ apply resolve_head | split; [ apply resolve_head | ] ].
-  intros k1 Hne. rewrite !(resolve_other k1 k) by exact Hne. apply Rel_same.
+    (given_param_equivalent_stated i k s p kind params metadata handler body
+       Hparam Hkind Hs Hfresh Hgive).
+  apply says_nothing_given_is_stated, Hnothing.
 Qed.
 
 (* The site of a variable, under the names that it had when the site
@@ -1563,11 +1695,12 @@ Lemma site_equivalent (k : continuation) (i : nat) (x p : variable)
     state_rel k i (Var x) p kind params metadata handler vars0 conts0 s s' ->
     equivalent s s'.
 Proof.
-  intros Hparam Hkind Hx Hfresh Hnothing.
+  intros Hparam Hkind Hx Hfresh Hnothing s s' Hrel.
   exact (simple_site_equivalent false k i (Var x) p kind params metadata
-    handler vars0 conts0 Hparam Hkind
-    (simple_among_drop_nth_false i (Var x) params Hx) Hfresh Hnothing
-    (not_a_loop _)).
+    handler vars0 conts0 (state_statics s) Hparam Hkind
+    (simple_among_drop_nth_false i (Var x) params Hx) Hfresh
+    (says_nothing_given_is_stated _ _ _ _ _ Hnothing) (not_a_loop _) s s'
+    Hrel (statics_extend_refl _)).
 Qed.
 
 (* ======================================================================== *)

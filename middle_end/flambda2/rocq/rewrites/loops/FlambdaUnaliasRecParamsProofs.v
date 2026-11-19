@@ -44,6 +44,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedParamsProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasRecParamsSpec.
+From OxCamlFlambda2 Require FlambdaWellFormedProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -117,7 +118,10 @@ Proof.
           rewrite step_let_cont_recursive, Hstatics; reflexivity ].
     apply
       (simple_site_equivalent true k i s p kind params metadata handler vars
-         conts Hparam Hkind Hs Hfresh Hnothing (fun _ => Hturns)).
+         conts statics Hparam Hkind Hs Hfresh
+         (says_nothing_given_is_stated _ _ _ _ _ Hnothing)
+         (fun _ => Hturns));
+      [ | apply FlambdaWellFormedProofs.statics_extend_refl ].
     apply (Rel_state_in_scope true k i s p kind params metadata handler vars
       conts s true);
       [ apply agree_refl | reflexivity | exact Hgive | ].
