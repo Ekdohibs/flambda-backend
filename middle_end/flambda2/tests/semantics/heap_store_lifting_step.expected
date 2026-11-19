@@ -7,4 +7,5 @@ heap_store_lifting_step.fl:
   the same
   calls outside code once those of known code are inlined: 0
   validated: the same once closures and blocks are lifted to symbols and the terms normalised
-  (the term before and the term after have a primitive of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that has one; the line above names the step at which the validation accepted)
+  (the term before and the term after have a primitive of the heap and do not pass the liftings' test of the heap: each of the four liftings to symbols of the validation lifts nothing in a term that does not pass it, which is one that has such a primitive outside the bodies of its code, or has one in them and a call outside them; the line above names the step at which the validation accepted)
+  (decision D65: the term before as given passes neither the liftings' tests as they were nor the finer ones)

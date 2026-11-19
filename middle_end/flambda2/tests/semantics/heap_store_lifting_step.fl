@@ -3,8 +3,19 @@
    Both terms keep the block, the store and the load. The unit is validated,
    and the verdict is the one that names a lifting to symbols: it is the step
    of the validation that accepted, which has other rewrites than its
-   liftings, and each of its liftings lifts nothing in a term that has a
-   primitive of the heap. The line under the verdict says so. *)
+   liftings, and each of its liftings lifts nothing in a term that does not
+   pass their test of the heap. A term that does not pass it has a primitive
+   of the heap outside the bodies of its code, or has one in them and a call
+   outside them (decision D65). The line under the verdict says so. This unit
+   has no code: the block is made, written and read outside any.
+
+   The last line in brackets is a line of decision D65. It says that the term
+   before, as the validation was given it, passes neither the liftings' tests
+   as they were nor the finer ones of that decision. An output that has such
+   a line carries the mark of the decision. The mark is a sign: it is neither
+   necessary nor sufficient for a verdict to rest on the finer tests. This
+   unit shows that it is not sufficient: its term before passes neither, and
+   nothing is lifted in it. *)
 let $camlHeap_store_lifting_step__immstring_0 = "abc" in
 let cell = %block.mut.[`0`].`toplevel` (0) in
 (let n = %opaque (3) in

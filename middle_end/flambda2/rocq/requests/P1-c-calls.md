@@ -474,18 +474,26 @@ The table of `FlambdaExtcallSpec.v` stays unused.
   primitive, and the unit of the controls that has one is not
   validated.
 - Nothing is said of what a C function does.
-- It can take a verdict away from a unit that calls no C function.
-  With `.cmx` files, a body of another unit that calls a C function,
-  and that the file keeps, is now bound in front of the unit, where
-  its code was declared deleted. A run that calls it is no longer
-  undefined at that call for that reason. But the liftings to symbols
-  lift nothing in a term that fails one of two tests of all the code
-  bound in it, and code that was declared deleted passed them. So
-  where such a body is still in the term that a lifting is given, and
-  has a primitive of the heap or raises a block that it makes, that
-  lifting lifts nothing, and a unit that was validated through it can
-  lose its verdict. The second unit of `body_with_a_store`, in
-  `tests/semantics/c_calls`, does. It need not happen: the validation
+- It can take a verdict away from a unit that calls no C function,
+  in a term that has a call outside the bodies of its code. With
+  `.cmx` files, a body of another unit that calls a C function, and
+  that the file keeps, is now bound in front of the unit, where its
+  code was declared deleted. A run that calls it is no longer
+  undefined at that call for that reason. But a lifting to symbols
+  lifts nothing in a term that fails one of two tests, and code that
+  was declared deleted passed them. When this request was written
+  the two tests were of all the code bound in the term. Since
+  decision D65 (yes, provisionally, on 18 November 2026) they are so
+  only in a term that has a call outside the bodies of its code;
+  where it has none they look outside those bodies only. So where
+  such a body is still in the term that a lifting is given, and has a
+  primitive of the heap or raises a block that it makes, and that
+  term has such a call, the lifting lifts nothing, and a unit that
+  was validated through it can lose its verdict.
+  `body_with_a_store_and_a_call`, a second unit of
+  `body_with_a_store` in `tests/semantics/c_calls`, does.
+  `body_with_a_store_not_called`, which has no call, did before that
+  decision and does not since. It need not happen: the validation
   has other ways, and a rewrite before the lifting may have removed
   the body. No unit that was measured lost a verdict so; that is a
   fact of the measure.

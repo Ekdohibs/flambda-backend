@@ -96,4 +96,14 @@ val binding_exits_plain_knowing : static_binding -> bool
 
 val code_exits_plain_knowing : code -> bool
 
+val strip_code : code -> code
+
+val strip_binding : static_binding -> static_binding
+
+val strip : expr -> expr
+
+val strip_handler : continuation_handler -> continuation_handler
+
+val exits_plain_fine : expr -> bool
+
 val lift_unit : lifting -> expr -> expr option

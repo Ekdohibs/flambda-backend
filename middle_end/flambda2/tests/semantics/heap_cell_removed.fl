@@ -4,7 +4,11 @@
    having the cell and what was written to it. Two exits are compared with
    their heaps (decision D40), and the validation has no rewrite that removes
    a cell: the unit is not validated. The line under that one says that the
-   term before has a primitive of the heap and the term after none. *)
+   term before has a primitive of the heap and does not pass the liftings'
+   test of the heap, and that the term after passes it. The term before has
+   its primitives of the heap in the body of the function, and a call of the
+   function outside the bodies of its code (decision D65); the term after has
+   no primitive of the heap. *)
 let code inline(never) loopify(never) size(20)
       work_0 (x : imm tagged)
         my_closure &my_alloc_region my_depth

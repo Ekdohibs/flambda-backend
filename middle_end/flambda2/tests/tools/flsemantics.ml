@@ -328,7 +328,7 @@
    the imports. The liftings are guessed again, each made without its test that
    the unit exits with symbols and constants only
    (FlambdaLiftObservedSpec.with_lifting_observed in the place of
-   FlambdaLiftSpec's lifting with [exits_plain_knowing]; the other tests of a
+   FlambdaLiftSpec's lifting with [exits_plain_fine]; the other tests of a
    lifting, of well-formedness, of fresh names and of closed code, and the
    comparisons, are those of the function), for the same lists of calls in the
    same order; the check is asked with no value slot to remove and, if it
@@ -1366,28 +1366,43 @@ let known_arity_call_met : bool ref = ref false
    then not bound ([bind_code]) leaves its C functions in the table of the
    conversion, and none in front.
 
-   Three, AND IT CAN TAKE A VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION.
-   Each of the four liftings to symbols lifts nothing in a term that fails one
-   of two tests, and both tests are of all the code that the term binds, that of
-   the prefix too (FlambdaHeapFreeSpec.expr_free_of_heap;
-   FlambdaLiftSpec.exits_plain_knowing). Code that is declared deleted passes
-   them, and the same code bound is tested with what it has. So where such a
-   body is still in the term that a lifting is given, and it has a primitive of
-   the heap or gives its exception continuation a block that it makes, that
-   lifting lifts nothing, and a unit that was validated through it can lose its
-   verdict. It need not: the validation has other ways than that lifting, and a
-   rewrite before it may have removed the body.
+   Three, AND IT CAN TAKE A VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION,
+   IN A TERM THAT HAS A CALL OUTSIDE THE BODIES OF ITS CODE. Each of the four
+   liftings to symbols lifts nothing in a term that fails one of two tests
+   (FlambdaHeapFreeSpec.free_of_heap_fine; FlambdaLiftSpec.exits_plain_fine). A
+   term passes one of them if it passes the test as it was, which is of all the
+   code that the term binds, that of the prefix too
+   (FlambdaHeapFreeSpec.expr_free_of_heap; FlambdaLiftSpec.exits_plain_knowing),
+   or if it has no Apply outside the bodies of its code and what is outside
+   those bodies passes that test (decision D65: yes, provisionally, by the human
+   on 18 November 2026; to be come back to). Code that is declared deleted
+   passes the tests as they were, and the same code bound is tested with what it
+   has. So a lifting lifts nothing in the term that it is given where that term
+   has a call outside the bodies of its code and code that it binds, that of the
+   prefix too, has a primitive of the heap or gives its exception continuation a
+   block that it makes; and a unit that was validated through that lifting can
+   lose its verdict. It need not: the validation has other ways than that
+   lifting, and a rewrite before it may have removed the body, or the call if it
+   is a call of code that the term knows. A term with no call outside the bodies
+   of its code loses nothing so: the two tests then look outside those bodies
+   only.
 
    tests/semantics/c_calls has a control of each: body_with_a_call and its two
    second units (a run that enters a body, and reaches the call or does not),
-   and body_with_a_store and its second unit (a unit that calls nothing, which
-   is not validated, and is validated where the code of the body is declared
-   deleted). Measured on 19 November 2026 against the tool before this reading,
-   on the 79 files of the standard library at two settings and on the 395 units
-   cut from 13 of them, one function each: no output of a unit that ran before
-   changes class; ten outputs of the files and two of the units change, in what
-   is in front of the terms and in the lines of the two runs (the count of
-   imports).
+   and body_with_a_store and its two second units. body_with_a_store_and_a_call
+   calls no C function and has a call outside its code, in the term before and
+   in the term after, that is not a call of known code (the tool counts it still
+   once the calls of known code are inlined): it is not validated, and is
+   validated where the code of the body is declared deleted.
+   body_with_a_store_not_called calls nothing: it was not validated before
+   decision D65, and is validated since (by its expected file, before the finer
+   tests and with them); its output carries the mark of that decision (the
+   tool's line that begins "(decision D65:", under the verdict line). Measured
+   on 19 November 2026 against the tool before this reading, on the 79 files of
+   the standard library at two settings and on the 395 units cut from 13 of
+   them, one function each: no output of a unit that ran before changes class;
+   ten outputs of the files and two of the units change, in what is in front of
+   the terms and in the lines of the two runs (the count of imports).
 
    What is left out. Simplify makes a primitive of seven comparisons
    ([caml_compare], [caml_equal], [caml_notequal], [caml_lessequal],
@@ -8787,38 +8802,47 @@ and validate_or_leave ~(demoted : bool)
       if outcome_before = Undefined
       then "nothing to validate, as the term before is undefined"
       else "not validated");
-  (* The guard of the liftings (FlambdaHeapFreeSpec.expr_free_of_heap): each of
+  (* The guard of the liftings (FlambdaHeapFreeSpec.free_of_heap_fine): each of
      the four liftings to symbols of the validation lifts nothing in a term that
-     has a primitive of the heap. Under the line "not validated", a line says
-     which of the two terms that the validation was given has one; there is none
-     where neither has. It does not say that the guard is why the unit is not
-     validated: the test is made of the term that a lifting is given, after the
-     rewrites before it, and the validation may refuse the unit for another
-     reason. A unit that has such a primitive is validated where no lifting is
-     needed. That may be at the verdict that names a lifting: the verdict is the
-     step of the validation that accepted, and that step has other rewrites than
-     its liftings. So the same line is printed under that verdict, and says
-     there that the verdict names the step. The liftings of the second check,
-     whose line may follow a line "not validated", are made without that test,
-     as without the test of the exits (FlambdaLiftObservedSpec.v): its line says
-     so where a term has such a primitive. *)
+     does not pass it, which is a term that has a primitive of the heap outside
+     the bodies of its code, or that has one in them and a call outside them
+     (decision D65). Under the line "not validated", a line says which of the
+     two terms that the validation was given does not pass; there is none where
+     both pass. It does not say that the guard is why the unit is not validated:
+     the test is made of the term that a lifting is given, after the rewrites
+     before it, and the validation may refuse the unit for another reason. A
+     pair with a term that does not pass is accepted where no lifting is needed.
+     That may be at the step that names a lifting: the line of the acceptance
+     names the step of the validation that accepted, and that step has other
+     rewrites than its liftings. So the same line is printed under the line of
+     an acceptance at that step, whether that line begins "validated" or "the
+     validation accepts the pair", and says there that the line above names the
+     step. The liftings of the second check, whose line may follow a line "not
+     validated", are made without that test, as without the test of the exits
+     (FlambdaLiftObservedSpec.v): its line says so where a term does not
+     pass. *)
   let line_of_the_guard ~at_the_lifting_step =
     match
-      ( Heap_free.expr_free_of_heap before.body,
-        Heap_free.expr_free_of_heap after.body )
+      ( Heap_free.free_of_heap_fine before.body,
+        Heap_free.free_of_heap_fine after.body )
     with
     | true, true -> ()
-    | before_free, after_free ->
+    | before_passes, after_passes ->
       Format.printf
         "  (%s: each of the four liftings to symbols of the validation lifts \
-         nothing in a term that has one%s)@."
-        (match before_free, after_free with
+         nothing in a term that does not pass it, which is one that has such a \
+         primitive outside the bodies of its code, or has one in them and a \
+         call outside them%s)@."
+        (match before_passes, after_passes with
         | false, false ->
-          "the term before and the term after have a primitive of the heap"
+          "the term before and the term after have a primitive of the heap and \
+           do not pass the liftings' test of the heap"
         | false, true ->
-          "the term before has a primitive of the heap, and the term after none"
+          "the term before has a primitive of the heap and does not pass the \
+           liftings' test of the heap, and the term after passes it"
         | true, false ->
-          "the term after has a primitive of the heap, and the term before none"
+          "the term after has a primitive of the heap and does not pass the \
+           liftings' test of the heap, and the term before passes it"
         | true, true -> assert false)
         (if at_the_lifting_step
          then "; the line above names the step at which the validation accepted"
@@ -8893,6 +8917,55 @@ and validate_or_leave ~(demoted : bool)
     Format.printf
       "  (with what my_closure is known to be from its code used in the rounds \
        after each lifting)@.";
+  (* Decision D65. A lifting asks two tests of the term that it is given. They
+     were FlambdaLiftSpec.exits_plain_knowing and
+     FlambdaHeapFreeSpec.expr_free_of_heap, which read the bodies of the code of
+     the unit; they are FlambdaLiftSpec.exits_plain_fine and
+     FlambdaHeapFreeSpec.free_of_heap_fine, which pass wherever those pass and,
+     of a unit that calls nothing outside the bodies of its code, wherever the
+     unit with those bodies taken out passes them. The validation lifts in the
+     term before alone. Where the validation accepts at the step that names a
+     lifting, a line says how the term before, as the validation was given it,
+     answers: there is no line where it passes the tests as they were; the line
+     says that it passes by the finer tests alone, or that it passes neither. It
+     is the last of the lines in brackets under the line of the acceptance,
+     which is the verdict line or, where the tool finds the run before that the
+     acceptance is of undefined within its bound of steps, the line that begins
+     "the validation accepts the pair". A unit whose output has the line carries
+     the mark of that decision. The mark is a sign: it is neither necessary nor
+     sufficient for the acceptance to rest on the finer tests. It is not
+     sufficient because it is of the term as given: the step may accept with
+     nothing lifted, and it has other rewrites than its liftings. The second
+     line is there because a lifting asks its tests of the term that it is
+     given, after the rewrites before it: a term that passes neither here may
+     pass the finer tests alone once the rounds have inlined its calls of known
+     code. It is not necessary for two reasons. There is no line where the term
+     as given passes the tests as they were, and that a rewrite of the
+     validation makes no term that fails them of one that passes them is
+     believed and is not a theorem of the model. And there is no line at another
+     step: where the validation is asked of the term before with copies of code
+     (FlambdaValidateCopyingSpec.before_copied), liftings and copies that ask
+     the finer tests are made before it is asked, and it may then accept at a
+     step that names no lifting. Which acceptances rest on the finer tests is to
+     be found by running the validation with the tests as they were and with the
+     finer ones on the same units; the mark does not say it. *)
+  (match validation with
+  | Same_once_lifted ->
+    let e = before.body in
+    if Lift.exits_plain_knowing [] [] e && Heap_free.expr_free_of_heap e
+    then ()
+    else if Lift.exits_plain_fine e && Heap_free.free_of_heap_fine e
+    then
+      Format.printf
+        "  (decision D65: the guards of the liftings pass by the finer tests \
+         alone)@."
+    else
+      Format.printf
+        "  (decision D65: the term before as given passes neither the \
+         liftings' tests as they were nor the finer ones)@."
+  | Not_validated | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed ->
+    ());
   (* The second check, FlambdaValidateRelatedSpec.validate_unit_related, of the
      two terms and the imports, for each list of calls that the attempts above
      of the first three kinds were made with, in their order. The liftings are
@@ -8999,8 +9072,8 @@ and validate_or_leave ~(demoted : bool)
          liftings' symbols-and-constants-only exit test%s%s%s@."
         head
         (if
-           Heap_free.expr_free_of_heap before.body
-           && Heap_free.expr_free_of_heap after.body
+           Heap_free.free_of_heap_fine before.body
+           && Heap_free.free_of_heap_fine after.body
          then ""
          else " and without their test of the heap")
         (if tables

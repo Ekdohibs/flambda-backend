@@ -10,7 +10,7 @@ two terms, before and after Simplify, with a stored file,
 `stdlib/`. Nothing under `stdlib/` is changed for them, and no file of the
 compiler's build.
 
-At this commit the driver validates 21 of the 79 files, and "What a
+At this commit the driver validates 24 of the 79 files, and "What a
 verdict means for a file of the library" says what that is a statement
 of. For the others the table says what stops each.
 
@@ -220,16 +220,19 @@ At this commit, by the stored files. (The counts and the table are made
 from the stored files by a script that is not in the tree; they are of
 this commit, and a commit that moves a stored file moves its row.)
 
-- validated: 6;
-- validated with its imports: 15, of which `stringLabels.ml` has a line
+- validated: 7;
+- validated with its imports: 17, of which `stringLabels.ml` has a line
   under the verdict, "(asked of the term after with the exception
   handlers that no call can raise to made ordinary continuations)";
-- compared, not validated: 9. Six have a line under the verdict:
-  `camlinternalAtomic.ml`, `semaphore.ml` and `uchar.ml` have "related
-  once lifted", and `option.ml`,
-  `pqueue.ml` and `result.ml` have the line of a function slot named
-  `partial_app_closure`, the name that Simplify gives the wrapper which
-  it makes of a partial application;
+  of the twenty-four that are validated, with or without their imports,
+  three carry the mark of decision D65, a line under the verdict,
+  "(decision D65: the guards of the liftings pass by the finer tests
+  alone)": `camlinternalAtomic.ml`, `semaphore.ml` and `uchar.ml`
+  ("What a verdict means for a file of the library" says what it is);
+- compared, not validated: 6. Three have a line under the verdict:
+  `option.ml`, `pqueue.ml` and `result.ml` have the line of a function
+  slot named `partial_app_closure`, the name that Simplify gives the
+  wrapper which it makes of a partial application;
 - undefined in the model: none;
 - not checked: 49. The first thing that the driver names is a primitive
   that the model has not got for 42 of them, a static constant that it
@@ -238,8 +241,8 @@ this commit, and a commit that moves a stored file moves its row.)
   `moreLabels.ml` a test that the tool makes of the code that the
   `.cmx` files of the other units give it.
 
-The 79 sources have 29,925 lines; the twenty-one that are validated, with or
-without their imports, have 1,682.
+The 79 sources have 29,925 lines; the twenty-four that are validated, with
+or without their imports, have 1,945.
 
 In the table, "what stops it" is the first thing that the driver names
 of a unit that is not checked: there may be others behind it. For a unit
@@ -262,7 +265,7 @@ mean".
 | `bytes.ml` | `stdlib__Bytes` | 865 | not checked | a primitive: `Bytes_set` |
 | `bytesLabels.ml` | `stdlib__BytesLabels` | 24 | validated with its imports |  |
 | `callback.ml` | `stdlib__Callback` | 36 | not checked | a primitive: `Array_load Naked_floats` |
-| `camlinternalAtomic.ml` | `camlinternalAtomic` | 62 | compared, not validated | the line under the verdict says "related once lifted" |
+| `camlinternalAtomic.ml` | `camlinternalAtomic` | 62 | validated (decision D65: the guards of the liftings pass by the finer tests alone) |  |
 | `camlinternalComprehension.ml` | `camlinternalComprehension` | 34 | validated |  |
 | `camlinternalFormat.ml` | `camlinternalFormat` | 2997 | not checked | a primitive: `Bytes_set` |
 | `camlinternalFormatBasics.ml` | `camlinternalFormatBasics` | 749 | validated |  |
@@ -316,7 +319,7 @@ mean".
 | `repr.ml` | `stdlib__Repr` | 25 | validated with its imports |  |
 | `result.ml` | `stdlib__Result` | 65 | compared, not validated | the line under the verdict says that the term after has a function slot of the name that Simplify gives the wrapper of a partial application |
 | `scanf.ml` | `stdlib__Scanf` | 1528 | not checked | a primitive: `String_load` |
-| `semaphore.ml` | `stdlib__Semaphore` | 89 | compared, not validated | the line under the verdict says "related once lifted" |
+| `semaphore.ml` | `stdlib__Semaphore` | 89 | validated with its imports (decision D65: the guards of the liftings pass by the finer tests alone) |  |
 | `seq.ml` | `stdlib__Seq` | 719 | not checked | a primitive: `Atomic_exchange Field_index` |
 | `set.ml` | `stdlib__Set` | 1179 | compared, not validated (the second alias) |  |
 | `stack.ml` | `stdlib__Stack` | 74 | not checked | a static constant: `Unique_block` |
@@ -327,7 +330,7 @@ mean".
 | `stringLabels.ml` | `stdlib__StringLabels` | 24 | validated with its imports (asked of the term after with the exception handlers that no call can raise to made ordinary continuations) |  |
 | `sys.ml` | `stdlib__Sys` | 324 | not checked | a static constant: `Unique_block` |
 | `type.ml` | `stdlib__Type` | 48 | not checked | a primitive: `Array_load Naked_floats` |
-| `uchar.ml` | `stdlib__Uchar` | 112 | compared, not validated | the line under the verdict says "related once lifted" |
+| `uchar.ml` | `stdlib__Uchar` | 112 | validated with its imports (decision D65: the guards of the liftings pass by the finer tests alone) |  |
 | `unit.ml` | `stdlib__Unit` | 24 | validated |  |
 | `weak.ml` | `stdlib__Weak` | 339 | not checked | a primitive: `Array_load Naked_floats` |
 
@@ -392,6 +395,31 @@ same head). `rocq/TRUST-LEDGER.md`, "Calls of C functions", says what is
 kept of a call of a C function and what a verdict of a function that
 calls one rests on.
 
+**The mark of decision D65.** Under the verdict of three files,
+`camlinternalAtomic.ml`, `semaphore.ml` and `uchar.ml`, the driver prints
+"(decision D65: the guards of the liftings pass by the finer tests
+alone)". A lifting of the validation asks two tests of the term that it
+is given, of its exits and of its primitives of the heap. By decision D65
+(yes, provisionally, by the human on 18 November 2026; to be come back
+to) each test also passes a term that has no call outside the bodies of
+its code and that passes with those bodies left out; the line says that
+the term before, as the validation was given it, passes the finer tests
+and not the tests as they were (`../ocaml/README.md`, "What the verdicts
+mean", has the item of the line; `rocq/TRUST-LEDGER.md` has "The mark of
+decision D65"). The functions of such a file may raise a variable or
+store in cells, and the run of its initialisation enters none of them.
+What the finer tests give away is said at their definitions
+(`FlambdaLiftSpec.exits_plain_fine`,
+`FlambdaHeapFreeSpec.free_of_heap_fine`): the statements of the liftings
+are of that run, and say nothing of the bodies of the functions that it
+does not enter, as "What it is not", below, says of any verdict here.
+The mark is a sign: it is neither necessary nor sufficient for the
+acceptance to rest on the finer tests. Of these three files it is known
+besides, from the stored files of the commit before the tool was given
+the finer tests, that each was "compared, not validated", with the line
+"related once lifted" under the verdict, and gained its verdict with
+them.
+
 What it is not:
 
 - **No theorem about the fields of the module block.** What the run exits
@@ -421,8 +449,8 @@ validated" says that the two runs came to the same result in the model
 and that the validation does not accept the pair: no theorem of
 refinement comes from this validation, and it is no failure of the
 compiler either. A weaker verdict, which is proved apart, may be printed
-under it: `camlinternalAtomic.ml` has "related once lifted"
-(`../ocaml/README.md` says what that is a statement of). `option.ml`,
+under it, "related once lifted" (`../ocaml/README.md` says what that is
+a statement of); no stored file has it at this commit. `option.ml`,
 `pqueue.ml` and `result.ml` have under it a line in round brackets,
 which is no verdict: the term after has a function slot of the name
 that Simplify gives the wrapper which it makes of a partial

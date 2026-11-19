@@ -1,0 +1,26 @@
+let $camlUndefined_beside_raise__first_const_0 = Block 0 () in
+(let code inline(never) size(3)
+       throw_0 (e/36 : val)
+         my_closure/37 &my_alloc_region/38 my_depth/39
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/40 = rec_info (succ my_depth/39) in
+   cont k/13 pop(regular k/13) (e/36)
+ in
+ let throw/41 = closure throw_0 @throw &toplevel in
+ let table/42 = %array.`imm`.`toplevel` (1, 2, 3) in
+ (let Popaque/45 = %opaque (table/42) in
+  let Popaque/46 = %opaque (table/42) in
+  let prim/47 = %phys_eq (Popaque/46, Popaque/45) in
+  let eq/48 = %tag_imm (prim/47) in
+  cont k/14 (eq/48))
+   where k/14 (result/43 : imm tagged) =
+     let Pmakeblock/44 = %block.[`0`].`toplevel` (throw/41, result/43) in
+     cont k/11 (Pmakeblock/44))
+  where k/11 define_root_symbol (module_block/33) =
+    let field_0/34 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/33)
+    in
+    let field_1/35 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/33)
+    in
+    let $camlUndefined_beside_raise = Block 0 (field_0/34, field_1/35) in
+    cont done ($camlUndefined_beside_raise)

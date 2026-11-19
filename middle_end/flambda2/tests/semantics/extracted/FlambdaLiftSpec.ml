@@ -290,6 +290,48 @@ and binding_exits_plain_knowing = function
 and code_exits_plain_knowing = function
   | Code (_, _, ret, _, _, body) -> exits_plain_knowing (ret :: []) [] body
 
+(** val strip_code : code -> code **)
+
+let strip_code = function
+  | Code (params, my_closure, ret, exn, metadata, _) ->
+    Code (params, my_closure, ret, exn, metadata, Invalid)
+
+(** val strip_binding : static_binding -> static_binding **)
+
+let strip_binding = function
+  | Bind_code (id, c) -> Bind_code (id, strip_code c)
+  | x -> x
+
+(** val strip : expr -> expr **)
+
+let rec strip = function
+  | Let (x, kind, d, body) -> Let (x, kind, d, strip body)
+  | Let_static (bindings, body) ->
+    Let_static (map strip_binding bindings, strip body)
+  | Let_cont_non_recursive (k, h, body) ->
+    Let_cont_non_recursive (k, strip_handler h, strip body)
+  | Let_cont_recursive (handlers, body) ->
+    Let_cont_recursive
+      ( map
+          (fun pat ->
+            let k, h = pat in
+            k, strip_handler h)
+          handlers,
+        strip body )
+  | x -> x
+
+(** val strip_handler : continuation_handler -> continuation_handler **)
+
+and strip_handler = function
+  | Handler (params, metadata, handler) ->
+    Handler (params, metadata, strip handler)
+
+(** val exits_plain_fine : expr -> bool **)
+
+let exits_plain_fine e =
+  exits_plain_knowing [] [] e
+  || (calls_nothing e && exits_plain_knowing [] [] (strip e))
+
 (** val lift_unit : lifting -> expr -> expr option **)
 
 let lift_unit l e =
@@ -297,7 +339,7 @@ let lift_unit l e =
     bind_my_closures l.lifted_my_closures (lift_expr l.lifted_lets root e)
   in
   if
-    ((exits_plain_knowing [] [] e && expr_free_of_heap e)
+    ((exits_plain_fine e && free_of_heap_fine e)
     && well_formed_unit l.lifting_unit lifted)
     && only_closures_of l.lifted_my_closures lifted
   then Some lifted

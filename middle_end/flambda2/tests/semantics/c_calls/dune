@@ -116,14 +116,24 @@
 ;; undefined at the call of the body, and there is nothing to validate.
 ;;
 ;; body_with_a_store, a function that calls a C function and stores what it
-;; returns in a cell. body_with_a_store_not_called names that function,
-;; calls nothing, and defines a function of its own. It is NOT validated:
-;; the liftings to symbols lift nothing in a term that has a primitive of
-;; the heap in the code bound in front of it, and the tool prints that line.
-;; With the code declared deleted the unit is validated with its imports
-;; (the tool as it was before this reading, run on this text on 19 November
-;; 2026; no rule here runs that tool). THIS IS A UNIT THAT CALLS NO C
-;; FUNCTION AND LOSES ITS VERDICT BY THE READING.
+;; returns in a cell. Its two second units name that function, do not call
+;; it, and define a function of their own. A lifting to symbols lifts nothing
+;; in a term that has a call outside the bodies of its code and a primitive
+;; of the heap in the code bound in front of it (decision D65: where a term
+;; has no such call, the two tests of the liftings look outside those bodies
+;; only). body_with_a_store_and_a_call calls its own function at top level,
+;; through the primitive %opaque, so that the call stays in both terms and is
+;; not a call of known code (the tool counts it still once the calls of known
+;; code are inlined). It is NOT validated, and the tool prints the line of
+;; the guard. With the code of the body declared deleted the unit is validated
+;; with its imports (the tool as it was before this reading, run on this text
+;; on 19 November 2026; no rule here runs that tool). THIS IS A UNIT THAT
+;; CALLS NO C FUNCTION AND LOSES ITS VERDICT BY THE READING.
+;; body_with_a_store_not_called calls nothing. It was not validated before
+;; decision D65, for the same primitive of the heap; it is validated with its
+;; imports since (by its expected file, before the finer tests and with
+;; them), and its output carries the mark of that decision (the tool's line
+;; that begins "(decision D65:", under the verdict line).
 ;;
 ;; tupled_body_with_a_call, a function of a pair that calls a C function:
 ;; tupled code, which the conversion does not bind from another unit. Its
@@ -751,6 +761,46 @@
   (diff
    body_with_a_store_not_called.expected
    body_with_a_store_not_called.output)))
+
+(rule
+ (targets
+  body_with_a_store_and_a_call.fl.made
+  body_with_a_store_and_a_call.cmi
+  body_with_a_store_and_a_call.cmx)
+ (deps %{ocamlopt} body_with_a_store.cmi body_with_a_store.cmx)
+ (action
+  (run
+   sh
+   %{dep:../ocaml/pairs/from_ocaml.sh}
+   %{ocamlopt}
+   %{dep:body_with_a_store_and_a_call.ml}
+   body_with_a_store_and_a_call
+   body_with_a_store)))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_store_and_a_call.fl
+   body_with_a_store_and_a_call.fl.made)))
+
+(rule
+ (deps body_with_a_store.cmi body_with_a_store.cmx)
+ (action
+  (with-stdout-to
+   body_with_a_store_and_a_call.output
+   (run
+    ../../tools/flsemantics.exe
+    -I
+    .
+    %{dep:body_with_a_store_and_a_call.fl}))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff
+   body_with_a_store_and_a_call.expected
+   body_with_a_store_and_a_call.output)))
 
 (rule
  (with-stdout-to
