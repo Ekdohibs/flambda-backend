@@ -37,7 +37,17 @@
    the code returns is read into the parameter of the handler that the
    call returns to, as in the flow proof; at the rank [i] nothing is, as
    the result has no source ([marker_ok]). The invariant is kept by the
-   run from there, so [x] is never bound. *)
+   run from there, so [x] is never bound ([marked_run]).
+
+   A call that [apply_never_returns] makes one that never returns reads,
+   at the node [a], the call witness of known arity of its callee, which
+   may come from the allocation [b] of the closure called; the witness [w]
+   of the code dep is among the sources of [a] ([never_returns_result]).
+   If the code is known, [w] gives [a] its code id, so the code is the one
+   [code_id_actually_called] finds; otherwise [w] is among the witnesses
+   that [never_returns_of_call] reads, and the result of [w] it finds with
+   no source is one of the code dep. The arity of the call is that of the
+   code, as the call steps ([entered_dead_result]). *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -48,7 +58,10 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec FlambdaMapProofs
   FlambdaReaperFlowSpec FlambdaReaperFlowProofs
   FlambdaReaperCallingConventions FlambdaReaperDeadFramesSpec.
 From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
-  FlambdaReaperLocalFieldsSpec FlambdaReaperLocalFieldsProofs.
+  FlambdaReaperLocalFieldsSpec FlambdaReaperLocalFieldsProofs
+  FlambdaReaperWrapperProofs.
+From OxCamlFlambda2 Require Import FlambdaReaperRebuild
+  FlambdaReaperUnboxing.
 Import ListNotations.
 Import FlambdaReaperFlowProofs.WithLocal.
 
@@ -338,17 +351,234 @@ Proof.
     exact (Closure_pa _ _ _ _ _ Hpa1 Hpa2).
 Qed.
 
+(* The run from the call of [marked_call] never binds [x]. *)
+Lemma marked_run (s : state) (ap : apply_expr) (callee : value)
+    (id : code_id) (slots : list (value_slot * value)) (cd : code_dep)
+    (i : nat) (r : node) (h : continuation_handler) (vars0 : env)
+    (K0 : cont_env) (rec0 : list (continuation * continuation_handler))
+    (x : variable) (m : nat) (s' : state) :
+  inv s -> state_expr s = Apply ap ->
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  ap_exn_continuation ap <> ap_continuation ap ->
+  eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+  closure_of (state_statics s) callee = Some (id, slots) ->
+  lookup id cds = Some cd -> nth_error (cd_return cd) i = Some r ->
+  s_has_source sol r = false ->
+  resolve (ap_continuation ap) (state_conts s) = Closure h vars0 K0 rec0 ->
+  s_has_source sol (Node_variable x) = false ->
+  run m
+    (State (Apply ap) (state_vars s)
+       ((ap_continuation ap, Closure (rename_param i x h) vars0 K0 rec0)
+        :: state_conts s)
+       (state_statics s) (state_heap s) (state_reads s))
+  = Step s' ->
+  lookup x (state_vars s') = None.
+Proof.
+  intros Hs Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr Hrs Hres Hx Hrun.
+  destruct m as [ | m].
+  - simpl in Hrun. injection Hrun as <-. exact (inv_unbound s x Hs Hx).
+  - rewrite run_succ in Hrun.
+    pose proof (marked_call s ap callee id slots cd i r h vars0 K0 rec0 x Hs
+                  Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr Hrs Hres) as Hs1.
+    destruct (step _) as [s1 | | ]; try discriminate Hrun.
+    exact (inv_unbound s' x (inv_run m s1 s' Hs1 Hrun) Hx).
+Qed.
+
+(* A call of [s] that does not enter the code of its callee with the
+   results it expects does not step, whatever its continuations. *)
+Lemma unentered_run (s : state) (ap : apply_expr) (K : cont_env)
+    (x : variable) (m : nat) (s' : state) :
+  inv s -> state_expr s = Apply ap ->
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  (∀ (callee : value) (id : code_id) (slots : list (value_slot * value))
+     (c : code),
+     eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+     closure_of (state_statics s) callee = Some (id, slots) ->
+     lookup id (static_code (state_statics s)) = Some c ->
+     arity_eqb (ap_return_arity ap) (code_result_arity c) = true -> False) ->
+  s_has_source sol (Node_variable x) = false ->
+  run m
+    (State (Apply ap) (state_vars s) K (state_statics s) (state_heap s)
+       (state_reads s))
+  = Step s' ->
+  lookup x (state_vars s') = None.
+Proof.
+  intros Hs Hexpr Hnu Hnot Hx Hrun.
+  destruct m as [ | m].
+  - simpl in Hrun. injection Hrun as <-. exact (inv_unbound s x Hs Hx).
+  - rewrite run_succ in Hrun.
+    destruct s as [e0 vars K1 statics hp rd]. simpl in *. subst e0.
+    destruct Hs as (ctx & ce & He & _ & _ & _ & _ & _ & Hcodes & _).
+    destruct He as (Hfrag & _).
+    pose proof (full_call_step G noted deps cds keep codes symbols False True
+                  ap vars K statics hp rd Hnu Hfrag Hcodes) as Hfull.
+    destruct (step _) as [s1 | | ]; try discriminate Hrun.
+    destruct Hfull as (id & callee & vs & extra & slots & c & callee_vars
+                       & _ & Hcallee & _ & _ & Hclosure & Hcode & _ & _ & _
+                       & _ & _ & Hk3 & _).
+    destruct (Hnot callee id slots c Hcallee Hclosure Hcode Hk3).
+Qed.
+
 End Frames.
 
 (* ======================================================================== *)
-(* The statement                                                            *)
+(* The code that a call that never returns enters                           *)
 (* ======================================================================== *)
 
-Theorem dead_frame : dead_frame_statement.
+Section Entered.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable sol : solution.
+Variable cds : finite_map code_dep.
+Variable codes : finite_map code_metadata.
+Hypothesis Hc : closed is_local (graph_of_facts F) sol.
+Hypothesis Hlocal : is_local_slots_only is_local.
+
+Abbreviation G := (graph_of_facts F).
+Abbreviation kw := (Field_call_witness Known_arity_code_pointer).
+
+(* The call of known arity [ap] reads at [a] the call witness of known
+   arity of its callee, which may come from the closure [b] of the code
+   [id], with the code dep [cd]. If [apply_never_returns] holds of the
+   call, a result of [cd], of a rank that the call expects, has no
+   source. *)
+Lemma never_returns_result (ap : apply_expr) (a b : node) (id : code_id)
+    (cd : code_dep) :
+  ap_call_kind ap <> Indirect_unknown_arity ->
+  g_accessor G a kw (node_of_simple (ap_callee ap)) ->
+  may_come_from sol b (node_of_simple (ap_callee ap)) ->
+  s_has_source sol b = true ->
+  g_constructor G b kw (cd_known_arity_call_witness cd) ->
+  lookup id cds = Some cd -> known_witness_edges G id cd ->
+  length (unarize (ap_return_arity ap)) <= length (cd_return cd) ->
+  apply_never_returns F sol cds codes ap = true ->
+  ∃ (i : nat) (r : node),
+    nth_error (cd_return cd) i = Some r ∧ s_has_source sol r = false.
 Proof.
-  intros flag is_local u e T n m s s' ap callee id slots cd i r h vars0 K0
-    rec0 x Hlocal Hslots Hfrag Hcheck Hrun Hexpr Hnu Hexn_ne Hcallee
-    Hclosure Hcd Hr Hrs Hres Hx Hrun'.
+  intros Hnu Ha Hb Hhsb Hbw Hcd Hkw Hlen Hnr.
+  assert (Hkl : is_local kw = false)
+    by (apply (not_local is_local Hlocal); intros; discriminate).
+  (* What [apply_never_returns] reads when the code is not known. *)
+  assert (Hunknown :
+            code_id_actually_called F sol ap = None ->
+            never_returns_of_call F sol Known_arity_code_pointer
+              (get_direct_sources sol (node_of_simple (ap_callee ap)))
+              [length (ap_args ap)] (length (unarize (ap_return_arity ap)))
+            = true).
+  { intros Ecall. unfold apply_never_returns in Hnr. rewrite Ecall in Hnr.
+    destruct (ap_callee ap); [ | | discriminate Hnr ];
+      (destruct (ap_call_kind ap);
+       [ exact Hnr | exfalso; apply Hnu; reflexivity | exact Hnr ]). }
+  set (f := node_of_simple (ap_callee ap)) in *.
+  destruct Hkw as (_ & Hretc & _ & Hcodeid & Hasid).
+  destruct (alloc_self is_local G sol Hc _ _ _ Hcodeid
+              (as_hs is_local G sol Hc _ (any_source_input _ _ _ Hc _ Hasid)))
+    as (Hhsw & Hww & _).
+  set (w := cd_known_arity_call_witness cd) in *. clearbody w.
+  destruct Hb as (_ & Hfb & _).
+  destruct (code_id_actually_called F sol ap) as [id0 | ] eqn:Ecall.
+  - (* The code is known: it is [id]. *)
+    unfold apply_never_returns in Hnr. rewrite Ecall in Hnr.
+    destruct (lookup id0 codes) as [md | ]; [ | discriminate Hnr ].
+    destruct (FlambdaReaperWrapperProofs.called_some F sol ap id0 Ecall)
+      as (ids & Eids & Esing).
+    pose proof (FlambdaReaperWrapperProofs.directly_no_any F sol f ids a Eids
+                  Ha) as Hasa.
+    assert (Hasf : s_any_source sol f = false).
+    { destruct (s_any_source sol f) eqn:E; [ | reflexivity ].
+      rewrite (any_source_accessor _ _ _ Hc _ _ a E Ha Hkl) in Hasa.
+      discriminate. }
+    destruct Hfb as [Hfb | Hfb]; [ congruence | ].
+    pose proof (alias_accessor_source _ _ _ Hc f b _ a w Ha Hfb Hasf Hbw)
+      as Haw.
+    assert (Hasw : s_any_source sol w = false).
+    { destruct (s_any_source sol w) eqn:E; [ | reflexivity ].
+      rewrite (any_source_alias _ _ _ Hc w a Haw E) in Hasa. discriminate. }
+    destruct Hww as [Hww | Hww]; [ congruence | ].
+    pose proof (sources_alias _ _ _ Hc w a w Hww Hasw Haw Hasa) as Haw'.
+    pose proof (FlambdaReaperWrapperProofs.directly_member F sol f ids a w id
+                  Eids Ha Haw' Hhsw Hcodeid) as Hin.
+    pose proof (FlambdaReaperWrapperProofs.singleton_some ids id0 id Esing
+                  Hin) as <-.
+    unfold code_never_returns in Hnr. rewrite Hcd in Hnr.
+    apply existsb_exists in Hnr as (r & Hr & Hno).
+    apply In_nth_error in Hr as (i & Hi).
+    exists i, r. split; [ exact Hi | ]. apply negb_true_iff. exact Hno.
+  - (* The code is not known: the result is read off [w]. *)
+    specialize (Hunknown eq_refl).
+    cbn [never_returns_of_call] in Hunknown.
+    unfold get_direct_sources in Hunknown.
+    destruct (s_any_source sol f) eqn:Hasf; [ discriminate Hunknown | ].
+    destruct Hfb as [Hfb | Hfb]; [ congruence | ].
+    unfold get_field_sources in Hunknown.
+    match type of Hunknown with
+    | context [if existsb ?p (f_constructor F) then _ else _] =>
+      destruct (existsb p (f_constructor F)) eqn:Eany;
+        [ discriminate Hunknown | ]
+    end.
+    assert (Hasw : s_any_source sol w = false).
+    { destruct (s_any_source sol w) eqn:E; [ | reflexivity ].
+      rewrite <- Eany. symmetry. apply existsb_exists.
+      exists (b, kw, w). split; [ exact Hbw | ].
+      rewrite Hfb, Hhsb, field_eqb_refl, E. reflexivity. }
+    destruct Hww as [Hww | Hww]; [ congruence | ].
+    apply existsb_exists in Hunknown as (i & Hi & Hno).
+    apply in_seq in Hi.
+    destruct (nth_error (cd_return cd) i) as [r | ] eqn:Hr;
+      [ | apply nth_error_None in Hr; lia ].
+    exists i, r. split; [ exact Hr | ].
+    destruct (s_has_source sol r) eqn:Er; [ | reflexivity ].
+    exfalso. apply negb_true_iff, Bool.not_true_iff_false in Hno. apply Hno.
+    unfold result_has_source_of. apply existsb_exists.
+    exists (w, Field_return_of_call (Normal i), r).
+    split; [ exact (Hretc i r Hr) | ].
+    rewrite field_eqb_refl, Er, andb_true_r, andb_true_r.
+    apply existsb_exists. exists (b, kw, w). split; [ exact Hbw | ].
+    rewrite Hfb, Hhsb, field_eqb_refl, Hww, Hhsw. reflexivity.
+Qed.
+
+End Entered.
+
+(* ======================================================================== *)
+(* The statements                                                           *)
+(* ======================================================================== *)
+
+(* The run of the unit keeps the invariant, with the hypotheses of the
+   section [Frames]. *)
+Lemma unit_inv (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (n : nat) (s : state) :
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  run n (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+  ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop),
+    closed is_local (graph_of_facts (traverse_unit flag u e))
+      (solution_of_tables T)
+    ∧ g_any_source (graph_of_facts (traverse_unit flag u e))
+        Node_all_constants
+    ∧ (∀ s : symbol,
+         noted s ->
+         may_come_from (solution_of_tables T) (Node_symbol s) (Node_symbol s))
+    ∧ (∀ s : symbol,
+         among s (static_names symbols_of_binding e) = true ->
+         may_come_from (solution_of_tables T) (Node_symbol s) (Node_symbol s))
+    ∧ (∀ d : closure_dep,
+         deps d ->
+         closure_dep_facts (graph_of_facts (traverse_unit flag u e))
+           (unit_code_deps flag u e) d)
+    ∧ NoDup (map fst (unit_code_deps flag u e))
+    ∧ (∀ (id : code_id) (cd : code_dep),
+         lookup id (unit_code_deps flag u e) = Some cd ->
+         known_witness_edges (graph_of_facts (traverse_unit flag u e)) id cd)
+    ∧ FlambdaReaperLocalFieldsSpec.local_reads_used is_local
+        (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+    ∧ inv (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+        noted deps (unit_code_deps flag u e) (unit_kept e) (unit_codes e)
+        (static_names symbols_of_binding e) u s.
+Proof.
+  intros Hlocal Hslots Hfrag Hcheck Hrun.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
                 is_local _ _
@@ -359,9 +589,10 @@ Proof.
               Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & _ & Hdeps & Hnd
         & Hkeys & _ & Hcds_eq).
+  subst cds.
   set (G := graph_of_facts (traverse_unit flag u e)) in *.
   set (sol := solution_of_tables T) in *.
-  rewrite <- Hcds_eq in Hcd.
+  set (cds := unit_code_deps flag u e) in *.
   pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
                 (static_names symbols_of_binding e) True False) as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
@@ -410,28 +641,163 @@ Proof.
   pose proof (initial_flow_invariant G sol noted deps cds (unit_kept e)
                 (unit_codes e) (static_names symbols_of_binding e) u False
                 no_location True e He) as H0.
-  pose proof (inv_run is_local G sol noted deps cds (unit_kept e)
-                (unit_codes e) (static_names symbols_of_binding e) u Hc Hlocal
-                Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds Hlrs n _ _ H0 Hrun)
-    as Hs.
-  destruct m as [ | m].
-  - simpl in Hrun'. injection Hrun' as <-. simpl.
-    exact (inv_unbound is_local G sol noted deps cds (unit_kept e)
-             (unit_codes e) (static_names symbols_of_binding e) u Hc s x Hs
-             Hx).
-  - rewrite run_succ in Hrun'.
-    pose proof (marked_call is_local G sol noted deps cds (unit_kept e)
-                  (unit_codes e) (static_names symbols_of_binding e) u Hc
-                  Hlocal Hconsts Hsyms Hnd Hcds s ap callee id slots cd i r h
-                  vars0 K0 rec0 x Hs Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr
-                  Hrs Hres)
-      as Hs1.
-    destruct (step _) as [s1 | | ]; try discriminate Hrun'.
-    exact (inv_unbound is_local G sol noted deps cds (unit_kept e)
-             (unit_codes e) (static_names symbols_of_binding e) u Hc s' x
-             (inv_run is_local G sol noted deps cds (unit_kept e)
-                (unit_codes e) (static_names symbols_of_binding e) u Hc
-                Hlocal Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds Hlrs m _ _ Hs1
-                Hrun')
-             Hx).
+  exists noted, deps.
+  do 8 (split; [ assumption | ]).
+  exact (inv_run is_local G sol noted deps cds (unit_kept e) (unit_codes e)
+           (static_names symbols_of_binding e) u Hc Hlocal Hconsts Hsyms
+           Hunit_syms Hdeps Hnd Hcds Hlrs n _ _ H0 Hrun).
+Qed.
+
+Theorem dead_frame : dead_frame_statement.
+Proof.
+  intros flag is_local u e T n m s s' ap callee id slots cd i r h vars0 K0
+    rec0 x Hlocal Hslots Hfrag Hcheck Hrun Hexpr Hnu Hexn_ne Hcallee
+    Hclosure Hcd Hr Hrs Hres Hx Hrun'.
+  destruct (unit_inv flag is_local u e T n s Hlocal Hslots Hfrag Hcheck Hrun)
+    as (noted & deps & Hc & Hconsts & Hsyms & Hunit_syms & Hdeps & Hnd & Hcds
+        & Hlrs & Hs).
+  exact (marked_run is_local _ _ noted deps _ _ _ _ u Hc Hlocal Hconsts Hsyms
+           Hunit_syms Hdeps Hnd Hcds Hlrs s ap callee id slots cd i r h vars0
+           K0 rec0 x m s' Hs Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr Hrs
+           Hres Hx Hrun').
+Qed.
+
+(* The call of [s] that enters the code [id] of [callee] with the results
+   it expects, and that [apply_never_returns] makes one that never
+   returns: a result of the code dep of [id] has no source. *)
+Lemma entered_dead_result (is_local : field -> bool) (F : facts)
+    (sol : solution) (noted : symbol -> Prop) (deps : closure_dep -> Prop)
+    (cds : finite_map code_dep) (keep : value_slot -> bool)
+    (codes : list (code_id * code)) (symbols : list symbol)
+    (u : unit_interface) (md : finite_map code_metadata) (s : state)
+    (ap : apply_expr) (callee : value) (id : code_id)
+    (slots : list (value_slot * value)) (c : code) :
+  closed is_local (graph_of_facts F) sol -> is_local_slots_only is_local ->
+  g_any_source (graph_of_facts F) Node_all_constants ->
+  (∀ s : symbol, noted s -> may_come_from sol (Node_symbol s) (Node_symbol s))
+  -> NoDup (map fst cds) ->
+  (∀ (id : code_id) (cd : code_dep),
+     lookup id cds = Some cd -> known_witness_edges (graph_of_facts F) id cd)
+  -> inv (graph_of_facts F) sol noted deps cds keep codes symbols u s ->
+  state_expr s = Apply ap -> ap_call_kind ap <> Indirect_unknown_arity ->
+  eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+  closure_of (state_statics s) callee = Some (id, slots) ->
+  lookup id (static_code (state_statics s)) = Some c ->
+  arity_eqb (ap_return_arity ap) (code_result_arity c) = true ->
+  apply_never_returns F sol cds md ap = true ->
+  ∃ (cd : code_dep) (i : nat) (r : node),
+    lookup id cds = Some cd ∧ nth_error (cd_return cd) i = Some r
+    ∧ s_has_source sol r = false.
+Proof.
+  intros Hc Hlocal Hconsts Hsyms Hnd Hcds Hs Hexpr Hnu Hcallee Hclosure Hcode
+    Hk3 Hnr.
+  set (G := graph_of_facts F) in *.
+  destruct s as [e0 vars K statics hp rd]. simpl in *. subst e0.
+  destruct Hs as (ctx & ce & He & Hlive & _ & Hvars & _ & Hst & Hcodes & _).
+  destruct He as (_ & Hnoted_callee & _ & returns & exn & _ & _ & Hedges).
+  apply known_call_edges_of in Hedges; [ | exact Hnu ].
+  destruct Hedges as (witness & a & called_node & _ & _ & _ & _ & _ & _
+                      & Happly).
+  destruct (code_facts G noted deps cds keep codes symbols False True Hnd
+              statics id c Hcodes Hcode)
+    as (_ & cd & Hcd & _ & _ & _ & Lr).
+  pose proof (simple_flows is_local G sol noted cds keep no_location Hc
+                Hconsts Hsyms vars _ _ Hvars Hnoted_callee Hcallee)
+    as Hfcallee.
+  destruct (closure_alloc G sol cds keep no_location statics callee _ id slots
+              Hst Hfcallee Hclosure)
+    as (b & Hb & Hfb & Hcalled_b).
+  unfold called_by, closure_dep_facts in Hcalled_b. simpl in Hcalled_b.
+  rewrite Hcd in Hcalled_b. destruct Hcalled_b as (_ & Hcw & _).
+  apply arity_eqb_eq in Hk3.
+  destruct (never_returns_result is_local F sol cds md Hc Hlocal ap a b id cd
+              Hnu Happly Hb
+              (flows_hs is_local G sol keep _ no_location Hc _ _ Hfb) Hcw Hcd
+              (Hcds id cd Hcd) ltac:(rewrite Lr, Hk3; reflexivity) Hnr)
+    as (i & r & Hr & Hrs).
+  exists cd, i, r. auto.
+Qed.
+
+Theorem dead_frame_of_call : dead_frame_of_call_statement.
+Proof.
+  intros flag is_local u e T n s s1 ap callee id slots Hlocal Hslots Hfrag
+    Hcheck Hrun Hexpr Hnu Hcallee Hclosure Hnr Hstep.
+  destruct (unit_inv flag is_local u e T n s Hlocal Hslots Hfrag Hcheck Hrun)
+    as (noted & deps & Hc & Hconsts & Hsyms & _ & _ & Hnd & Hcds & _ & Hs).
+  assert (Hentered :
+            ∃ c, lookup id (static_code (state_statics s)) = Some c
+                 ∧ arity_eqb (ap_return_arity ap) (code_result_arity c)
+                   = true).
+  { destruct s as [e0 vars K statics hp rd]. simpl in *. subst e0.
+    destruct Hs as (ctx & ce & He & _ & _ & _ & _ & _ & Hcodes & _).
+    destruct He as (Hfrag' & _).
+    pose proof (full_call_step _ noted deps _ _ _ _ False True ap vars K
+                  statics hp rd Hnu Hfrag' Hcodes) as Hfull.
+    rewrite Hstep in Hfull.
+    destruct Hfull as (id' & callee' & _ & _ & slots' & c & _ & _ & Hcallee'
+                       & _ & _ & Hclosure' & Hcode & _ & _ & _ & _ & _ & Hk3
+                       & _).
+    rewrite Hcallee in Hcallee'. injection Hcallee' as <-.
+    rewrite Hclosure in Hclosure'. injection Hclosure' as <- <-.
+    exists c. auto. }
+  destruct Hentered as (c & Hcode & Hk3).
+  exact (entered_dead_result is_local _ _ noted deps _ _ _ _ u _ s ap callee
+           id slots c Hc Hlocal Hconsts Hsyms Hnd Hcds Hs Hexpr Hnu Hcallee
+           Hclosure Hcode Hk3 Hnr).
+Qed.
+
+Theorem never_returns_frame : never_returns_frame_statement.
+Proof.
+  intros flag is_local u e T n s ap h vars0 K0 rec0 Hlocal Hslots Hfrag
+    Hcheck Hrun Hexpr Hnu Hexn_ne Hnr Hres.
+  destruct (unit_inv flag is_local u e T n s Hlocal Hslots Hfrag Hcheck Hrun)
+    as (noted & deps & Hc & Hconsts & Hsyms & Hunit_syms & Hdeps & Hnd & Hcds
+        & Hlrs & Hs).
+  (* The run from a call that does not enter code never binds [x]. *)
+  assert (Hstuck :
+            (∀ (callee : value) (id : code_id)
+               (slots : list (value_slot * value)) (c : code),
+               eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+               closure_of (state_statics s) callee = Some (id, slots) ->
+               lookup id (static_code (state_statics s)) = Some c ->
+               arity_eqb (ap_return_arity ap) (code_result_arity c) = true ->
+               False) ->
+            ∃ i : nat,
+              ∀ (x : variable) (m : nat) (s' : state),
+                s_has_source (solution_of_tables T) (Node_variable x) = false
+                ->
+                run m
+                  (State (Apply ap) (state_vars s)
+                     ((ap_continuation ap,
+                       Closure (rename_param i x h) vars0 K0 rec0)
+                      :: state_conts s)
+                     (state_statics s) (state_heap s) (state_reads s))
+                = Step s' ->
+                lookup x (state_vars s') = None).
+  { intros Hnot. exists 0%nat. intros x m s' Hx Hrun'.
+    exact (unentered_run is_local _ _ noted deps _ _ _ _ u Hc s ap _ x m s'
+             Hs Hexpr Hnu Hnot Hx Hrun'). }
+  destruct (eval_simple (state_vars s) (ap_callee ap)) as [callee | ]
+    eqn:Hcallee; [ | apply Hstuck; intros; discriminate ].
+  destruct (closure_of (state_statics s) callee) as [[id slots] | ]
+    eqn:Hclosure;
+    [ | apply Hstuck; intros callee' ? ? ? E; injection E as <-;
+        congruence ].
+  destruct (lookup id (static_code (state_statics s))) as [c | ] eqn:Hcode;
+    [ | apply Hstuck; intros callee' id' ? ? E1 E2;
+        injection E1 as <-; rewrite Hclosure in E2; injection E2 as <- _;
+        congruence ].
+  destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
+    [ | apply Hstuck; intros callee' id' ? c' E1 E2 E3;
+        injection E1 as <-; rewrite Hclosure in E2; injection E2 as <- _;
+        rewrite Hcode in E3; injection E3 as <-; congruence ].
+  destruct (entered_dead_result is_local _ _ noted deps _ _ _ _ u _ s ap callee
+              id slots c Hc Hlocal Hconsts Hsyms Hnd Hcds Hs Hexpr Hnu Hcallee
+              Hclosure Hcode Hk3 Hnr)
+    as (cd & i & r & Hcd & Hr & Hrs).
+  exists i. intros x m s' Hx Hrun'.
+  exact (marked_run is_local _ _ noted deps _ _ _ _ u Hc Hlocal Hconsts Hsyms
+           Hunit_syms Hdeps Hnd Hcds Hlrs s ap callee id slots cd i r h vars0
+           K0 rec0 x m s' Hs Hexpr Hnu Hexn_ne Hcallee Hclosure Hcd Hr Hrs
+           Hres Hx Hrun').
 Qed.
