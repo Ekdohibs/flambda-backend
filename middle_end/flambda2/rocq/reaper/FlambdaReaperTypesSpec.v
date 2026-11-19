@@ -41,8 +41,10 @@
    not aliases), [statics_of_values] and [exits_of_values] (its premise
    on static blocks), [unboxed_values] and
    [block_fields_of_one_kind] (for unboxed variables of code),
-   [slot_value_at_path] and [changed_closure_rebuilt] (for the closures
-   whose representation changes), the statements, and the examples,
+   [slot_value_at_path], [changed_closure_rebuilt], [changed_unstored],
+   [reprs_of_sets], [reprs_without_slots] and [changed_at] (for the
+   closures whose representation changes), the statements, and the
+   examples,
    against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
    FlambdaReaperFlowSpec.v (where values may be),
@@ -325,6 +327,25 @@
      of FlambdaReaperUnboxingRefinesClosuresSimProofs.v relates them
      ([changed_closure_rebuilt]), and the latter to the closure of the
      unit by [rebuilt_under].
+   - [rewrite_changed_type_sound_statement]: the same for every closure
+     whose set changes, of the three runs: the type of the fragment
+     [loose] that holds of a closure of the first run at a node, under a
+     metadata that holds there, rewritten by [rewrite_arbitrary_u] with
+     the changes of representation of the unit
+     ([unit_changed_representations] of the table [tcr]), holds of what
+     the run of the unit rebuilt with unboxing has for it, the closure
+     in the representation of each allocation of the node
+     ([changed_at]) of what the run rebuilt without has
+     ([rebuilt_value]). Two premises are on the graph and the
+     representations: no closure that changes is held in a field other
+     than a function slot ([changed_unstored]; [crel] gives the new
+     slots what the old ones held, which is right only there, as in
+     the fragment of FlambdaReaperUnboxingRefinesClosuresSpec.v), and
+     the representations are those of sets ([reprs_of_sets]: the
+     closures of a set change together, each with its own function
+     slot, the new function slots distinct). The fragment: the
+     representations keep no value slot ([reprs_without_slots]). No
+     fault found.
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
@@ -360,14 +381,16 @@
      reads a static block at its shape, which the model has not got.
    - Unboxing: the rewriting of the types of the closures whose
      representation changes, which [rewrite_arbitrary] forgets and
-     [rewrite_arbitrary_u] rewrites as the compiler does, is stated of
-     one example only ([changed_example_statement]): the statement for
-     every closure, of the three runs as for unboxed variables, is left,
-     and so is the rebuild with a change of representation in the other
-     statements; the unboxing of closures and of names whose uses
-     are called (not of [check_unboxed_uses]); the fields of an unboxed
-     [my_closure], which the result types give no equation, so that
-     there is nothing to state of them. *)
+     [rewrite_arbitrary_u] rewrites as the compiler does, is stated for
+     every closure ([rewrite_changed_type_sound_statement]) only where
+     the representations keep no value slot: the types of the new value
+     slots (the leaves of [changed_leaves], read from the closures of
+     the set by [get_fields_of_constructors], and those of a value slot
+     unboxed in turn) are left, and so is the rebuild with a change of
+     representation in the other statements; the unboxing of closures
+     and of names whose uses are called (not of [check_unboxed_uses]);
+     the fields of an unboxed [my_closure], which the result types give
+     no equation, so that there is nothing to state of them. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -1224,6 +1247,129 @@ Definition changed_example_statement : Prop :=
       ChangedExample.closure_mid ChangedExample.closure'
   ∧ type_satisfied empty_static_env [] ChangedExample.closure'
       ChangedExample.rewritten.
+
+(* No allocation holds a closure whose representation changes ([reprs])
+   in a field other than a function slot: in a block, a value slot or
+   the fields of a call, as in the fragment of
+   FlambdaReaperUnboxingRefinesClosuresSpec.v, whose value slots and
+   blocks hold plain names. *)
+Definition changed_unstored (G : graph) (sol : solution)
+    (reprs : list (node * FlambdaReaperUnboxing.closure_repr)) : Prop :=
+  ∀ (a : node) (f : field) (from c : node),
+    g_constructor G a f from ->
+    (∀ g : function_slot, f <> Field_function_slot g) ->
+    may_come_from sol c from -> s_has_source sol c = true ->
+    Keyed.lookup node_eqb c reprs = None.
+
+(* The representations of the closures of the sets, as
+   FlambdaReaperUnboxing.changed_representations makes them: the closures
+   of a set change or not together, those of a set with the same fields
+   and new function slots, each with the function slot of its closure;
+   the new function slots of a set are distinct, one for each of its
+   function slots. A check of the representations, which the proof does
+   not derive from their construction. *)
+Definition reprs_of_sets (G : graph)
+    (reprs : list (node * FlambdaReaperUnboxing.closure_repr)) : Prop :=
+  (∀ (a b : node) (g : function_slot),
+     g_constructor G a (Field_function_slot g) b ->
+     match Keyed.lookup node_eqb a reprs, Keyed.lookup node_eqb b reprs with
+     | None, None => True
+     | Some r, Some r' =>
+       FlambdaReaperUnboxing.cr_fields r' = FlambdaReaperUnboxing.cr_fields r
+       ∧ FlambdaReaperUnboxing.cr_function_slots r'
+         = FlambdaReaperUnboxing.cr_function_slots r
+       ∧ FlambdaReaperUnboxing.cr_current r' = g
+       ∧ is_bound g (FlambdaReaperUnboxing.cr_function_slots r) = true
+     | _, _ => False
+     end)
+  ∧ ∀ (a : node) (r : FlambdaReaperUnboxing.closure_repr),
+      Keyed.lookup node_eqb a reprs = Some r ->
+      NoDup (map snd (FlambdaReaperUnboxing.cr_function_slots r)).
+
+(* The representations keep no value slot: only the function slots
+   change. The fragment of [rewrite_changed_type_sound_statement]. *)
+Definition reprs_without_slots
+    (reprs : list (node * FlambdaReaperUnboxing.closure_repr)) : Prop :=
+  ∀ (a : node) (r : FlambdaReaperUnboxing.closure_repr),
+    Keyed.lookup node_eqb a reprs = Some r ->
+    FlambdaReaperUnboxing.cr_fields r = [].
+
+(* What the run of the unit rebuilt with unboxing and changes of
+   representation has, [v'], for a value [v_mid] that the run of the unit
+   rebuilt without has at the node [n]: [n] has an allocation, and each
+   of them changes its representation, [v'] being the closure in that
+   representation ([changed_closure_rebuilt]). *)
+Definition changed_at (sol : solution)
+    (reprs : list (node * FlambdaReaperUnboxing.closure_repr)) (n : node)
+    (v_mid v' : value) : Prop :=
+  (∃ a : node, may_come_from sol a n ∧ s_has_source sol a = true)
+  ∧ ∀ a : node,
+      may_come_from sol a n -> s_has_source sol a = true ->
+      ∃ r : FlambdaReaperUnboxing.closure_repr,
+        Keyed.lookup node_eqb a reprs = Some r
+        ∧ changed_closure_rebuilt r v_mid v'.
+
+(* The closure types of a set whose representation changes, for every
+   closure, of the three runs: the type [t] of the fragment [loose] that
+   holds of a closure [v] of the first run, at the node [n], rewritten as
+   [rewrite_arbitrary_u] rewrites it, with the changes of representation
+   of the unit, under a metadata [m] that holds at [n], holds of what
+   the run of the unit rebuilt with unboxing and changes of
+   representation has for it ([v']), where the run of the unit rebuilt
+   without has [v_mid], related to [v] as the rebuild relates them
+   ([rebuilt_value]), and [v'] is the closure of [v_mid] in the
+   representation of each allocation of [n] ([changed_at], the [crel]
+   of the simulation of the closures). The static environment of the
+   last two runs is one, as the simulation has it. Of the graph, it asks
+   that no closure that changes be held but at a function slot
+   ([changed_unstored]), and of the representations that they be those
+   of sets ([reprs_of_sets]) and keep no value slot
+   ([reprs_without_slots]). *)
+Definition rewrite_changed_type_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v_mid v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    changed_unstored (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    reprs_without_slots
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    closure_in_set statics v <> None ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v n v_mid ->
+    metadata_at (solution_of_tables T) m n ->
+    changed_at (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      n v_mid v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u all_fixes
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
 
 (* ======================================================================== *)
 (* The two runs                                                             *)
