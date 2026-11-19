@@ -103,14 +103,59 @@ and its two exceptions).
   the sources, here, in `script/` and in `library/`, that have an
   unboxed tuple, an unboxed number, a parameter marked `local_` or
   the literal of an immutable array.
-- A source identified as following lines of a file of `stdlib/`, or
-  as reduced from one, is given the notice of that file at its head,
-  byte for byte; its own comment, under the notice, names the file and
-  the lines, and says what matches them and what differs. Absence of
+- A source identified as following lines of a file of `stdlib/`, as
+  reduced from one, or as written after functions of one, is given
+  the notice of that file at its head, byte for byte, and the notices
+  of two files, one after the other, where that is so of two; its own
+  comment, under the notice, names the file and the lines, and says
+  what matches them and what differs. Absence of
   such a notice is not a finding that the source contains no text from
   the library: many sources declare primitives in the same form as the
   library (`external ( + ) : int -> int -> int = "%addint"`), and a
   match alone does not establish where the text came from.
+- `X.fl` is written by the compiler from `X.ml` ("How a term is made",
+  above) and is kept as the compiler wrote it. It has no notice of its
+  own: it stands under the notice of its source, where the source has
+  one, and under the credits that the comment of its source gives. The
+  sources of this directory that begin with a notice are these, each
+  with the text made from it: `bool_kept_across_call.ml` and
+  `bool_kept_across_call.fl`; `bool_tested_at_once.ml` and
+  `bool_tested_at_once.fl`; `boxed_number_in_slot.ml` and
+  `boxed_number_in_slot.fl`; `boxed_number_in_slot_kept.ml` and
+  `boxed_number_in_slot_kept.fl`; `boxed_number_in_slot_not_known.ml`
+  and `boxed_number_in_slot_not_known.fl`;
+  `boxed_number_in_two_slots.ml` and `boxed_number_in_two_slots.fl`;
+  `chain_of_eighteen_in_functor.ml` and
+  `chain_of_eighteen_in_functor.fl`;
+  `chain_of_five_closures_then_argument.ml` and
+  `chain_of_five_closures_then_argument.fl`;
+  `chain_of_five_in_function.ml` and `chain_of_five_in_function.fl`;
+  `chain_of_five_in_functor.ml` and `chain_of_five_in_functor.fl`;
+  `chain_of_four_closures_then_argument.ml` and
+  `chain_of_four_closures_then_argument.fl`;
+  `chain_of_four_in_function.ml` and `chain_of_four_in_function.fl`;
+  `chain_of_four_in_functor.ml` and `chain_of_four_in_functor.fl`;
+  `copy_local.ml` and `copy_local.fl`; `fst_snd.ml` and `fst_snd.fl`;
+  `lifted_block_in_two_bodies.ml` and `lifted_block_in_two_bodies.fl`;
+  `lifted_closure_in_two_bodies.ml` and
+  `lifted_closure_in_two_bodies.fl`;
+  `raise_constant_inlined_in_function.ml` and
+  `raise_constant_inlined_in_function.fl`; `raise_made_block_inlined.ml`
+  and `raise_made_block_inlined.fl`; `raise_made_block_inlined_twice.ml`
+  and `raise_made_block_inlined_twice.fl`; `raise_made_block_written.ml`
+  and `raise_made_block_written.fl`; `slot_through_held.ml` and
+  `slot_through_held.fl`; `slot_through_held_functor.ml` and
+  `slot_through_held_functor.fl`; `string_get16_be.ml` and
+  `string_get16_be.fl`; `string_get16_checked.ml` and
+  `string_get16_checked.fl`. Each begins with the notice of a file of
+  `stdlib/` that its comment names; three of them,
+  `raise_made_block_inlined.ml`, `raise_made_block_inlined_twice.ml` and
+  `raise_made_block_written.ml`, with the notices of two files. Each
+  notice says that the file is distributed under the terms of the GNU
+  Lesser General Public License version 2.1, with the special exception
+  on linking described in the file LICENSE. No notice passes from a
+  source to what the test tool prints of the unit (`X.expected`), nor to
+  an interface that only declares what the unit exports (`X.mli`).
 
 ## What the conversion does to a unit
 
@@ -1576,15 +1621,20 @@ here.
    leave through outside them. A handler that raises again what it
    caught passes the first of the two where everything that can
    reach it is a symbol or a constant (`exported_function_raises.ml`
-   and `reraise_in_kept_function.ml`, which were here, are
-   validated). The second check answers of the unit ("Related once
-   lifted, and not validated", above); it is counted as not
-   validated.
+   and `reraise_in_kept_function.ml`, sources by T5b, which were
+   here, are validated). The second check answers of the unit
+   ("Related once lifted, and not validated", above); it is counted
+   as not validated.
    Three units were here with it, whose code raises a variable and
    which call nothing outside the bodies of their code:
    `raise_parameter.ml`, whose code raises its parameter, and
    `raise_made_block_inlined.ml` and
-   `raise_made_block_inlined_twice.ml`, whose code raises a variable
+   `raise_made_block_inlined_twice.ml` (sources by T5b, written after
+   an account of V3's, which is not in this tree, of functions of
+   the standard library that call `invalid_arg`: `Option.get`, and
+   `get_left` and `get_right` of `Either`; each begins with the
+   notices of the files of the library that its comment names),
+   whose code raises a variable
    that holds a block made of its parameter, as a function that
    makes an exception of a message does (there the function is
    always inlined and is called with constant strings: Simplify
@@ -1595,7 +1645,10 @@ here.
    each with the first line of the mark of that decision (the last
    entry of the list below).
    The two units that make a block have two controls, validated
-   with their imports. In `raise_made_block_written.ml` the same
+   with their imports (sources by T5b too, written with the first
+   of the two; each begins with the notice, or the notices, of the
+   files of the library that its comment names).
+   In `raise_made_block_written.ml` the same
    exception is made where it is raised, with no function to
    inline, and the front end makes its block a symbol. In
    `raise_constant_inlined_in_function.ml` the function that is
@@ -3142,7 +3195,8 @@ removed it:
 - Code that raises a variable that is not known to hold a symbol or a
   constant, in a unit that calls nothing outside the bodies of its
   code (`raise_parameter.ml`, `raise_made_block_inlined.ml`,
-  `raise_made_block_inlined_twice.ml`; C3's, decision D65: yes,
+  `raise_made_block_inlined_twice.ml`, the last two sources by T5b;
+  the change is C3's, decision D65: yes,
   provisionally, by the human on 18 November 2026; to be come back
   to). A lifting asked, of the unit that it was given, that it give
   symbols, constants and variables known to hold one to every
