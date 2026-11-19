@@ -496,7 +496,23 @@ The table of `FlambdaExtcallSpec.v` stays unused.
   decision and does not since. It need not happen: the validation
   has other ways, and a rewrite before the lifting may have removed
   the body. No unit that was measured lost a verdict so; that is a
-  fact of the measure.
+  fact of one measure and of nothing else. The measure: on 19
+  November 2026, before stage 134 had landed, two programs were run
+  on the same inputs: the test tool of the integrator's build of a
+  frozen tip of that stage, whose build of the tip that landed made a
+  tool of the same bytes; and the tool of this reading as it then
+  was, built from the commits of the reading carried over that frozen
+  tip. The inputs: the list of 2,689 units used for such comparisons,
+  each at the default flags and at `-O3`, of which 482 are units of
+  this tree and the others are sets of units that other streams keep
+  outside the tree; the 79 files of `stdlib/` of this repository that
+  `tests/semantics/stdlib` names, at the flags of the build and at
+  `-O3`; and 395 units of one function each, cut from 13 of those
+  files by the streams N1 (228) and X1 (167) for their own probes. As
+  this is written, the files of those 395 units are not in the tree
+  and no commit of its history adds a file of their names; what they
+  hold is text of the library, and the two streams keep them outside
+  the repository. No rule of the tree runs this measure.
 
 **A variant that is not built.** Such bodies could be left out of
 what is in front of a unit, as they were: their code declared
