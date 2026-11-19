@@ -557,6 +557,14 @@ pass into the validator.
     a refinement of two units passes two tests, the symbols at its
     exit are bound in its static environment, which a refinement
     alone does not say; same stream)
+  - `middle_end/flambda2/tests/tools/prefix_fault_control.ml` and the
+    directory `middle_end/flambda2/tests/semantics/prefix_fault/` (two
+    controls of a prefix that declares code deleted, on prefixes and
+    units made by hand: the test that the test tool makes of a prefix
+    before it uses one, and the steps of a run; same stream)
+  - `middle_end/flambda2/tests/semantics/lifting_guess/` (a control of
+    the test tool's guess of what Simplify lifted, on a pair of texts
+    written by hand, the term after given with `-after`; same stream)
   - `middle_end/flambda2/rocq/status/V3.md`
 - S6, unboxing of continuation parameters. Owner: unassigned.
 - S7, the reaper. Out of scope for now, unassigned.
