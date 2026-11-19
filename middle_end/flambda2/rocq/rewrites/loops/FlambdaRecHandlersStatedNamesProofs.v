@@ -26,10 +26,12 @@
  ******************************************************************************)
 
 (* FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated commutes
-   with renaming where the rewrite that it is given does: the lemma
-   from which FlambdaValidatorEquivarianceProofs.v proves that the
-   rounds of the term after commute with renaming. There is no
-   statement here, and nothing here needs review.
+   with renaming where the rewrite that it is given does, and keeps
+   scope where that rewrite does: the lemmas from which
+   FlambdaValidatorEquivarianceProofs.v and FlambdaValidateScopeProofs.v
+   prove that the rounds of the validation commute with renaming and
+   keep scope. There is no statement here, and nothing here needs
+   review.
 
    The functions act on names only through the rewrite and through
    what is known of the variables in scope, which is renamed by
@@ -40,7 +42,7 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaNominalSpec FlambdaNominalProofs
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
-  FlambdaNormaliseSpec FlambdaValidatorEquivarianceSpec
+  FlambdaNormaliseSpec FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaRecHandlersStatedSpec FlambdaEquivarianceTactic.
 Import ListNotations.
@@ -82,3 +84,71 @@ Lemma rewrite_rec_handlers_stated_equivariant (r : renaming) (e : expr) :
 Proof. equivariance. Qed.
 
 End Rewrite_rec_handlers_stated.
+
+(* ======================================================================== *)
+(* The rewrite keeps scope                                                  *)
+(* ======================================================================== *)
+
+Section Rewrite_rec_handlers_stated_scope.
+
+Variable f : stated_in_scope -> expr -> expr.
+Hypothesis f_scoped :
+  ∀ (S : stated_in_scope) (e : expr), scoped e (f S e).
+
+Lemma rewrite_code_body_stated_scoped (S : stated_in_scope) (body : expr) :
+  scoped body (rewrite_code_body (f S) body).
+Proof.
+  unfold rewrite_code_body. cbv zeta.
+  destruct (Bool.eqb (binds_statics body) (binds_statics (f S body)));
+    [ apply f_scoped | apply scoped_refl ].
+Qed.
+
+Fixpoint rewrite_rec_handlers_stated_scoped (e : expr) :
+  ∀ S : stated_in_scope, scoped e (rewrite_rec_handlers_stated f S e)
+with rewrite_rec_handlers_stated_in_handler_scoped
+    (h : continuation_handler) :
+  ∀ S : stated_in_scope,
+    scoped_handler h (rewrite_rec_handlers_stated_in_handler f S h)
+with rewrite_rec_handler_stated_scoped (h : continuation_handler) :
+  ∀ S : stated_in_scope,
+    scoped_handler h (rewrite_rec_handler_stated f S h).
+Proof.
+  - destruct e
+      as [x kind d body | bindings body | k h body | handlers body | ap | ac
+         | scrutinee arms | ];
+      intros S;
+      cbn [rewrite_rec_handlers_stated rewrite_rec_handlers_stated_in_handler
+           rewrite_rec_handler_stated].
+    + apply scoped_let;
+        [ apply incl_refl | apply rewrite_rec_handlers_stated_scoped ].
+    + apply scoped_let_static;
+        [ apply scoped_bindings_refl
+        | apply rewrite_rec_handlers_stated_scoped ].
+    + apply scoped_let_cont;
+        [ apply rewrite_rec_handlers_stated_in_handler_scoped
+        | apply rewrite_rec_handlers_stated_scoped ].
+    + apply scoped_let_cont_recursive;
+        [ | | apply rewrite_rec_handlers_stated_scoped ].
+      * rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+      * induction handlers as [ | [k h] handlers IH]; cbn [map];
+          [ apply scoped_handlers_nil | ].
+        apply scoped_handlers_cons;
+          [ apply rewrite_rec_handler_stated_scoped | exact IH ].
+    + apply scoped_refl.
+    + apply scoped_refl.
+    + apply scoped_refl.
+    + apply scoped_refl.
+  - destruct h as [params metadata handler]. intros S.
+    cbn [rewrite_rec_handlers_stated rewrite_rec_handlers_stated_in_handler
+         rewrite_rec_handler_stated].
+    apply scoped_handler_intro, rewrite_rec_handlers_stated_scoped.
+  - destruct h as [params metadata handler]. intros S.
+    cbn [rewrite_rec_handlers_stated rewrite_rec_handlers_stated_in_handler
+         rewrite_rec_handler_stated].
+    apply scoped_handler_intro.
+    eapply scoped_trans;
+      [ apply rewrite_rec_handlers_stated_scoped
+      | apply rewrite_code_body_stated_scoped ].
+Qed.
+
+End Rewrite_rec_handlers_stated_scope.

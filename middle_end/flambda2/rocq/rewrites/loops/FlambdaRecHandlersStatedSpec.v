@@ -30,9 +30,11 @@
    variable is stated to be work inside a loop.
 
    This file is to be reviewed: [rewrite_rec_handlers_stated], which
-   the validation applies (FlambdaValidateSpec.tidy_code_after; the
-   tool of middle_end/flambda2/tests/semantics/ runs the extraction of
-   the validation), and the statement.
+   the validation applies (the rounds
+   FlambdaValidateSpec.arms_code_before_stated,
+   tidy_code_before_stated and tidy_code_after_stated; the tool of
+   middle_end/flambda2/tests/semantics/ runs the extraction of the
+   validation), and the two statements.
 
    FlambdaRecHandlersSpec.rewrite_rec_handlers applies a rewrite to the
    handler of every recursive continuation of a term, and gives the
@@ -91,16 +93,19 @@
    known of a variable that a parameter hides is replaced by what is
    stated of the parameter (FlambdaStatedScopeSpec.params_stated).
 
-   The statement ([rewrite_rec_handlers_stated_equivalent_statement]):
-   if [f S] gives, of every term, a term that runs the same under the
-   environments in which [S] holds
+   The statements. If [f S] gives, of every term, a term that runs
+   the same under the environments in which [S] holds
    (FlambdaStatedScopeSpec.stated_hold), then so does
-   [rewrite_rec_handlers_stated f S]. With nothing known that is
-   FlambdaSemanticsSpec.expr_equivalent.
+   [rewrite_rec_handlers_stated f S]
+   ([rewrite_rec_handlers_stated_equivalent_statement]); with nothing
+   known that is FlambdaSemanticsSpec.expr_equivalent. And the same
+   for an [f] whose result refines, with a refinement
+   ([rewrite_rec_handlers_stated_refines_statement]): the rewrites of
+   the term before refine and are no equivalences.
 
-   Not done: the bodies of code are given nothing of what the code
-   states of its parameters; a rewrite that refines and is no
-   equivalence has no statement here.
+   The bodies of code are not gone into:
+   FlambdaCodeStatedSpec.rewrite_code_stated takes a rewrite there,
+   with what the code states of its parameters.
 
    The functions here act on variables and continuations only through
    [f] and through what is known. That [rewrite_rec_handlers_stated f]
@@ -173,4 +178,18 @@ Definition rewrite_rec_handlers_stated_equivalent_statement : Prop :=
       (statics : static_env) (hp : heap) (rd : read_record),
       stated_hold statics S vars ->
       equivalent (State e vars conts statics hp rd)
+        (State (rewrite_rec_handlers_stated f S e) vars conts statics hp rd).
+
+(* The same for a rewrite that gives a term that refines. *)
+Definition rewrite_rec_handlers_stated_refines_statement : Prop :=
+  ∀ f : stated_in_scope -> expr -> expr,
+    (∀ (S : stated_in_scope) (e : expr) (vars : env) (conts : cont_env)
+       (statics : static_env) (hp : heap) (rd : read_record),
+       stated_hold statics S vars ->
+       refines (State e vars conts statics hp rd)
+         (State (f S e) vars conts statics hp rd)) ->
+    ∀ (S : stated_in_scope) (e : expr) (vars : env) (conts : cont_env)
+      (statics : static_env) (hp : heap) (rd : read_record),
+      stated_hold statics S vars ->
+      refines (State e vars conts statics hp rd)
         (State (rewrite_rec_handlers_stated f S e) vars conts statics hp rd).

@@ -84,7 +84,14 @@
    the same ([related_bindings_equivalent_stated_where]). What is
    known in the body is then
    FlambdaStatedScopeProofs.code_stated_bound, which the proof of the
-   rewrite applies. *)
+   rewrite applies.
+
+   A rewrite of the term before refines and is no equivalence.
+   [expr_refines_stated] is the refinement under the environments in
+   which what is known holds, with the same laws through the binders
+   (the last section), and a group of static bindings may be replaced
+   by one whose code has bodies that refine where they are entered
+   ([let_static_bindings_stated_refine]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -562,4 +569,169 @@ Proof.
     exact
       (params_stated_entered S params metadata vars statics statics' vs
          handler_vars Hhold Hext Hvs Hbind).
+Qed.
+
+(* ======================================================================== *)
+(* Refinement under what is known                                           *)
+(* ======================================================================== *)
+
+(* Refinement under the environments in which what is known of the
+   variables in scope holds. *)
+Definition expr_refines_stated (S : stated_in_scope) (e e' : expr) : Prop :=
+  ∀ (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record),
+    stated_hold statics S vars ->
+    refines (State e vars conts statics hp rd)
+      (State e' vars conts statics hp rd).
+
+Lemma expr_refines_stated_refl (S : stated_in_scope) (e : expr) :
+  expr_refines_stated S e e.
+Proof. intros vars conts statics hp rd _. apply refines_refl. Qed.
+
+Lemma expr_refines_stated_trans (S : stated_in_scope) (e e' e'' : expr) :
+  expr_refines_stated S e e' ->
+  expr_refines_stated S e' e'' ->
+  expr_refines_stated S e e''.
+Proof.
+  intros H H' vars conts statics hp rd Hhold.
+  exact (refines_trans _ _ _ (H vars conts statics hp rd Hhold)
+    (H' vars conts statics hp rd Hhold)).
+Qed.
+
+(* A refinement under all environments is one under these. *)
+Lemma expr_refines_stated_of (S : stated_in_scope) (e e' : expr) :
+  expr_refines e e' -> expr_refines_stated S e e'.
+Proof. intros H vars conts statics hp rd _. apply H. Qed.
+
+(* With nothing known, all environments. *)
+Lemma expr_refines_of_stated (e e' : expr) :
+  expr_refines_stated [] e e' -> expr_refines e e'.
+Proof.
+  intros H vars conts statics hp rd. apply H, stated_hold_nil.
+Qed.
+
+(* An equivalence under what is known is a refinement under it. *)
+Lemma expr_equivalent_stated_refines (S : stated_in_scope) (e e' : expr) :
+  expr_equivalent_stated S e e' -> expr_refines_stated S e e'.
+Proof.
+  intros H vars conts statics hp rd Hhold.
+  apply equivalent_refines, H, Hhold.
+Qed.
+
+Lemma let_stated_refines (S : stated_in_scope) (x : variable)
+    (kind : flambda_kind) (d : named) (body body' : expr) :
+  expr_refines_stated ((x, stated_of_named S d) :: S) body body' ->
+  expr_refines_stated S (Let x kind d body) (Let x kind d body').
+Proof.
+  intros Hbody vars conts statics hp rd Hhold.
+  apply let_refines_step_exec; [ reflexivity | intros v hp' rd' Hexec _ ].
+  apply Hbody, stated_hold_cons; [ exact Hhold | ].
+  exact (stated_of_named_sound statics hp hp' rd rd' S vars d v Hhold Hexec).
+Qed.
+
+Lemma let_static_stated_refines (S : stated_in_scope)
+    (bindings : list static_binding) (body body' : expr) :
+  expr_refines_stated S body body' ->
+  expr_refines_stated S (Let_static bindings body)
+    (Let_static bindings body').
+Proof.
+  intros Hbody vars conts statics hp rd Hhold.
+  apply let_static_refines_step.
+  destruct (eval_static_bindings vars bindings statics) as [extended | ]
+    eqn:Hbindings; [ | exact I ].
+  apply Hbody.
+  exact
+    (stated_hold_extend statics extended S vars
+       (eval_static_bindings_extend vars _ _ _ Hbindings) Hhold).
+Qed.
+
+Lemma let_cont_body_stated_refines (S : stated_in_scope)
+    (k : continuation) (h : continuation_handler) (body body' : expr) :
+  expr_refines_stated S body body' ->
+  expr_refines_stated S (Let_cont_non_recursive k h body)
+    (Let_cont_non_recursive k h body').
+Proof.
+  intros Hbody vars conts statics hp rd Hhold.
+  apply let_cont_non_recursive_refines_step, Hbody, Hhold.
+Qed.
+
+Lemma let_cont_recursive_body_stated_refines (S : stated_in_scope)
+    (handlers : list (continuation * continuation_handler))
+    (body body' : expr) :
+  expr_refines_stated S body body' ->
+  expr_refines_stated S (Let_cont_recursive handlers body)
+    (Let_cont_recursive handlers body').
+Proof.
+  intros Hbody vars conts statics hp rd Hhold.
+  apply let_cont_recursive_refines_step; [ reflexivity | intros _ ].
+  apply Hbody, Hhold.
+Qed.
+
+Lemma let_cont_handler_stated_refines (S : stated_in_scope)
+    (k : continuation) (params : list variable)
+    (metadata : handler_metadata) (handler handler' body : expr) :
+  expr_refines_stated
+    (params_stated params (hm_params_subkinds metadata) S) handler
+    handler' ->
+  expr_refines_stated S
+    (Let_cont_non_recursive k (Handler params metadata handler) body)
+    (Let_cont_non_recursive k (Handler params metadata handler') body).
+Proof.
+  intros Hhandler vars conts statics hp rd Hhold.
+  apply
+    (let_cont_handler_refines_stated_where (statics_extend statics)
+       (extend_from statics));
+    try apply statics_extend_refl.
+  intros vs handler_vars conts' statics' hp' rd' Hext Hkinds Hvs Hbind.
+  apply Hhandler.
+  exact
+    (params_stated_entered S params metadata vars statics statics' vs
+       handler_vars Hhold Hext Hvs Hbind).
+Qed.
+
+Lemma let_cont_recursive_handler_stated_refines (S : stated_in_scope)
+    (before : list (continuation * continuation_handler)) (k : continuation)
+    (params : list variable) (metadata : handler_metadata)
+    (handler handler' : expr)
+    (after : list (continuation * continuation_handler)) (body : expr) :
+  binds_statics handler = binds_statics handler' ->
+  expr_refines_stated
+    (params_stated params (hm_params_subkinds metadata) S) handler
+    handler' ->
+  expr_refines_stated S
+    (Let_cont_recursive
+       (before ++ (k, Handler params metadata handler) :: after) body)
+    (Let_cont_recursive
+       (before ++ (k, Handler params metadata handler') :: after) body).
+Proof.
+  intros Hbinds Hhandler vars conts statics hp rd Hhold.
+  apply
+    (let_cont_recursive_handler_refines_stated_where
+       (statics_extend statics) (extend_from statics));
+    try apply statics_extend_refl; try congruence.
+  intros vs handler_vars conts' statics' hp' rd' Hext Hkinds Hvs Hbind.
+  apply Hhandler.
+  exact
+    (params_stated_entered S params metadata vars statics statics' vs
+       handler_vars Hhold Hext Hvs Hbind).
+Qed.
+
+(* A group of bindings may be replaced by one whose code has bodies
+   that refine where they are entered, under every static
+   environment. *)
+Lemma let_static_bindings_stated_refine
+    (bindings bindings' : list static_binding) (body : expr) :
+  bindings_refine_stated always bindings bindings' ->
+  expr_refines (Let_static bindings body) (Let_static bindings' body).
+Proof.
+  intros [Hforwards Hbackwards] vars conts statics hp rd.
+  apply (fun H =>
+    eval_static_bindings_related_where _ vars _ _ H statics statics
+      (statics_related_where_refl _ statics)) in Hforwards, Hbackwards.
+  apply let_static_refines_step.
+  destruct (eval_static_bindings vars bindings statics) as [extended | ],
+    (eval_static_bindings vars bindings' statics) as [extended' | ];
+    try contradiction; [ | exact I ].
+  apply (related_statics_refine_stated_where always always_extend);
+    [ exact I | exact I | exact Hforwards | exact Hbackwards ].
 Qed.

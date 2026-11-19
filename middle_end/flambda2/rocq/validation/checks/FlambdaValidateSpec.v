@@ -466,7 +466,7 @@ From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
 From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
-  FlambdaRecHandlersStatedSpec.
+  FlambdaRecHandlersStatedSpec FlambdaCodeStatedSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaMadeLengthsSpec.
@@ -807,17 +807,43 @@ Definition normalise_params_round (e : expr) : expr :=
    that FlambdaLoopifySpec.loopify_unit puts in the body of code is
    given so: the loop has the parameters of the code and is entered
    with them, and the rounds of the first phase make no names
-   apart. *)
-Definition arms_expr_before (e : expr) : expr :=
+   apart.
+
+   That rewrite asks what is known of the variable where the handler
+   of the loop states something of its parameter
+   (FlambdaStatedScopeSpec.is_stated_at: the machine tests what a
+   handler states where it is applied; decision D25, at parameters).
+   So the step takes what is known of the variables bound around the
+   term and gives it to that rewrite ([arms_expr_before_stated]:
+   [S]). In the handler of a recursive continuation that is what the
+   handler states of its parameters and what was known around its
+   [Let_cont] (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated),
+   and in the body of code what the code states of its parameters
+   (FlambdaCodeStatedSpec.rewrite_code_stated): the loop that
+   [loopify_unit] puts in the body of code states of each parameter
+   what the code states of it, and is given the parameters of the
+   code. *)
+Definition arms_expr_before_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_conts
     (forward_applications
-       (forward_to_arms (lift_handler_conts (unalias_rec_params e)))).
+       (forward_to_arms (lift_handler_conts (unalias_rec_params_under S e)))).
+
+(* That step with nothing known. *)
+Definition arms_expr_before (e : expr) : expr := arms_expr_before_stated [] e.
+
+(* The step in the handlers of the recursive continuations of a term,
+   and then in the term. *)
+Definition arms_code_before_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  arms_expr_before_stated S
+    (rewrite_rec_handlers_stated arms_expr_before_stated S body).
 
 Definition arms_code_before (body : expr) : expr :=
-  arms_expr_before (rewrite_rec_handlers arms_expr_before body).
+  arms_code_before_stated [] body.
 
 Definition first_phase_round (e : expr) : expr :=
-  rewrite_code arms_code_before (arms_code_before (normalise_params_round e)).
+  rewrite_code_stated arms_code_before_stated
+    (arms_code_before (normalise_params_round e)).
 
 (* What ends the normalisation of the term before. The exception
    handlers that no call can raise to are made ordinary continuations
@@ -1442,8 +1468,14 @@ Definition placed (e : expr) : expr :=
    no round of it follows the placing. Then a primitive that was
    computed is not computed again; aliases are followed, into the
    handlers of recursive continuations too for what is known where
-   they are defined; the [Let]s left unused are removed. *)
-Definition tidy_expr_before (e : expr) : expr :=
+   they are defined; the [Let]s left unused are removed.
+
+   The first three rewrites ask what is known of a variable where
+   they take away a parameter that a handler states something of
+   (FlambdaStatedScopeSpec.is_stated_at; decision D25, at parameters):
+   the round takes what is known of the variables bound around the
+   term and gives it to them ([S]). *)
+Definition tidy_expr_before_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_defined_lets []
     (remove_unused_lets
        (follow_aliases_in_loops []
@@ -1457,20 +1489,32 @@ Definition tidy_expr_before (e : expr) : expr :=
                                (forward_applications
                                   (fold_constants
                                      (numbers_in_arms
-                                        (unalias_rec_params
-                                           (unalias_params
-                                              (give_scrutinees
+                                        (unalias_rec_params_under S
+                                           (unalias_params_under S
+                                              (give_scrutinees_under S
                                                  e))))))))))))))).
 
+(* That round with nothing known. *)
+Definition tidy_expr_before (e : expr) : expr := tidy_expr_before_stated [] e.
+
 (* The same for the body of code: that round, and the same for the
-   handler of each of its recursive continuations. *)
+   handler of each of its recursive continuations, with what the
+   handler states of its parameters and what is known of the variables
+   bound around its [Let_cont]
+   (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated). *)
+Definition tidy_code_before_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  rewrite_rec_handlers_stated tidy_expr_before_stated S
+    (tidy_expr_before_stated S body).
+
 Definition tidy_code_before (body : expr) : expr :=
-  rewrite_rec_handlers tidy_expr_before (tidy_expr_before body).
+  tidy_code_before_stated [] body.
 
 (* One round for the term before: that on the term itself, and on the
-   body of each piece of code. *)
+   body of each piece of code with what the code states of its
+   parameters (FlambdaCodeStatedSpec.rewrite_code_stated). *)
 Definition tidy_before_round (e : expr) : expr :=
-  rewrite_code tidy_code_before (tidy_code_before e).
+  rewrite_code_stated tidy_code_before_stated (tidy_code_before e).
 
 (* The term before as it is compared, when the rounds of the
    normalisations are over: its continuations placed, then the
@@ -1544,10 +1588,10 @@ Definition tidy_expr_after_stated (S : stated_in_scope) (e : expr) : expr :=
 (* That round with nothing known. *)
 Definition tidy_expr_after (e : expr) : expr := tidy_expr_after_stated [] e.
 
-(* The same for the body of code: that round with nothing known, and
-   then the round for the handler of each of its recursive
-   continuations, with what the handler states of its parameters and
-   what is known of the variables bound around its [Let_cont]
+(* The same for the body of code: that round, and then the round for
+   the handler of each of its recursive continuations, with what the
+   handler states of its parameters and what is known of the variables
+   bound around its [Let_cont]
    (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated). Inside
    a loop the three rewrites then know what the loop states of its own
    parameters: where a continuation of the loop states that its
@@ -1555,16 +1599,22 @@ Definition tidy_expr_after (e : expr) : expr := tidy_expr_after_stated [] e.
    parameter of the loop that is stated the same, the test of what is
    stated passes, and the parameter is taken away if the other
    conditions of the rewrite hold. (In the units with a loop on a
-   boolean flag the term before has lost that parameter.) Nothing is
-   known in the body of code of what the code states of its
-   parameters. *)
-Definition tidy_code_after (body : expr) : expr :=
-  rewrite_rec_handlers_stated tidy_expr_after_stated []
-    (tidy_expr_after body).
+   boolean flag the term before has lost that parameter.) *)
+Definition tidy_code_after_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  rewrite_rec_handlers_stated tidy_expr_after_stated S
+    (tidy_expr_after_stated S body).
 
+Definition tidy_code_after (body : expr) : expr :=
+  tidy_code_after_stated [] body.
+
+(* One round for the term after: that on the term itself, and on the
+   body of each piece of code with what the code states of its
+   parameters (FlambdaCodeStatedSpec.rewrite_code_stated); then the
+   unused [Let]s of code that are sure to have a value are removed. *)
 Definition tidy_after_round (e : expr) : expr :=
   remove_unused_defined_lets_in_code
-    (rewrite_code tidy_code_after (tidy_code_after e)).
+    (rewrite_code_stated tidy_code_after_stated (tidy_code_after e)).
 
 Definition tidied_after (rounds : nat) (e : expr) : expr :=
   groups_up (iterate rounds tidy_after_round (placed e)).

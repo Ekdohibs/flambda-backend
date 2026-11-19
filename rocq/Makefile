@@ -138,6 +138,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   semantics/FlambdaClosuresSpec.v \
   rewrites/closures/FlambdaCodeLetsProofs.v \
   rewrites/closures/FlambdaCodeLetsSpec.v \
+  rewrites/common/FlambdaCodeStatedNamesProofs.v \
+  rewrites/common/FlambdaCodeStatedProofs.v \
+  rewrites/common/FlambdaCodeStatedSpec.v \
   nominal/FlambdaCompareAlphaProofs.v \
   nominal/FlambdaCompareAlphaSpec.v \
   nominal/FlambdaCompareConverseProofs.v \

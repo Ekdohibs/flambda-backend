@@ -116,7 +116,8 @@ From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
 From OxCamlFlambda2 Require FlambdaUnboxTogetherProofs.
 From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
   FlambdaStatedContextProofs FlambdaRecHandlersStatedSpec
-  FlambdaRecHandlersStatedProofs.
+  FlambdaRecHandlersStatedProofs FlambdaCodeStatedSpec
+  FlambdaCodeStatedProofs.
 Import ListNotations.
 
 Lemma expr_equivalent_refl (e : expr) : expr_equivalent e e.
@@ -352,27 +353,45 @@ Qed.
    that every turn passes on taken away, the continuations of a
    handler bound outside it, and the applications made to go to the
    arms. *)
+Lemma arms_expr_before_stated_refines (S : stated_in_scope) (e : expr) :
+  expr_refines_stated S e (arms_expr_before_stated S e).
+Proof.
+  unfold arms_expr_before_stated.
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, expr_equivalent_refines,
+          remove_unused_conts_equivalent ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, forward_applications_refines ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, forward_to_arms_refines ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, expr_equivalent_refines,
+          lift_handler_conts_equivalent ].
+  apply expr_equivalent_stated_refines,
+    FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent.
+Qed.
+
 Lemma arms_expr_before_refines (e : expr) :
   expr_refines e (arms_expr_before e).
 Proof.
-  unfold arms_expr_before.
-  eapply expr_refines_trans;
-    [ | apply expr_equivalent_refines, remove_unused_conts_equivalent ].
-  eapply expr_refines_trans; [ | apply forward_applications_refines ].
-  eapply expr_refines_trans; [ | apply forward_to_arms_refines ].
-  eapply expr_refines_trans;
-    [ | apply expr_equivalent_refines, lift_handler_conts_equivalent ].
-  apply expr_equivalent_refines,
-    FlambdaUnaliasRecParamsProofs.unalias_rec_params_equivalent.
+  exact (expr_refines_of_stated _ _ (arms_expr_before_stated_refines [] e)).
+Qed.
+
+Lemma arms_code_before_stated_refines (S : stated_in_scope) (body : expr) :
+  expr_refines_stated S body (arms_code_before_stated S body).
+Proof.
+  unfold arms_code_before_stated.
+  exact (expr_refines_stated_trans S _ _ _
+    (rewrite_rec_handlers_stated_refines_aux arms_expr_before_stated
+       arms_expr_before_stated_refines body S)
+    (arms_expr_before_stated_refines S _)).
 Qed.
 
 Lemma arms_code_before_refines (body : expr) :
   expr_refines body (arms_code_before body).
 Proof.
-  unfold arms_code_before.
-  exact (expr_refines_trans _ _ _
-    (rewrite_rec_handlers_refines _ arms_expr_before_refines body)
-    (arms_expr_before_refines _)).
+  exact
+    (expr_refines_of_stated _ _ (arms_code_before_stated_refines [] body)).
 Qed.
 
 Lemma first_phase_round_refines (e : expr) :
@@ -380,7 +399,9 @@ Lemma first_phase_round_refines (e : expr) :
 Proof.
   unfold first_phase_round.
   eapply expr_refines_trans;
-    [ | apply rewrite_code_refines, arms_code_before_refines ].
+    [ | apply
+          (rewrite_code_stated_refines_aux arms_code_before_stated
+             arms_code_before_stated_refines) ].
   eapply expr_refines_trans;
     [ apply normalise_params_round_refines | apply arms_code_before_refines ].
 Qed.
@@ -491,20 +512,45 @@ Qed.
 
 (* The tidying of the term before, once its continuations are placed,
    refines. *)
+Lemma tidy_expr_before_stated_refines (S : stated_in_scope) (e : expr) :
+  expr_refines_stated S e (tidy_expr_before_stated S e).
+Proof.
+  unfold tidy_expr_before_stated.
+  repeat
+    (eapply expr_refines_stated_trans;
+     [ | solve [ apply expr_refines_stated_of; refinement_step ] ]).
+  eapply expr_refines_stated_trans;
+    [ | apply expr_equivalent_stated_refines,
+          FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent
+    ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_equivalent_stated_refines,
+          unalias_params_under_equivalent ].
+  apply expr_refines_stated_of, expr_equivalent_refines,
+    give_scrutinees_under_equivalent.
+Qed.
+
 Lemma tidy_expr_before_refines (e : expr) :
   expr_refines e (tidy_expr_before e).
 Proof.
-  unfold tidy_expr_before.
-  repeat (eapply expr_refines_trans; [ | solve [ refinement_step ] ]).
-  apply expr_refines_refl.
+  exact (expr_refines_of_stated _ _ (tidy_expr_before_stated_refines [] e)).
+Qed.
+
+Lemma tidy_code_before_stated_refines (S : stated_in_scope) (body : expr) :
+  expr_refines_stated S body (tidy_code_before_stated S body).
+Proof.
+  unfold tidy_code_before_stated.
+  exact (expr_refines_stated_trans S _ _ _
+    (tidy_expr_before_stated_refines S body)
+    (rewrite_rec_handlers_stated_refines_aux tidy_expr_before_stated
+       tidy_expr_before_stated_refines _ S)).
 Qed.
 
 Lemma tidy_code_before_refines (body : expr) :
   expr_refines body (tidy_code_before body).
 Proof.
-  unfold tidy_code_before.
-  exact (expr_refines_trans _ _ _ (tidy_expr_before_refines body)
-    (rewrite_rec_handlers_refines _ tidy_expr_before_refines _)).
+  exact
+    (expr_refines_of_stated _ _ (tidy_code_before_stated_refines [] body)).
 Qed.
 
 Lemma tidy_before_round_refines (e : expr) :
@@ -512,7 +558,8 @@ Lemma tidy_before_round_refines (e : expr) :
 Proof.
   unfold tidy_before_round.
   exact (expr_refines_trans _ _ _ (tidy_code_before_refines e)
-    (rewrite_code_refines _ tidy_code_before_refines _)).
+    (rewrite_code_stated_refines_aux tidy_code_before_stated
+       tidy_code_before_stated_refines _)).
 Qed.
 
 Lemma tidied_before_refines (rounds : nat) (e : expr) :
@@ -553,15 +600,23 @@ Proof.
     (expr_equivalent_of_stated _ _ (tidy_expr_after_stated_equivalent [] e)).
 Qed.
 
+Lemma tidy_code_after_stated_equivalent (S : stated_in_scope)
+    (body : expr) :
+  expr_equivalent_stated S body (tidy_code_after_stated S body).
+Proof.
+  unfold tidy_code_after_stated.
+  exact (expr_equivalent_stated_trans S _ _ _
+    (tidy_expr_after_stated_equivalent S body)
+    (rewrite_rec_handlers_stated_equivalent_aux tidy_expr_after_stated
+       tidy_expr_after_stated_equivalent _ S)).
+Qed.
+
 Lemma tidy_code_after_equivalent (body : expr) :
   expr_equivalent body (tidy_code_after body).
 Proof.
-  unfold tidy_code_after.
-  apply (expr_equivalent_trans _ _ _ (tidy_expr_after_equivalent body)).
-  apply expr_equivalent_of_stated.
   exact
-    (rewrite_rec_handlers_stated_equivalent_aux tidy_expr_after_stated
-       tidy_expr_after_stated_equivalent _ []).
+    (expr_equivalent_of_stated _ _
+       (tidy_code_after_stated_equivalent [] body)).
 Qed.
 
 Lemma tidy_after_round_equivalent (e : expr) :
@@ -571,7 +626,8 @@ Proof.
   eapply expr_equivalent_trans;
     [ | apply remove_unused_defined_lets_in_code_equivalent ].
   exact (expr_equivalent_trans _ _ _ (tidy_code_after_equivalent e)
-    (rewrite_code_equivalent _ tidy_code_after_equivalent _)).
+    (rewrite_code_stated_equivalent tidy_code_after_stated
+       tidy_code_after_stated_equivalent _)).
 Qed.
 
 Lemma tidied_after_equivalent (rounds : nat) :

@@ -100,8 +100,10 @@ From OxCamlFlambda2 Require FlambdaLiftContsNamesProofs.
 From OxCamlFlambda2 Require FlambdaStaticsInScopeProofs.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
-From OxCamlFlambda2 Require Import FlambdaRecHandlersStatedSpec.
-From OxCamlFlambda2 Require FlambdaRecHandlersStatedNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaRecHandlersStatedSpec
+  FlambdaCodeStatedSpec.
+From OxCamlFlambda2 Require FlambdaRecHandlersStatedNamesProofs
+  FlambdaCodeStatedNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
@@ -3962,18 +3964,37 @@ Proof.
 Qed.
 
 (* What follows that round in the first phase, and the two together. *)
+Lemma arms_expr_before_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (e : expr) :
+  arms_expr_before_stated (rename_stated_in_scope r S) (rename_expr r e)
+  = rename_expr r (arms_expr_before_stated S e).
+Proof.
+  unfold arms_expr_before_stated.
+  rewrite
+    FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_under_equivariant.
+  rename_outwards. reflexivity.
+Qed.
+
 Lemma arms_expr_before_equivariant : rewrite_equivariant arms_expr_before.
 Proof.
-  intros r e. unfold arms_expr_before. rename_outwards. reflexivity.
+  intros r e. exact (arms_expr_before_stated_equivariant r [] e).
+Qed.
+
+Lemma arms_code_before_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (body : expr) :
+  arms_code_before_stated (rename_stated_in_scope r S) (rename_expr r body)
+  = rename_expr r (arms_code_before_stated S body).
+Proof.
+  unfold arms_code_before_stated.
+  rewrite
+    (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_equivariant
+       arms_expr_before_stated arms_expr_before_stated_equivariant r body S).
+  apply arms_expr_before_stated_equivariant.
 Qed.
 
 Lemma arms_code_before_equivariant : rewrite_equivariant arms_code_before.
 Proof.
-  intros r e. unfold arms_code_before.
-  rewrite
-    (rewrite_rec_handlers_equivariant arms_expr_before
-       arms_expr_before_equivariant).
-  apply arms_expr_before_equivariant.
+  intros r e. exact (arms_code_before_stated_equivariant r [] e).
 Qed.
 
 Theorem first_phase_round_equivariant :
@@ -3981,7 +4002,9 @@ Theorem first_phase_round_equivariant :
 Proof.
   intros r e. unfold first_phase_round.
   rewrite normalise_params_round_equivariant, arms_code_before_equivariant.
-  apply rewrite_code_equivariant, arms_code_before_equivariant.
+  exact
+    (FlambdaCodeStatedNamesProofs.rewrite_code_stated_equivariant
+       arms_code_before_stated arms_code_before_stated_equivariant r _).
 Qed.
 
 (* The demotion of exception handlers, as the validation applies it:
@@ -4060,23 +4083,47 @@ Qed.
 (* The tidying that follows the placing: a round for an expression,
    for the body of code and for a term, of the term before and of the
    term after. *)
+Lemma tidy_expr_before_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (e : expr) :
+  tidy_expr_before_stated (rename_stated_in_scope r S) (rename_expr r e)
+  = rename_expr r (tidy_expr_before_stated S e).
+Proof.
+  unfold tidy_expr_before_stated.
+  rewrite FlambdaGiveScrutineeNamesProofs.give_scrutinees_under_equivariant,
+    FlambdaUnaliasParamsNamesProofs.unalias_params_under_equivariant,
+    FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_under_equivariant.
+  rename_outwards. reflexivity.
+Qed.
+
 Lemma tidy_expr_before_equivariant : rewrite_equivariant tidy_expr_before.
 Proof.
-  intros r e. unfold tidy_expr_before. rename_outwards. reflexivity.
+  intros r e. exact (tidy_expr_before_stated_equivariant r [] e).
+Qed.
+
+Lemma tidy_code_before_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (body : expr) :
+  tidy_code_before_stated (rename_stated_in_scope r S) (rename_expr r body)
+  = rename_expr r (tidy_code_before_stated S body).
+Proof.
+  unfold tidy_code_before_stated.
+  rewrite tidy_expr_before_stated_equivariant.
+  exact
+    (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_equivariant
+       tidy_expr_before_stated tidy_expr_before_stated_equivariant r _ S).
 Qed.
 
 Lemma tidy_code_before_equivariant : rewrite_equivariant tidy_code_before.
 Proof.
-  intros r e. unfold tidy_code_before.
-  rewrite tidy_expr_before_equivariant.
-  apply rewrite_rec_handlers_equivariant, tidy_expr_before_equivariant.
+  intros r e. exact (tidy_code_before_stated_equivariant r [] e).
 Qed.
 
 Lemma tidy_before_round_equivariant : rewrite_equivariant tidy_before_round.
 Proof.
   intros r e. unfold tidy_before_round.
   rewrite tidy_code_before_equivariant.
-  apply rewrite_code_equivariant, tidy_code_before_equivariant.
+  exact
+    (FlambdaCodeStatedNamesProofs.rewrite_code_stated_equivariant
+       tidy_code_before_stated tidy_code_before_stated_equivariant r _).
 Qed.
 
 Theorem tidied_before_equivariant : tidied_before_equivariant_statement.
@@ -4109,20 +4156,30 @@ Proof.
   intros r e. exact (tidy_expr_after_stated_equivariant r [] e).
 Qed.
 
-Lemma tidy_code_after_equivariant : rewrite_equivariant tidy_code_after.
+Lemma tidy_code_after_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (body : expr) :
+  tidy_code_after_stated (rename_stated_in_scope r S) (rename_expr r body)
+  = rename_expr r (tidy_code_after_stated S body).
 Proof.
-  intros r e. unfold tidy_code_after.
-  rewrite tidy_expr_after_equivariant.
+  unfold tidy_code_after_stated.
+  rewrite tidy_expr_after_stated_equivariant.
   exact
     (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_equivariant
-       tidy_expr_after_stated tidy_expr_after_stated_equivariant r _ []).
+       tidy_expr_after_stated tidy_expr_after_stated_equivariant r _ S).
+Qed.
+
+Lemma tidy_code_after_equivariant : rewrite_equivariant tidy_code_after.
+Proof.
+  intros r e. exact (tidy_code_after_stated_equivariant r [] e).
 Qed.
 
 Lemma tidy_after_round_equivariant : rewrite_equivariant tidy_after_round.
 Proof.
   intros r e. unfold tidy_after_round.
   rewrite tidy_code_after_equivariant.
-  rewrite (rewrite_code_equivariant _ tidy_code_after_equivariant).
+  rewrite
+    (FlambdaCodeStatedNamesProofs.rewrite_code_stated_equivariant
+       tidy_code_after_stated tidy_code_after_stated_equivariant r _).
   apply remove_unused_defined_lets_in_code_equivariant.
 Qed.
 
@@ -6498,9 +6555,25 @@ Proof.
        FlambdaStaticsScopeProofs.unalias_rec_params_keeps_scope).
 Qed.
 
-Lemma tidy_expr_before_keeps_scope : keeps_scope tidy_expr_before.
+(* The rewrites of a round that follow the three that take what is
+   known. *)
+Lemma tidy_tail_before_keeps_scope :
+  keeps_scope
+    (fun e =>
+       remove_unused_defined_lets []
+         (remove_unused_lets
+            (follow_aliases_in_loops []
+               (follow_aliases []
+                  (share_known_primitives
+                     (inline_tail_conts
+                        (sink_let_conts
+                           (remove_unused_conts
+                              (merge_switches
+                                 (collapse_switches
+                                    (forward_applications
+                                       (fold_constants
+                                          (numbers_in_arms e))))))))))))).
 Proof.
-  unfold tidy_expr_before.
   refine
     (keeps_scope_compose _ (remove_unused_defined_lets []) _
        (FlambdaKeepsScopeProofs.remove_unused_defined_lets_keeps_scope [])).
@@ -6537,29 +6610,62 @@ Proof.
   refine
     (keeps_scope_compose _ fold_constants _
        FlambdaKeepsScopeProofs.fold_constants_keeps_scope).
+  exact FlambdaStaticsScopeProofs.numbers_in_arms_keeps_scope.
+Qed.
+
+(* The round keeps scope whatever it is given of the variables in
+   scope: the three rewrites that take it do. *)
+Lemma tidy_expr_before_stated_scoped (S : stated_in_scope) (e : expr) :
+  FlambdaScopedProofs.scoped e (tidy_expr_before_stated S e).
+Proof.
+  unfold tidy_expr_before_stated.
+  eapply FlambdaScopedProofs.scoped_trans;
+    [ | exact
+          (FlambdaScopedProofs.keeps_scope_scoped _
+             tidy_tail_before_keeps_scope
+             (unalias_rec_params_under S
+                (unalias_params_under S (give_scrutinees_under S e)))) ].
+  eapply FlambdaScopedProofs.scoped_trans;
+    [ | apply
+          FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_under_scoped
+    ].
+  eapply FlambdaScopedProofs.scoped_trans;
+    [ | apply FlambdaUnaliasParamsNamesProofs.unalias_params_under_scoped ].
+  apply FlambdaGiveScrutineeNamesProofs.give_scrutinees_under_scoped.
+Qed.
+
+Lemma tidy_expr_before_keeps_scope : keeps_scope tidy_expr_before.
+Proof.
+  apply FlambdaScopedProofs.keeps_scope_intro. intros e.
+  exact (tidy_expr_before_stated_scoped [] e).
+Qed.
+
+Lemma tidy_code_before_stated_scoped (S : stated_in_scope) (body : expr) :
+  FlambdaScopedProofs.scoped body (tidy_code_before_stated S body).
+Proof.
+  unfold tidy_code_before_stated.
+  eapply FlambdaScopedProofs.scoped_trans;
+    [ apply tidy_expr_before_stated_scoped | ].
   exact
-    (keeps_scope_compose
-       (fun e => unalias_rec_params (unalias_params (give_scrutinees e)))
-       numbers_in_arms give_then_unalias_keeps_scope
-       FlambdaStaticsScopeProofs.numbers_in_arms_keeps_scope).
+    (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_scoped
+       tidy_expr_before_stated tidy_expr_before_stated_scoped _ S).
 Qed.
 
 Lemma tidy_code_before_keeps_scope : keeps_scope tidy_code_before.
 Proof.
-  exact
-    (keeps_scope_compose tidy_expr_before
-       (rewrite_rec_handlers tidy_expr_before) tidy_expr_before_keeps_scope
-       (FlambdaLoopsScopeProofs.rewrite_rec_handlers_keeps_scope _
-          tidy_expr_before_keeps_scope)).
+  apply FlambdaScopedProofs.keeps_scope_intro. intros e.
+  exact (tidy_code_before_stated_scoped [] e).
 Qed.
 
 Lemma tidy_before_round_keeps_scope : keeps_scope tidy_before_round.
 Proof.
+  apply FlambdaScopedProofs.keeps_scope_intro. intros e.
+  unfold tidy_before_round.
+  eapply FlambdaScopedProofs.scoped_trans;
+    [ exact (tidy_code_before_stated_scoped [] e) | ].
   exact
-    (keeps_scope_compose tidy_code_before (rewrite_code tidy_code_before)
-       tidy_code_before_keeps_scope
-       (FlambdaKeepsScopeProofs.rewrite_code_keeps_scope _
-          tidy_code_before_keeps_scope)).
+    (FlambdaCodeStatedNamesProofs.rewrite_code_stated_scoped
+       tidy_code_before_stated tidy_code_before_stated_scoped _).
 Qed.
 
 Theorem tidied_before_keeps_scope : tidied_before_keeps_scope_statement.

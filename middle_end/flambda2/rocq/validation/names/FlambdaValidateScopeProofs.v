@@ -80,6 +80,10 @@ From OxCamlFlambda2 Require FlambdaShadowParamsNamesProofs
   FlambdaTwinParamsNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
+  FlambdaRecHandlersStatedSpec FlambdaCodeStatedSpec.
+From OxCamlFlambda2 Require FlambdaRecHandlersStatedNamesProofs
+  FlambdaCodeStatedNamesProofs.
 Import ListNotations.
 
 Lemma rename_apart_scoped (e : expr) : scoped e (rename_apart e).
@@ -247,20 +251,48 @@ Proof. apply keeps_scope_intro, normalise_params_round_scoped. Qed.
 #[export] Hint Resolve
   FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_scoped : scoped.
 
-(* What follows that round in the first phase, and the two together. *)
+(* What follows that round in the first phase, and the two together:
+   the step takes what is known of the variables in scope, and keeps
+   scope whatever it is given. *)
+Lemma arms_expr_before_stated_scoped (S : stated_in_scope) (e : expr) :
+  scoped e (arms_expr_before_stated S e).
+Proof.
+  unfold arms_expr_before_stated.
+  apply (scoped_trans _ (unalias_rec_params_under S e));
+    [ apply FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_under_scoped
+    | scoped_chain ].
+Qed.
+
 Lemma arms_expr_before_scoped (e : expr) : scoped e (arms_expr_before e).
-Proof. unfold arms_expr_before. scoped_chain. Qed.
+Proof. exact (arms_expr_before_stated_scoped [] e). Qed.
 
 #[export] Hint Resolve arms_expr_before_scoped : scoped.
 
+Lemma arms_code_before_stated_scoped (S : stated_in_scope) (body : expr) :
+  scoped body (arms_code_before_stated S body).
+Proof.
+  unfold arms_code_before_stated.
+  eapply scoped_trans; [ | apply arms_expr_before_stated_scoped ].
+  exact
+    (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_scoped
+       arms_expr_before_stated arms_expr_before_stated_scoped body S).
+Qed.
+
 Lemma arms_code_before_scoped (body : expr) :
   scoped body (arms_code_before body).
-Proof. unfold arms_code_before. scoped_chain. Qed.
+Proof. exact (arms_code_before_stated_scoped [] body). Qed.
 
 #[export] Hint Resolve arms_code_before_scoped : scoped.
 
 Lemma first_phase_round_scoped (e : expr) : scoped e (first_phase_round e).
-Proof. unfold first_phase_round. scoped_chain. Qed.
+Proof.
+  unfold first_phase_round.
+  eapply scoped_trans;
+    [ | exact
+          (FlambdaCodeStatedNamesProofs.rewrite_code_stated_scoped
+             arms_code_before_stated arms_code_before_stated_scoped _) ].
+  scoped_chain.
+Qed.
 
 #[export] Hint Resolve first_phase_round_scoped : scoped.
 
