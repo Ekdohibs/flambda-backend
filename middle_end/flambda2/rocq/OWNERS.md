@@ -780,6 +780,14 @@ units with loops (`while`, `for`, tail-recursive functions).
   down past the bindings under it)
 - `middle_end/flambda2/rocq/rewrites/params/FlambdaParamOrder*` (the parameters of a
   continuation put in the order in which its handler first names them)
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUntagAtBinder*` (the untagging of
+  a parameter that states a tagged immediate, of a continuation that
+  a call returns to, is bound at the head of the handler, where
+  Simplify's wrapper untags what the call gives: an equivalence, of
+  the machine that tests what a handler states of its parameters
+  where the handler is entered, for both terms; its laws of renaming
+  and of scope, which are stated in `FlambdaUntagAtBinderNamesSpec.v`;
+  and controls of the pass, in `FlambdaUntagAtBinderExamplesSpec.v`)
 
 ## N1: nominal loose ends
 
