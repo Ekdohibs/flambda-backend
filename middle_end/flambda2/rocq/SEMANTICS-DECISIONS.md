@@ -207,7 +207,9 @@ does what the line says). Dates are of 2026.
   closures that a `Let` makes, do not look inside functions in a unit with no
   call outside them (yes, provisionally, by the human on 18 Nov; to be come
   back to). A verdict that rests on that says nothing of the unit's functions
-  under a caller.
+  under a caller. The tool marks an acceptance at the step that lifts whose
+  term before, as given, fails the tests as they were; the mark is a sign,
+  neither necessary nor sufficient for a verdict to rest on that.
 
 ## 9. The types of Simplify
 

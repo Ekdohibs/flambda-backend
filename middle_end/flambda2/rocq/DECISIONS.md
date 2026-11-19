@@ -732,7 +732,19 @@ a `CR` at the place in the `Spec` file.
   accepts); or to wait for a statement about the functions of a unit
   under every caller. `requests/C3-finer-guards.md` has the measure,
   and a `CR` at each of the two finer tests says what a verdict that
-  rests on them does not say.
+  rests on them does not say. The test tool prints one line more
+  under the line of an acceptance at the step that names a lifting,
+  where the term before, as the validation was given it, does not
+  pass the tests as they were: the line begins "(decision D65:", and
+  the trust ledger has its two forms ("The mark of decision D65"). A
+  unit whose output has that line carries the mark of this decision.
+  The mark is a sign, neither necessary nor sufficient for the
+  acceptance to rest on the finer tests: it is of the term as given,
+  and the ledger says where an acceptance may rest on them with no
+  such line. The units whose acceptance rests on the finer tests are
+  counted by running the validation with the tests as they were and
+  with the finer ones on the same units, not by the mark. The test
+  tool has no switch that asks the tests as they were; one is owed.
 - **D66.** The bit pattern of a NaN is not guaranteed to be preserved.
   Ruled (18 November 2026); not yet in the tree. Open: whether a run
   that observes those bits is undefined, or exits are compared up to
