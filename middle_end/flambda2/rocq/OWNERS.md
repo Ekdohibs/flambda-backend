@@ -831,6 +831,12 @@ Owner: N1.
 - `middle_end/flambda2/rocq/nominal/FlambdaObserversActions*` (the renamings
   and the permutations of locations on what may follow a unit; the
   files of what may follow a unit are not N1's)
+- `middle_end/flambda2/rocq/rewrites/common/FlambdaSpineWalk*` (a
+  rewrite applied at every node of the spine of a term; that it
+  commutes with renaming and keeps scope where the rewrite of one node
+  does)
+- `middle_end/flambda2/rocq/terms/FlambdaTermInduction*` (induction on
+  terms, proved once: lemmas only)
 - `middle_end/flambda2/rocq/types/join/FlambdaEnvRenameJoinTypesProofs.v`
   (N1's, though it is in the types library and its name matches the
   pattern of N3's files on the join under renaming: lemmas only, the

@@ -41,6 +41,7 @@ places where it is still used are in the last table here.
 | That a term makes no immutable array and that a state is free of arrays (it holds no array value and may come to run nothing that makes one); the refinement of expressions of the machine of `FlambdaHeapMachineSpec.v` restricted to the closed whole source states that are free of arrays | `FlambdaNoArrayValueSpec.v` | the owner of that file |
 | The free names; the three conditions on binders; `alpha_equivalent` | `FlambdaAlphaSpec.v` | N1 |
 | The comparison `expr_eqb` | `FlambdaCompareAlphaSpec.v` | N1 |
+| The comparison `expr_says_at_least`, which lets its second term state less than its first of its parameters and of the results of its code | `FlambdaCompareOrderLawsSpec.v` | N2 |
 | The rewrites of the normalisation, the passes for loops, the sharing of a handler that is the same as one bound around it, the parameters bound again at the head of their handlers and their twins, the parameters of a loop that every turn passes on taken away, the parameters given one symbol or one constant bound at the head of their handlers, the applications made to go to the arm of the number that they give, the checks of well-formedness (exception handlers and trap actions among them), the check of kinds, the normalisation of the term after and the first phase of that of the term before | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | The normalisation of the term before and that of a term in which something was lifted: up to the names that a round makes. `validate_unit`: where the code of the term before is closed | `FlambdaValidatorEquivarianceSpec.v` | N3 |
 | Identities of primitives, lifting, lifting out of code, the binding of `my_closure`, ranges, sharing of primitives and of projections, the recovery of comparisons, folding at known symbols, unused and known value slots, the order of static bindings, the static closures in sight, code moved up, code and static bindings bound first, lifting out of the arms of a test, inlining within a group of code, the unboxing of parameters, of the reads of a loop and of the boxed numbers that continuations pass to one another, the merging of the arms of a `Switch` and their merging into a load from a table, the continuations that a handler binds on its way to its `Switch` bound outside it, the demotion of exception handlers, the rewrite of the calls of code that never returns, the fold of a `Phys_equal` of a simple against itself or of two different symbols, the calls of the unit's other code made indirect in the code of a stub, the lifting to a group around, a `Let` of a variable to the variable just bound made one `Let` with it, the reading of a known immutable array, the sharing of the reads of two places that hold one variable, the inlining of the calls of known siblings in the term after, the inlining of the direct calls that stand at chosen places, the copy of code for static sets of closures and for the sets of closures that a `Let` makes, the calls of the closures that a `Let` in sight makes made direct, what `my_closure` is known to be from its code used in the bodies of code, a value slot that the body of code reads through another closure read from the closure that holds both, the read of a known block where it is sure to have a value, the removal of the unused allocations of constants and the constant put for the length of a mutable array that a `Let` in scope has made, in the term after | the `Spec` file of each pass | the owner of each |
@@ -188,6 +189,7 @@ use the marks of the frames (section 9).
 | `FlambdaFreshQuantifierSpec.v`, `FlambdaFreshAbstractionSpec.v` | The quantifier "for all but finitely many names"; `fresh_names`; equal abstractions of one name and of a list of distinct names, said with the quantifier |
 | `FlambdaFreshBindersSpec.v`, `FlambdaAlphaFreshSpec.v`, `FlambdaAlphaGroupSpec.v` | For each binder, the rule that compares two binders at fresh names, and that it can be read both ways on terms with distinct binders and closed code; the recursive group as a name abstraction |
 | `FlambdaCompareConverseSpec.v` | What the comparison accepts is alpha-equivalent, on terms with distinct binders and closed code |
+| `FlambdaCompareOrderSpec.v`, `FlambdaCompareOrderLawsSpec.v` | The comparison `expr_says_at_least`: `expr_eqb` but for what two paired binders state of their parameters and, where they are code, of their results, of which the first term may state more; asked with no names paired, it is sound for a refinement, the second term refining the first, and it is transitive; whatever names are paired, it accepts what `expr_eqb` accepts and does not depend on the names |
 | `FlambdaInlineFreshSpec.v` | Inlining a call with the binders of the code exchanged for fresh names; two choices give alpha-equivalent terms |
 | `FlambdaValidatorEquivarianceSpec.v` | Each rewrite and each check of the validator commutes with renaming: the rewrites of the normalisation, the checks of well-formedness and of kinds; what a rewrite that makes names owes instead, and with it the normalisation of the term before and `validate_unit` |
 
@@ -513,20 +515,36 @@ There are two accounts, and they are related.
   and satisfy the same of the three conditions of section 3
   (`alpha_equivalent_code_closed_statement` and the statements beside
   it), so the conditions are conditions on the classes.
-- `expr_eqb`: the comparison that the validator runs, by recursion on
-  the two terms with a map of paired names. It is sound, it is an
-  equivalence relation, it accepts every two alpha-equivalent terms,
-  and its answer does not change when the two terms and the names
-  paired so far are renamed (`expr_eqb_equivariant_statement`).
+- `expr_eqb`: the comparison by recursion on the two terms with a
+  map of paired names. It is sound, it is an equivalence relation, it
+  accepts every two alpha-equivalent terms, and its answer does not
+  change when the two terms and the names paired so far are renamed
+  (`expr_eqb_equivariant_statement`).
 
 The comparison is the primary notion (it is a function and it is what
-runs); the rules of `alpha_equivalent` are facts about it. The converse
+runs: the validator asks it of a term and of what a round made of it);
+the rules of `alpha_equivalent` are facts about it. The converse
 (what the comparison accepts is alpha-equivalent) is for terms with
 distinct binders and closed code, which are the terms that
 well-formedness admits. It is proved
 (`FlambdaCompareConverseSpec.expr_eqb_iff_alpha_equivalent_statement`):
 on those terms the comparison and alpha-equivalence are one relation,
 and the comparison decides it.
+
+Between a term made from the term before and one made from the term
+after, the validator asks another comparison, `expr_says_at_least`
+(`FlambdaCompareOrderSpec.v`). It is `expr_eqb` but for the metadata
+of two paired binders: the kinds, the arities and the flags are to be
+the same, and the first term may state more of its parameters, and
+of the results of its code, than the second (decision D25, at
+parameters). It is not symmetric, and what it accepts need not be
+the same up to bound names: two terms that it accepts may differ in
+what their binders state. Asked with no names paired, it is sound
+for a refinement, the second term refining the first, and it is
+transitive. Whatever names are paired so far, it accepts what
+`expr_eqb` accepts, and its answer does not change when the two
+terms and those names are renamed
+(`expr_says_at_least_equivariant_statement`).
 
 At each binder alpha-equivalence can also be said as the papers on
 nominal sets say it: two binders are alpha-equivalent exactly when
@@ -759,6 +777,16 @@ binders that it answers are renamed with the term
 Rewrites that have both compose and iterate, a rewrite that commutes
 with renaming has the first, and the comparison answers the same on
 the results (`expr_eqb_up_to_statement`).
+
+That is said of `expr_eqb`. Of the comparison that the validation
+asks of a term made from the term before and one made from the term
+after, `expr_says_at_least` (section 5), the form with two renamings
+is stated, of the comparison asked with no names paired: where the
+code of its first term is closed, it answers the same with its
+second term renamed and its first under a renaming that does to the
+free names of that term what the other does
+(`expr_says_at_least_renamed_alike_statement`). The form of
+`expr_eqb_up_to_statement` is not stated of it.
 
 The rounds of a rewrite stop after the first that gives back the
 term that it was given, up to bound names
@@ -1053,6 +1081,19 @@ leaves applied once has its handler put at its application
 (`remove_unused_conts`, `sink_let_conts`, and `inline_tail_conts` or,
 in the term after, `FlambdaInlineTailSpec.inline_tail_conts_kinded`);
 all are rewrites of the rounds and none makes a name;
+then, in both terms, an untagging found in the handler of a
+non-recursive continuation that a call returns to is bound at the
+head of that handler, where the parameter that it untags states at
+least "not null, a tagged immediate" and the other tests of the pass
+allow it
+(`FlambdaUntagAtBinderSpec.bind_untaggings`, which makes no name: the
+`Let` that it puts at the head of a handler takes the name of the
+variable of an untagging that the handler has, and reads a parameter
+of that handler; it compares names by equality only, commutes with
+every renaming by an equation,
+`bind_untaggings_equivariant_statement`, and keeps scope,
+`bind_untaggings_keeps_scope_statement`, both in
+`FlambdaUntagAtBinderNamesSpec.v`);
 primitives are shared, aliases are followed and the `Let`s left
 unused are removed; and then, once, the groups of static bindings at
 the head of the body of a continuation binding are bound before it
@@ -2004,9 +2045,10 @@ Owed:
 
 - **A new term form.** Its case in `rename_expr` and the functions
   beside it, in the free names of `FlambdaBindersSpec.v`, in the three
-  conditions if it binds, in `expr_eqb`, and in the proofs that go by
-  cases on terms. If it binds, a row in the table of section 3, a rule
-  of `alpha_equivalent`, and a statement that it is a name abstraction.
+  conditions if it binds, in `expr_eqb` and in `expr_says_at_least`,
+  which is written after it, and in the proofs that go by cases on
+  terms. If it binds, a row in the table of section 3, a rule of
+  `alpha_equivalent`, and a statement that it is a name abstraction.
 - **A new place in a term that names** (as a trap action does): it is
   renamed, it is among the free names, and the comparison pairs it as
   it pairs the other occurrences of that sort.
