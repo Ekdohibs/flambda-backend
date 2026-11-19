@@ -18,9 +18,14 @@
 # with no byte after the newline of that line, no null byte, and no "/#",
 # which is what is put below in the place of a number.
 #
-# The tool and the driver print a variable as its name, a slash, the number
-# that their process gave it, and UV if the variable is user-visible or N if
-# it is not. In each of the two lines, a word that stands between a space or
+# The way is for a line that shows the variables of the primitive as the
+# compiler prints a variable of the current unit: its name, a slash, the
+# number that the process gave it, and UV if the variable is user-visible or
+# N if it is not. The tool and the driver show a variable of the line by its
+# name alone (print_refused_primitive in
+# middle_end/flambda2/tests/tools/flsemantics.ml), and keep the compiler's
+# print, numbers and all, only where a check that they make of the names
+# fails. In each of the two lines, a word that stands between a space or
 # a parenthesis and a space or a parenthesis, and that is a name (letters,
 # digits, underscores and quotes, of which the first is a letter or an
 # underscore), a slash, digits, and UV or N, has "/#" put in the place of
