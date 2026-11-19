@@ -74,8 +74,16 @@
    of no local field or no projection, and compose the [_local]
    statement of FlambdaReaperCallingConventionsSpec.v with the first.
    The statements with the old premise are their corollaries.
+   [rebuild_repr_fixed_refines_cc_never_returns_statement],
+   [rebuild_repr_fixed_observably_never_returns_statement] and
+   [rebuild_repr_fixed_local_never_returns_statement]: the first and the
+   two statements up to observation (the last with local fields), for
+   the fragment that takes the code [nr] to never return
+   ([repr_unboxing_nr]), any [nr], as in
+   FlambdaReaperUnboxingRefinesCallsSpec.v. The statements above are
+   these with no such code ([repr_unboxing]).
 
-   The fragment ([repr_unboxing]), for the unboxed fields that the tables
+   The fragment ([repr_unboxing_nr]), for the unboxed fields that the tables
    give ([unit_unboxed_fields]), the changes of representation
    ([unit_changed_representations]), the solution and the table:
    - Names are plain, unboxed, or changed (a name that the changes of
@@ -115,22 +123,27 @@
    - Code ([repr_code]) changes its calling convention, with decisions
      that keep or delete each parameter and result ([Decided]), keeps its
      [my_closure] ([my_closure_decision_u] is [None]), which is not
-     unboxed, and has plain parameters, as many as its decisions.
+     unboxed, and has plain parameters, as many as its decisions. The
+     return continuation of code of [nr] is not live in its body
+     ([live_conts]).
    - Calls ([repr_call]): direct, of the code they are known to call, or
      of known arity, at the arities of that code, whose results all have a
-     source ([code_never_returns]), with plain arguments and no extra argument
-     for the exception continuation, by a variable that is plain if the
-     [my_closure] of the code is, and changed with the same
-     representation if that is changed; they return to a continuation
-     whose decisions are those of the results of the callee (to a way out
-     of the unit, if the callee keeps all of them), so that neither
-     rebuild makes a wrapper.
+     source ([code_never_returns]) or which is of [nr], with plain
+     arguments and no extra argument for the exception continuation, by a
+     variable that is plain if the [my_closure] of the code is, and
+     changed with the same representation if that is changed; if the
+     results all have a source, they return to a continuation whose
+     decisions are those of the results of the callee (to a way out of
+     the unit, if the callee keeps all of them), so that neither rebuild
+     makes a wrapper. Otherwise the fix makes the call return to a handler
+     [Invalid], and its continuation is not checked.
    - Static constants are code of the fragment and blocks of plain
      simples.
    - [check_unboxed_uses] of FlambdaReaperUnboxingRefinesCallsSpec.v.
 
    What is left out, for the proof: unboxed parameters, parameters kept
-   with no use, wrappers, raising from code, code that keeps its calling
+   with no use, wrappers but for calls that never return, raising from
+   code, code that keeps its calling
    convention, calls of unknown arity, projections of other closures of
    a set, static sets whose representation changes (the static
    environments of the two runs would differ: [static_set_example]
@@ -287,6 +300,8 @@ Variable unboxed : list (node * unboxed_fields).
 Variable changed : list (node * closure_repr).
 (* The [my_closure] of each code of the unit. *)
 Variable my_closures : finite_map variable.
+(* The code taken to never return, as in [calls_unboxing_nr]. *)
+Variable nr : code_id -> bool.
 
 Definition changed_name (n : node) : option closure_repr :=
   changed_of_node changed n.
@@ -418,7 +433,7 @@ Definition repr_call (C : finite_map (list decision * bool))
          with
          | Changing_u pd rd =>
            forallb decided pd && forallb decided rd
-           && negb (code_never_returns sol code_deps id)
+           && (negb (code_never_returns sol code_deps id) || nr id)
            && is_none
                 (my_closure_decision_u cannot_change code_deps unit_code_ids
                    unboxed id)
@@ -430,7 +445,8 @@ Definition repr_call (C : finite_map (list decision * bool))
            && Nat.eqb (length rd) (length (unarize (cm_result_arity metadata)))
            && forallb plain_c (ap_args ap)
            && match ap_exn_extra_args ap with [] => true | _ :: _ => false end
-           && returns_ok C (ap_continuation ap) rd
+           && (code_never_returns sol code_deps id
+               || returns_ok C (ap_continuation ap) rd)
          | Not_changing_u => false
          end
        | _, _ => false
@@ -529,22 +545,33 @@ with repr_code (id : code_id) (c : code) {struct c} : bool :=
               [(ret, (rd, true)); (exn, ([], false))] body
        | Not_changing_u => false
        end
+    && (negb (nr id)
+        || negb (among ret (live_conts F sol code_deps codes body)))
   end.
 
 End Fragment.
 
 (* The unit [e] is of the fragment, for the unboxing and the changes of
-   representation that the tables give from its graph [F]. *)
-Definition repr_unboxing (is_local : field -> bool) (F : facts) (T : tables)
-    (cannot_change : list node) (code_deps : finite_map code_dep)
-    (dominated : list (node * node)) (to_unbox tcr : list node) (e : expr)
-    : bool :=
+   representation that the tables give from its graph [F], and the code
+   [nr] taken to never return. *)
+Definition repr_unboxing_nr (nr : code_id -> bool) (is_local : field -> bool)
+    (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) : bool :=
   let unboxed := fst (unit_unboxed_fields F T dominated to_unbox e) in
   repr_expr F (solution_of_tables T) (fun n => mem_node n cannot_change)
     code_deps (static_names code_ids_bound e) (bound_code_metadata e) unboxed
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
-    (bound_code_my_closures e) [] [] e
+    (bound_code_my_closures e) nr [] [] e
   && check_unboxed_uses F T unboxed.
+
+(* With no code taken to never return. *)
+Definition repr_unboxing (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox tcr : list node) (e : expr)
+    : bool :=
+  repr_unboxing_nr (fun _ => false) is_local F T cannot_change code_deps
+    dominated to_unbox tcr e.
 
 (* ======================================================================== *)
 (* The statements                                                           *)
@@ -635,6 +662,81 @@ Definition rebuild_repr_fixed_tail_refines_observably_statement : Prop :=
    too (FlambdaReaperLocalFieldsSpec.v). *)
 Definition rebuild_repr_fixed_tail_refines_observably_local_statement : Prop :=
   rebuild_repr_fixed_refines_observably_local_statement.
+
+(* The three statements above with calls of code that never returns: the
+   fragment takes the code [nr] to never return ([repr_unboxing_nr]). *)
+Definition rebuild_repr_fixed_refines_cc_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    repr_unboxing_nr nr is_local (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox tcr e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_repr_fixed is_local (traverse_unit flag u e) T
+         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
+         preserve_direct_calls e).
+
+Definition rebuild_repr_fixed_observably_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    repr_unboxing_nr nr is_local (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox tcr e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_repr_fixed is_local (traverse_unit flag u e) T
+         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
+         preserve_direct_calls e).
+
+Definition rebuild_repr_fixed_local_never_returns_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    any_kind_arguments e = true ->
+    results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    check_cc_closed (traverse_unit flag u e) T cannot_change = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    repr_unboxing_nr nr is_local (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox tcr e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines_observably e
+      (rebuild_unit_unbox_repr_fixed is_local (traverse_unit flag u e) T
+         cannot_change (unit_code_deps flag u e) dominated to_unbox tcr
+         preserve_direct_calls e).
 
 (* ======================================================================== *)
 (* Examples                                                                 *)
