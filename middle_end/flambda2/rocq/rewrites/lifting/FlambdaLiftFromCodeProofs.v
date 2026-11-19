@@ -41,11 +41,15 @@
    bindings of the symbols are in that group; and a defining expression
    that mentions no variable is evaluated alike in every environment.
 
-   The bindings are put once each. What a [Let] needs is that the
-   bindings that stand for it are evaluated ([bindings_bound],
-   [bound_alias]), whichever [Let] they were put for: a binding that
-   is left out is the same as one that is put
-   ([once_each_has]). The handlers of a group of recursive
+   The bindings are put once each, across the bodies of the code that
+   a group binds. What a [Let] needs is that the bindings that stand
+   for it are evaluated ([bindings_bound], [bound_alias]), whichever
+   [Let] they were put for: a binding that is left out is the same as
+   one that is put, for this body or for the body of code bound
+   earlier in the group ([once_each_has]). Down a group, what has been
+   put so far is bound in the second static environment
+   ([eval_lifted_out_bindings], [eval_static_bindings_lifted_out],
+   with [seen]). The handlers of a group of recursive
    continuations are rewritten each at its path, and a closure of
    one of them carries the group rewritten, with what the [Let]s
    lifted out of its handlers need ([cont_lifted_out]).
@@ -807,39 +811,57 @@ Proof.
 Qed.
 
 (* The bindings that stand for the [Let]s lifted out of an expression,
-   once each, are evaluated, where their symbols are distinct and not
-   bound, and bind what those [Let]s need. *)
-Lemma eval_lifted_out_bindings (vars' : env) (lets : list (path * lift_to))
-    (at_path : path) (e : expr) (statics' : static_env) :
+   once each and less those of [seen], are evaluated, where their
+   symbols are distinct and not bound and the bindings of [seen] are
+   bound; and what those [Let]s need is then bound, as are the bindings
+   put and those of [seen]. *)
+Lemma eval_lifted_out_bindings (vars' : env) (seen : list static_binding)
+    (lets : list (path * lift_to)) (at_path : path) (e : expr)
+    (statics' : static_env) :
+  bindings_bound statics' [] seen ->
   distinct
     (flat_map symbols_of_binding
-       (once_each [] (lifted_out_bindings lets at_path e)))
+       (once_each seen (lifted_out_bindings lets at_path e)))
   = true ->
   (∀ s : symbol,
     s
     ∈ flat_map symbols_of_binding
-        (once_each [] (lifted_out_bindings lets at_path e)) ->
+        (once_each seen (lifted_out_bindings lets at_path e)) ->
     lookup s (static_values statics') = None) ->
   ∃ extended' : static_env,
     eval_static_bindings vars'
-      (once_each [] (lifted_out_bindings lets at_path e)) statics'
+      (once_each seen (lifted_out_bindings lets at_path e)) statics'
     = Some extended'
     ∧ static_code extended' = static_code statics'
-    ∧ aliases_bound extended' lets at_path e.
+    ∧ aliases_bound extended' lets at_path e
+    ∧ bindings_bound extended' []
+        (once_each seen (lifted_out_bindings lets at_path e) ++ seen).
 Proof.
-  intros Hdistinct Hfresh.
+  intros Hseen Hdistinct Hfresh.
   assert (Hclosed :
-    Forall closed_binding (once_each [] (lifted_out_bindings lets at_path e))).
+    Forall closed_binding
+      (once_each seen (lifted_out_bindings lets at_path e))).
   { apply Forall_forall. intros binding Hin.
     exact (proj1 (Forall_forall _ _)
              (lifted_out_bindings_evaluate lets at_path e) binding
              (once_each_in _ _ _ Hin)). }
   destruct (eval_closed_bindings vars' _ statics' Hclosed Hdistinct Hfresh)
     as (extended' & Hextended & Hcode & Hbound).
+  pose proof (eval_static_bindings_extend vars' _ statics' extended'
+    Hextended) as Hextend.
+  assert (Hboth :
+    bindings_bound extended' []
+      (once_each seen (lifted_out_bindings lets at_path e) ++ seen)).
+  { intros s const Hin. apply in_app_or in Hin as [Hin | Hin];
+      [ exact (Hbound s const Hin) | ].
+    destruct (Hseen s const Hin) as (allocated & Hconst & Hs).
+    exists allocated.
+    split; [ exact Hconst | exact (proj2 Hextend s _ Hs) ]. }
   exists extended'. split; [ exact Hextended | ]. split; [ exact Hcode | ].
+  split; [ | exact Hboth ].
   apply bound_aliases. intros s const Hin.
-  destruct (once_each_has _ [] _ Hin) as [[] | Hin'].
-  exact (Hbound s const Hin').
+  destruct (once_each_has _ seen _ Hin) as [Hin' | Hin'];
+    apply Hboth; apply in_or_app; [ right | left ]; exact Hin'.
 Qed.
 
 (* ======================================================================== *)
@@ -849,11 +871,12 @@ Qed.
 Lemma bindings_lift_from_code_nothing (K : lets_in_code)
     (bindings : list static_binding) :
   existsb binding_binds bindings = false ->
-  flat_map (binding_lift_from_code K) bindings = bindings.
+  ∀ seen : list static_binding,
+    put_once_each seen (map (binding_lift_from_code K) bindings) = bindings.
 Proof.
   induction bindings as [ | [id c | id | sym const] bindings IH]; simpl;
-    try discriminate; [ reflexivity | ].
-  intros Hbinds. rewrite (IH Hbinds). reflexivity.
+    try discriminate; intros Hbinds seen; [ reflexivity | ].
+  rewrite (IH Hbinds). reflexivity.
 Qed.
 
 Fixpoint lift_from_code_nil (K : lets_in_code) (at_path : path)
@@ -893,13 +916,16 @@ Qed.
 (* The rewrite binds something statically where the expression does. *)
 Lemma bindings_lift_from_code_bind (K : lets_in_code)
     (bindings : list static_binding) :
-  existsb binding_binds (flat_map (binding_lift_from_code K) bindings)
-  = existsb binding_binds bindings.
+  ∀ seen : list static_binding,
+    existsb binding_binds
+      (put_once_each seen (map (binding_lift_from_code K) bindings))
+    = existsb binding_binds bindings.
 Proof.
-  induction bindings as [ | [id c | id | sym const] bindings IH]; simpl;
-    [ reflexivity | | exact IH | reflexivity ].
+  induction bindings as [ | [id c | id | sym const] bindings IH];
+    intros seen; [ reflexivity | | exact (IH seen) | reflexivity ].
   destruct c as [params my_closure ret exn metadata body].
-  rewrite !existsb_app. simpl. rewrite orb_true_r. reflexivity.
+  cbn [map binding_lift_from_code put_once_each].
+  rewrite existsb_app. simpl. apply orb_true_r.
 Qed.
 
 Fixpoint lift_from_code_binds_statics (K : lets_in_code)
@@ -965,8 +991,8 @@ Definition code_lifted_out (id : code_id) (c : code) : code :=
 
 Lemma binding_lift_from_code_code (id : code_id) (c : code) :
   binding_lift_from_code K (Bind_code id c)
-  = once_each [] (lifted_out_bindings (lets_of K id) root (code_body c))
-    ++ [Bind_code id (code_lifted_out id c)].
+  = (lifted_out_bindings (lets_of K id) root (code_body c),
+     Bind_code id (code_lifted_out id c)).
 Proof. destruct c. reflexivity. Qed.
 
 Lemma code_lifted_out_parts (id : code_id) (c : code) :
@@ -1020,35 +1046,43 @@ Proof.
 Qed.
 
 (* A group that the first run evaluates, the second does, rewritten,
-   given that it binds none of the symbols already. *)
+   given that it binds none of the symbols already. [seen] is what has
+   been put of the bindings lifted out of the bodies of the code of the
+   group so far: its bindings are bound in the second static
+   environment. *)
 Lemma eval_static_bindings_lifted_out (vars vars' : env) :
-  ∀ (bindings : list static_binding) (statics statics' extended : static_env),
+  ∀ (bindings seen : list static_binding)
+    (statics statics' extended : static_env),
     env_lifted statics' vars vars' ->
     statics_lifted_out statics statics' ->
+    bindings_bound statics' [] seen ->
     distinct
       (flat_map symbols_of_binding
-         (flat_map (binding_lift_from_code K) bindings))
+         (put_once_each seen (map (binding_lift_from_code K) bindings)))
     = true ->
     (∀ s : symbol,
       s
       ∈ flat_map symbols_of_binding
-          (flat_map (binding_lift_from_code K) bindings) ->
+          (put_once_each seen (map (binding_lift_from_code K) bindings)) ->
       lookup s (static_values statics') = None) ->
     eval_static_bindings vars bindings statics = Some extended ->
     ∃ extended' : static_env,
       eval_static_bindings vars'
-        (flat_map (binding_lift_from_code K) bindings) statics'
+        (put_once_each seen (map (binding_lift_from_code K) bindings))
+        statics'
       = Some extended'
       ∧ statics_lifted_out extended extended'.
 Proof.
   induction bindings as [ | binding bindings IH];
-    intros statics statics' extended Hvars Hstatics Hdistinct Hfresh.
+    intros seen statics statics' extended Hvars Hstatics Hseen Hdistinct
+      Hfresh.
   - simpl. intros [= <-]. eauto.
   - destruct binding as [id c | id | sym const].
-    + (* Code: the bindings of its [Let]s lifted out, then the code. *)
-      cbn [flat_map] in Hdistinct, Hfresh |- *.
+    + (* Code: the bindings of its [Let]s lifted out that are not put
+         yet, then the code. *)
+      cbn [map] in Hdistinct, Hfresh |- *.
       rewrite binding_lift_from_code_code in Hdistinct, Hfresh |- *.
-      rewrite <- app_assoc in Hdistinct, Hfresh |- *.
+      cbn [put_once_each] in Hdistinct, Hfresh |- *.
       rewrite flat_map_app in Hdistinct, Hfresh.
       cbn [app flat_map symbols_of_binding] in Hdistinct, Hfresh.
       destruct (distinct_app_parts _ _ Hdistinct)
@@ -1056,9 +1090,9 @@ Proof.
       simpl.
       destruct (lookup id (static_code statics)) eqn:Hid; [ discriminate | ].
       intros Hbindings.
-      destruct (eval_lifted_out_bindings vars' (lets_of K id) root
-                  (code_body c) statics' Hdistinct_out)
-        as (extended1 & Hextended1 & Hcode1 & Hbound);
+      destruct (eval_lifted_out_bindings vars' seen (lets_of K id) root
+                  (code_body c) statics' Hseen Hdistinct_out)
+        as (extended1 & Hextended1 & Hcode1 & Hbound & Hseen1);
         [ intros s Hin; apply Hfresh; apply in_or_app; left; exact Hin | ].
       pose proof (eval_static_bindings_extend vars' _ statics' extended1
         Hextended1) as Hextend1.
@@ -1075,11 +1109,11 @@ Proof.
       rewrite eval_static_bindings_app, Hextended1.
       cbn [eval_static_bindings]. rewrite Hid'.
       apply
-        (IH
+        (IH _
            (Static_env ((id, c) :: static_code statics)
               (static_values statics))
            _ extended);
-        [ exact (env_lifted_extend _ _ _ _ Hextend Hvars) |
+        [ exact (env_lifted_extend _ _ _ _ Hextend Hvars) | | exact Hseen1
         | exact Hdistinct_rest | | exact Hbindings ].
       * destruct Hstatics as (Hcode & Hsymbols & Haliases).
         split; [ | split ].
@@ -1100,7 +1134,8 @@ Proof.
           [ apply Hfresh; apply in_or_app; right; exact Hin | ].
         intros Hin'. exact (Hapart s Hin' Hin).
     + (* Deleted code. *)
-      exact (IH statics statics' extended Hvars Hstatics Hdistinct Hfresh).
+      exact (IH seen statics statics' extended Hvars Hstatics Hseen Hdistinct
+               Hfresh).
     + (* A symbol: not bound in the second run either. *)
       simpl in Hdistinct, Hfresh |- *.
       destruct (lookup sym (static_values statics)) eqn:Hsym;
@@ -1114,8 +1149,8 @@ Proof.
       simpl. apply andb_true_iff in Hdistinct as [Hnotin Hdistinct].
       pose proof (statics_extend_symbol statics' sym allocated'
         (Hfresh sym (or_introl eq_refl))) as Hextend.
-      apply IH;
-        [ exact (env_lifted_extend _ _ _ _ Hextend Hvars) |
+      apply (IH seen);
+        [ exact (env_lifted_extend _ _ _ _ Hextend Hvars) | |
         | exact Hdistinct | ].
       * destruct Hstatics as (Hcode & Hsymbols & Haliases).
         split; [ exact Hcode | split ].
@@ -1129,6 +1164,10 @@ Proof.
               exact (allocated_lifted_extend _ _ _ _ Hextend Ha).
         -- intros id c Hid.
            exact (aliases_bound_extend _ _ Hextend _ _ _ (Haliases id c Hid)).
+      * intros s const0 Hin.
+        destruct (Hseen s const0 Hin) as (seen_allocated & Hconst0 & Hs).
+        exists seen_allocated.
+        split; [ exact Hconst0 | exact (proj2 Hextend s _ Hs) ].
       * intros s Hin. cbn [static_values].
         rewrite lookup_other; [ apply Hfresh; right; exact Hin | ].
         intros ->. apply negb_true_iff in Hnotin.
@@ -1839,8 +1878,11 @@ Proof.
     unfold static_fault in Hfault. simpl_state.
     apply orb_false_iff in Hfault as [_ Hfault].
     destruct (no_rebinding statics' _ Hfault) as [Hdistinct Hfresh].
-    destruct (eval_static_bindings_lifted_out vars vars' bindings statics
-                statics' extended Hvars Hstatics Hdistinct Hfresh Hbindings)
+    destruct (eval_static_bindings_lifted_out vars vars' bindings [] statics
+                statics' extended Hvars Hstatics
+                (fun s const (Hin : Bind_symbol s const ∈ []) =>
+                   match Hin with end)
+                Hdistinct Hfresh Hbindings)
       as (extended' & Hextended & Hlifted).
     pose proof (eval_static_bindings_extend vars' _ statics' extended'
       Hextended) as Hextend.
@@ -2305,8 +2347,11 @@ with handler_lift_from_code_renamed (r : renaming) (K : lets_in_code)
   = handler_lift_from_code K lets at_path (rename_handler r h)
 with binding_lift_from_code_renamed (r : renaming) (K : lets_in_code)
     (binding : static_binding) {struct binding} :
-  map (rename_static_binding r) (binding_lift_from_code K binding)
-  = binding_lift_from_code K (rename_static_binding r binding).
+  binding_lift_from_code K (rename_static_binding r binding)
+  = (fst (binding_lift_from_code K binding),
+     rename_static_binding r (snd (binding_lift_from_code K binding)))
+  ∧ map (rename_static_binding r) (fst (binding_lift_from_code K binding))
+    = fst (binding_lift_from_code K binding).
 Proof.
   - destruct e
       as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
@@ -2316,9 +2361,17 @@ Proof.
       destruct (lifted_out lets at_path d) as [[bindings s] | ]; simpl;
         rewrite lift_from_code_renamed; reflexivity.
     + rewrite lift_from_code_renamed. f_equal.
-      induction bindings as [ | binding bindings IH]; [ reflexivity | ].
-      simpl. rewrite map_app, IH, binding_lift_from_code_renamed.
-      reflexivity.
+      generalize (@nil static_binding).
+      induction bindings as [ | binding bindings IH]; intros seen;
+        [ reflexivity | ].
+      cbn [map].
+      destruct (binding_lift_from_code_renamed r K binding)
+        as [Hrenamed Hclosed].
+      rewrite Hrenamed.
+      destruct (binding_lift_from_code K binding) as [lifted rewritten].
+      cbn [fst snd] in Hclosed |- *. cbn [put_once_each].
+      rewrite map_app, (once_each_closed r _ seen Hclosed). cbn [map].
+      rewrite IH. reflexivity.
     + rewrite handler_lift_from_code_renamed, lift_from_code_renamed.
       reflexivity.
     + rewrite lift_from_code_renamed. f_equal.
@@ -2329,13 +2382,21 @@ Proof.
       rewrite handler_lift_from_code_renamed, IH. reflexivity.
   - destruct h as [params metadata handler]. simpl.
     rewrite lift_from_code_renamed. reflexivity.
-  - destruct binding as [id c | id | sym const]; try reflexivity.
+  - destruct binding as [id c | id | sym const]; try (split; reflexivity).
     destruct c as [params my_closure ret exn metadata body]. simpl.
-    rewrite map_app,
-      (once_each_closed r _ [] (lifted_out_bindings_closed r _ _ _)),
-      lifted_out_bindings_renamed.
-    simpl. rewrite lift_from_code_renamed. reflexivity.
+    rewrite lifted_out_bindings_renamed, lift_from_code_renamed.
+    split; [ reflexivity | apply lifted_out_bindings_closed ].
 Qed.
 
 Theorem lift_from_code_equivariant : lift_from_code_equivariant_statement.
 Proof. exact lift_from_code_renamed. Qed.
+
+(* ======================================================================== *)
+(* The rewrite computed on two small units                                  *)
+(* ======================================================================== *)
+
+Theorem lift_from_code_two_bodies : lift_from_code_two_bodies_statement.
+Proof. reflexivity. Qed.
+
+Theorem lift_from_code_two_blocks : lift_from_code_two_blocks_statement.
+Proof. reflexivity. Qed.

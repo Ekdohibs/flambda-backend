@@ -115,8 +115,11 @@ Proof.
   unfold static_fault in Hfault. simpl in Hfault.
   apply orb_false_iff in Hfault as [_ Hfault].
   destruct (no_rebinding statics0 _ Hfault) as [Hdistinct Hfresh].
-  destruct (eval_lifted_out_bindings [] lets root e statics0 Hdistinct Hfresh)
-    as (statics' & Heval & Hcode & Hbound).
+  destruct (eval_lifted_out_bindings [] [] lets root e statics0
+              (fun s const (Hin : Bind_symbol s const ∈ []) =>
+                 match Hin with end)
+              Hdistinct Hfresh)
+    as (statics' & Heval & Hcode & Hbound & _).
   pose proof (eval_static_bindings_extend [] _ statics0 statics' Heval)
     as Hextend.
   exists statics'. split.

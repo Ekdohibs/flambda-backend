@@ -242,7 +242,10 @@
    - the sharing of equal constants: here a symbol is bound once, so
      two [Let]s cannot be given the same symbol; the two files just
      named put one binding for two [Let]s of one constant that are
-     lifted out of one body (FlambdaLiftFromCodeSpec.once_each);
+     lifted out of one body (FlambdaLiftFromCodeSpec.once_each), and
+     the first of them for two that are lifted out of the bodies of
+     the code that one group of static bindings binds
+     (FlambdaLiftFromCodeSpec.put_once_each);
    - a unit that gives its return continuation a variable that is not
      known to hold a symbol or a constant, or that raises one in code
      where the unit has a call outside the bodies of its code: see

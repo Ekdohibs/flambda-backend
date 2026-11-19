@@ -550,7 +550,8 @@ with handler_lift_from_code_scoped (K : lets_in_code)
   scoped_handler h (handler_lift_from_code K lets at_path h)
 with binding_lift_from_code_scoped (K : lets_in_code)
     (binding : static_binding) {struct binding} :
-  scoped_bindings [binding] (binding_lift_from_code K binding).
+  no_free_names (fst (binding_lift_from_code K binding))
+  ∧ scoped_bindings [binding] [snd (binding_lift_from_code K binding)].
 Proof.
   - destruct e as [x kind d body | bindings body | k h body | handlers body
                   | ap | ac | scrutinee arms | ];
@@ -559,10 +560,17 @@ Proof.
         (apply scoped_let; [ | apply lift_from_code_scoped ]);
         [ apply incl_nil_l | apply incl_refl ].
     + apply scoped_let_static; [ | apply lift_from_code_scoped ].
-      induction bindings as [ | binding bindings IH]; cbn [flat_map];
-        [ apply scoped_bindings_nil | ].
-      exact (scoped_bindings_app [binding] _ bindings _
-               (binding_lift_from_code_scoped K binding) IH).
+      generalize (@nil static_binding).
+      induction bindings as [ | binding bindings IH]; intros seen;
+        cbn [map]; [ apply scoped_bindings_nil | ].
+      destruct (binding_lift_from_code_scoped K binding)
+        as [Hlifted Hbinding].
+      destruct (binding_lift_from_code K binding) as [lifted rewritten].
+      cbn [fst snd] in Hlifted, Hbinding. cbn [put_once_each].
+      apply scoped_bindings_prepend;
+        [ exact (once_each_no_free_names _ seen Hlifted) | ].
+      exact (scoped_bindings_app [binding] [rewritten] bindings _ Hbinding
+               (IH _)).
     + apply scoped_let_cont;
         [ apply handler_lift_from_code_scoped | apply lift_from_code_scoped ].
     + apply scoped_let_cont_recursive; [ | | apply lift_from_code_scoped ].
@@ -579,10 +587,11 @@ Proof.
     cbn [handler_lift_from_code].
     apply scoped_handler_intro, lift_from_code_scoped.
   - destruct binding as [id c | id | sym const];
-      cbn [binding_lift_from_code]; try apply scoped_bindings_refl.
+      cbn [binding_lift_from_code fst snd];
+      try (split; [ repeat split | apply scoped_bindings_refl ]).
     destruct c as [params my_closure ret exn metadata body].
-    apply scoped_bindings_prepend;
-      [ apply once_each_no_free_names, lifted_out_bindings_no_free_names | ].
+    cbn [fst snd].
+    split; [ apply lifted_out_bindings_no_free_names | ].
     apply scoped_bindings_cons_code;
       [ apply scoped_code_intro, lift_from_code_scoped
       | apply scoped_bindings_nil ].

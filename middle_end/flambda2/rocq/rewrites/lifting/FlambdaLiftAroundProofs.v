@@ -197,7 +197,7 @@ with handler_lift_from_code_nothing (at_path : path)
   handler_lift_from_code [] [] at_path h = h
 with binding_lift_from_code_nothing (binding : static_binding)
     {struct binding} :
-  binding_lift_from_code [] binding = [binding].
+  binding_lift_from_code [] binding = ([], binding).
 Proof.
   - destruct e
       as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
@@ -205,8 +205,11 @@ Proof.
       simpl; try reflexivity.
     + rewrite lift_from_code_nothing. reflexivity.
     + rewrite lift_from_code_nothing. f_equal.
-      induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-      rewrite (binding_lift_from_code_nothing binding), IH. reflexivity.
+      generalize (@nil static_binding).
+      induction bindings as [ | binding bindings IH]; intros seen;
+        [ reflexivity | ].
+      cbn [map]. rewrite (binding_lift_from_code_nothing binding).
+      cbn [put_once_each once_each app]. rewrite IH. reflexivity.
     + rewrite handler_lift_from_code_nothing, lift_from_code_nothing.
       reflexivity.
     + rewrite lift_from_code_nothing. f_equal.
@@ -224,10 +227,13 @@ Proof.
 Qed.
 
 Lemma bindings_lift_from_code_nothing_at_all (bindings : list static_binding) :
-  flat_map (binding_lift_from_code []) bindings = bindings.
+  put_once_each [] (map (binding_lift_from_code []) bindings) = bindings.
 Proof.
-  induction bindings as [ | binding bindings IH]; simpl; [ reflexivity | ].
-  rewrite binding_lift_from_code_nothing, IH. reflexivity.
+  generalize (@nil static_binding).
+  induction bindings as [ | binding bindings IH]; intros seen;
+    [ reflexivity | ].
+  cbn [map]. rewrite binding_lift_from_code_nothing.
+  cbn [put_once_each once_each app]. rewrite IH. reflexivity.
 Qed.
 
 Lemma code_lifted_out_nothing (id : code_id) (c : code) :
@@ -1185,8 +1191,9 @@ Proof.
     unfold static_fault in Hfault. simpl_state.
     apply orb_false_iff in Hfault as [_ Hfault].
     destruct (no_rebinding statics' _ Hfault) as [Hdistinct Hfresh].
-    pose proof (eval_static_bindings_lifted_out [] vars vars' bindings statics
-      statics' extended Hvars Hstatics)
+    pose proof (eval_static_bindings_lifted_out [] vars vars' bindings []
+      statics statics' extended Hvars Hstatics
+      (fun s const (Hin : Bind_symbol s const ∈ []) => match Hin with end))
       as Hgroup.
     rewrite bindings_lift_from_code_nothing_at_all in Hgroup.
     destruct (Hgroup Hdistinct Hfresh Hbindings)
