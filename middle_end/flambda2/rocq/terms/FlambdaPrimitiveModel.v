@@ -1,29 +1,63 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*            Mark Shinwell and Xavier Clerc, Jane Street Europe          *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file is a partial translation into Rocq of two files of the
+   compiler. Its inductive types, but [heap_primitive] and
+   [region_primitive], are written after type declarations of those files,
+   cut down: a type has only the constructors that the model has, and a
+   constructor only the arguments that the model has, some under another
+   name. The comment on each names the declaration, and the head comment
+   below lists the differences.
+   After middle_end/flambda2/terms/flambda_primitive.mli: [signedness]
+   (signed_or_unsigned there), [block_access_field_kind],
+   [block_access_kind], [unary_int_arith_op], [reinterpret_64_bit_word],
+   [array_kind], [array_kind_for_length], [array_load_kind],
+   [unary_primitive], [binary_int_arith_op], [int_shift_op],
+   [int_comparison] (comparison there), [int_comparison_behaviour]
+   (comparison_behaviour there), [string_accessor_width],
+   [equality_comparison], [binary_primitive], [block_kind],
+   [variadic_primitive], [init_or_assign] and [array_set_kind]; three of
+   the constructors of [prim] (Without_args.t there); and the constructors
+   of [heap_primitive] and of [region_primitive] other than
+   [Local_allocation], which stand for constructors of the unary, binary,
+   ternary and variadic primitives of that file, as the comment on each
+   says, two of them under names of the model.
+   After middle_end/flambda2/terms/mutability.mli: [mutability], and
+   [cell_mutability], which is two of its three cases under names of the
+   model.
+   The rest is not a translation: the choice of the fragment; the gathering
+   of the primitives of the heap and of regions into the types
+   [heap_primitive] and [region_primitive], with the constructors [Heap],
+   [Region_primitive] and [Local_allocation]; and the comments, but for the
+   notices at the head of the file.
+
+   The header above is that of
+   middle_end/flambda2/terms/flambda_primitive.mli,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/terms/mutability.mli,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* The primitives of Flambda 2 as the semantics sees them: a fragment.
 

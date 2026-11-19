@@ -14,7 +14,16 @@
 
 (* The header above is that of
    middle_end/flambda2/types/env/aliases.ml,
-   the file of the compiler that this file transcribes. *)
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/identifiers/name.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* The aliases of the typing environment: which names and constants are
    known to be equal, and the canonical element of each class.
@@ -22,7 +31,11 @@
    This file is the model's copy of
    middle_end/flambda2/types/env/aliases.ml: the structure and the
    functions on it, written as the OCaml is, function by function and
-   under its names, in a module [Aliases]. It extracts. What the
+   under its names, in a module [Aliases]. One definition that stands
+   before that module, [name_is_symbol], is the model's form of the
+   function [is_symbol] of middle_end/flambda2/identifiers/name.ml: a
+   match on the two forms of a name, where the OCaml calls
+   [pattern_match]. The file extracts. What the
    structure means and what the functions guarantee is
    FlambdaEnvAliasesSpec.v, whose header says what is to be read here
    against the OCaml and lists every difference; in short:

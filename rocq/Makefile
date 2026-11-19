@@ -865,9 +865,15 @@ all: layout $(SOURCES:.v=.vo) claims
 # no list names is looked at too.
 FLAMBDA2_TRANSCRIBED := \
   rewrites/lets/FlambdaIdentitiesSpec.v \
+  semantics/FlambdaPrimitiveSpec.v \
+  semantics/FlambdaSemanticsSpec.v \
+  terms/FlambdaKindModel.v \
+  terms/FlambdaModel.v \
+  terms/FlambdaPrimitiveModel.v \
   types/aliases/FlambdaEnvAliases.v \
   types/env/FlambdaBindingTime.v \
   types/env/FlambdaTypingEnv.v \
+  types/env/FlambdaTypingEnvExtension.v \
   types/grammar/FlambdaTypeGrammar.v \
   types/grammar/FlambdaTypeProject.v \
   types/join/FlambdaJoinEnv.v \

@@ -1,29 +1,76 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*            Mark Shinwell and Xavier Clerc, Jane Street Europe          *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file is a partial translation into Rocq of parts of three files of
+   the compiler: the definitions named here are written after those parts,
+   and the rest of the file is not a translation of any file.
+   After middle_end/flambda2/terms/flambda_primitive.ml: the tables of
+   kinds [arg_kind_of_unary_primitive], [result_kind_of_unary_primitive],
+   [args_kind_of_binary_primitive], [result_kind_of_binary_primitive],
+   [args_kind_of_variadic_primitive] and
+   [result_kind_of_variadic_primitive], each the table of the function of
+   that name there on the primitives that the model has, the cases grouped
+   otherwise, and [prim_result_kind] (result_kind' there);
+   [byte_width_of_string_accessor_width], the function of that name there
+   without the widths that the model has not; [array_element_ok], the
+   first two cases of Array_kind.element_kinds there, made a test of a
+   value; and, at the end of [eval_string_load], the cases that give the
+   kind of the result of a load of each width, which are those of
+   result_kind_of_binary_primitive there.
+   After middle_end/flambda2/to_cmm/to_cmm_primitive.ml: the case analysis
+   of [eval_unary_int_arith], by the operation and then by the kind as in
+   unary_int_arith_primitive there; what each case computes is the
+   model's.
+   After middle_end/flambda2/simplify/simplify_unary_primitive.ml: the
+   case [Boolean_not] of [eval_unary_primitive], which is the test on zero
+   and on one of simplify_boolean_not there; and the two cases of
+   [eval_reinterpret_64_bit_word] with what the first computes, twice the
+   integer plus one, as a function convert there computes it (the two
+   cases are also those of to_cmm_primitive.ml).
+   The rest is not a translation. What the primitives compute ([eval_prim]
+   and what it is made of, but for the parts above) is the model's own
+   statement, on mathematical integers and on the values of the model; its
+   comments name the functions of the compiler against which it is to be
+   reviewed. [result_kind_of_heap_primitive] and
+   [result_kind_of_region_primitive] are tables of the model, with no
+   function of their own in the compiler; their kinds agree with those
+   that flambda_primitive.ml gives the primitives that their constructors
+   stand for. The section on numbers in range, the statements of the laws
+   and the comments, but for the notices at the head of the file, are the
+   model's own too.
+
+   The header above is that of
+   middle_end/flambda2/terms/flambda_primitive.ml,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/to_cmm/to_cmm_primitive.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                        Guillaume Bury, OCamlPro                        *)
+(*   Copyright 2019--2019 OCamlPro SAS                                    *)
+   - middle_end/flambda2/simplify/simplify_unary_primitive.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   *)
 
 (* What the primitives of FlambdaPrimitiveModel.v compute, their kinds,
    and the laws that every primitive obeys.

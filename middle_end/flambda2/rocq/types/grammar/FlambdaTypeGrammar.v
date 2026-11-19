@@ -25,8 +25,8 @@
 
    The header above is that of
    middle_end/flambda2/types/grammar/type_grammar.ml,
-   the first of the files of the compiler that this file transcribes.
-   It also transcribes:
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
    - middle_end/flambda2/types/grammar/type_descr.ml,
      whose header differs from the one above; its lines of authors and
      of copyright:
@@ -35,7 +35,55 @@
 (*   Copyright 2013--2019 OCamlPro SAS                                    *)
 (*   Copyright 2014--2019 Jane Street Group LLC                           *)
    - middle_end/flambda2/types/grammar/more_type_creators.ml,
-     whose header is the same. *)
+     whose header is the same;
+   - middle_end/flambda2/kinds/flambda_kind.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/types/grammar/set_of_closures_contents.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/term_basics/simple.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2017 OCamlPro SAS                                    *)
+(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+   - middle_end/flambda2/lattices/or_unknown.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/lattices/or_bottom.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/lattices/or_unknown_or_bottom.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/bound_identifiers/alloc_mode.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                  Mark Shinwell, Jane Street Europe                     *)
+(*   Copyright 2022 Jane Street Group LLC                                 *)
+   *)
 
 
 (* The grammar of Flambda types, as the model sees it.

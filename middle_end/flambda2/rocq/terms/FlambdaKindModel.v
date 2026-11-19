@@ -1,29 +1,40 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file writes again for the model, with the compiler's names, types
+   and functions of two files of the compiler; a constructor is prefixed as
+   the comment below says. After middle_end/flambda2/kinds/flambda_kind.mli:
+   [naked_number_kind], [flambda_kind], [standard_int] and [boxable_number]
+   are [Naked_number_kind.t], [t], [Standard_int.t] and [Boxable_number.t],
+   each with the compiler's constructors in their order; [subkind], with
+   [constructor_shapes] and [field_subkinds], is a part of
+   [With_subkind.Non_null_value_subkind.t], cut down as its comment says;
+   [param_subkind] is [With_subkind.t] without its kind, and [any_value] is
+   [With_subkind.any_value]. After middle_end/flambda2/kinds/flambda_kind.ml:
+   [kind_of_standard_int] and [unboxed_kind] are [Standard_int.to_kind] and
+   [Boxable_number.unboxed_kind], case for case. The rest of the file is not
+   a transcription: the functions that decide equality,
+   [boxable_number_of_kind], [says_nothing] and [subkinds_say_nothing].
+
+   The header above is that of
+   middle_end/flambda2/kinds/flambda_kind.mli,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/kinds/flambda_kind.ml,
+     whose header is the same. *)
 
 (* The kinds of Flambda 2.
 

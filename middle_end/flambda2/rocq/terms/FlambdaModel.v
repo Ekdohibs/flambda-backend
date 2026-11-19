@@ -1,29 +1,100 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file is a partial adaptation of files of the compiler: it writes
+   again for the model, with the compiler's names, some of their types and
+   a few of their functions, renamed, cut down and restructured as the
+   comment below says. [expr], [named] and [static_binding] are after
+   [expr_descr], [named] and [static_const_or_code] of
+   middle_end/flambda2/terms/flambda.mli. [const] is after [Const_data.t]
+   of middle_end/flambda2/identifiers/int_ids.ml, and [kind_of_const] after
+   [kind] of middle_end/flambda2/identifiers/reg_width_const.ml.
+   [arity_component] is after the components of an arity of
+   middle_end/flambda2/kinds/flambda_arity.mli, and the functions on
+   arities whose comments name a function of [Flambda_arity] are after
+   those of middle_end/flambda2/kinds/flambda_arity.ml. [static_const] is
+   after a part of [t] of middle_end/flambda2/terms/static_const.mli;
+   [raise_kind] and [trap_action] are after [Raise_kind.t] and [t] of
+   middle_end/flambda2/terms/trap_action.mli; [apply_expr] and [apply_cont]
+   keep some of the fields of [t] of
+   middle_end/flambda2/terms/apply_expr.ml and of
+   middle_end/flambda2/terms/apply_cont_expr.ml; [call_kind] is after
+   [Function_call.t] of middle_end/flambda2/terms/call_kind.mli.
+   [kinds_agree_on_prefix] and [partial_or_over_application] are after
+   [arity_mismatch] and the conditions of [simplify_direct_function_call]
+   of middle_end/flambda2/simplify/simplify_apply_expr.ml. Of the rest,
+   [simple] has the three cases of the view that the compiler gives of its
+   type of simples, and [code_metadata] keeps four fields of the compiler's
+   record among its own; the other definitions are written for the model.
+
+   The header above is that of
+   middle_end/flambda2/terms/flambda.mli,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/identifiers/int_ids.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   - middle_end/flambda2/identifiers/reg_width_const.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   - middle_end/flambda2/kinds/flambda_arity.mli,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2023 OCamlPro SAS                                    *)
+(*   Copyright 2014--2023 Jane Street Group LLC                           *)
+   - middle_end/flambda2/terms/static_const.mli,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+   - middle_end/flambda2/terms/trap_action.mli,
+     whose header is the same;
+   - middle_end/flambda2/terms/apply_expr.ml,
+     whose header is the same;
+   - middle_end/flambda2/terms/apply_cont_expr.ml,
+     whose header is the same;
+   - middle_end/flambda2/terms/call_kind.mli,
+     whose header is the same;
+   - middle_end/flambda2/kinds/flambda_arity.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2023 OCamlPro SAS                                    *)
+(*   Copyright 2014--2023 Jane Street Group LLC                           *)
+   - middle_end/flambda2/simplify/simplify_apply_expr.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* The terms of Flambda 2 as the semantics sees them: a fragment.
 
