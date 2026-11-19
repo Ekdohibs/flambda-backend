@@ -87,11 +87,14 @@
    same reason (FlambdaLiftSpec.lift_unit), and is the identity where
    one fails:
    - the unit exits with symbols and constants only
-     (FlambdaLiftSpec.exits_plain_knowing);
-   - the unit has no primitive of the heap
-     (FlambdaHeapFreeSpec.expr_free_of_heap: the guard that the
+     (FlambdaLiftSpec.exits_plain_fine);
+   - the run of the unit executes no primitive of the heap
+     (FlambdaHeapFreeSpec.free_of_heap_fine: the guard that the
      liftings have for now, with the same limit and the same CR, at
      FlambdaLiftSpec.lift_unit).
+   Each is of the whole unit, or, where the unit calls nothing
+   outside the bodies of its code, of what is outside them: the run
+   of such a unit enters no code (decision D65, the CRs at the two).
    No primitive reads the code of a closure as the model stands:
    FlambdaPrimitiveSpec.eval_phys_equal has no value on two allocated
    values (the CR there). If it were given one on two closures that
@@ -127,8 +130,10 @@
    unit followed by what may follow a unit (FlambdaObserversSpec.v),
    as it is for the copy of static sets: what follows may read a
    closure that the unit made from a symbol that the unit gave it,
-   and exit with it. Nothing is stated of a unit that has a primitive
-   of the heap, of which the rewrite is the identity.
+   and exit with it. Where a unit does not pass the guard of the heap
+   (it has a primitive of the heap outside the bodies of its code, or
+   one in them and a call outside them), the rewrite is the identity:
+   the statements hold of it with no copy made.
 
    The rewrite commutes with renaming, which renames no code id and
    no symbol, and names a [Let] by where it is
@@ -270,14 +275,15 @@ Definition let_copy : Type :=
 Definition copies_apart (ids : list (code_id * code_id)) : bool :=
   forallb (fun id => negb (among id (map snd ids))) (map fst ids).
 
-(* The unit with one copy, if it exits with symbols and constants
-   only, has no primitive of the heap, the copy passes
+(* The unit with one copy, if it passes the test of the exits
+   (FlambdaLiftSpec.exits_plain_fine) and the guard of the heap
+   (FlambdaHeapFreeSpec.free_of_heap_fine), the copy passes
    [copies_apart], and the check of
    FlambdaCopyCodeSpec.copy_static_code passes; the unit as it is
    otherwise. The first two tests are of the unit given. *)
 Definition copy_let_code (copy : let_copy) (e : expr) : expr :=
   let '(ids, symbols, (lets, in_code)) := copy in
-  if exits_plain_knowing [] [] e && expr_free_of_heap e && copies_apart ids
+  if exits_plain_fine e && free_of_heap_fine e && copies_apart ids
   then
     match copy_static_code ids symbols e with
     | Some e' =>

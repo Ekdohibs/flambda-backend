@@ -39,23 +39,25 @@
    FlambdaLiftFromCodeSpec.lift_from_code_unit, FlambdaLiftSpec.lift_unit
    and FlambdaLiftAroundSpec.lift_around_unit. The first two
    conditions of each are tests of the unit before it is lifted. One
-   is FlambdaLiftSpec.exits_plain_knowing, the test of the exits: the
+   is FlambdaLiftSpec.exits_plain_fine, the test of the exits: the
    unit exits with symbols and constants only. With it, the unit
    lifted exits with the same values as the unit. The other is
-   FlambdaHeapFreeSpec.expr_free_of_heap, the test of the heap: the
-   unit has no primitive of the heap. With it, the unit, run from the
-   empty heap as the statements of the four run it, exits with the
-   empty heap if it exits, and so does the unit lifted. With both, the statement
-   of each is a refinement, in which the values of two exits are equal
-   and their heaps are equal. Without the first, the unit lifted may
-   exit with a symbol where the unit exits with the closure, the block
-   or the boxed number that the symbol is bound to
-   (FlambdaLiftSpec.value_lifted), and the values of the two exits are
-   not equal. Without the second, a cell of the heap of the unit
-   lifted may hold such a symbol where the cell of the unit holds
-   what the symbol is bound to, and the heaps of the two exits are not
-   equal, whatever the values of the exits are: the test of the exits
-   alone does not make the heaps equal.
+   FlambdaHeapFreeSpec.free_of_heap_fine, the test of the heap: the
+   unit has no primitive of the heap, or none outside the bodies of
+   its code where it calls nothing outside them. With it, the unit,
+   run from the empty heap as the statements of the four run it,
+   exits with the empty heap if it exits, and so does the unit
+   lifted. With both, the statement of each is a refinement, in
+   which the values of two exits are equal and their heaps are
+   equal. Without the first, the unit lifted may exit with a symbol
+   where the unit exits with the closure, the block or the boxed
+   number that the symbol is bound to (FlambdaLiftSpec.value_lifted),
+   and the values of the two exits are not equal. Without the
+   second, a cell of the heap of the unit lifted may hold such a
+   symbol where the cell of the unit holds what the symbol is bound
+   to, and the heaps of the two exits are not equal, whatever the
+   values of the exits are: the test of the exits alone does not make
+   the heaps equal.
 
    The functions here are those four with those two tests left out
    and every other condition kept. What is stated of each is

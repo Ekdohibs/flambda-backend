@@ -138,15 +138,17 @@
    machine tells the block from the symbol. They differ at an exit of
    the unit, among its values and in what the cells of its heap hold,
    so [lift_around_unit] makes the two checks of the unit that
-   FlambdaLiftSpec.lift_unit makes: FlambdaLiftSpec.exits_plain_knowing,
+   FlambdaLiftSpec.lift_unit makes: FlambdaLiftSpec.exits_plain_fine,
    the unit exits with symbols and constants only; and
-   FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
-   the heap, so that the heaps of two exits are empty (a limit: the CR
-   at FlambdaLiftSpec.lift_unit). It also checks that the result is a
-   well-formed unit: a group put is then outside loops and code,
-   executed once at most, and binds symbols that are new; and its
-   variables are in scope where it stands, so they have values there
-   (FlambdaScopeSpec.v).
+   FlambdaHeapFreeSpec.free_of_heap_fine, its run executes no
+   primitive of the heap, so that the heaps of two exits are empty (a
+   limit: the CR at FlambdaLiftSpec.lift_unit). Each is of the whole
+   unit, or, where the unit calls nothing outside the bodies of its
+   code, of what is outside them (decision D65, the CRs at the two).
+   It also checks that the result is a well-formed unit: a group put
+   is then outside loops and code, executed once at most, and binds
+   symbols that are new; and its variables are in scope where it
+   stands, so they have values there (FlambdaScopeSpec.v).
    With these the unit lifted refines the unit, run on its own
    ([lift_around_unit_program_refines_statement]).
 
@@ -171,11 +173,11 @@
    that has one (mutable or unique) is made by a primitive of the heap,
    which [lift_named] does not lift (FlambdaLiftSpec.v, "Identity").
    The step of the core executes a primitive of the heap, and
-   [lift_around_unit] lifts nothing in a unit that has one
-   (FlambdaHeapFreeSpec.expr_free_of_heap). A value with identity that
-   comes from another unit is not itself made an alias by this
-   rewrite. Of the immutable allocated values that this rewrite makes
-   aliases, the physical comparison of two has no value
+   [lift_around_unit] lifts nothing in a unit that does not pass the
+   guard of the heap (FlambdaHeapFreeSpec.free_of_heap_fine). A value
+   with identity that comes from another unit is not itself made an
+   alias by this rewrite. Of the immutable allocated values that this
+   rewrite makes aliases, the physical comparison of two has no value
    (FlambdaPrimitiveSpec.eval_phys_equal, decision D19), so a unit that
    compares them is undefined before and after. Physical equality of
    immutable values is outside the model, and sharing is what it would
@@ -450,18 +452,20 @@ Definition groups_of (lets : list (path * lift_to))
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess made aliases and its groups
-   put: if the unit exits with symbols and constants only and has no
-   primitive of the heap, the guess passes the check, and the result
-   is a well-formed unit. The second is a limit, and not a condition
-   of the lifting: the CR at FlambdaLiftSpec.lift_unit. *)
+   put: if the unit passes the test of the exits
+   (FlambdaLiftSpec.exits_plain_fine) and the guard of the heap
+   (FlambdaHeapFreeSpec.free_of_heap_fine), the guess passes the
+   check, and the result is a well-formed unit. The second is a limit,
+   and not a condition of the lifting: the CR at
+   FlambdaLiftSpec.lift_unit. *)
 Definition lift_around_unit (u : unit_interface)
     (lets : list (path * lift_to)) (places : list (path * list path))
     (e : expr) : option expr :=
   let groups := groups_of lets places e in
   let lifted := lift_around lets groups root e in
   if
-    exits_plain_knowing [] [] e
-    && expr_free_of_heap e
+    exits_plain_fine e
+    && free_of_heap_fine e
     && around_ok lets groups [] root e
     && well_formed_unit u lifted
   then Some lifted

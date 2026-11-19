@@ -203,9 +203,11 @@ does what the line says). Dates are of 2026.
 - **D60.** Well-formedness asks that static bindings be outside loops
   and code; a separate check of static names gives a handler only the
   names bound on every way to it (provisional for the interim; open).
-- **D65.** Whether the guards of a lifting need look inside functions in
-  a unit with no call outside them. Meanwhile they do; not to look would
-  change which units are validated, not what a program means (open).
+- **D65.** The guards of a lifting, and of the copy of code for a set of
+  closures that a `Let` makes, do not look inside functions in a unit with no
+  call outside them (yes, provisionally, by the human on 18 Nov; to be come
+  back to). A verdict that rests on that says nothing of the unit's functions
+  under a caller.
 
 ## 9. The types of Simplify
 

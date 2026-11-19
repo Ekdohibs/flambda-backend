@@ -1868,7 +1868,7 @@ Definition exit_same (last : state) (vs : list value) (hp : heap)
    which it determines, is related to the third. *)
 Definition unit_related (s s' : state) : Prop :=
   copied_inv ids s
-  ∧ plain_state s
+  ∧ exits_are_plain s
   ∧ state_copied ids in_code (copy_state ids symbols s) s'.
 
 Lemma unit_related_step (s s' : state) :
@@ -1876,7 +1876,7 @@ Lemma unit_related_step (s s' : state) :
 Proof.
   intros (Hinv & Hplain & Hrelated).
   pose proof (copy_step ids symbols Hnew s Hinv) as Hcopy.
-  pose proof (plain_step s Hplain) as Hplain'.
+  pose proof (exits_are_plain_step s Hplain) as Hplain'.
   pose proof
     (lets_step ids in_code (copy_state ids symbols s) s' Hrelated
        (follows_copy_statics (state_statics s) (proj2 Hinv))
@@ -1900,8 +1900,8 @@ Qed.
 Lemma copy_lets_refines_from (lets : list path) (e : expr)
     (statics : static_env) :
   binds_no_code (map snd ids) e = true ->
-  exits_plain_knowing [] [] e = true ->
-  expr_free_of_heap e = true ->
+  exits_plain_fine e = true ->
+  free_of_heap_fine e = true ->
   static_code statics = [] ->
   copy_statics ids symbols statics = statics ->
   refines (State e [] [] statics empty_heap no_reads)
@@ -1914,9 +1914,9 @@ Proof.
   apply (stuttering_heaps_refines unit_related exit_same unit_related_step).
   - intros k vs hp last vs' hp' Hexits [Hvs Halike]. split; [ exact Hvs | ].
     assert (Hempty : hp = empty_heap).
-    { apply (free_of_heap_exits_empty e statics k vs hp Hheap);
+    { apply (free_of_heap_fine_exits_empty e statics k vs hp Hheap);
         [ | exact Hexits ].
-      unfold statics_free_of_heap. rewrite Hno_code. reflexivity. }
+      intros _. unfold statics_free_of_heap. rewrite Hno_code. reflexivity. }
     subst hp. exact (heap_alike_empty _ hp' Halike).
   - split; [ | split ].
     + split.
@@ -1924,7 +1924,7 @@ Proof.
         intros id c Hlookup. rewrite Hno_code in Hlookup.
         discriminate Hlookup.
       * simpl_state. intros id _. rewrite Hno_code. reflexivity.
-    + exact (plain_from e statics empty_heap no_reads Hplain Hno_code).
+    + exact (exits_are_plain_from e statics Hplain Hno_code).
     + unfold copy_state. simpl_state. rewrite Hsame.
       apply State_copied;
         [ exists lets, root; reflexivity | apply env_copied_nil
@@ -1947,8 +1947,8 @@ Lemma copy_let_code_refines_from (copy : let_copy) (e : expr)
 Proof.
   intros Hno_code Hsame. destruct copy as [[ids symbols] [lets in_code]].
   unfold copy_let_code.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | apply refines_refl ].
-  destruct (expr_free_of_heap e) eqn:Hheap; [ | apply refines_refl ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | apply refines_refl ].
+  destruct (free_of_heap_fine e) eqn:Hheap; [ | apply refines_refl ].
   destruct (copies_apart ids) eqn:Hapart; [ | apply refines_refl ].
   cbn [andb]. unfold copy_static_code, copy_ok.
   destruct (distinct (map fst ids) && distinct (map snd ids)
@@ -2005,11 +2005,9 @@ Qed.
    path of a handler: its law is proved here by hand, with a step
    that uses it.
 
-   The first test of the rewrite, [FlambdaLiftSpec.exits_plain_knowing]
-   at nothing known, has its law stated at nothing known; that law,
-   and those of the two other tests, are in other files and are given
-   as they are. So is the law of the copy of static code, from right
-   to left. *)
+   The laws of the three tests of the rewrite are in other files and
+   are given as they are. So is the law of the copy of static code,
+   from right to left. *)
 Lemma rec_handlers_map_renamed (r : renaming)
     (f : path -> continuation_handler -> continuation_handler)
     (handlers : list (continuation * continuation_handler)) :
@@ -2038,11 +2036,7 @@ Qed.
     [ | eqv_enter l; intros ?; solve [ eqv_core ] ]
   end.
 
-Lemma exits_plain_renamed (r : renaming) (e : expr) :
-  exits_plain_knowing [] [] (rename_expr r e) = exits_plain_knowing [] [] e.
-Proof. exact (exits_plain_knowing_equivariant r [] [] e). Qed.
-
-#[local] Hint Rewrite exits_plain_renamed expr_free_of_heap_rename
+#[local] Hint Rewrite exits_plain_fine_equivariant free_of_heap_fine_rename
   binds_no_code_equivariant : equivariance.
 #[local] Hint Rewrite <- copy_expr_equivariant : equivariance.
 

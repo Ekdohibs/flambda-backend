@@ -36,7 +36,17 @@
    (FlambdaSemanticsSpec.step_heap_statement), where the defining
    expression is then no primitive of the heap and leaves the heap
    (FlambdaSemanticsSpec.exec_named_heap_statement). No fact about
-   values is used. *)
+   values is used.
+
+   For a unit that calls nothing outside the bodies of its code the
+   invariant asks nothing of code ([state_quiet]): what is still to be
+   run has no [Apply] and no primitive of the heap outside the code
+   that it binds, and so have the handlers that the continuations
+   hold; and each continuation is a way out or a handler, none what
+   is left of an over-application ([cont_quiet]). No state of such a
+   run is at an [Apply] and no continuation of it makes a call, so
+   no step enters code, and the proof is the one above with the
+   cases of a call taken out. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -351,6 +361,203 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* A unit whose own run enters no code                                      *)
+(* ======================================================================== *)
+
+Definition handler_quiet (h : continuation_handler) : Prop :=
+  handler_calls_nothing h = true
+  ∧ handler_free_of_heap_outside_code h = true.
+
+Definition handlers_quiet
+    (handlers : list (continuation * continuation_handler)) : Prop :=
+  forallb (fun '(_, h) => handler_calls_nothing h) handlers = true
+  ∧ forallb (fun '(_, h) => handler_free_of_heap_outside_code h) handlers
+    = true.
+
+Inductive cont_quiet : cont_value -> Prop :=
+  | Outer_quiet (k : continuation) : cont_quiet (Outer k)
+  | Closure_quiet (h : continuation_handler) (vars : env) (conts : cont_env)
+      (recursive : list (continuation * continuation_handler)) :
+    handler_quiet h ->
+    Forall (fun kc => cont_quiet (snd kc)) conts ->
+    handlers_quiet recursive ->
+    cont_quiet (Closure h vars conts recursive).
+
+Definition conts_quiet (conts : cont_env) : Prop :=
+  Forall (fun kc => cont_quiet (snd kc)) conts.
+
+(* What is still to be run calls nothing and has no primitive of the
+   heap, the code that it binds apart, and so have the handlers that
+   the continuations hold. Nothing is asked of the static
+   environment. *)
+Definition state_quiet (st : state) : Prop :=
+  calls_nothing (state_expr st) = true
+  ∧ expr_free_of_heap_outside_code (state_expr st) = true
+  ∧ conts_quiet (state_conts st).
+
+Lemma lookup_quiet (k : continuation) (conts : cont_env) (c : cont_value) :
+  conts_quiet conts -> lookup k conts = Some c -> cont_quiet c.
+Proof.
+  induction 1 as [ | [k' c'] conts Hc _ IH]; simpl; [ discriminate | ].
+  destruct (Pos.eqb k k'); [ intros [= <-]; exact Hc | exact IH ].
+Qed.
+
+Lemma resolve_quiet (k : continuation) (conts : cont_env) :
+  conts_quiet conts -> cont_quiet (resolve k conts).
+Proof.
+  intros Hconts. unfold resolve.
+  destruct (lookup k conts) as [c | ] eqn:Hk;
+    [ exact (lookup_quiet k conts c Hconts Hk) | apply Outer_quiet ].
+Qed.
+
+Lemma rec_closures_quiet (vars : env) (conts : cont_env)
+    (recursive : list (continuation * continuation_handler)) :
+  handlers_quiet recursive ->
+  conts_quiet conts ->
+  conts_quiet (rec_closures recursive vars conts ++ conts).
+Proof.
+  intros Hrecursive Hconts. apply Forall_app. split; [ | exact Hconts ].
+  unfold rec_closures. apply Forall_forall. intros [k c] Hin.
+  apply in_map_iff in Hin as ([k' h] & [= <- <-] & Hin). simpl.
+  apply Closure_quiet; [ | exact Hconts | exact Hrecursive ].
+  destruct Hrecursive as [Hcalls Hheap].
+  rewrite forallb_forall in Hcalls. rewrite forallb_forall in Hheap.
+  split; [ exact (Hcalls (k', h) Hin) | exact (Hheap (k', h) Hin) ].
+Qed.
+
+Lemma apply_cont_value_quiet (c : cont_value) :
+  cont_quiet c ->
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record)
+    (st : state),
+    apply_cont_value c vs statics hp rd = Step st ->
+    state_quiet st.
+Proof.
+  intros Hc.
+  destruct Hc
+    as [ k | [params metadata handler] dvars dconts recursive [Hcalls Hheap]
+             Hdconts Hrecursive ];
+    intros vs statics hp rd st.
+  - discriminate.
+  - simpl.
+    destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (bind_params params vs dvars) as [bound | ]; [ | discriminate ].
+    intros [= <-].
+    split; [ exact Hcalls | ]. split; [ exact Hheap | ].
+    apply rec_closures_quiet; assumption.
+Qed.
+
+Lemma quiet_step_components (e : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) (st : state) :
+  calls_nothing e = true ->
+  expr_free_of_heap_outside_code e = true ->
+  conts_quiet conts ->
+  step (State e vars conts statics hp rd) = Step st ->
+  state_quiet st.
+Proof.
+  intros Hcalls Hheap Hconts.
+  destruct e
+    as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    simpl in Hcalls, Hheap.
+  - (* Let *)
+    apply andb_true_iff in Hheap as [_ Hbody]. rewrite step_let_exec.
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+      [ | discriminate ].
+    destruct (kind_eqb (kind_of_value v) xkind); [ | discriminate ].
+    intros [= <-]. split; [ exact Hcalls | split; assumption ].
+  - (* Let_static *)
+    rewrite step_let_static.
+    destruct (eval_static_bindings vars bindings statics) as [extended | ];
+      [ | discriminate ].
+    intros [= <-]. split; [ exact Hcalls | split; assumption ].
+  - (* Let_cont_non_recursive *)
+    apply andb_true_iff in Hcalls as [Hhcalls Hbcalls].
+    apply andb_true_iff in Hheap as [Hhheap Hbheap].
+    rewrite step_let_cont_non_recursive. intros [= <-].
+    split; [ exact Hbcalls | ]. split; [ exact Hbheap | ].
+    constructor; [ | exact Hconts ]. simpl.
+    apply Closure_quiet;
+      [ split; assumption | exact Hconts | split; reflexivity ].
+  - (* Let_cont_recursive *)
+    apply andb_true_iff in Hcalls as [Hhcalls Hbcalls].
+    apply andb_true_iff in Hheap as [Hhheap Hbheap].
+    rewrite step_let_cont_recursive.
+    destruct (handlers_bind_statics handlers); [ discriminate | ].
+    intros [= <-].
+    split; [ exact Hbcalls | ]. split; [ exact Hbheap | ].
+    apply rec_closures_quiet; [ split; assumption | exact Hconts ].
+  - (* Apply: there is none *)
+    discriminate Hcalls.
+  - (* Apply_cont *)
+    rewrite step_apply_cont.
+    destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | discriminate ].
+    unfold apply_continuation.
+    exact (apply_cont_value_quiet _
+             (resolve_quiet (ac_continuation ac) conts Hconts) _ _ _ _ _).
+  - (* Switch *)
+    rewrite step_switch.
+    destruct (eval_simple vars scrutinee) as [v | ]; [ | discriminate ].
+    destruct (naked_immediate_of_value v) as [i | ]; [ | discriminate ].
+    destruct (find_arm i arms) as [ac | ]; [ | discriminate ].
+    intros [= <-]. split; [ reflexivity | split; [ reflexivity | assumption ] ].
+  - (* Invalid *)
+    rewrite step_invalid. discriminate.
+Qed.
+
+(* A step keeps the invariant, and the heap. *)
+Lemma quiet_step (st st' : state) :
+  state_quiet st ->
+  step st = Step st' ->
+  state_quiet st' ∧ state_heap st' = state_heap st.
+Proof.
+  intros (Hcalls & Hheap & Hconts) Hstep. split.
+  - revert Hstep. rewrite (state_eta st).
+    exact (quiet_step_components _ _ _ _ _ _ st' Hcalls Hheap Hconts).
+  - destruct (step_heap st st' Hstep)
+      as [Hsame | (x & kind & d & body & v & Hexpr & Hexec)];
+      [ exact Hsame | ].
+    rewrite Hexpr in Hheap. simpl in Hheap.
+    apply andb_true_iff in Hheap as [Hd _]. apply negb_true_iff in Hd.
+    refine (exec_named_heap _ _ _ _ _ _ _ _ _ Hexec).
+    intros q args ->. discriminate Hd.
+Qed.
+
+(* So an exit of the run has the heap that the run started from. *)
+Lemma quiet_run_exit (n : nat) :
+  ∀ (st : state) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    state_quiet st -> run n st = Exit k vs hp rd -> hp = state_heap st.
+Proof.
+  induction n as [ | n IH]; intros st k vs hp rd Hquiet; simpl;
+    [ discriminate | ].
+  destruct (step st) as [t | k' vs' hp' rd' | ] eqn:Hstep;
+    [ | | discriminate ].
+  - destruct (quiet_step st t Hquiet Hstep) as [Hquiet' Hheap].
+    intros Hexit. rewrite <- Hheap. exact (IH t k vs hp rd Hquiet' Hexit).
+  - intros [= <- <- <- <-]. exact (step_exit_heap st k' vs' hp' rd' Hstep).
+Qed.
+
+Theorem calls_nothing_exits_empty : calls_nothing_exits_empty_statement.
+Proof.
+  intros e statics k vs hp Hcalls Hheap [n [rd Hn]].
+  refine (quiet_run_exit n _ k vs hp rd _ Hn).
+  split; [ exact Hcalls | ]. split; [ exact Hheap | constructor ].
+Qed.
+
+Theorem free_of_heap_fine_exits_empty :
+  free_of_heap_fine_exits_empty_statement.
+Proof.
+  intros e statics k vs hp Hfine Hstatics Hrun.
+  unfold free_of_heap_fine in Hfine.
+  destruct (expr_free_of_heap e) eqn:He.
+  - exact (free_of_heap_exits_empty e statics k vs hp He (Hstatics eq_refl)
+             Hrun).
+  - simpl in Hfine. apply andb_true_iff in Hfine as [Hcalls Hheap].
+    exact (calls_nothing_exits_empty e statics k vs hp Hcalls Hheap Hrun).
+Qed.
+
+(* ======================================================================== *)
 (* Renaming                                                                 *)
 (* ======================================================================== *)
 
@@ -358,3 +565,18 @@ Qed.
    (FlambdaEquivarianceTactic.v). *)
 Theorem expr_free_of_heap_rename : expr_free_of_heap_rename_statement.
 Proof. equivariance. Qed.
+
+Theorem calls_nothing_rename : calls_nothing_rename_statement.
+Proof. equivariance. Qed.
+
+Theorem expr_free_of_heap_outside_code_rename :
+  expr_free_of_heap_outside_code_rename_statement.
+Proof. equivariance. Qed.
+
+Theorem free_of_heap_fine_rename : free_of_heap_fine_rename_statement.
+Proof.
+  intros r e. unfold free_of_heap_fine.
+  rewrite expr_free_of_heap_rename, calls_nothing_rename,
+    expr_free_of_heap_outside_code_rename.
+  reflexivity.
+Qed.

@@ -52,9 +52,9 @@
 
    The second run is that of a well-formed unit, so it never binds a
    symbol twice (FlambdaWellFormedProofs.well_formed_never_faults).
-   That the values at the exit are equal is from the invariant of the
-   first run that FlambdaLiftProofs.v has for the check of the exits
-   ([plain_state]).
+   That the values at the exit are equal is from what
+   FlambdaLiftProofs.v has of the first run for the check of the exits
+   ([exits_are_plain]).
 
    The two runs may start from a continuation environment of what may
    follow a unit (FlambdaObserversSpec.observers), the empty one for
@@ -2017,7 +2017,7 @@ Hypothesis Hfree :
 (* The states are related, the second is reached, and the first is one
    of a unit that exits with symbols and constants only. *)
 Definition unit_lifted_out_plain (s s' : state) : Prop :=
-  unit_lifted_out e statics0 hp0 rd0 [] s s' ∧ plain_state s.
+  unit_lifted_out e statics0 hp0 rd0 [] s s' ∧ exits_are_plain s.
 
 (* The values at an exit are lifted, and are constants and symbols: they
    are the same. *)
@@ -2030,7 +2030,7 @@ Proof.
     (unit_lifted_out_step u e statics0 hp0 rd0 [] Hwf Hno_code Hfree
        (Forall_nil _) s s' Hlifted)
     as Hanswer.
-  pose proof (plain_step s Hplain) as Hstep.
+  pose proof (exits_are_plain_step s Hplain) as Hstep.
   destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
     [ | | exact I ].
   - destruct Hanswer as (m & t' & Hrun & Ht).
@@ -2041,10 +2041,10 @@ Proof.
 Qed.
 
 (* The unit rewritten refines the unit, the two run from that static
-   environment and that heap, if the unit exits with the empty heap
-   only. *)
+   environment and that heap, if the unit exits with constants and
+   symbols only, and with the empty heap only. *)
 Lemma unit_lifted_out_refines :
-  exits_plain_knowing [] [] e = true ->
+  exits_are_plain (State e [] [] statics0 hp0 rd0) ->
   (∀ (k : continuation) (vs : list value) (hp : heap),
     behaves (State e [] [] statics0 hp0 rd0) (Exits k vs hp) ->
     hp = empty_heap) ->
@@ -2062,7 +2062,7 @@ Proof.
   - split;
       [ exact (unit_lifted_out_initial e statics0 hp0 rd0 [] Hno_code
                  (Forall_nil _))
-      | exact (plain_from e statics0 hp0 rd0 Hplain Hno_code) ].
+      | exact Hplain ].
 Qed.
 
 End Unit_refines.
@@ -2073,33 +2073,35 @@ Theorem lift_from_code_unit_program_refines :
   lift_from_code_unit_program_refines_statement.
 Proof.
   intros u K e e'. unfold lift_from_code_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (well_formed_unit u (lift_from_code K [] root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
   exact (unit_lifted_out_refines K u e empty_static_env empty_heap no_reads Hwf
-           eq_refl (free_in_empty _) Hplain
+           eq_refl (free_in_empty _)
+           (exits_are_plain_from e empty_static_env Hplain eq_refl)
            (fun k vs hp =>
-              free_of_heap_exits_empty e empty_static_env k vs hp Hheap_free
-                eq_refl)).
+              free_of_heap_fine_exits_empty e empty_static_env k vs hp
+                Hheap_free (fun _ => eq_refl))).
 Qed.
 
 Theorem lift_from_code_unit_refines_imports :
   lift_from_code_unit_refines_imports_statement.
 Proof.
   intros imports u K e e'. unfold lift_from_code_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (well_formed_unit u (lift_from_code K [] root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-] Hfree. unfold unit_refines.
   exact
     (unit_lifted_out_refines K u e (imports_statics imports) empty_heap no_reads
-       Hwf eq_refl Hfree Hplain
+       Hwf eq_refl Hfree
+       (exits_are_plain_from e (imports_statics imports) Hplain eq_refl)
        (fun k vs hp =>
-          free_of_heap_exits_empty e (imports_statics imports) k vs hp
-            Hheap_free eq_refl)).
+          free_of_heap_fine_exits_empty e (imports_statics imports) k vs hp
+            Hheap_free (fun _ => eq_refl))).
 Qed.
 
 (* ======================================================================== *)

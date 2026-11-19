@@ -1075,8 +1075,8 @@ the term, `without_slots` and `with_known`, each an equation
 `with_known_equivariant_statement`).
 The test of the exits that `FlambdaLiftSpec.lift_unit` makes reads
 names and makes none. `exits_plain` asks that a variable is given only
-to a continuation in scope; `exits_plain_knowing`, which is the test
-that `lift_unit` makes, allows as well a variable known to hold a
+to a continuation in scope; `exits_plain_knowing` allows as well a
+variable known to hold a
 symbol or a constant: a parameter of a non-recursive handler that
 every way of reaching the handler gives a symbol, a constant or such a
 variable. It keeps the variables known and takes one away at a `Let`
@@ -1092,23 +1092,41 @@ renamed with it, what it answers of the term
 (`exits_plain_equivariant_statement`,
 `exits_plain_knowing_equivariant_statement`, in `FlambdaLiftSpec.v`);
 nothing is stated of two terms that are the same up to their bound
-names.
+names. The test that `lift_unit` makes, `exits_plain_fine`, is
+`exits_plain_knowing` with nothing in scope and nothing known, or, of
+a term that has no `Apply` outside the bodies of its code
+(`FlambdaHeapFreeSpec.calls_nothing`), the same of the term with
+`Invalid` for the body of each piece of code that it binds (`strip`;
+decision D65). `strip` reads no name and makes
+none, and commutes with every renaming by an equation; the names that
+occur only in the bodies that it takes out are not in what it
+returns, which is given to the test and to nothing else. The test
+answers of a term renamed what it answers of the term
+(`strip_equivariant_statement`,
+`exits_plain_fine_equivariant_statement`); of it too, nothing is
+stated of two terms that are the same up to their bound names.
 Each of the four functions that make a lifting of a unit (`lift_unit`,
 `FlambdaLiftFromCodeSpec.lift_from_code_unit`,
 `FlambdaLiftFromArmsSpec.lift_to_head_unit`,
 `FlambdaLiftAroundSpec.lift_around_unit`) has one test more, after
-that of the exits: it lifts nothing in the term that it is given if
-that term has a primitive of the heap in a `Let` of the term, of a
-handler or of code, code that no run reaches included
-(`FlambdaHeapFreeSpec.expr_free_of_heap`; a primitive of the heap is
+that of the exits: it lifts nothing in the term that it is given
+unless that term passes `FlambdaHeapFreeSpec.free_of_heap_fine`: the
+term has no primitive of the heap in a `Let` of the term, of a
+handler or of code (`expr_free_of_heap`; a primitive of the heap is
 one of the four that allocate or store,
 `FlambdaHeapSpec.named_changes_heap`, and a primitive that only reads
-a cell is not refused). It is the guard that the liftings have for
+a cell is not refused), or it has none outside the bodies of its code
+and no `Apply` outside them (`expr_free_of_heap_outside_code`,
+`calls_nothing`; decision D65).
+It is the guard that the liftings have for
 now: a limit of them pending decision D40, and not a property that a
 unit is meant to have. It is not a condition of the rewrites
-themselves. The test looks at no name, and answers of a term renamed
-what it answers of the term (`expr_free_of_heap_rename_statement`, in
-its own file). The statements under renaming of the four files are of
+themselves. The tests look at no name, and answer of a term renamed
+what they answer of the term (`expr_free_of_heap_rename_statement`,
+`calls_nothing_rename_statement`,
+`expr_free_of_heap_outside_code_rename_statement`,
+`free_of_heap_fine_rename_statement`, in
+their own file). The statements under renaming of the four files are of
 the rewrites and of the tests of the exits, name none of the four
 functions, and keep their text; those of what calls the four functions
 (`FlambdaValidatorEquivarianceSpec.v`,
@@ -1733,7 +1751,7 @@ told by where it stands, so the pass makes no name and names no
 variable and no continuation; it is the identity unless the term that
 it is given passes the two tests that a lifting to a symbol makes,
 that of the exits and that of the primitives of the heap
-(`exits_plain_knowing`, `expr_free_of_heap`), no code id that is given
+(`exits_plain_fine`, `free_of_heap_fine`), no code id that is given
 a copy is among the new ones (`copies_apart`), and the check of the
 copy for static sets passes; those two tests answer of a term renamed
 what they answer of the term, and the rewrite and the copies in turn

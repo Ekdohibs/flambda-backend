@@ -30,6 +30,7 @@
 
    This file is to be reviewed: [lift_named] and [lift_expr], against
    what Simplify does (below); [exits_plain] and [exits_plain_knowing];
+   [strip] and [exits_plain_fine], with the CR at the last;
    [lift_unit], which is extracted and run by the validation of
    middle_end/flambda2/tests/semantics/; the relation [value_lifted];
    and the statements.
@@ -156,19 +157,24 @@
      given one symbol, are refused by it. The second is that the term
      lifted makes one closure only, the symbol, of each code in which
      [my_closure] was bound to a symbol.
-   - [lift_unit_program_refines_statement]: if moreover the term gives
-     only symbols and constants to the continuations it may leave
-     through ([exits_plain_knowing]) and has no primitive of the heap
-     (FlambdaHeapFreeSpec.expr_free_of_heap), the values at the exit
-     are equal, the two heaps are empty, and the term lifted refines
-     the term, run on its own
-     (FlambdaUnusedStaticsSpec.program_refines). [lift_unit] checks
-     these, and this is the statement that
+   - [lift_unit_program_refines_statement]: if moreover the term
+     passes the test of the exits ([exits_plain_fine]: it gives only
+     symbols and constants to the continuations it may leave through,
+     [exits_plain_knowing], or it calls nothing outside the bodies of
+     its code and gives only those to the continuations that it may
+     leave through outside them) and the guard of the heap
+     (FlambdaHeapFreeSpec.free_of_heap_fine: it has no primitive of
+     the heap, or none outside the bodies of its code where it calls
+     nothing outside them), the values at the exit are equal, the two
+     heaps are empty, and the term lifted refines the term, run on its
+     own (FlambdaUnusedStaticsSpec.program_refines). [lift_unit]
+     checks these, and this is the statement that
      FlambdaValidateSpec.validate_unit uses. A unit made from an OCaml
      source returns the symbol of its module block, which the first
      allows; whether it passes the first depends on its other exits
-     and on its code too (the CR at [exits_plain]). The second is a
-     limit, and not a condition of the lifting (the CR at
+     and, where it calls something outside its code, on its code too
+     (the CRs at [exits_plain] and at [exits_plain_fine]). The second
+     is a limit, and not a condition of the lifting (the CR at
      [lift_unit]).
 
    [exits_plain] is a check on a term, with a statement of its own
@@ -180,8 +186,9 @@
    continuation of code included, may be the way out of the unit, and
    is given symbols and constants only.
 
-   [exits_plain_knowing] is the check that [lift_unit] makes. It is
-   [exits_plain] with one more thing counted as a symbol or a constant:
+   [exits_plain_knowing] is the first half of the check that
+   [lift_unit] makes. It is [exits_plain] with one more thing counted
+   as a symbol or a constant:
    a variable known to hold one, which is a parameter of a
    non-recursive handler that every way of reaching the handler gives
    a symbol, a constant or such a variable ([params_known], [spoils]).
@@ -191,6 +198,31 @@
    environment whose code passes the check
    [exits_plain_knowing_sound_from_statement]), and it accepts whatever
    [exits_plain] accepts ([exits_plain_knowing_accepts_statement]).
+
+   [exits_plain_fine] is the check that [lift_unit] makes:
+   [exits_plain_knowing], or, of a unit that has no [Apply] outside the
+   bodies of its code (FlambdaHeapFreeSpec.calls_nothing),
+   [exits_plain_knowing] of the unit with the bodies of its code taken
+   out ([strip]: the body of each piece of code that the unit binds is
+   [Invalid]). Code whose body is [Invalid] passes the test, and what
+   the test knows of the parameters of the handlers of the unit does
+   not come from static bindings ([spoils]), so that is the test with
+   every binding of code counted as passing. [strip] is for the test
+   only: what a lifting rewrites is the unit, and not the unit
+   stripped. From the first state of the unit, with no continuation
+   given, the first entry into code needs an [Apply] (an [Apply_cont]
+   enters code only through what is left of an over-application,
+   FlambdaSemanticsSpec.apply_cont_value, which a call makes): the
+   run of such a unit enters no code, and what code gives its
+   exception continuation reaches no exit of that run. It has the
+   same statement
+   ([exits_plain_fine_sound_statement]; from a static environment,
+   [exits_plain_fine_sound_from_statement]; and of a unit that calls
+   nothing, from any static environment,
+   [calls_nothing_exits_plain_statement]). What it gives away is not
+   in those statements, and is said at its definition: decision D65
+   (yes, provisionally, by the human on 18 November 2026; to be come
+   back to).
 
    What neither check says. The machine has no step for a call of code
    that neither the term nor the static environment it is run from
@@ -211,9 +243,10 @@
      two [Let]s cannot be given the same symbol; the two files just
      named put one binding for two [Let]s of one constant that are
      lifted out of one body (FlambdaLiftFromCodeSpec.once_each);
-   - a unit that gives its return continuation, or raises in code, a
-     variable that is not known to hold a symbol or a constant: see
-     the CR at [exits_plain].
+   - a unit that gives its return continuation a variable that is not
+     known to hold a symbol or a constant, or that raises one in code
+     where the unit has a call outside the bodies of its code: see
+     the CRs at [exits_plain] and at [exits_plain_fine].
 
    Identity. The model's [Make_block] is the immutable one
    (FlambdaPrimitiveModel.v) and its values have no identity, so nothing
@@ -438,7 +471,10 @@ Definition apply_cont_exits_plain (scope : list continuation)
    design of the heap), the check would go and
    [lift_simulates_statement] would be the whole statement.
    [exits_plain_knowing] below refuses fewer: it accepts such a variable
-   where it is known to hold a symbol or a constant. *)
+   where it is known to hold a symbol or a constant. [exits_plain_fine],
+   which is what [lift_unit] asks, refuses fewer still: it does not
+   look into the code of a unit that calls nothing outside the bodies
+   of its code (the CR there). *)
 
 (* The expression gives a variable only to continuations of [scope], and
    every call in it returns to one. The exceptions of a call go to its
@@ -759,6 +795,124 @@ Definition exits_plain_knowing_accepts_statement : Prop :=
     exits_plain scope e = true -> exits_plain_knowing scope plain e = true.
 
 (* ======================================================================== *)
+(* What a unit may exit with, where its own run enters no code              *)
+(* ======================================================================== *)
+
+(* The code with [Invalid] for its body: its parameters, its closure
+   variable, the names of its two continuations and its metadata are
+   as they were. *)
+Definition strip_code (c : code) : code :=
+  match c with
+  | Code params my_closure ret exn metadata _ =>
+    Code params my_closure ret exn metadata Invalid
+  end.
+
+Definition strip_binding (binding : static_binding) : static_binding :=
+  match binding with
+  | Bind_code id c => Bind_code id (strip_code c)
+  | Bind_deleted_code id => Bind_deleted_code id
+  | Bind_symbol s const => Bind_symbol s const
+  end.
+
+(* The expression with the bodies of its code taken out: every piece
+   of code that a [Let_static] of the expression binds, in a handler
+   too, has [Invalid] for its body. Nothing else is changed. *)
+Fixpoint strip (e : expr) : expr :=
+  match e with
+  | Let x kind d body => Let x kind d (strip body)
+  | Let_static bindings body =>
+    Let_static (map strip_binding bindings) (strip body)
+  | Let_cont_non_recursive k h body =>
+    Let_cont_non_recursive k (strip_handler h) (strip body)
+  | Let_cont_recursive handlers body =>
+    Let_cont_recursive (map (fun '(k, h) => (k, strip_handler h)) handlers)
+      (strip body)
+  | Apply ap => Apply ap
+  | Apply_cont ac => Apply_cont ac
+  | Switch scrutinee arms => Switch scrutinee arms
+  | Invalid => Invalid
+  end
+with strip_handler (h : continuation_handler) : continuation_handler :=
+  match h with
+  | Handler params metadata handler => Handler params metadata (strip handler)
+  end.
+
+(* CR mshinwell: [exits_plain_fine] accepts a unit in which code gives
+   its exception continuation a variable (a function that raises a
+   block which it makes), where the unit has no [Apply] outside the
+   bodies of its code. Its statement is true
+   ([exits_plain_fine_sound_statement]): the run of such a unit enters
+   no code, so no exit of code is an exit of that run. What is given
+   away is not in the statement. The statements of the liftings are of
+   the unit's own run, and for a unit whose run enters no code they
+   say nothing of the bodies of its functions, with this test or with
+   the one before it. [exits_plain_knowing] is of the text of all the
+   code of the unit, entered or not: with it a lifting is made, and a
+   verdict may rest on it, only in a unit whose code passes the test
+   ([code_exits_plain_knowing]). The finer test asks that only of a
+   unit that has an [Apply] outside the bodies of its code. So a
+   module of a library that has none, and passes the test outside
+   those bodies, passes it though its functions raise blocks that
+   they make; where the other checks of a lifting pass it may be
+   lifted, and a verdict may rest on that lifting, on a run that
+   calls none of those functions. What the validation then has of
+   the bodies of its functions is that the two terms, bodies
+   included, are the same once its rewrites are made, each of which
+   has its own statement; that is no theorem about a call of them.
+   The other answers: to keep [exits_plain_knowing] as the test,
+   when no such lifting is made and a pair that needs it stays not
+   validated unless another comparison succeeds, with the second
+   check of FlambdaValidateRelatedSpec.v for what it accepts
+   (decision D43); or to compare the values of two exits up to the
+   lifting, when the test goes altogether (the CR at [exits_plain]).
+   Decision D65: yes, provisionally, by the human on 18 November
+   2026; to be come back to. *)
+
+(* The test that the liftings ask: [exits_plain_knowing], or, of a
+   unit that calls nothing outside the bodies of its code, the same
+   test of the unit with those bodies taken out. *)
+Definition exits_plain_fine (e : expr) : bool :=
+  exits_plain_knowing [] [] e
+  || (calls_nothing e && exits_plain_knowing [] [] (strip e)).
+
+(* A unit that calls nothing outside the bodies of its code and passes
+   the test with those bodies taken out, run on its own from any
+   static environment, exits with symbols and constants only: nothing
+   is asked of the code that the unit or the static environment
+   binds. *)
+Definition calls_nothing_exits_plain_statement : Prop :=
+  ∀ (statics : static_env) (e : expr) (n : nat) (k : continuation)
+    (vs : list value) (hp : heap) (rd : read_record),
+    calls_nothing e = true ->
+    exits_plain_knowing [] [] (strip e) = true ->
+    run n (State e [] [] statics empty_heap no_reads) = Exit k vs hp rd ->
+    ∀ v : value, v ∈ vs -> plain_value v.
+
+(* [exits_plain_knowing_sound_statement], word for word but for the
+   test. *)
+Definition exits_plain_fine_sound_statement : Prop :=
+  ∀ (e : expr) (n : nat) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    exits_plain_fine e = true ->
+    run n (State e [] [] empty_static_env empty_heap no_reads) = Exit k vs hp rd
+      ->
+    ∀ v : value, v ∈ vs -> plain_value v.
+
+(* The same from a static environment. Its code is asked to pass the
+   test only where the unit passes by [exits_plain_knowing]; a unit
+   that passes only by calling nothing needs nothing of it. *)
+Definition exits_plain_fine_sound_from_statement : Prop :=
+  ∀ (statics : static_env) (e : expr) (n : nat) (k : continuation)
+    (vs : list value) (hp : heap) (rd : read_record),
+    (exits_plain_knowing [] [] e = true ->
+     ∀ (id : code_id) (c : code),
+       lookup id (static_code statics) = Some c ->
+       code_exits_plain_knowing c = true) ->
+    exits_plain_fine e = true ->
+    run n (State e [] [] statics empty_heap no_reads) = Exit k vs hp rd ->
+    ∀ v : value, v ∈ vs -> plain_value v.
+
+(* ======================================================================== *)
 (* The check                                                                *)
 (* ======================================================================== *)
 
@@ -769,18 +923,23 @@ Definition exits_plain_knowing_accepts_statement : Prop :=
    to it, and FlambdaSemanticsSpec.refines compares the heaps of two
    exits by equality. What two exits are to be compared by is decision
    D40, which is not taken. For now, nothing is lifted in a unit given
-   to [lift_unit] that has a primitive of the heap anywhere, in a
-   function that no run calls too. The three other liftings have the
-   same guard (FlambdaLiftFromArmsSpec.lift_to_head_unit,
+   to [lift_unit] that does not pass
+   FlambdaHeapFreeSpec.free_of_heap_fine: one that has a primitive of
+   the heap anywhere, unless it has none outside the bodies of its
+   code and calls nothing outside them, when its run enters no code
+   (decision D65, with the CR at that guard). The three other liftings
+   have the same guard (FlambdaLiftFromArmsSpec.lift_to_head_unit,
    FlambdaLiftFromCodeSpec.lift_from_code_unit,
    FlambdaLiftAroundSpec.lift_around_unit). Nothing here justifies
-   removing the guard or weakening it while the heaps of two exits
-   are compared by equality: a finer guard would need a proof of its
-   own and a measure of the units that it turns. With two exits
-   compared up to a relation of their heaps that holds of a unit and
-   the unit lifted the guard would go, as [exits_plain_knowing] would
-   with their values so compared (the CR at [exits_plain]); that is
-   one way for it to go, and is not said to be the only one.
+   removing the guard while the heaps of two exits are compared by
+   equality; the finer guard has a proof of its own
+   (FlambdaHeapFreeSpec.calls_nothing_exits_empty_statement), and the
+   measure of the units that it turns is in
+   requests/C3-finer-guards.md. With two exits compared up to a
+   relation of their heaps that holds of a unit and the unit lifted
+   the guard would go, as [exits_plain_knowing] would with their
+   values so compared (the CR at [exits_plain]); that is one way for
+   it to go, and is not said to be the only one.
 
    What the guard costs, as another stream measured it on the branch
    that puts the ports of the exchange together, with a tool whose
@@ -801,17 +960,18 @@ Definition exits_plain_knowing_accepts_statement : Prop :=
 
 (* The unit with the [Let]s of the guess lifted and, in the code that
    the guess names, [my_closure] bound to the symbol given: if the unit
-   exits with symbols and constants only and has no primitive of the
-   heap, the result is a well-formed unit, and it makes no closure of
-   that code but the symbol. *)
+   passes the test of the exits ([exits_plain_fine]) and the guard of
+   the heap (FlambdaHeapFreeSpec.free_of_heap_fine), the result is a
+   well-formed unit, and it makes no closure of that code but the
+   symbol. *)
 Definition lift_unit (L : lifting) (e : expr) : option expr :=
   let lifted :=
     bind_my_closures (lifted_my_closures L)
       (lift_expr (lifted_lets L) root e)
   in
   if
-    exits_plain_knowing [] [] e
-    && expr_free_of_heap e
+    exits_plain_fine e
+    && free_of_heap_fine e
     && well_formed_unit (lifting_unit L) lifted
     && only_closures_of (lifted_my_closures L) lifted
   then Some lifted
@@ -1020,3 +1180,14 @@ Definition exits_plain_knowing_equivariant_statement : Prop :=
     exits_plain_knowing (map (rename_continuation r) scope)
       (map (rename_variable r) plain) (rename_expr r e)
     = exits_plain_knowing scope plain e.
+
+(* Taking the bodies of code out commutes with renaming, and the test
+   that the liftings ask answers of a term renamed what it answers of
+   the term. *)
+Definition strip_equivariant_statement : Prop :=
+  ∀ (r : renaming) (e : expr),
+    strip (rename_expr r e) = rename_expr r (strip e).
+
+Definition exits_plain_fine_equivariant_statement : Prop :=
+  ∀ (r : renaming) (e : expr),
+    exits_plain_fine (rename_expr r e) = exits_plain_fine e.

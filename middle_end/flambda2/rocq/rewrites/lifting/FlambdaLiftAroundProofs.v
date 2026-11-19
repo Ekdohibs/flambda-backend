@@ -47,9 +47,9 @@
    symbol twice (FlambdaWellFormedProofs.well_formed_never_faults) and
    reads no variable that has no value
    (FlambdaWellFormedProofs.well_formed_names_bound), so a group that is
-   put is evaluated. That the values at the exit are equal is from the
-   invariant of the first run that FlambdaLiftProofs.v has for the
-   check of the exits ([plain_state]).
+   put is evaluated. That the values at the exit are equal is from
+   what FlambdaLiftProofs.v has of the first run for the check of the
+   exits ([exits_are_plain]).
 
    Without the test of the exits (FlambdaLiftObservedSpec.v), the two
    runs are not started from what may follow a unit: such a term may
@@ -156,8 +156,8 @@ Proof.
   unfold lift_around_unit, groups_of. cbn [map]. cbv zeta.
   rewrite (lift_around_nothing root e).
   destruct
-    (exits_plain_knowing [] [] e
-     && expr_free_of_heap e
+    (exits_plain_fine e
+     && free_of_heap_fine e
      && around_ok [] [] [] root e
      && well_formed_unit u e);
     reflexivity.
@@ -1674,7 +1674,7 @@ Hypothesis Hfree :
 (* The states are related, the second is reached, and the first is one
    of a unit that exits with symbols and constants only. *)
 Definition unit_around_plain (s s' : state) : Prop :=
-  unit_around lets groups e statics0 hp0 rd0 s s' ∧ plain_state s.
+  unit_around lets groups e statics0 hp0 rd0 s s' ∧ exits_are_plain s.
 
 (* The values at an exit are lifted, and are constants and symbols: they
    are the same. *)
@@ -1687,7 +1687,7 @@ Proof.
     (unit_around_step u lets groups e statics0 hp0 rd0 Hwf Hno_code Hfree s s'
        Hrelated)
     as Hanswer.
-  pose proof (plain_step s Hplain) as Hstep.
+  pose proof (exits_are_plain_step s Hplain) as Hstep.
   destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
     [ | | exact I ].
   - destruct Hanswer as (m & t' & Hrun & Ht).
@@ -1698,10 +1698,10 @@ Proof.
 Qed.
 
 (* The unit rewritten refines the unit, the two run from that static
-   environment and that heap, if the unit exits with the empty heap
-   only. *)
+   environment and that heap, if the unit exits with constants and
+   symbols only, and with the empty heap only. *)
 Lemma unit_around_refines :
-  exits_plain_knowing [] [] e = true ->
+  exits_are_plain (State e [] [] statics0 hp0 rd0) ->
   (∀ (k : continuation) (vs : list value) (hp : heap),
     behaves (State e [] [] statics0 hp0 rd0) (Exits k vs hp) ->
     hp = empty_heap) ->
@@ -1718,7 +1718,7 @@ Proof.
     exact (heap_alike_empty _ hp' Hheap).
   - split;
       [ exact (unit_around_initial lets groups e statics0 hp0 rd0 Hok Hno_code)
-      | exact (plain_from e statics0 hp0 rd0 Hplain Hno_code) ].
+      | exact Hplain ].
 Qed.
 
 End Unit_refines.
@@ -1728,18 +1728,19 @@ Theorem lift_around_unit_program_refines :
 Proof.
   intros u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
   exact
     (unit_around_refines u lets groups e empty_static_env empty_heap no_reads
-       Hwf Hok eq_refl (free_in_empty _) Hplain
+       Hwf Hok eq_refl (free_in_empty _)
+       (exits_are_plain_from e empty_static_env Hplain eq_refl)
        (fun k vs hp =>
-          free_of_heap_exits_empty e empty_static_env k vs hp Hheap_free
-            eq_refl)).
+          free_of_heap_fine_exits_empty e empty_static_env k vs hp Hheap_free
+            (fun _ => eq_refl))).
 Qed.
 
 Theorem lift_around_unit_refines_imports :
@@ -1747,17 +1748,18 @@ Theorem lift_around_unit_refines_imports :
 Proof.
   intros imports u lets places e e'. unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (around_ok lets groups [] root e) eqn:Hok; [ | discriminate ].
   destruct (well_formed_unit u (lift_around lets groups root e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-] Hfree. unfold unit_refines.
   exact (unit_around_refines u lets groups e (imports_statics imports)
-           empty_heap no_reads Hwf Hok eq_refl Hfree Hplain
+           empty_heap no_reads Hwf Hok eq_refl Hfree
+           (exits_are_plain_from e (imports_statics imports) Hplain eq_refl)
            (fun k vs hp =>
-              free_of_heap_exits_empty e (imports_statics imports) k vs hp
-                Hheap_free eq_refl)).
+              free_of_heap_fine_exits_empty e (imports_statics imports) k vs hp
+                Hheap_free (fun _ => eq_refl))).
 Qed.
 
 (* ======================================================================== *)

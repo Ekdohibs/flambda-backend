@@ -699,9 +699,40 @@ a `CR` at the place in the `Spec` file.
   of terms leaves out", *A pause*), and the `CR` is at the case of
   the conversion. Decided provisionally by the team while the human
   was away, with the conversion and not before it; his to overrule.
-- **D65.** Whether the guards of a lifting need look inside the
-  functions of a unit that has no call outside them. Meanwhile they do.
-  Open: the human's.
+- **D65.** In a unit that has no `Apply` outside the bodies of its
+  code, the two tests of a lifting look outside those bodies only.
+  Yes, provisionally, by the human on 18 November 2026; to be come
+  back to. Each of the four liftings, and the copy of code for a set
+  of closures that a `Let` makes
+  (`FlambdaCopyLetsSpec.copy_let_code`), is made only in a unit that
+  passes a test of its exits and a guard of the heap (D40, D43). Both
+  looked into the bodies of the unit's code
+  (`FlambdaLiftSpec.exits_plain_knowing`,
+  `FlambdaHeapFreeSpec.expr_free_of_heap`): code that raises a block
+  which it makes, or that has a primitive of the heap, kept every
+  such lifting from its unit. The five functions ask finer tests
+  (`FlambdaLiftSpec.exits_plain_fine`,
+  `FlambdaHeapFreeSpec.free_of_heap_fine`): a unit that has no
+  `Apply` outside the bodies of its code, so that its own run enters
+  none of them, is tested outside those bodies only. Their statements
+  keep their text and are proved. What is given away is in no
+  statement: the statement of a verdict that rests on a lifting is of
+  the unit's own run, and for such a unit it says nothing of the
+  bodies of its functions; the tests of before, which are of the text
+  of all the code of a unit, entered or not, kept a lifting, and a
+  verdict that rests on one, from a unit whose code fails them. With
+  the finer tests a module of a library that calls nothing outside
+  its code can pass though its functions raise what they make or
+  store; where the other checks of a lifting pass it may be lifted,
+  and a verdict may rest on that lifting, on a run that calls none of
+  its functions. The finer tests are not the conservative side. The
+  other answers were: the tests as they were, when no such lifting is
+  made and a pair that needs it stays not validated unless another
+  comparison succeeds (with the second check of D43 for what that
+  accepts); or to wait for a statement about the functions of a unit
+  under every caller. `requests/C3-finer-guards.md` has the measure,
+  and a `CR` at each of the two finer tests says what a verdict that
+  rests on them does not say.
 - **D66.** The bit pattern of a NaN is not guaranteed to be preserved.
   Ruled (18 November 2026); not yet in the tree. Open: whether a run
   that observes those bits is undefined, or exits are compared up to

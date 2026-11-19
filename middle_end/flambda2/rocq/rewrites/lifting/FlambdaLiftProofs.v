@@ -78,11 +78,25 @@
    continuation: the call binds that one first, and its entry hides
    that of the exception continuation ([call_code_plain]).
 
+   The test that [lift_unit] asks accepts as well a unit that calls
+   nothing outside the bodies of its code and passes with those
+   bodies taken out ([exits_plain_fine], [strip]). The proof above is
+   not opened for it. Code whose body is [Invalid] passes the test,
+   so the unit stripped passes it with its code and has the statement
+   above; and a term that calls nothing and the term stripped run
+   step for step alike, to the same exit with the same values
+   ([stripped_run]): the machine reads the body of code at a call and
+   nowhere else. So the refinements of the liftings carry, beside
+   their simulation, not [plain_state] but what it is for
+   ([exits_are_plain]): every exit of the run from here has constants
+   and symbols only. It holds of the first state by the statement of
+   the test, and a step keeps it.
+
    That the heaps at the exit are equal, and not only alike, is from
-   the guard of FlambdaLiftSpec.lift_unit: a unit with no primitive of
-   the heap exits with the empty heap
-   (FlambdaHeapFreeProofs.free_of_heap_exits_empty), and a heap alike
-   to the empty heap is empty ([heap_alike_empty]).
+   the guard of FlambdaLiftSpec.lift_unit: a unit that passes it exits
+   with the empty heap
+   (FlambdaHeapFreeProofs.free_of_heap_fine_exits_empty), and a heap
+   alike to the empty heap is empty ([heap_alike_empty]).
 
    The two runs may start from a continuation environment of what may
    follow a unit (FlambdaObserversSpec.observers), the empty one for
@@ -112,7 +126,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaImportsSpec FlambdaImportsProofs FlambdaStaticsInScopeSpec
   FlambdaRunUnderSpec FlambdaObserversSpec FlambdaObserversProofs
   FlambdaUnitFromProofs FlambdaHeapFreeSpec FlambdaHeapFreeProofs
-  FlambdaLiftSpec FlambdaEquivarianceTactic.
+  FlambdaLiftSpec FlambdaEquivarianceTactic FlambdaEquivarianceProofs
+  FlambdaTermInductionProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -3951,6 +3966,348 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* The test of a unit whose own run enters no code                          *)
+(* ======================================================================== *)
+
+Definition strip_handlers
+    (handlers : list (continuation * continuation_handler))
+    : list (continuation * continuation_handler) :=
+  map (fun '(k, h) => (k, strip_handler h)) handlers.
+
+(* The static environment with the bodies of its code taken out. *)
+Definition strip_statics (statics : static_env) : static_env :=
+  Static_env (map (fun '(id, c) => (id, strip_code c)) (static_code statics))
+    (static_values statics).
+
+Lemma lookup_strip_code (id : code_id) (codes : list (code_id * code)) :
+  lookup id (map (fun '(id', c) => (id', strip_code c)) codes)
+  = option_map strip_code (lookup id codes).
+Proof.
+  induction codes as [ | [id' c] codes IH]; simpl; [ reflexivity | ].
+  destruct (Pos.eqb id id'); [ reflexivity | exact IH ].
+Qed.
+
+(* Code with [Invalid] for its body passes the test. *)
+Lemma strip_code_plain (c : code) :
+  code_exits_plain_knowing (strip_code c) = true.
+Proof. destruct c. reflexivity. Qed.
+
+Lemma binding_binds_strip (b : static_binding) :
+  binding_binds (strip_binding b) = binding_binds b.
+Proof. destruct b; reflexivity. Qed.
+
+Lemma binds_statics_strip (e : expr) :
+  binds_statics (strip e) = binds_statics e.
+Proof.
+  induction e using expr_deep_ind; simpl.
+  - assumption.
+  - rewrite IHe. f_equal.
+    clear. induction bindings as [ | b bindings IH]; simpl; [ reflexivity | ].
+    rewrite binding_binds_strip, IH. reflexivity.
+  - rewrite IHe1, IHe2. reflexivity.
+  - rewrite IHe. f_equal.
+    induction H as [ | [k [params metadata handler]] handlers Hh _ IH]; simpl;
+      [ reflexivity | ].
+    simpl in Hh. rewrite Hh, IH. reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma handlers_bind_statics_strip
+    (handlers : list (continuation * continuation_handler)) :
+  handlers_bind_statics (strip_handlers handlers)
+  = handlers_bind_statics handlers.
+Proof.
+  unfold handlers_bind_statics, strip_handlers.
+  induction handlers as [ | [k [params metadata handler]] handlers IH]; simpl;
+    [ reflexivity | ].
+  rewrite binds_statics_strip, IH. reflexivity.
+Qed.
+
+(* A defining expression reads the static environment for its
+   statically allocated values only. *)
+Lemma exec_named_strip (statics : static_env) (hp : heap) (rd : read_record)
+    (vars : env) (d : named) :
+  exec_named (strip_statics statics) hp rd vars d
+  = exec_named statics hp rd vars d.
+Proof.
+  destruct d as [s | p args | code slots | fslot decls slots | slot closure
+    | pfrom slot closure | move_from move_to closure];
+    try (unfold exec_named;
+         rewrite (eval_named_static_values (strip_statics statics) statics vars
+                    _ eq_refl);
+         reflexivity).
+  apply exec_named_static_values. intros vs s _ _. reflexivity.
+Qed.
+
+Lemma eval_static_bindings_strip (vars : env) :
+  ∀ (bindings : list static_binding) (statics : static_env),
+    eval_static_bindings vars (map strip_binding bindings)
+      (strip_statics statics)
+    = option_map strip_statics (eval_static_bindings vars bindings statics).
+Proof.
+  induction bindings as [ | [id c | id | s const] bindings IH];
+    intros statics; simpl.
+  - reflexivity.
+  - rewrite lookup_strip_code.
+    destruct (lookup id (static_code statics)); simpl; [ reflexivity | ].
+    exact (IH (Static_env ((id, c) :: static_code statics)
+                 (static_values statics))).
+  - apply IH.
+  - destruct (lookup s (static_values statics)); [ reflexivity | ].
+    destruct (eval_static_const vars const) as [allocated | ]; simpl;
+      [ | reflexivity ].
+    exact (IH (Static_env (static_code statics)
+                 ((s, allocated) :: static_values statics))).
+Qed.
+
+(* A continuation of a run that calls nothing, and the same with the
+   bodies of code taken out of its handlers: no continuation of such a
+   run is one of a call. *)
+Inductive cont_stripped : cont_value -> cont_value -> Prop :=
+  | Outer_stripped (k : continuation) : cont_stripped (Outer k) (Outer k)
+  | Closure_stripped (h : continuation_handler) (vars : env)
+      (conts conts' : cont_env)
+      (recursive : list (continuation * continuation_handler)) :
+    handler_calls_nothing h = true ->
+    forallb (fun '(_, h') => handler_calls_nothing h') recursive = true ->
+    Forall2
+      (fun kc kc' => fst kc' = fst kc ∧ cont_stripped (snd kc) (snd kc'))
+      conts conts' ->
+    cont_stripped (Closure h vars conts recursive)
+      (Closure (strip_handler h) vars conts' (strip_handlers recursive)).
+
+Definition conts_stripped (conts conts' : cont_env) : Prop :=
+  Forall2 (fun kc kc' => fst kc' = fst kc ∧ cont_stripped (snd kc) (snd kc'))
+    conts conts'.
+
+(* A state whose expression calls nothing, and the state stripped. *)
+Inductive state_stripped : state -> state -> Prop :=
+  | State_stripped (e : expr) (vars : env) (conts conts' : cont_env)
+      (statics : static_env) (hp : heap) (rd : read_record) :
+    calls_nothing e = true ->
+    conts_stripped conts conts' ->
+    state_stripped (State e vars conts statics hp rd)
+      (State (strip e) vars conts' (strip_statics statics) hp rd).
+
+Definition result_stripped (r r' : step_result) : Prop :=
+  match r, r' with
+  | Step s, Step s' => state_stripped s s'
+  | Exit k vs hp rd, Exit k' vs' hp' rd' =>
+    k' = k ∧ vs' = vs ∧ hp' = hp ∧ rd' = rd
+  | Undefined, Undefined => True
+  | _, _ => False
+  end.
+
+Lemma resolve_stripped (k : continuation) (conts conts' : cont_env) :
+  conts_stripped conts conts' ->
+  cont_stripped (resolve k conts) (resolve k conts').
+Proof.
+  unfold resolve.
+  induction 1 as [ | [k1 c] [k1' c'] conts conts' [Hk Hc] _ IH]; simpl;
+    [ apply Outer_stripped | ].
+  simpl in Hk, Hc. subst k1'.
+  destruct (Pos.eqb k k1); [ exact Hc | exact IH ].
+Qed.
+
+Lemma rec_closures_stripped (vars : env) (conts conts' : cont_env)
+    (recursive : list (continuation * continuation_handler)) :
+  forallb (fun '(_, h) => handler_calls_nothing h) recursive = true ->
+  conts_stripped conts conts' ->
+  conts_stripped (rec_closures recursive vars conts ++ conts)
+    (rec_closures (strip_handlers recursive) vars conts' ++ conts').
+Proof.
+  intros Hrecursive Hconts. apply Forall2_app; [ | exact Hconts ].
+  unfold rec_closures.
+  assert (Hsome :
+    ∀ l : list (continuation * continuation_handler),
+      forallb (fun '(_, h) => handler_calls_nothing h) l = true ->
+      Forall2
+        (fun kc kc' => fst kc' = fst kc ∧ cont_stripped (snd kc) (snd kc'))
+        (map (fun '(k, h) => (k, Closure h vars conts recursive)) l)
+        (map
+           (fun '(k, h) =>
+              (k, Closure h vars conts' (strip_handlers recursive)))
+           (strip_handlers l))).
+  { induction l as [ | [k h] l IH]; simpl; [ constructor | ].
+    intros Hl. apply andb_true_iff in Hl as [Hh Hl].
+    constructor; [ | exact (IH Hl) ].
+    split; [ reflexivity | ]. simpl.
+    apply Closure_stripped; assumption. }
+  exact (Hsome recursive Hrecursive).
+Qed.
+
+Lemma apply_cont_value_stripped (c c' : cont_value) :
+  cont_stripped c c' ->
+  ∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
+    result_stripped (apply_cont_value c vs statics hp rd)
+      (apply_cont_value c' vs (strip_statics statics) hp rd).
+Proof.
+  intros Hc.
+  destruct Hc
+    as [ k | [params metadata handler] dvars dconts dconts' recursive Hh
+             Hrecursive Hdconts ];
+    intros vs statics hp rd; simpl.
+  - repeat split.
+  - destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (bind_params params vs dvars) as [bound | ]; [ | exact I ].
+    simpl. apply State_stripped; [ exact Hh | ].
+    apply rec_closures_stripped; assumption.
+Qed.
+
+(* A step of the one is the same step of the other. *)
+Lemma stripped_step (s s' : state) :
+  state_stripped s s' -> result_stripped (step s) (step s').
+Proof.
+  intros Hs. destruct Hs as [e vars conts conts' statics hp rd Hcalls Hconts].
+  destruct e
+    as [ x xkind d body | bindings body | k h body | handlers body | ap | ac
+       | scrutinee arms | ];
+    simpl in Hcalls; simpl strip.
+  - (* Let *)
+    rewrite !step_let_exec, exec_named_strip.
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ];
+      [ | exact I ].
+    destruct (kind_eqb (kind_of_value v) xkind); [ | exact I ].
+    simpl. apply State_stripped; assumption.
+  - (* Let_static *)
+    rewrite !step_let_static, eval_static_bindings_strip.
+    destruct (eval_static_bindings vars bindings statics) as [extended | ];
+      simpl; [ | exact I ].
+    apply State_stripped; assumption.
+  - (* Let_cont_non_recursive *)
+    apply andb_true_iff in Hcalls as [Hh Hbody].
+    rewrite !step_let_cont_non_recursive. simpl.
+    apply State_stripped; [ exact Hbody | ].
+    constructor; [ | exact Hconts ].
+    split; [ reflexivity | ]. simpl.
+    exact (Closure_stripped h vars conts conts' [] Hh eq_refl Hconts).
+  - (* Let_cont_recursive *)
+    apply andb_true_iff in Hcalls as [Hhandlers Hbody].
+    rewrite !step_let_cont_recursive.
+    change (map (fun '(k, h) => (k, strip_handler h)) handlers)
+      with (strip_handlers handlers).
+    rewrite handlers_bind_statics_strip.
+    destruct (handlers_bind_statics handlers); [ exact I | ].
+    simpl. apply State_stripped; [ exact Hbody | ].
+    apply rec_closures_stripped; assumption.
+  - (* Apply: there is none *)
+    discriminate Hcalls.
+  - (* Apply_cont *)
+    rewrite !step_apply_cont.
+    destruct (eval_simples vars (ac_args ac)) as [vs | ]; [ | exact I ].
+    unfold apply_continuation.
+    exact (apply_cont_value_stripped _ _
+             (resolve_stripped (ac_continuation ac) conts conts' Hconts) vs
+             statics hp rd).
+  - (* Switch *)
+    rewrite !step_switch.
+    destruct (eval_simple vars scrutinee) as [v | ]; [ | exact I ].
+    destruct (naked_immediate_of_value v) as [i | ]; [ | exact I ].
+    destruct (find_arm i arms) as [ac | ]; [ | exact I ].
+    simpl. exact (State_stripped (Apply_cont ac) vars conts conts' statics hp
+                    rd eq_refl Hconts).
+  - (* Invalid *)
+    rewrite !step_invalid. exact I.
+Qed.
+
+Lemma stripped_run (n : nat) :
+  ∀ s s' : state,
+    state_stripped s s' -> result_stripped (run n s) (run n s').
+Proof.
+  induction n as [ | n IH]; intros s s' Hs; simpl; [ exact Hs | ].
+  pose proof (stripped_step s s' Hs) as Hstep.
+  destruct (step s) as [t | k vs hp rd | ],
+    (step s') as [t' | k' vs' hp' rd' | ];
+    simpl in Hstep; try contradiction.
+  - exact (IH t t' Hstep).
+  - exact Hstep.
+  - exact I.
+Qed.
+
+(* The unit stripped passes the test, and so does the code of the
+   static environment stripped: the statement of the test, of the
+   unit stripped, is that of the unit. *)
+Theorem calls_nothing_exits_plain : calls_nothing_exits_plain_statement.
+Proof.
+  intros statics e n k vs hp rd Hcalls Hplain Hrun.
+  pose proof
+    (stripped_run n _ _
+       (State_stripped e [] [] [] statics empty_heap no_reads Hcalls
+          (Forall2_nil _)))
+    as Hrel.
+  rewrite Hrun in Hrel.
+  destruct
+    (run n (State (strip e) [] [] (strip_statics statics) empty_heap no_reads))
+    as [t' | k' vs' hp' rd' | ] eqn:Hrun'; simpl in Hrel; try contradiction.
+  destruct Hrel as (-> & -> & -> & ->).
+  refine (exits_plain_knowing_sound_from (strip_statics statics) (strip e) n k
+            vs hp rd _ Hplain Hrun').
+  intros id c. simpl. rewrite lookup_strip_code.
+  destruct (lookup id (static_code statics)) as [c0 | ]; simpl;
+    [ | discriminate ].
+  intros [= <-]. apply strip_code_plain.
+Qed.
+
+Theorem exits_plain_fine_sound_from : exits_plain_fine_sound_from_statement.
+Proof.
+  intros statics e n k vs hp rd Hcode Hfine Hrun.
+  unfold exits_plain_fine in Hfine.
+  destruct (exits_plain_knowing [] [] e) eqn:He.
+  - exact (exits_plain_knowing_sound_from statics e n k vs hp rd
+             (Hcode eq_refl) He Hrun).
+  - simpl in Hfine. apply andb_true_iff in Hfine as [Hcalls Hplain].
+    exact (calls_nothing_exits_plain statics e n k vs hp rd Hcalls Hplain
+             Hrun).
+Qed.
+
+Theorem exits_plain_fine_sound : exits_plain_fine_sound_statement.
+Proof.
+  intros e n k vs hp rd Hfine Hrun.
+  refine (exits_plain_fine_sound_from empty_static_env e n k vs hp rd _ Hfine
+            Hrun).
+  intros _ id c Hlookup. discriminate Hlookup.
+Qed.
+
+(* What the test of the exits is for, as an invariant of a run: every
+   exit of the run from the state has constants and symbols only. *)
+Definition exits_are_plain (s : state) : Prop :=
+  ∀ (n : nat) (k : continuation) (vs : list value) (hp : heap)
+    (rd : read_record),
+    run n s = Exit k vs hp rd -> ∀ v : value, v ∈ vs -> plain_value v.
+
+Lemma exits_are_plain_step (s : state) :
+  exits_are_plain s ->
+  match step s with
+  | Step t => exits_are_plain t
+  | Exit k vs _ _ => ∀ v : value, v ∈ vs -> plain_value v
+  | Undefined => True
+  end.
+Proof.
+  intros Hs. destruct (step s) as [t | k vs hp rd | ] eqn:Hstep.
+  - intros n k vs hp rd Hrun. apply (Hs (S n) k vs hp rd). simpl.
+    rewrite Hstep. exact Hrun.
+  - apply (Hs 1 k vs hp rd). simpl. rewrite Hstep. reflexivity.
+  - exact I.
+Qed.
+
+(* It holds of the first state of a unit that passes the test that
+   the liftings ask, run from a static environment that holds no
+   code. *)
+Lemma exits_are_plain_from (e : expr) (statics : static_env) :
+  exits_plain_fine e = true ->
+  static_code statics = [] ->
+  exits_are_plain (State e [] [] statics empty_heap no_reads).
+Proof.
+  intros Hfine Hno_code n k vs hp rd Hrun.
+  refine (exits_plain_fine_sound_from statics e n k vs hp rd _ Hfine Hrun).
+  intros _ id c Hlookup. rewrite Hno_code in Hlookup. discriminate Hlookup.
+Qed.
+
+(* ======================================================================== *)
 (* What [lift_unit] gives refines the unit                                  *)
 (* ======================================================================== *)
 
@@ -3983,7 +4340,7 @@ Hypothesis Hheap_ok :
     lookup id known = Some sym -> heap_free id hp0.
 
 Definition unit_lifted_plain (s s' : state) : Prop :=
-  unit_lifted known lets e statics0 hp0 rd0 [] s s' ∧ plain_state s.
+  unit_lifted known lets e statics0 hp0 rd0 [] s s' ∧ exits_are_plain s.
 
 (* The values at an exit are lifted, and are constants and symbols: they
    are the same. *)
@@ -3997,7 +4354,7 @@ Proof.
        Hfree
        Hstatics_ok Hheap_ok (Forall_nil _) s s' Hlifted)
     as Hanswer.
-  pose proof (plain_step s Hplain) as Hstep.
+  pose proof (exits_are_plain_step s Hplain) as Hstep.
   destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
     [ | | exact I ].
   - destruct Hanswer as (n & t' & Hrun & Ht).
@@ -4008,11 +4365,11 @@ Proof.
 Qed.
 
 (* The unit lifted refines the unit, the two run from that static
-   environment and that heap, if the unit exits with the empty heap
-   only: the heap of the unit lifted, which is alike, is then empty
-   too. *)
+   environment and that heap, if the unit exits with constants and
+   symbols only, and with the empty heap only: the heap of the unit
+   lifted, which is alike, is then empty too. *)
 Lemma unit_lifted_refines :
-  exits_plain_knowing [] [] e = true ->
+  exits_are_plain (State e [] [] statics0 hp0 rd0) ->
   (∀ (k : continuation) (vs : list value) (hp : heap),
     behaves (State e [] [] statics0 hp0 rd0) (Exits k vs hp) ->
     hp = empty_heap) ->
@@ -4030,7 +4387,7 @@ Proof.
   - split;
       [ exact (unit_lifted_initial known lets e statics0 hp0 rd0 [] Hno_code
                  (Forall_nil _))
-      | exact (plain_from e statics0 hp0 rd0 Hplain Hno_code) ].
+      | exact Hplain ].
 Qed.
 
 End Unit_refines.
@@ -4038,8 +4395,8 @@ End Unit_refines.
 Theorem lift_unit_program_refines : lift_unit_program_refines_statement.
 Proof.
   intros L e e'. unfold lift_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   fold (lifted_unit (lifted_my_closures L) (lifted_lets L) e).
   destruct
     (well_formed_unit (lifting_unit L)
@@ -4056,17 +4413,18 @@ Proof.
            (lifted_lets L) e empty_static_env empty_heap no_reads Hwf Honly
            eq_refl (free_in_empty _)
            (fun id sym _ => statics_ok_empty id sym)
-           (fun id sym _ => heap_values_all_empty _) Hplain
+           (fun id sym _ => heap_values_all_empty _)
+           (exits_are_plain_from e empty_static_env Hplain eq_refl)
            (fun k vs hp =>
-              free_of_heap_exits_empty e empty_static_env k vs hp Hheap_free
-                eq_refl)).
+              free_of_heap_fine_exits_empty e empty_static_env k vs hp
+                Hheap_free (fun _ => eq_refl))).
 Qed.
 
 Theorem lift_unit_refines_imports : lift_unit_refines_imports_statement.
 Proof.
   intros imports L e e'. unfold lift_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   fold (lifted_unit (lifted_my_closures L) (lifted_lets L) e).
   destruct
     (well_formed_unit (lifting_unit L)
@@ -4083,10 +4441,11 @@ Proof.
            (lifted_lets L) e (imports_statics imports) empty_heap no_reads Hwf
            Honly eq_refl Hfree
            (fun id sym _ => statics_ok_imports id sym imports)
-           (fun id sym _ => heap_values_all_empty _) Hplain
+           (fun id sym _ => heap_values_all_empty _)
+           (exits_are_plain_from e (imports_statics imports) Hplain eq_refl)
            (fun k vs hp =>
-              free_of_heap_exits_empty e (imports_statics imports) k vs hp
-                Hheap_free eq_refl)).
+              free_of_heap_fine_exits_empty e (imports_statics imports) k vs hp
+                Hheap_free (fun _ => eq_refl))).
 Qed.
 
 (* ======================================================================== *)
@@ -4150,3 +4509,15 @@ Proof. equivariance. Qed.
 Theorem exits_plain_knowing_equivariant :
   exits_plain_knowing_equivariant_statement.
 Proof. equivariance. Qed.
+
+Theorem strip_equivariant : strip_equivariant_statement.
+Proof. equivariance. Qed.
+
+Theorem exits_plain_fine_equivariant : exits_plain_fine_equivariant_statement.
+Proof.
+  intros r e. unfold exits_plain_fine.
+  rewrite strip_equivariant, calls_nothing_rename.
+  pose proof (exits_plain_knowing_equivariant r [] [] e) as Hexits.
+  pose proof (exits_plain_knowing_equivariant r [] [] (strip e)) as Hstripped.
+  simpl in Hexits, Hstripped. rewrite Hexits, Hstripped. reflexivity.
+Qed.

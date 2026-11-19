@@ -43,18 +43,21 @@
    FlambdaValidateSpec.validate_unit applies in turn
    (FlambdaValidateSpec.with_lifting), gives a term lifted only where
    the term that it is given passes two tests: that of the exits
-   (FlambdaLiftSpec.exits_plain_knowing) and that it has no primitive
-   of the heap (FlambdaHeapFreeSpec.expr_free_of_heap). Where a test
-   fails that lifting is not made and the term is kept as it was; the
-   verdict [Same_once_lifted] may still be reached without it. A
-   lifting gives a symbol where the unit before gave the value that
-   it lifts (FlambdaLiftSpec.lift_named), and
-   FlambdaSemanticsSpec.refines asks of two exits the same values and
-   the same heap. So the first test refuses the lifting of a term
-   whose exits are not symbols and constants only, which could exit
-   with something lifted, and the second the lifting of a term that
-   has a primitive of the heap, which could store something lifted in
-   a cell.
+   (FlambdaLiftSpec.exits_plain_fine) and that of the heap
+   (FlambdaHeapFreeSpec.free_of_heap_fine: it has no primitive of the
+   heap, or none outside the bodies of its code where it calls
+   nothing outside them). Where a test fails that lifting is not made
+   and the term is kept as it was; the verdict [Same_once_lifted] may
+   still be reached without it. A lifting gives a symbol where the
+   unit before gave the value that it lifts
+   (FlambdaLiftSpec.lift_named), and FlambdaSemanticsSpec.refines asks
+   of two exits the same values and the same heap. So the first test
+   refuses the lifting of a term whose exits are not symbols and
+   constants only, which could exit with something lifted, and the
+   second the lifting of a term that has a primitive of the heap,
+   which could store something lifted in a cell. Neither test counts
+   what is in the bodies of the code of a term that calls nothing
+   outside them: the run of such a term enters no code.
 
    The check here follows the two comparisons of lifted terms of
    [validate_unit], with the liftings made without those two tests
@@ -158,7 +161,7 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* FlambdaValidateSpec.lifted_in_turn with each lifting made without
-   the two tests of the unit (its exits; no primitive of the heap).
+   the two tests of the unit (that of its exits and that of the heap).
    What ends it is what ends that one. *)
 Fixpoint lifted_in_turn_observed (rounds : nat) (avoid : list continuation)
     (Ls : list lifting) (kept : list code_id) (e : expr) : expr :=

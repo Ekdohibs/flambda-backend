@@ -794,9 +794,9 @@ Lemma lift_around_unit_scoped (u : unit_interface)
 Proof.
   unfold lift_around_unit. cbv zeta.
   set (groups := groups_of lets places e).
-  destruct (exits_plain_knowing [] [] e); cbn [andb];
+  destruct (exits_plain_fine e); cbn [andb];
     [ | apply scoped_refl ].
-  destruct (FlambdaHeapFreeSpec.expr_free_of_heap e); cbn [andb];
+  destruct (FlambdaHeapFreeSpec.free_of_heap_fine e); cbn [andb];
     [ | apply scoped_refl ].
   destruct (around_ok lets groups [] root e) eqn:Hok; cbn [andb];
     [ | apply scoped_refl ].

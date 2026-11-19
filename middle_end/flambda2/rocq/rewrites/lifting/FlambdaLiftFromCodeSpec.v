@@ -104,8 +104,9 @@
    executes a primitive of the heap (FlambdaHeapSpec.exec_prim): one
    that makes a block or an array allocates a location of its own
    each time it is executed. [lift_from_code_unit] lifts nothing in a
-   unit that has a primitive of the heap
-   (FlambdaHeapFreeSpec.expr_free_of_heap; a limit, the CR at
+   unit that has a primitive of the heap, unless the unit has none
+   outside the bodies of its code and calls nothing outside them
+   (FlambdaHeapFreeSpec.free_of_heap_fine; a limit, the CR at
    FlambdaLiftSpec.lift_unit). A [Let] that is lifted out mentions no
    variable, so what is put once holds symbols and constants only. A
    location of the heap is a value that only a variable holds, so the
@@ -128,14 +129,17 @@
    an exit of the unit, among its values and in what the cells of its
    heap hold, so [lift_from_code_unit] makes the same two checks of
    the unit as FlambdaLiftSpec.lift_unit:
-   FlambdaLiftSpec.exits_plain_knowing, the unit gives only symbols
-   and constants to the continuations that it may leave through; and
-   FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
-   the heap, so that the heaps of two exits are empty (a limit: the CR
-   at FlambdaLiftSpec.lift_unit). It also checks that the result is a
-   well-formed unit: the symbols given are then new and distinct, and
-   the group of the code is executed once. With the three, the unit
-   lifted refines the unit, run on its own
+   FlambdaLiftSpec.exits_plain_fine, the unit gives only symbols
+   and constants to the continuations that its run may leave through;
+   and FlambdaHeapFreeSpec.free_of_heap_fine, its run executes no
+   primitive of the heap, so that the heaps of two exits are empty (a
+   limit: the CR at FlambdaLiftSpec.lift_unit). Each is of the whole
+   unit, or, where the unit calls nothing outside the bodies of its
+   code, of what is outside them: the run of such a unit enters no
+   code (decision D65, the CRs at the two). It also checks that the
+   result is a well-formed unit: the symbols given are then new and
+   distinct, and the group of the code is executed once. With the
+   three, the unit lifted refines the unit, run on its own
    ([lift_from_code_unit_program_refines_statement]).
 
    The second run binds the symbol when the group of the code is
@@ -313,16 +317,17 @@ with binding_lift_from_code (K : lets_in_code)
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess lifted out of its code: if the
-   unit exits with symbols and constants only and has no primitive of
-   the heap, and the result is a well-formed unit. The second is a
-   limit, and not a condition of the lifting: the CR at
+   unit passes the test of the exits (FlambdaLiftSpec.exits_plain_fine)
+   and the guard of the heap (FlambdaHeapFreeSpec.free_of_heap_fine),
+   and the result is a well-formed unit. The second is a limit, and
+   not a condition of the lifting: the CR at
    FlambdaLiftSpec.lift_unit. *)
 Definition lift_from_code_unit (u : unit_interface) (K : lets_in_code)
     (e : expr) : option expr :=
   let lifted := lift_from_code K [] root e in
   if
-    exits_plain_knowing [] [] e
-    && expr_free_of_heap e
+    exits_plain_fine e
+    && free_of_heap_fine e
     && well_formed_unit u lifted
   then Some lifted
   else None.

@@ -81,9 +81,10 @@
    executed, and the second has the symbol, bound before anything else
    of the unit runs, to the same thing; the two values are related by
    FlambdaLiftSpec.value_lifted. The checks are the same
-   ([lift_to_head_unit]): the unit exits with symbols and constants
-   only; it has no primitive of the heap
-   (FlambdaHeapFreeSpec.expr_free_of_heap; a limit, the CR at
+   ([lift_to_head_unit]): the unit passes the test of the exits
+   (FlambdaLiftSpec.exits_plain_fine: it exits with symbols and
+   constants only); it passes the guard of the heap
+   (FlambdaHeapFreeSpec.free_of_heap_fine; a limit, the CR at
    FlambdaLiftSpec.lift_unit); and the result is a well-formed unit,
    so that the symbols given are new and distinct. The binding of a
    symbol cannot itself be undefined, for the reasons given in
@@ -120,16 +121,17 @@ Definition lift_to_head (lets : list (path * lift_to)) (e : expr) : expr :=
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess lifted to its head: if the
-   unit exits with symbols and constants only and has no primitive of
-   the heap, and the result is a well-formed unit. The second is a
-   limit, and not a condition of the lifting: the CR at
+   unit passes the test of the exits (FlambdaLiftSpec.exits_plain_fine)
+   and the guard of the heap (FlambdaHeapFreeSpec.free_of_heap_fine),
+   and the result is a well-formed unit. The second is a limit, and
+   not a condition of the lifting: the CR at
    FlambdaLiftSpec.lift_unit. *)
 Definition lift_to_head_unit (u : unit_interface)
     (lets : list (path * lift_to)) (e : expr) : option expr :=
   let lifted := lift_to_head lets e in
   if
-    exits_plain_knowing [] [] e
-    && expr_free_of_heap e
+    exits_plain_fine e
+    && free_of_heap_fine e
     && well_formed_unit u lifted
   then Some lifted
   else None.
