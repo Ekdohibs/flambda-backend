@@ -50,9 +50,9 @@
    - [unused_code_dead_of_shapes]: [unused_code_dead] where every code of
      the unit has the shape.
 
-   That the traversal of a unit whose variables are bound once gives the
-   facts this shape is not proved: FlambdaReaperUnusedCodeTraversalProofs.v
-   reduces it to bounds of the facts (see S7.md). *)
+   That the traversal of a unit of [in_flow_fragment] whose variables are
+   bound once gives the facts this shape is
+   FlambdaReaperUnusedCodeTraversalProofs.v. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

@@ -70,8 +70,12 @@
      of the term. FlambdaReaperUnusedCodeProofs.v proves it of a least
      solution where the facts into that node, into the [my_closure] of
      the code dep and into the nodes of the direct calls of the code have
-     the shape that the traversal gives them; that the traversal does so
-     where every variable is bound once is not proved (see S7.md).
+     the shape that the traversal gives them, and
+     FlambdaReaperUnusedCodeTraversalProofs.v that the traversal does so
+     where every variable is bound once.
+
+   [fix_never_fails_full_statement]: the same, with [variables_bound_once]
+   (FlambdaReaperLeastSpec.v) in place of [unused_code_dead].
 
    [fix_fails_only_by_unboxed_callee_statement] and
    [fix_fails_only_by_unboxed_callee_any_groups_statement], from before
@@ -200,6 +204,35 @@ Definition fix_never_fails_statement : Prop :=
     unknown_calls_have_args e = true ->
     results_within_codes e = true ->
     unused_code_dead S e = true ->
+    rebuild_unit_unbox_repr_fixed_fails is_local F T cannot_change code_deps
+      dominated to_unbox tcr preserve_direct_calls e
+    = false.
+
+(* [fix_never_fails_statement] with [variables_bound_once] in place of
+   [unused_code_dead], which a least solution of the facts of such a unit
+   meets. *)
+Definition fix_never_fails_full_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (max_unbox_size : nat) (lambda_lifting preserve_direct_calls : bool)
+    (tcr : list node),
+    let F := traverse_unit Auto u e in
+    let code_deps := unit_code_deps Auto u e in
+    let cannot_change := derive_cannot_change F T in
+    let dominated := derive_dominated T in
+    let to_unbox :=
+      derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+        lambda_lifting
+    in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    exn_handlers_well_formed e = true ->
+    unknown_calls_have_args e = true ->
+    results_within_codes e = true ->
+    variables_bound_once e = true ->
     rebuild_unit_unbox_repr_fixed_fails is_local F T cannot_change code_deps
       dominated to_unbox tcr preserve_direct_calls e
     = false.

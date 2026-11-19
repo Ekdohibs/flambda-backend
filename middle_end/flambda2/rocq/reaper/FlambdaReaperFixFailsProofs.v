@@ -40,7 +40,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperWrapperSpec FlambdaReaperWrapperDerivedSpec
   FlambdaReaperFixFailsSpec.
 From OxCamlFlambda2 Require FlambdaReaperWrapperProofs
-  FlambdaReaperWrapperDerivedProofs FlambdaReaperFlowProofs FlambdaMapProofs.
+  FlambdaReaperWrapperDerivedProofs FlambdaReaperFlowProofs FlambdaMapProofs
+  FlambdaReaperUnusedCodeTraversalProofs.
 From OxCamlFlambda2 Require Import FlambdaBindersSpec.
 Import ListNotations.
 
@@ -792,6 +793,19 @@ Proof.
                   Hloc Hslots
                   Hfrag Hleast Hwf Hcalls id c Hc Hused) as Hcnr.
     discriminate (eq_trans (eq_sym Hnr) Hcnr).
+Qed.
+
+(* [unused_code_dead] holds of a least solution where the unit binds each
+   variable once (FlambdaReaperUnusedCodeTraversalProofs.v). *)
+Theorem fix_never_fails_full : fix_never_fails_full_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting pdc tcr F code_deps
+    cannot_change dominated to_unbox Hloc Hslots Hfrag Hleast Hcount Hkinds
+    Hwf Hhas Hres Hbound.
+  apply (fix_never_fails is_local u e T max_unbox_size lambda_lifting pdc tcr
+           Hloc Hslots Hfrag Hleast Hcount Hkinds Hwf Hhas Hres).
+  exact (FlambdaReaperUnusedCodeTraversalProofs.unused_code_dead_traversal
+           is_local u e T Hfrag Hbound Hloc Hleast).
 Qed.
 
 (* The rebuild of the fix no longer stops at an unboxed callee, and the
