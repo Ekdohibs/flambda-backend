@@ -275,7 +275,7 @@ from the others.
 | `several_compared.ml` | `several.ml` | a toplevel compares two of the fields | the same prefix; undefined before and after; nothing to validate |
 | `several_loaded.ml` | `several.ml` | a toplevel loads a field of one of the fields | the same prefix; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `several_called.ml` | `several.ml` | a toplevel calls one of the fields | the same prefix; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
-| `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the addition has no value on such a symbol; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
+| `partly_tested.ml` | `partly.ml` | a function loads, from its argument, the field of a record of which the `.cmx` says nothing, and adds to it; the toplevel reads the other field and gives the function the record | a prefix of two bindings, the record with a symbol of which nothing is known in that field; undefined before and after, as the record is not of what the parameter of the function states, a block of two tagged immediates; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `parity_called.ml` | `parity.ml` | calls a function that is one of a set of two, in a function and at toplevel | a prefix of five bindings; undefined before and after; nothing to validate; the validation accepts the pair, and the tool says that it says nothing of the unit |
 | `cycle_read.ml` | `cycle.ml` | a toplevel reads a block that the first unit made by calls of the runtime, and tests it | a prefix of one binding, the module block with two symbols of which nothing is known; undefined before and after; nothing to validate; the validation accepts the pair with its imports, given the `.cmx`, and the tool says that it says nothing of the unit |
 | `probed_called.ml` | `probed.ml` | calls, without inlining it, a function of the first unit whose body has a probe | a prefix of five bindings without the body, which the conversion refuses; the run is undefined before and after, and the validation says nothing of it |
@@ -427,7 +427,13 @@ of the term after.
 `hidden_tested.ml` tests it, `hidden_joined.ml` adds to what is the
 field down one arm of a test and a number down the other,
 `several_loaded.ml` loads a field of it and `several_called.ml`
-calls it. The two others compare. `hidden_same.ml` compares the
+calls it. The run of `hidden_joined.ml` stops before its addition:
+the continuation that the two arms give their value to states a
+tagged immediate of its parameter, the machine tests what a handler
+states of its parameters where the continuation is applied (decision
+D25 of `middle_end/flambda2/rocq/DECISIONS.md`, at parameters), and
+such a symbol is no tagged immediate. The two others compare.
+`hidden_same.ml` compares the
 field with itself: the model has no value for that comparison
 (decision D41 of `middle_end/flambda2/rocq/DECISIONS.md`), Simplify
 makes the comparison of a variable with itself its answer, so the
@@ -441,9 +447,14 @@ undefined, and the validator does not accept the pair.
 `partly_tested.ml` shows that such a symbol is not a value that the
 model computes with. The load of the field is in a function, from
 its argument, which the making of the prefix does not see as a load
-from the record: the record is bound, the function gets the symbol
-of the field, and the addition has no value on it, so the run is
-undefined before and after.
+from the record: the record is bound, with the symbol in that field.
+The parameter of the function states a block of two tagged
+immediates, the machine tests what a parameter states where the code
+is entered (decision D25 of
+`middle_end/flambda2/rocq/DECISIONS.md`, at parameters), and a
+symbol of which nothing is known is no tagged immediate: the call is
+undefined, so the run is undefined before and after. The body of the
+function is not entered.
 
 Of `cycle.ml` the `.cmx` says nothing of the two fields of the
 module block, and nothing that Simplify can use. The prefix of

@@ -24,6 +24,10 @@ How to read it and keep it current:
 - `middle_end/flambda2/rocq/status/<stream>.md` is its stream's, and
   needs no entry.
 - A file that no section covers is C0's.
+- The files of a stream that is unassigned are answered for by C0, the
+  integrator, until an agent has the stream: the owner's word on a
+  change of one of them is C0's. When the stream has an owner the files
+  and the word are that owner's.
 - C0 keeps the layout of this file; the sections are their streams'.
 
 Paths are from the root of the repository.
@@ -156,6 +160,21 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/tests/semantics/roundtrip/` (the rules that
     take every example through the round trip, and the answers that
     are not "the same", with their reasons)
+  - `middle_end/flambda2/rocq/semantics/FlambdaSubkindSpec.v`,
+    `middle_end/flambda2/rocq/semantics/FlambdaSubkindProofs.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaSubkindBinder*` (whether
+    a value is of what a binder states of it beyond its kind, which
+    the machine tests where a parameter is bound, and what follows
+    from the test; decision D25, at parameters)
+  - `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedScope*`,
+    `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedSymbols*`,
+    `middle_end/flambda2/rocq/rewrites/common/FlambdaCodeStated*` and
+    `middle_end/flambda2/rocq/rewrites/loops/FlambdaRecHandlersStated*`
+    (what is known, at a point of a term, of the variables and of the
+    symbols in scope to be of what a binder states, for the rewrites
+    of the validation that ask it; and a rewrite applied in the body
+    of code and in the handler of a recursive continuation with what
+    is known there)
 - C3, sets of closures. Owner: C3, on `flambda2-rocq/C3-closures`.
   - `middle_end/flambda2/rocq/requests/C3-closures.md`
   - `middle_end/flambda2/rocq/requests/C3-partial-application.md`
@@ -557,6 +576,11 @@ pass into the validator.
     a refinement of two units passes two tests, the symbols at its
     exit are bound in its static environment, which a refinement
     alone does not say; same stream)
+  - `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedContextProofs.v`
+    (the equivalence and the refinement of two terms under what is
+    known of the variables in scope, with their laws through the
+    binders: lemmas for the rewrites that read what a binder states;
+    no statement; same stream)
   - `middle_end/flambda2/tests/tools/prefix_fault_control.ml` and the
     directory `middle_end/flambda2/tests/semantics/prefix_fault/` (two
     controls of a prefix that declares code deleted, on prefixes and
@@ -822,6 +846,13 @@ Owner: N2.
   body of code from the states that have a predicate that a step
   keeps. Its lemmas are in C0's `FlambdaContextProofs.v`, which N2
   changed for it by C0's leave; that file stays C0's)
+- `middle_end/flambda2/rocq/semantics/FlambdaSubkindOrder*` (N2's,
+  though it is about C2's subkinds: the order on what two binders
+  state)
+- `middle_end/flambda2/rocq/nominal/FlambdaCompareOrder*` (N2's,
+  though it matches the pattern of V1's section: the comparison of
+  the validation that lets the term after state less, with its laws,
+  `FlambdaCompareOrderLaws*`)
 - `middle_end/flambda2/rocq/rewrites/common/FlambdaGuardScope*` (N2's, though it is
   run by the validation: a rewrite made to keep scope by a test)
 - `middle_end/flambda2/rocq/validation/names/FlambdaKeepsScope*` (N2's, though it is

@@ -21,10 +21,12 @@ does what the line says). Dates are of 2026.
   (provisional). Not tested: a field of a static block or a value slot
   where it is stored, a value given to a way out of the term (open).
 - **D25.** Subkinds. A run is undefined where a parameter of a
-  continuation or of code is bound to a value that has not the shape
-  that its subkind states (ruled 18 Nov; not yet in the tree). A `let`
-  binds with no subkind test. What the subkind of a field of a made
-  block promises is open: meanwhile nothing; a field is any value.
+  continuation or of code is bound to a value that is not of what its
+  subkind states (ruled 18 Nov). Null passes only where it is allowed, a
+  block with an identity only where the subkind states nothing, poison
+  only where both. What code states of its results is not tested; a `let`
+  binds with no subkind test. What the subkind of a field of a made block
+  promises is open: meanwhile nothing; a field is any value.
 - **D8.** An operation on a symbol bound to nothing is undefined (ruled
   by 11 Nov). `Is_null` and `Is_int` have no value on poison (open).
 - **D5.** `Get_tag` has a value on blocks only (ruled by 11 Nov); a

@@ -577,11 +577,11 @@ it gave back.
   - that a block marked `Mutable` or `Immutable_unique` is converted
     only where it has as many kinds of fields as arguments, every one
     of kind value, whatever its subkind and whether or not it may be
-    null; that much of the kind of a field is dropped, as it is of a
-    parameter (decision D25, which is open), and only where it has an
-    argument: one made with no field as a term runs is refused, as
-    the compiler makes none (a static block with no field is another
-    thing, and not of these cases). The case of a block marked
+    null; that much of the kind of a field is dropped (decision D25,
+    which is open for the fields of a made block), and only where it
+    has an argument: one made with no field as a term runs is refused,
+    as the compiler makes none (a static block with no field is
+    another thing, and not of these cases). The case of a block marked
     `Immutable` is as it was: it does not ask for an argument, and
     nothing here is said of it;
   - that a store into a block is the model's `Block_set` on the block
@@ -870,6 +870,52 @@ it gave back.
   compiler checks that where code is made). Not cross-checked: how an
   arity is grouped into unboxed products, which is rebuilt through
   `Flambda_arity.fold_per_parameter`.
+- **The subkinds of parameters that the conversion gives**, in the
+  same file (`convert_subkind`, `convert_field_subkinds`,
+  `convert_params_subkinds`; decision D25, at parameters). A handler
+  and code get what the compiler states of each of their parameters
+  beyond its kind (`Bound_parameter.kind`, a
+  `Flambda_kind.With_subkind.t`): whether the value may be null, and
+  that it is a tagged immediate, a boxed number of one of nine kinds,
+  or a variant with its constant constructors and, for each tag of a
+  block, its fields with what is stated of each. The machine has no
+  step where a handler is applied, or the body of code entered, with
+  a value that is not of what is stated
+  (`FlambdaSubkindSpec.values_of_subkinds`), so a subkind that the
+  conversion gets wrong makes a run undefined that should not be, or
+  the reverse. Trusted: that what is given is the compiler's. The
+  test is of the value that the model has. Two sorts of value are of
+  no subkind but the one that says nothing of a shape, so they pass a
+  parameter that states nothing, or only that the value is not null,
+  and no other: a location, which is what the machine has for a block
+  that can change (the test reads no heap), and a symbol of which
+  nothing is known, which is what the tool puts for a field of the
+  block of another unit that its `.cmx` does not describe. A run is
+  undefined in the model, whatever the program does, where it gives
+  one of them to a parameter that states a shape of it (a tagged
+  immediate, a boxed number or a variant), or gives a block with one
+  of them in a field to a parameter that states a shape of that
+  field: the model then says nothing of the unit. A field of which
+  the parameter states nothing, or only that it is not null, takes
+  one. Units of the tree meet both:
+  `region_cell_no_frame.fl`, whose text states of its cell only that
+  it is not null, and `ocaml/pairs/partly_tested.ml` and
+  `ocaml/pairs/hidden_joined.ml`. Two
+  things are given as less than the compiler states, which can only
+  make a run defined where the compiler's statement would make it
+  undefined: the subkinds of arrays and of a block of floats are given
+  as stating nothing but whether the value may be null; and a
+  constructor whose fields are not all values, or of whose fields the
+  compiler states nothing, keeps its tag, and nothing is said of its
+  fields. Where no parameter states anything the list is empty, which
+  is what `FlambdaModel.make_handler_metadata` gives a handler. What
+  code states of its results is not converted: the model has a place
+  for it (`FlambdaModel.cm_result_subkinds`), the tool gives it
+  nothing, and no machine tests it. The round trip covers this much: the
+  printer of the model writes what the parameters state
+  (`flmodel_to_fexpr.ml`, `kinded_parameters`), and the term read
+  back is compared with the first by `FlambdaCompareSpec.expr_eqb`,
+  which asks the two to state the same.
 - **Tupled functions** are in the model as code that is marked
   (`FlambdaModel.cm_is_tupled`), and the converter gives code the mark
   of `Code0.is_tupled`. A direct call and a call of unknown arity of
@@ -1782,10 +1828,10 @@ it gave back.
   primitives that allocate or load, that is: a block that is not of
   values, and a field of a block that is not of kind value. The
   subkinds of the fields of a `Make_block` at block kind `Values`, and
-  whether a field may be null, are another matter: the model has no
-  subkinds, and the check of the kinds of the fields drops that much
-  of the kind of a field, as the conversion does of a parameter, where
-  it refused a block one of whose fields said more than `any_value`.
+  whether a field may be null, are another matter: the block kind of
+  the model's `Make_block` has no subkinds, and the check of the kinds
+  of the fields drops that much of the kind of a field, where it
+  refused a block one of whose fields said more than `any_value`.
   It is the check of the kinds only, beside the other conditions
   under which a block is converted. That is a claim of the term that
   is dropped, and no renaming: Simplify takes an argument that is a
@@ -1800,13 +1846,14 @@ it gave back.
   the kind of a field, with its subkind, to a parameter that it adds
   where it removes a block (`simplify/flow/mutable_unboxing.ml`), and
   the backend reads the subkind of a parameter (discrepancy C2-10);
-  the conversion drops the subkinds of parameters as well. The
-  subkinds of the two terms are not compared. A term read from a text
-  that does not write these kinds had lost them before the conversion
-  (discrepancy V2-2). The tool reads every field of a `Make_block` at
-  block kind `Values` as any value; this is provisional; decision D25
-  is open and is the human's: whether they are dropped or come into
-  the model. A `Make_array` that is marked
+  the conversion keeps the subkinds of parameters (the entry on them,
+  above). The subkinds of the fields of the two terms are not
+  compared. A term read from a text that does not write these kinds
+  had lost them before the conversion (discrepancy V2-2). The tool
+  reads every field of a `Make_block` at block kind `Values` as any
+  value; this is provisional; decision D25 is open for the fields of
+  a made block and is the human's: whether they are dropped or come
+  into the model. A `Make_array` that is marked
   `Immutable` and is of one of the three array kinds of values is
   converted to the model's
   `Make_immutable_array` at that kind, which is not the primitive of
@@ -2111,9 +2158,11 @@ it gave back.
     `pairs/several_compared.ml`, `pairs/several_loaded.ml`,
     `pairs/several_called.ml` and `pairs/cycle_read.ml`, which load
     it outside code, and `pairs/partly_tested.ml`, in which a
-    function inspects such a field through its argument, which the
-    test does not see as a load of the block: the block is bound
-    and the run has no value.
+    function loads such a field from its argument, which the
+    test does not see as a load of the block: the block is bound,
+    the call tests it, with its fields, against what the parameter
+    of the function states, which it is not, and the run has no
+    value.
     Measured outside this tree, on units that use another unit, at
     the default settings and at `-O3` (190 runs): seven runs come to
     "validated with its imports, given the .cmx", two of them from a
@@ -2189,7 +2238,16 @@ it gave back.
 - **What the tool reports**, in the same file (`check`, `run`,
   `observe`): that it calls `validate_unit` on the two terms converted
   or, where that does not validate them, `validate_unit_knowing` on the
-  same two terms, and prints the answer as it is. Where neither
+  same two terms, and prints the answer as it is. "The same" in an
+  answer is by the comparison at which the validation accepted the
+  pair (`FlambdaCompareOrderSpec.expr_says_at_least`; decision D25, at
+  parameters). That comparison is of a term made from the term before
+  with a term made from the term after, by the rewrites that come
+  before it in the validation; the two need not be the two terms
+  converted. The two terms compared at that step are the same up to
+  bound names but for what handlers and code state of their
+  parameters, and code of its results, of which the second states no
+  more than the first. Where neither
   validates them for any of the lists of calls that the tool
   tries, it calls
   `FlambdaValidateReadingSpec.validate_unit_reading` on the same
