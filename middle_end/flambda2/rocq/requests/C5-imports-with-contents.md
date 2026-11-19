@@ -33,6 +33,14 @@ Added on 18 November 2026. The request is kept as it was written, on
   `verdict_holds_from`).
 - What is trusted of a prefix is in `rocq/TRUST-LEDGER.md`, the
   entry "What the `.cmx` files of other units say".
+- The test tool converts a call of a C function whose callee is a
+  symbol of the compilation unit of external symbols, as it is in
+  every such call that the compiler makes, and a run that reaches
+  the call is undefined there (decision D50 of `DECISIONS.md`). So
+  the last sentence of section 4, that 92 of the 119 units are not
+  converted "for a C call first and then for the heap", is of the
+  day on which it was written: such a call no longer keeps a unit
+  from being converted.
 
 Paths of the model are in `middle_end/flambda2/rocq/`, and those of
 the compiler in `middle_end/flambda2/`, unless they say otherwise.
