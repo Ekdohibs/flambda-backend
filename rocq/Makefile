@@ -504,6 +504,10 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/unboxing/FlambdaUnboxVariantsRenameSpec.v \
   rewrites/unboxing/FlambdaUnboxVariantsSpec.v \
   semantics/FlambdaUnitFromProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderNamesProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderNamesSpec.v \
+  rewrites/unboxing/FlambdaUntagAtBinderProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderSpec.v \
   rewrites/unboxing/FlambdaUntagParamsNamesProofs.v \
   rewrites/unboxing/FlambdaUntagParamsProofs.v \
   rewrites/unboxing/FlambdaUntagParamsSpec.v \
