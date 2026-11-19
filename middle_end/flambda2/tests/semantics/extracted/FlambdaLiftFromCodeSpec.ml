@@ -7,6 +7,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaWellFormedSpec
 open List
+open ListDef
 
 (** val closed_named : named -> bool **)
 
@@ -84,6 +85,16 @@ let rec once_each seen = function
     then once_each seen rest
     else binding :: once_each (binding :: seen) rest
 
+(** val put_once_each : static_binding list -> (static_binding list *
+    static_binding) list -> static_binding list **)
+
+let rec put_once_each seen = function
+  | [] -> []
+  | p :: rest ->
+    let lifted, binding = p in
+    let put = once_each seen lifted in
+    app put (binding :: put_once_each (app put seen) rest)
+
 (** val lift_from_code : lets_in_code -> (path * lift_to) list -> path -> expr
     -> expr **)
 
@@ -98,7 +109,7 @@ let rec lift_from_code k lets at_path e =
     | None -> Let (x, kind, d, body0))
   | Let_static (bindings, body) ->
     Let_static
-      ( flat_map (binding_lift_from_code k) bindings,
+      ( put_once_each [] (map (binding_lift_from_code k) bindings),
         lift_from_code k lets (Coq_xO at_path) body )
   | Let_cont_non_recursive (k0, h, body) ->
     Let_cont_non_recursive
@@ -121,25 +132,23 @@ and handler_lift_from_code k lets at_path = function
     Handler (params, metadata, lift_from_code k lets at_path handler)
 
 (** val binding_lift_from_code : lets_in_code -> static_binding ->
-    static_binding list **)
+    static_binding list * static_binding **)
 
 and binding_lift_from_code k binding =
   match binding with
   | Bind_code (id, c) ->
     let (Code (params, my_closure, ret, exn, metadata, body)) = c in
-    app
-      (once_each [] (lifted_out_bindings (lets_of k id) root body))
-      (Bind_code
-         ( id,
-           Code
-             ( params,
-               my_closure,
-               ret,
-               exn,
-               metadata,
-               lift_from_code k (lets_of k id) root body ) )
-      :: [])
-  | _ -> binding :: []
+    ( lifted_out_bindings (lets_of k id) root body,
+      Bind_code
+        ( id,
+          Code
+            ( params,
+              my_closure,
+              ret,
+              exn,
+              metadata,
+              lift_from_code k (lets_of k id) root body ) ) )
+  | _ -> [], binding
 
 (** val lift_from_code_unit : unit_interface -> lets_in_code -> expr -> expr
     option **)

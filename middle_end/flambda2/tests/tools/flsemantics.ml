@@ -4328,8 +4328,12 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
   (* The [Let]s that mention no variable, in the body of code or in a handler
      that is not at toplevel. [given] has the symbols given in the same place,
      each with its constant: a [Let] that no symbol is left for takes one of
-     those, if it makes just that constant. The handlers of a group of recursive
-     continuations have the paths of FlambdaLiftSpec.rec_handlers_map. *)
+     those, if it makes just that constant. For the body of code the place is
+     the group of static bindings that binds the code: the model puts the
+     bindings lifted out of the bodies of one group once each
+     (FlambdaLiftFromCodeSpec.put_once_each). The handlers of a group of
+     recursive continuations have the paths of
+     FlambdaLiftSpec.rec_handlers_map. *)
   let plain (s : Model.simple) =
     match s with Symbol _ | Const _ -> true | Var _ -> false
   in
@@ -4353,7 +4357,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
          symbol, so the closure of the term after may have fewer;
          FlambdaValidateSpec.without_slots removes them from the term before
          after the lifting. Nothing is believed of this: the validation checks
-         the lifting, and a wrong guess is a unit that is not validated. *)
+         the lifting; whatever is guessed, the verdict is the validation's. *)
       (match d with
       | Set_of_closures (code, slots) when plain_slots slots -> (
         match
@@ -4717,12 +4721,13 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     match e with
     | Let (_, _, _, body) -> in_groups body
     | Let_static (bindings, body) ->
+      let given = ref [] in
       List.iter
         (fun (binding : Model.static_binding) ->
           match binding with
           | Bind_code (id, Code (_, _, _, _, _, code_body)) -> (
             let code_lets = ref [] in
-            in_code (code_lets, ref []) Lift.root code_body;
+            in_code (code_lets, given) Lift.root code_body;
             match !code_lets with
             | [] -> ()
             | _ :: _ -> out_of_code := (id, List.rev !code_lets) :: !out_of_code
