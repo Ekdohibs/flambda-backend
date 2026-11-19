@@ -37,6 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs
   FlambdaInlineSiblingsSpec FlambdaInlineSiblingsProofs
   FlambdaValidatorEquivarianceBaseProofs FlambdaKnownSiblingsSpec.
+From OxCamlFlambda2 Require FlambdaStatedScopeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -100,7 +101,8 @@ Proof.
   set
     (c' :=
        Code params my_closure ret exn metadata
-         (inline_known_calls kept others_code others_symbols code_body)).
+         (inline_known_calls_under [] kept others_code others_symbols
+            code_body)).
   assert (Hrefine :
     bindings_refine (statics_know_both others_code others_symbols)
       (done ++ Bind_code id c :: todo) (done ++ Bind_code id c' :: todo)
@@ -116,9 +118,15 @@ Proof.
         | intros vars' conts' statics' hp' rd' [Hcode' Hsymbols'];
           first
             [ apply equivalent_refines,
-                inline_known_calls_equivalent_knowing; assumption
+                inline_known_calls_equivalent_knowing;
+              first
+                [ assumption
+                | apply FlambdaStatedScopeProofs.stated_hold_nil ]
             | apply equivalent_refines, equivalent_sym,
-                inline_known_calls_equivalent_knowing; assumption ] ]. }
+                inline_known_calls_equivalent_knowing;
+              first
+                [ assumption
+                | apply FlambdaStatedScopeProofs.stated_hold_nil ] ] ]. }
   destruct Hrefine as [[Hf Hb] [Hf' Hb']].
   apply (fun H =>
     eval_static_bindings_related _ vars _ _ H statics statics

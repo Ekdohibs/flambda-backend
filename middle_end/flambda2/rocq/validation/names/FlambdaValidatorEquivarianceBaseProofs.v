@@ -38,7 +38,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaNominalSpec
   FlambdaNominalProofs FlambdaAlphaSpec FlambdaAlphaProofs
   FlambdaNormaliseSpec FlambdaEquivarianceSpec FlambdaEquivarianceProofs
-  FlambdaUnusedContsSpec.
+  FlambdaUnusedContsSpec FlambdaStatedScopeSpec
+  FlambdaStatedScopeNamesProofs.
 Import ListNotations.
 
 Lemma existsb_map_with {A B : Type} (f : B -> bool) (g : A -> B)
@@ -179,12 +180,26 @@ Proof.
   unfold call_agrees_b. simpl. rewrite length_map. reflexivity.
 Qed.
 
-Lemma inline_known_apply_equivariant (r : renaming) (kept : list code_id)
-    (known_code : list (code_id * code))
+(* The test of [inline_known_apply] reads what is known of the
+   variables in scope, which is renamed by
+   FlambdaStatedScopeNamesProofs.rename_stated_in_scope. *)
+Lemma call_agrees_stated_renamed (r : renaming) (S : stated_in_scope)
+    (ap : apply_expr) (c : code) :
+  call_agrees_stated (rename_stated_in_scope r S) (rename_apply r ap)
+    (rename_code r c)
+  = call_agrees_stated S ap c.
+Proof.
+  destruct c as [params my_closure ret exn metadata body].
+  unfold call_agrees_stated. simpl.
+  rewrite length_map, are_stated_equivariant. reflexivity.
+Qed.
+
+Lemma inline_known_apply_equivariant (r : renaming) (S : stated_in_scope)
+    (kept : list code_id) (known_code : list (code_id * code))
     (known_symbols : list (symbol * option code_id)) (ap : apply_expr) :
-  inline_known_apply kept (map_values (rename_code r) known_code)
-    known_symbols (rename_apply r ap)
-  = rename_expr r (inline_known_apply kept known_code known_symbols ap).
+  inline_known_apply (rename_stated_in_scope r S) kept
+    (map_values (rename_code r) known_code) known_symbols (rename_apply r ap)
+  = rename_expr r (inline_known_apply S kept known_code known_symbols ap).
 Proof.
   unfold inline_known_apply.
   replace (ap_callee (rename_apply r ap)) with (rename_simple r (ap_callee ap))
@@ -200,29 +215,33 @@ Proof.
   destruct (lookup called known_code) as [c | ]; cbn [option_map];
     [ | reflexivity ].
   rewrite FlambdaEquivarianceProofs.inlinable_b_equivariant,
-    call_agrees_b_renamed.
+    call_agrees_stated_renamed.
   destruct
     (negb (among called kept)
-     && (Pos.eqb code called && inlinable_b ap c && call_agrees_b ap c));
+     && (Pos.eqb code called && inlinable_b ap c
+         && call_agrees_stated S ap c));
     [ | reflexivity ].
   apply inlined_body_equivariant.
 Qed.
 
-Fixpoint inline_known_calls_equivariant_aux (r : renaming)
+Fixpoint inline_known_calls_equivariant_under (r : renaming)
     (kept : list code_id) (known_symbols : list (symbol * option code_id))
     (e : expr) :
-  ∀ known_code : list (code_id * code),
-    inline_known_calls kept (map_values (rename_code r) known_code)
-      known_symbols (rename_expr r e)
-    = rename_expr r (inline_known_calls kept known_code known_symbols e)
-with inline_known_calls_in_handler_equivariant (r : renaming)
+  ∀ (S : stated_in_scope) (known_code : list (code_id * code)),
+    inline_known_calls_under (rename_stated_in_scope r S) kept
+      (map_values (rename_code r) known_code) known_symbols (rename_expr r e)
+    = rename_expr r
+        (inline_known_calls_under S kept known_code known_symbols e)
+with inline_known_calls_in_handler_equivariant_under (r : renaming)
     (kept : list code_id) (known_symbols : list (symbol * option code_id))
     (h : continuation_handler) :
-  ∀ known_code : list (code_id * code),
-    inline_known_calls_in_handler kept (map_values (rename_code r) known_code)
-      known_symbols (rename_handler r h)
+  ∀ (S : stated_in_scope) (known_code : list (code_id * code)),
+    inline_known_calls_in_handler_under (rename_stated_in_scope r S) kept
+      (map_values (rename_code r) known_code) known_symbols
+      (rename_handler r h)
     = rename_handler r
-        (inline_known_calls_in_handler kept known_code known_symbols h)
+        (inline_known_calls_in_handler_under S kept known_code known_symbols
+           h)
 with inline_known_calls_in_binding_equivariant (r : renaming)
     (kept : list code_id) (known_symbols : list (symbol * option code_id))
     (binding : static_binding) :
@@ -243,13 +262,15 @@ Proof.
   - destruct e
       as [ x kind d body | bindings body | k h body | handlers body | ap | ac
          | scrutinee arms | ];
-      intros known_code;
+      intros S known_code;
       [ | | | | exact
-                  (inline_known_apply_equivariant r kept known_code
+                  (inline_known_apply_equivariant r S kept known_code
                      known_symbols ap)
       | | | ];
       simpl; try reflexivity.
-    + rewrite inline_known_calls_equivariant_aux. reflexivity.
+    + rewrite stated_of_named_equivariant, stated_in_scope_cons_renamed,
+        inline_known_calls_equivariant_under.
+      reflexivity.
     + (* Let_static: what is known in the body is what the group, as
          rewritten, makes known *)
       assert (Hbindings :
@@ -266,23 +287,40 @@ Proof.
                    known_symbols binding), IH.
         reflexivity. }
       rewrite Hbindings, codes_of_equivariant, symbols_of_renamed,
-        inline_known_calls_equivariant_aux.
+        inline_known_calls_equivariant_under.
       reflexivity.
-    + rewrite inline_known_calls_in_handler_equivariant,
-        inline_known_calls_equivariant_aux.
+    + rewrite inline_known_calls_in_handler_equivariant_under,
+        inline_known_calls_equivariant_under.
       reflexivity.
-    + rewrite inline_known_calls_equivariant_aux. f_equal.
+    + rewrite inline_known_calls_equivariant_under. f_equal.
       induction handlers as [ | [k h] handlers IH]; simpl; [ reflexivity | ].
-      rewrite (inline_known_calls_in_handler_equivariant r kept known_symbols
-                 h),
+      rewrite (inline_known_calls_in_handler_equivariant_under r kept
+                 known_symbols h),
         IH.
       reflexivity.
-  - destruct h as [params metadata handler]. intros known_code. simpl.
-    rewrite inline_known_calls_equivariant_aux. reflexivity.
+  - destruct h as [params metadata handler]. intros S known_code. simpl.
+    rewrite params_stated_equivariant, inline_known_calls_equivariant_under.
+    reflexivity.
   - destruct binding as [id c | id | sym const]; intros known_code; simpl;
       try reflexivity.
     rewrite inline_known_calls_in_code_equivariant. reflexivity.
   - destruct c as [params my_closure ret exn metadata body].
     intros known_code. simpl.
-    rewrite inline_known_calls_equivariant_aux. reflexivity.
+    rewrite <-
+      (inline_known_calls_equivariant_under r kept known_symbols body []
+         known_code).
+    reflexivity.
+Qed.
+
+(* The pass from the empty scope, which a renaming leaves as it is. *)
+Lemma inline_known_calls_equivariant_aux (r : renaming)
+    (kept : list code_id) (known_symbols : list (symbol * option code_id))
+    (e : expr) :
+  ∀ known_code : list (code_id * code),
+    inline_known_calls kept (map_values (rename_code r) known_code)
+      known_symbols (rename_expr r e)
+    = rename_expr r (inline_known_calls kept known_code known_symbols e).
+Proof.
+  intros known_code.
+  exact (inline_known_calls_equivariant_under r kept known_symbols e [] _).
 Qed.
