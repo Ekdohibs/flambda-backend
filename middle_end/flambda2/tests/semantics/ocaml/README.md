@@ -103,6 +103,14 @@ and its two exceptions).
   the sources, here, in `script/` and in `library/`, that have an
   unboxed tuple, an unboxed number, a parameter marked `local_` or
   the literal of an immutable array.
+- A source identified as following lines of a file of `stdlib/`, or
+  as reduced from one, is given the notice of that file at its head,
+  byte for byte; its own comment, under the notice, names the file and
+  the lines, and says what matches them and what differs. Absence of
+  such a notice is not a finding that the source contains no text from
+  the library: many sources declare primitives in the same form as the
+  library (`external ( + ) : int -> int -> int = "%addint"`), and a
+  match alone does not establish where the text came from.
 
 ## What the conversion does to a unit
 
@@ -220,6 +228,9 @@ unit made from OCaml.
   "Calls of C functions", says what is kept of a call, and what a
   verdict of a function that calls one rests on: the rewrites of the
   validation as they are written, and no theorem.
+  A file of `../c_calls/` identified as having items taken or adapted
+  from files of `stdlib/` begins with their notice, and its own
+  comment says which item is from which file and which lines.
 
 ## What the verdicts mean
 
