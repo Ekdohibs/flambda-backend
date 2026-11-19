@@ -12,7 +12,7 @@ let $camlExported_externals__first_const_0 = Block 0 () in
          ($`*extern*`.c_signal : val? -> val?) (c/81) -> k/24 * k/25
  in
  let code size(10) stub
-       `fn[exported_externals.ml:15,0--40]_1` (prim/88 : val)
+       `fn[exported_externals.ml:42,0--40]_1` (prim/88 : val)
          my_closure/89 &my_alloc_region/90 my_depth/91
          -> k/27 * k/28
          : imm tagged =
@@ -21,7 +21,7 @@ let $camlExported_externals__first_const_0 = Block 0 () in
      ($`*extern*`.c_signal : val? -> val?) (prim/88) -> k/27 * k/28
  in
  let code size(10) stub
-       `fn[exported_externals.ml:13,0--43]_2`
+       `fn[exported_externals.ml:40,0--43]_2`
          (prim/93 : val, prim/94 : imm tagged)
          my_closure/95 &my_alloc_region/96 my_depth/97
          -> k/29 * k/30
@@ -33,7 +33,7 @@ let $camlExported_externals__first_const_0 = Block 0 () in
        -> k/29 * k/30
  in
  let code size(10) stub
-       `fn[exported_externals.ml:11,0--40]_3` (prim/99 : imm tagged)
+       `fn[exported_externals.ml:38,0--40]_3` (prim/99 : imm tagged)
          my_closure/100 &my_alloc_region/101 my_depth/102
          -> k/31 * k/32
          : val =
@@ -44,23 +44,23 @@ let $camlExported_externals__first_const_0 = Block 0 () in
  let wait_and_signal/104 =
    closure wait_and_signal_0 @wait_and_signal &toplevel
  in
- let `fn[exported_externals.ml:15,0--40]/105` =
-   closure `fn[exported_externals.ml:15,0--40]_1`
-     @`fn[exported_externals.ml:15,0--40]` &toplevel
+ let `fn[exported_externals.ml:42,0--40]/105` =
+   closure `fn[exported_externals.ml:42,0--40]_1`
+     @`fn[exported_externals.ml:42,0--40]` &toplevel
  in
- let `fn[exported_externals.ml:13,0--43]/106` =
-   closure `fn[exported_externals.ml:13,0--43]_2`
-     @`fn[exported_externals.ml:13,0--43]` &toplevel
+ let `fn[exported_externals.ml:40,0--43]/106` =
+   closure `fn[exported_externals.ml:40,0--43]_2`
+     @`fn[exported_externals.ml:40,0--43]` &toplevel
  in
- let `fn[exported_externals.ml:11,0--40]/107` =
-   closure `fn[exported_externals.ml:11,0--40]_3`
-     @`fn[exported_externals.ml:11,0--40]` &toplevel
+ let `fn[exported_externals.ml:38,0--40]/107` =
+   closure `fn[exported_externals.ml:38,0--40]_3`
+     @`fn[exported_externals.ml:38,0--40]` &toplevel
  in
  let Pmakeblock/108 =
    %block.[`0`].`toplevel`
-     (`fn[exported_externals.ml:11,0--40]/107`,
-      `fn[exported_externals.ml:13,0--43]/106`,
-      `fn[exported_externals.ml:15,0--40]/105`,
+     (`fn[exported_externals.ml:38,0--40]/107`,
+      `fn[exported_externals.ml:40,0--43]/106`,
+      `fn[exported_externals.ml:42,0--40]/105`,
       wait_and_signal/104)
  in
  cont k/23 (Pmakeblock/108))
