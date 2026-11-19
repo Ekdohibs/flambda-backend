@@ -529,7 +529,7 @@ Proof.
        (order_statics_as_scope c) Hclosed_floated Halike_floated)
     as (Hclosed_last & Halike_last).
   rewrite
-    (expr_eqb_renamed_alike r r2
+    (expr_says_at_least_renamed_alike r r2
        (order_statics_as c
           (float_code (without_statics unused (without_slots slots l))))
        c Hclosed_last Halike_last).

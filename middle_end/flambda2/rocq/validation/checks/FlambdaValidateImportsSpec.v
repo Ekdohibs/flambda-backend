@@ -171,7 +171,7 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaCompareSpec FlambdaStaticsOrderSpec
+  FlambdaCompareSpec FlambdaCompareOrderSpec FlambdaStaticsOrderSpec
   FlambdaUnusedStaticsSpec FlambdaUnusedHeadStaticsSpec FlambdaLoopifySpec
   FlambdaStubCallsSpec FlambdaNeverReturnsSpec
   FlambdaLiftSpec FlambdaLiftFromCodeSpec FlambdaLiftFromArmsSpec
@@ -646,7 +646,12 @@ Definition head_removal_free_in (statics : static_env) (D : dropped)
    - of the term before, [lifted_free_in];
    - where the first of the two comparisons of lifted terms fails, so
      that the verdict is of the second, [statics_first_free_in] of
-     both terms that the second compares.
+     both terms that the second compares. The first comparison is
+     asked here as [validate_unit] asks it, with the same function
+     of the same two terms
+     (FlambdaCompareOrderSpec.expr_says_at_least, the term made from
+     the term before first), and only to tell which of the two gave
+     the verdict.
    Nothing is asked for the removal of value slots, for the code taken
    first, for the reading of value slots that are known, or for the
    sharing of the reads of two places that hold one variable: their laws
@@ -680,7 +685,7 @@ Definition lifted_holds_from (statics : static_env) (rounds : nat)
   in
   head_removal_free_in statics unused tidied
   && lifted_free_in statics rounds (unit_continuations Ls) Ls kept before
-  && (expr_eqb [] []
+  && (expr_says_at_least [] []
         (order_statics_as (float_code (with_code_first after))
            (float_code lifted))
         (float_code (with_code_first after))

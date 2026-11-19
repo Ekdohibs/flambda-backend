@@ -22,7 +22,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaBindersSpec FlambdaCompareSpec
-  FlambdaCompareProofs FlambdaNormaliseSpec FlambdaNormaliseProofs
+  FlambdaCompareProofs FlambdaCompareOrderSpec FlambdaCompareOrderProofs
+  FlambdaNormaliseSpec FlambdaNormaliseProofs
   FlambdaStaticsOrderSpec FlambdaStaticsOrderProofs FlambdaUnusedStaticsSpec
   FlambdaUnusedStaticsProofs FlambdaUnusedHeadStaticsSpec
   FlambdaUnusedHeadStaticsProofs FlambdaLoopifySpec FlambdaLoopifyProofs
@@ -598,13 +599,13 @@ Proof.
      && head_removal_free_in statics unused a
      && lifted_observed_free_in statics rounds (unit_continuations Ls) Ls
           kept source
-     && (expr_eqb [] []
+     && (expr_says_at_least [] []
            (order_statics_as (float_code (with_code_first c))
               (float_code lifted))
            (float_code (with_code_first c))
          || statics_first_free_in statics Ls c
             && statics_first_free_in statics Ls lifted
-            && expr_eqb [] []
+            && expr_says_at_least [] []
                  (order_statics_as (with_statics_first Ls c)
                     (with_statics_first Ls lifted))
                  (with_statics_first Ls c))) eqn:Htests;
@@ -647,12 +648,16 @@ Proof.
   - (* the first comparison: the code of the unit after first *)
     apply (refines_trans _
       (State (with_code_first c) [] conts statics empty_heap no_reads)).
-    { apply expr_equivalent_refines.
-      apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
-      apply (expr_equivalent_trans _ _ _
-        (order_statics_as_equivalent (float_code (with_code_first c)) _)).
-      apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hsame)).
-      apply expr_equivalent_sym, float_code_equivalent. }
+    { apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _ (float_code_equivalent _))).
+      apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _
+           (order_statics_as_equivalent (float_code (with_code_first c))
+              _))).
+      apply (expr_refines_trans _ _ _
+        (expr_says_at_least_sound _ _ Hsame)).
+      apply expr_equivalent_refines, expr_equivalent_sym,
+        float_code_equivalent. }
     apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.
@@ -665,10 +670,10 @@ Proof.
          (with_statics_first_equivalent_followed Ls lifted Hfree_lifted))).
     apply (refines_trans _
       (State (with_statics_first Ls c) [] conts statics empty_heap no_reads)).
-    { apply expr_equivalent_refines.
-      apply (expr_equivalent_trans _ _ _
-        (order_statics_as_equivalent (with_statics_first Ls c) _)).
-      exact (expr_eqb_sound _ _ Hsame). }
+    { apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _
+           (order_statics_as_equivalent (with_statics_first Ls c) _))).
+      exact (expr_says_at_least_sound _ _ Hsame). }
     apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.

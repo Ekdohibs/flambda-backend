@@ -122,7 +122,20 @@
    of the unit after bound first, up to the order of the static
    bindings and the place of the code; and, if that fails, with the
    static bindings of both that need nothing from around them bound
-   first (FlambdaValidateSpec.with_statics_first).
+   first (FlambdaValidateSpec.with_statics_first). Each of the two
+   comparisons is the one that [validate_unit] asks
+   (FlambdaCompareOrderSpec.expr_says_at_least), with the term made
+   from the unit before first. The two are to be the same up to
+   bound names but for what their binders state: where two handlers,
+   or two pieces of code, are paired, that term is to state at least
+   as much of its parameters as the term made from the unit after,
+   and need not state the same; what two paired pieces of code state
+   of their results is compared the same way round, which only makes
+   the comparison refuse more. What it gives is that the second term
+   refines the first, and the check needs no more: the term compared
+   first is reached from the unit before, and the unit after refines
+   the term compared second. It does not say that the values that
+   code returns are of what the code states of its results.
 
    The unit is run from the static environment of its imports
    (FlambdaImportsSpec.imports_statics). The check computes what the
@@ -146,7 +159,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaBindersSpec FlambdaCompareSpec FlambdaNormaliseSpec
+  FlambdaBindersSpec FlambdaCompareSpec FlambdaCompareOrderSpec
+  FlambdaNormaliseSpec
   FlambdaStaticsOrderSpec FlambdaUnusedStaticsSpec
   FlambdaUnusedHeadStaticsSpec FlambdaUnusedSlotsSpec FlambdaLoopifySpec
   FlambdaLiftSpec FlambdaKnownSlotsSpec
@@ -243,13 +257,13 @@ Definition validate_unit_related (imports : list (symbol * import_class))
     && head_removal_free_in statics unused tidied
     && lifted_observed_free_in statics rounds (unit_continuations Ls) Ls kept
          source
-    && (expr_eqb [] []
+    && (expr_says_at_least [] []
           (order_statics_as (float_code (with_code_first target))
              (float_code lifted))
           (float_code (with_code_first target))
         || statics_first_free_in statics Ls target
            && statics_first_free_in statics Ls lifted
-           && expr_eqb [] []
+           && expr_says_at_least [] []
                 (order_statics_as (with_statics_first Ls target)
                    (with_statics_first Ls lifted))
                 (with_statics_first Ls target))

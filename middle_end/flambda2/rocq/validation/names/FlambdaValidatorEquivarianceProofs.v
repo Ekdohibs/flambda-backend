@@ -48,6 +48,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaBindersSpec FlambdaFreeNamesSpec FlambdaFreeNamesProofs
   FlambdaUnboxSpec FlambdaWellFormedSpec FlambdaWellKindedSpec
   FlambdaCompareSpec FlambdaCompareAlphaSpec FlambdaCompareAlphaProofs
+  FlambdaCompareOrderSpec FlambdaCompareOrderProofs
+  FlambdaCompareOrderLawsSpec FlambdaCompareOrderLawsProofs
   FlambdaMyClosureSpec FlambdaMyClosureProofs FlambdaLiftSpec
   FlambdaLiftProofs FlambdaLiftFromCodeSpec FlambdaLiftFromCodeProofs
   FlambdaLiftAroundSpec
@@ -5081,6 +5083,32 @@ Proof.
     rewrite Hsame in Habsurd. discriminate.
 Qed.
 
+(* The same of the comparison that lets its second term state less.
+   [expr_eqb] accepts the two renamings of the first term, either way
+   round; the other comparison accepts what [expr_eqb] accepts, is
+   transitive, and answers the same of two terms renamed by one
+   renaming. That it is not symmetric does not matter: only the two
+   renamings of the first term are taken either way round. *)
+Theorem expr_says_at_least_renamed_alike :
+  expr_says_at_least_renamed_alike_statement.
+Proof.
+  intros r r' e e' Hclosed Halike.
+  pose proof (expr_eqb_renamed_alike r r' e e Hclosed Halike) as Hforth.
+  rewrite (expr_eqb_reflexive e) in Hforth.
+  pose proof (expr_eqb_symmetric _ _ Hforth) as Hback.
+  pose proof (expr_eqb_says_at_least _ _ _ _ Hforth) as Hforth'.
+  pose proof (expr_eqb_says_at_least _ _ _ _ Hback) as Hback'.
+  pose proof (expr_says_at_least_equivariant r [] [] e e') as Hsame.
+  cbn [rename_name_map map] in Hsame.
+  destruct (expr_says_at_least [] [] e e') eqn:He.
+  - exact (expr_says_at_least_transitive _ _ _ Hforth' Hsame).
+  - destruct
+      (expr_says_at_least [] [] (rename_expr r' e) (rename_expr r e'))
+      eqn:He'; [ | reflexivity ].
+    pose proof (expr_says_at_least_transitive _ _ _ Hback' He') as Habsurd.
+    rewrite Hsame in Habsurd. discriminate.
+Qed.
+
 Theorem expr_eqb_up_to : expr_eqb_up_to_statement.
 Proof.
   intros f r e e' Kf Hf Hclosed.
@@ -6533,8 +6561,8 @@ Proof.
   intros r r1 rounds unused slots G Ls kept before after Hclosed Halike1
     Hheld.
   unfold validate_unit.
-  rewrite (expr_eqb_renamed_alike r r1 before after Hclosed Halike1).
-  destruct (expr_eqb [] [] before after); [ reflexivity | ].
+  rewrite (expr_says_at_least_renamed_alike r r1 before after Hclosed Halike1).
+  destruct (expr_says_at_least [] [] before after); [ reflexivity | ].
   cbv zeta.
   assert (Hunits : rename_conts_alike r r1 (unit_continuations Ls)).
   { intros k Hk. apply Hheld. rewrite among_app, Hk. reflexivity. }
@@ -6675,19 +6703,19 @@ Proof.
        (order_statics_as_scope c') Hclosed_first Halike_first)
     as (Hclosed_last' & Halike_last').
   rewrite
-    (expr_eqb_renamed_alike r r' (order_statics_as a b) a Hclosed_ordered
-       Halike_ordered),
-    (expr_eqb_renamed_alike r r'
+    (expr_says_at_least_renamed_alike r r' (order_statics_as a b) a
+       Hclosed_ordered Halike_ordered),
+    (expr_says_at_least_renamed_alike r r'
        (order_statics_as a (without_statics unused b)) a Hclosed_both
        Halike_both),
-    (expr_eqb_renamed_alike r r'
+    (expr_says_at_least_renamed_alike r r'
        (order_statics_as a' (without_statics unused b)) a' Hclosed_both'
        Halike_both'),
-    (expr_eqb_renamed_alike r r''
+    (expr_says_at_least_renamed_alike r r''
        (order_statics_as c
           (float_code (without_statics unused (without_slots slots l))))
        c Hclosed_last Halike_last),
-    (expr_eqb_renamed_alike r r''
+    (expr_says_at_least_renamed_alike r r''
        (order_statics_as c'
           (with_statics_first Ls
              (without_statics unused (without_slots slots l))))

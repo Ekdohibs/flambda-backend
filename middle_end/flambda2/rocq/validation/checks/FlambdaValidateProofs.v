@@ -33,6 +33,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaCompareSpec FlambdaCompareProofs
+  FlambdaCompareOrderSpec FlambdaCompareOrderProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaBlockLoadSpec
   FlambdaBlockLoadProofs FlambdaCodeLetsSpec FlambdaCodeLetsProofs
   FlambdaCseSpec FlambdaCseProofs
@@ -576,24 +577,26 @@ Proof.
     (tidied_after_equivalent rounds _)).
 Qed.
 
-(* A term that is, once its static bindings are in the order of the
-   term after normalised, the same as that term up to bound names: it
-   is equivalent to the term after. *)
-Lemma ordered_same_equivalent (rounds : nat) (kept : list code_id)
+(* A term that the comparison accepts, once its static bindings are in
+   the order of the term after normalised, before that term: the term
+   after refines it. *)
+Lemma ordered_same_refines (rounds : nat) (kept : list code_id)
     (e after : expr) :
-  expr_eqb [] []
+  expr_says_at_least [] []
     (order_statics_as (tidied_after rounds (normalise_after rounds kept after))
        e)
     (tidied_after rounds (normalise_after rounds kept after))
   = true ->
-  expr_equivalent e after.
+  expr_refines e after.
 Proof.
   intros Heq.
-  apply (expr_equivalent_trans _ _ _
-    (order_statics_as_equivalent
-       (tidied_after rounds (normalise_after rounds kept after)) e)).
-  apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Heq)).
-  apply expr_equivalent_sym, tidied_after_normalised_equivalent.
+  apply (expr_refines_trans _ _ _
+    (expr_equivalent_refines _ _
+       (order_statics_as_equivalent
+          (tidied_after rounds (normalise_after rounds kept after)) e))).
+  apply (expr_refines_trans _ _ _ (expr_says_at_least_sound _ _ Heq)).
+  apply expr_equivalent_refines, expr_equivalent_sym,
+    tidied_after_normalised_equivalent.
 Qed.
 
 (* The calls of the term before taken on, or not: it is refined. *)
@@ -621,12 +624,12 @@ Proof.
   destruct taken; [ apply returns_taken_on_refines | apply expr_refines_refl ].
 Qed.
 
-(* The two normalised terms being the same up to bound names, once the
-   static bindings of the first are in the order of the second, the term
+(* The comparison accepting the two normalised terms, once the static
+   bindings of the first are in the order of the second, the term
    after refines the term before. *)
 Lemma normalised_refines (rounds : nat) (kept : list code_id) (taken : bool)
     (before after : expr) :
-  expr_eqb [] []
+  expr_says_at_least [] []
     (order_statics_as (tidied_after rounds (normalise_after rounds kept after))
        (tidied_before rounds
           (with_returns taken (normalise_before rounds kept before))))
@@ -639,8 +642,7 @@ Proof.
     (normalise_before_refines rounds kept before)).
   apply (expr_refines_trans _ _ _ (with_returns_refines taken _)).
   apply (expr_refines_trans _ _ _ (tidied_before_refines rounds _)).
-  apply expr_equivalent_refines.
-  exact (ordered_same_equivalent rounds kept _ after Heq).
+  exact (ordered_same_refines rounds kept _ after Heq).
 Qed.
 
 Lemma expr_refines_program (source target : expr) :
@@ -1060,8 +1062,8 @@ Theorem validate_unit_sound_everywhere :
   validate_unit_sound_everywhere_statement.
 Proof.
   intros rounds unused slots G Ls kept before after. unfold validate_unit.
-  destruct (expr_eqb [] [] before after) eqn:Hsame.
-  - intros _. apply expr_equivalent_refines, expr_eqb_sound, Hsame.
+  destruct (expr_says_at_least [] [] before after) eqn:Hsame.
+  - intros _. apply expr_says_at_least_sound, Hsame.
   - cbv zeta. intros Hvalidated.
     apply (expr_refines_trans _ _ _ (demote_full_stub_calls_refines before)).
     apply (expr_refines_trans _ _ _
@@ -1075,7 +1077,7 @@ Proof.
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
-    destruct (expr_eqb [] []
+    destruct (expr_says_at_least [] []
                 (order_statics_as a
                    (tidied_before rounds
                       (with_returns taken
@@ -1084,7 +1086,7 @@ Proof.
       eqn:Hnormalised.
     + intros _.
       exact (normalised_refines rounds kept taken before after Hnormalised).
-    + destruct (expr_eqb [] []
+    + destruct (expr_says_at_least [] []
                   (order_statics_as a
                      (without_statics unused
                         (tidied_before rounds
@@ -1093,7 +1095,7 @@ Proof.
                   a);
         [ intros [H | H]; discriminate H | ].
       set (c := without_head_statics unused a).
-      destruct (expr_eqb [] []
+      destruct (expr_says_at_least [] []
                   (order_statics_as c
                      (without_statics unused
                         (tidied_before rounds
@@ -1102,7 +1104,7 @@ Proof.
                   c);
         [ intros [H | H]; discriminate H | ].
       destruct
-        (expr_eqb [] []
+        (expr_says_at_least [] []
            (order_statics_as (float_code (with_code_first c))
               (float_code
                  (without_statics unused
@@ -1114,7 +1116,7 @@ Proof.
            (float_code (with_code_first c)));
         [ intros [H | H]; discriminate H | ].
       destruct
-        (expr_eqb [] []
+        (expr_says_at_least [] []
            (order_statics_as (with_statics_first Ls c)
               (with_statics_first Ls
                  (without_statics unused
@@ -1130,10 +1132,9 @@ Qed.
 Theorem validate_unit_sound : validate_unit_sound_statement.
 Proof.
   intros rounds unused slots G Ls kept before after. unfold validate_unit.
-  destruct (expr_eqb [] [] before after) eqn:Hsame.
+  destruct (expr_says_at_least [] [] before after) eqn:Hsame.
   - intros _.
-    apply expr_refines_program, expr_equivalent_refines, expr_eqb_sound,
-      Hsame.
+    apply expr_refines_program, expr_says_at_least_sound, Hsame.
   - cbv zeta. intros Hvalidated.
     apply (refines_trans _ _ _
       (expr_refines_program _ _ (demote_full_stub_calls_refines before))).
@@ -1150,7 +1151,7 @@ Proof.
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
-    destruct (expr_eqb [] []
+    destruct (expr_says_at_least [] []
                 (order_statics_as a
                    (tidied_before rounds
                       (with_returns taken
@@ -1168,7 +1169,7 @@ Proof.
           (normalise_before_refines rounds kept before)).
         apply (expr_refines_trans _ _ _ (with_returns_refines taken _)).
         apply tidied_before_refines. }
-      destruct (expr_eqb [] []
+      destruct (expr_says_at_least [] []
                   (order_statics_as a
                      (without_statics unused
                         (tidied_before rounds
@@ -1178,8 +1179,8 @@ Proof.
       * intros _. apply (refines_trans _ _ _ Hbefore).
         apply (refines_trans _ _ _
           (without_statics_program_refines unused _)).
-        apply expr_refines_program, expr_equivalent_refines.
-        exact (ordered_same_equivalent rounds kept _ after Hremoved).
+        apply expr_refines_program.
+        exact (ordered_same_refines rounds kept _ after Hremoved).
       * assert (Hafter :
           equivalent (State after [] [] empty_static_env empty_heap no_reads)
             (State a [] [] empty_static_env empty_heap no_reads))
@@ -1190,7 +1191,7 @@ Proof.
         { apply (refines_trans _ _ _
             (without_head_statics_program_refines unused a)).
           apply equivalent_refines, equivalent_sym, Hafter. }
-        destruct (expr_eqb [] []
+        destruct (expr_says_at_least [] []
                     (order_statics_as c
                        (without_statics unused
                           (tidied_before rounds
@@ -1203,10 +1204,11 @@ Proof.
             apply (refines_trans _
               (State c [] [] empty_static_env empty_heap no_reads));
               [ | exact Hcleaned ];
-            apply expr_refines_program, expr_equivalent_refines;
-            apply (expr_equivalent_trans _ _ _
-              (order_statics_as_equivalent c _));
-            exact (expr_eqb_sound _ _ Hremoved_head)
+            apply expr_refines_program;
+            apply (expr_refines_trans _ _ _
+              (expr_equivalent_refines _ _
+                 (order_statics_as_equivalent c _)));
+            exact (expr_says_at_least_sound _ _ Hremoved_head)
           | ].
         set (lifted :=
           without_statics unused
@@ -1226,7 +1228,7 @@ Proof.
           apply (refines_trans _ _ _ (without_slots_program_refines slots _)).
           apply without_statics_program_refines. }
         destruct
-          (expr_eqb [] []
+          (expr_says_at_least [] []
              (order_statics_as (float_code (with_code_first c))
                 (float_code lifted))
              (float_code (with_code_first c))) eqn:Hlifted.
@@ -1234,20 +1236,24 @@ Proof.
            apply (refines_trans _
              (State (with_code_first c) [] [] empty_static_env empty_heap
                 no_reads)).
-           { apply expr_refines_program, expr_equivalent_refines.
-             apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
-             apply (expr_equivalent_trans _ _ _
-               (order_statics_as_equivalent
-                  (float_code (with_code_first c)) _)).
-             apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hlifted)).
-             apply expr_equivalent_sym, float_code_equivalent. }
+           { apply expr_refines_program.
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _ (float_code_equivalent _))).
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _
+                  (order_statics_as_equivalent
+                     (float_code (with_code_first c)) _))).
+             apply (expr_refines_trans _ _ _
+               (expr_says_at_least_sound _ _ Hlifted)).
+             apply expr_equivalent_refines, expr_equivalent_sym,
+               float_code_equivalent. }
            apply (refines_trans _
              (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].
            apply equivalent_refines, equivalent_sym.
            apply with_code_first_program_equivalent.
         -- destruct
-             (expr_eqb [] []
+             (expr_says_at_least [] []
                 (order_statics_as (with_statics_first Ls c)
                    (with_statics_first Ls lifted))
                 (with_statics_first Ls c)) eqn:Hfirst;
@@ -1259,10 +1265,12 @@ Proof.
            apply (refines_trans _
              (State (with_statics_first Ls c) [] [] empty_static_env
                 empty_heap no_reads)).
-           { apply expr_refines_program, expr_equivalent_refines.
-             apply (expr_equivalent_trans _ _ _
-               (order_statics_as_equivalent (with_statics_first Ls c) _)).
-             exact (expr_eqb_sound _ _ Hfirst). }
+           { apply expr_refines_program.
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _
+                  (order_statics_as_equivalent (with_statics_first Ls c)
+                     _))).
+             exact (expr_says_at_least_sound _ _ Hfirst). }
            apply (refines_trans _
              (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].

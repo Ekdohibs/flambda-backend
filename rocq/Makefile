@@ -142,6 +142,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   nominal/FlambdaCompareAlphaSpec.v \
   nominal/FlambdaCompareConverseProofs.v \
   nominal/FlambdaCompareConverseSpec.v \
+  nominal/FlambdaCompareOrderLawsProofs.v \
+  nominal/FlambdaCompareOrderLawsSpec.v \
   nominal/FlambdaCompareOrderProofs.v \
   nominal/FlambdaCompareOrderSpec.v \
   nominal/FlambdaCompareProofs.v \

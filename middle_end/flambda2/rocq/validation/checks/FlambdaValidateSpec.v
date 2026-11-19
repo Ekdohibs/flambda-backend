@@ -35,7 +35,8 @@
    [validate_unit] is the whole check, so that what it accepts is correct
    by one theorem and not by how a tool puts the proved pieces together.
    It compares the two terms as they are given, up to bound names
-   (FlambdaCompareSpec.expr_eqb). Failing that, it makes calls of
+   (FlambdaCompareOrderSpec.expr_says_at_least; "What a comparison
+   asks", below). Failing that, it makes calls of
    known arity, in the code of each stub of the term before, of the
    direct calls of code of the unit that is not a stub which it knows
    to be full calls, as Simplify does where it simplifies the code of
@@ -373,6 +374,45 @@
    in which something was lifted exits with constants and symbols only:
    that is one of the conditions.
 
+   What a comparison asks. Each of the six comparisons of
+   [validate_unit] is of a term made from the term before, first,
+   with a term made from the term after, second, and is
+   FlambdaCompareOrderSpec.expr_says_at_least. The two are to be the
+   same up to bound names but for what their binders state. Where
+   two handlers, or two pieces of code, are paired, the first is to
+   state at least as much of its parameters as the second
+   (FlambdaSubkindOrderSpec.params_say_at_least), and need not state
+   the same: Simplify states less in places. What two paired pieces
+   of code state of their results is compared the same way round;
+   the machine tests no result against it, so that part only makes
+   the comparison refuse more. What a comparison that passes gives
+   is that its second term refines its first
+   (FlambdaCompareOrderSpec.expr_says_at_least_sound_statement). It
+   does not give that the two are equivalent, and it does not say
+   that the values that code returns are of what the code states of
+   its results. That is the way round that the statements below
+   need: each concludes that the term after refines the term before,
+   and the term compared first is one that refines the term before,
+   the term compared second one that the term after refines. So a
+   verdict ([Same_up_to_bound_names] and the others) records by
+   which route the pair was accepted, and does not say that the two
+   terms compared state the same. The last two comparisons, of the
+   lifted terms, share one verdict, [Same_once_lifted].
+
+   The tests inside what is done to one of the two terms are not
+   comparisons of the one with the other. They ask
+   FlambdaCompareSpec.expr_eqb, which asks that paired binders state
+   the same: the tests of a fixed point ([iterate],
+   [normalise_before_round_avoiding]), which set a term against what
+   a round made of it; the test of [with_twins], of a term whose
+   parameters are bound again against the same with the twins made;
+   and the test of [keeps_a_return], of a term forwarded with its
+   calls against the same forwarded without them.
+
+   The six comparisons of [validate_unit] ask what the paragraphs
+   above say because of decision D25, at parameters: the machine tests
+   what a parameter states, and Simplify states less in places.
+
    The number of rounds, the names and the value slots to remove, the
    code to loopify with the names of its loops, what to lift and the
    code whose calls are not to be inlined
@@ -388,7 +428,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaCompareSpec FlambdaNormaliseSpec FlambdaBlockLoadSpec
+  FlambdaCompareSpec FlambdaCompareOrderSpec FlambdaNormaliseSpec
+  FlambdaBlockLoadSpec
   FlambdaCodeLetsSpec FlambdaCseSpec FlambdaDeadParamsSpec FlambdaForwardSpec
   FlambdaForwardKindedSpec FlambdaForwardArmSpec FlambdaLiftContsSpec
   FlambdaIdentitiesSpec FlambdaMergeSwitchesSpec FlambdaMergeTablesSpec
@@ -1532,7 +1573,13 @@ Definition with_returns (taken : bool) (e : expr) : expr :=
 (* The check                                                                *)
 (* ======================================================================== *)
 
-(* How a pair of terms was found to be correct, if it was.
+(* How a pair of terms was found to be correct, if it was: by which
+   route [validate_unit] accepted it. The last two comparisons, of
+   the lifted terms, share the verdict [Same_once_lifted]. "Same" is
+   up to bound names and up to what the binders state, of which the
+   term made from the term before may state more
+   (FlambdaCompareOrderSpec.expr_says_at_least); no verdict says that
+   the two terms state the same.
    [Same_once_unused_statics_removed] is of the term after as it is
    once normalised, placed and tidied: the bindings are removed from
    the term before only. [Same_once_head_statics_removed] is of the
@@ -1550,7 +1597,7 @@ Inductive validation : Type :=
 Definition validate_unit (rounds : nat) (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr) : validation :=
-  if expr_eqb [] [] before after then Same_up_to_bound_names
+  if expr_says_at_least [] [] before after then Same_up_to_bound_names
   else
     let before :=
       loopify_unit G (cut_returns [] (demote_full_stub_calls before))
@@ -1561,20 +1608,20 @@ Definition validate_unit (rounds : nat) (unused : dropped)
       tidied_before rounds
         (with_returns taken (normalise_before rounds kept before))
     in
-    if expr_eqb [] [] (order_statics_as after normalised) after
+    if expr_says_at_least [] [] (order_statics_as after normalised) after
     then Same_once_normalised
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as after (without_statics unused normalised)) after
     then Same_once_unused_statics_removed
     else
     let after := without_head_statics unused after in
     if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as after (without_statics unused normalised)) after
     then Same_once_head_statics_removed
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as (float_code (with_code_first after))
            (float_code
               (without_statics unused
@@ -1586,7 +1633,7 @@ Definition validate_unit (rounds : nat) (unused : dropped)
         (float_code (with_code_first after))
     then Same_once_lifted
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as (with_statics_first Ls after)
            (with_statics_first Ls
               (without_statics unused
