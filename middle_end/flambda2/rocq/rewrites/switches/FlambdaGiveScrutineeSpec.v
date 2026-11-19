@@ -100,8 +100,13 @@
    rewrite for each in turn ([give_first]), and keeps the first
    result for which FlambdaUnaliasParamsSpec.unalias_param would then
    take the parameter away: every application now gives that one
-   variable, and the other conditions of that pass hold. If there is
-   none the body is left as it was. That test is for the use of the
+   variable, and the other conditions of that pass hold. That pass
+   reads what is known of the variables bound around the [Let_cont]
+   (FlambdaStatedScopeSpec.stated_in_scope), so this one goes down
+   the term with the same ([give_scrutinees_under]: a [Let] adds what
+   its defining expression makes, a handler what it states of its
+   parameters; [give_scrutinees] is that from nothing known). If there
+   is none the body is left as it was. That test is for the use of the
    result, and neither statement depends on it. The nearest [Switch]
    is not always the one: where an arm applies a continuation whose
    handler tests something else and applies the continuation in the
@@ -125,7 +130,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaSemanticsSpec FlambdaUnusedContsSpec
-  FlambdaUnaliasParamsSpec.
+  FlambdaUnaliasParamsSpec FlambdaStatedScopeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -330,51 +335,64 @@ with handler_first_scrutinee (k : continuation) (i : nat)
 (* The body of the [Let_cont] of [k], whose handler is [h], with the
    first of the variables [xs] given at position [i] for which
    FlambdaUnaliasParamsSpec.unalias_param would then take the parameter
-   away; the body as it is if there is none. *)
-Fixpoint give_first (xs : list variable) (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) : expr :=
+   away; the body as it is if there is none. [S]: what is known of
+   the variables bound around the [Let_cont], which that test reads. *)
+Fixpoint give_first (S : stated_in_scope) (xs : list variable) (i : nat)
+    (k : continuation) (h : continuation_handler) (body : expr) : expr :=
   match xs with
   | [] => body
   | x :: xs =>
     let body' := give_scrutinee x k i None body in
-    match unalias_param i k h body' with
+    match unalias_param S i k h body' with
     | Some _ => body'
-    | None => give_first xs i k h body
+    | None => give_first S xs i k h body
     end
   end.
 
 (* The same for the variables that the first application of [k] in
    the body says to try. *)
-Definition give_at (i : nat) (k : continuation) (h : continuation_handler)
-    (body : expr) : expr :=
+Definition give_at (S : stated_in_scope) (i : nat) (k : continuation)
+    (h : continuation_handler) (body : expr) : expr :=
   match first_scrutinee k i [] body with
-  | Some xs => give_first xs i k h body
+  | Some xs => give_first S xs i k h body
   | None => body
   end.
 
 (* The same for every position below [i], the last first. *)
-Fixpoint give_from (i : nat) (k : continuation) (h : continuation_handler)
-    (body : expr) : expr :=
+Fixpoint give_from (S : stated_in_scope) (i : nat) (k : continuation)
+    (h : continuation_handler) (body : expr) : expr :=
   match i with
   | O => body
-  | S i => give_from i k h (give_at i k h body)
+  | Datatypes.S i => give_from S i k h (give_at S i k h body)
   end.
 
 (* The pass: every non-recursive [Let_cont] of a term, its handler and
-   its body first. The handlers of recursive continuations and the
-   bodies of code are left as they are. *)
-Fixpoint give_scrutinees (e : expr) {struct e} : expr :=
+   its body first, with what is known of the variables bound around
+   each. The handlers of recursive continuations and the bodies of
+   code are left as they are. *)
+Fixpoint give_scrutinees_under (S : stated_in_scope) (e : expr) {struct e}
+    : expr :=
   match e with
-  | Let x kind d body => Let x kind d (give_scrutinees body)
-  | Let_static bindings body => Let_static bindings (give_scrutinees body)
+  | Let x kind d body =>
+    Let x kind d
+      (give_scrutinees_under ((x, stated_of_named S d) :: S) body)
+  | Let_static bindings body =>
+    Let_static bindings (give_scrutinees_under S body)
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
-    let h := Handler params metadata (give_scrutinees handler) in
+    let h :=
+      Handler params metadata
+        (give_scrutinees_under
+           (params_stated params (hm_params_subkinds metadata) S) handler)
+    in
     Let_cont_non_recursive k h
-      (give_from (length params) k h (give_scrutinees body))
+      (give_from S (length params) k h (give_scrutinees_under S body))
   | Let_cont_recursive handlers body =>
-    Let_cont_recursive handlers (give_scrutinees body)
+    Let_cont_recursive handlers (give_scrutinees_under S body)
   | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
   end.
+
+(* The same from nothing known. *)
+Definition give_scrutinees (e : expr) : expr := give_scrutinees_under [] e.
 
 (* The result behaves as the term does, under all environments. *)
 Definition give_scrutinees_equivalent_statement : Prop :=

@@ -46,10 +46,10 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaNominalSpec FlambdaNominalProofs
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
+  FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaTermInductionProofs FlambdaEquivarianceTactic
-  FlambdaScopedInductionProofs FlambdaScopeTactic
-  FlambdaSpineWalkSpec FlambdaSpineWalkNamesProofs.
+  FlambdaScopedInductionProofs FlambdaScopeTactic.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -134,6 +134,26 @@ Lemma drop_arg_equivariant : equivariance_of drop_arg.
 Proof. equivariance. Qed.
 #[export] Hint Rewrite drop_arg_equivariant : equivariance.
 
+(* The pass reads what is known of the variables in scope, which is
+   renamed by FlambdaStatedScopeNamesProofs.rename_stated_in_scope;
+   the laws of that file are given to the tactic. *)
+#[local] Instance stated_in_scope_renaming : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
+
+#[local] Hint Rewrite is_stated_at_equivariant stated_of_named_equivariant
+  params_stated_equivariant : equivariance.
+
+(* The test of the pass is of a variable, which the tactic meets
+   renamed and not as a renamed simple: the law of [is_stated_at]
+   there. The laws of the passes that ask this test of a variable use
+   it too. *)
+Lemma is_stated_at_var_equivariant (r : renaming) (S : stated_in_scope)
+    (sks : list param_subkind) (i : nat) (x : variable) :
+  is_stated_at (rename_stated_in_scope r S) sks i (Var (rename_variable r x))
+  = is_stated_at S sks i (Var x).
+Proof. exact (is_stated_at_equivariant r S sks i (Var x)). Qed.
+#[export] Hint Rewrite is_stated_at_var_equivariant : equivariance.
+
 Lemma unalias_param_equivariant : equivariance_of unalias_param.
 Proof. equivariance. Qed.
 #[export] Hint Rewrite unalias_param_equivariant : equivariance.
@@ -146,11 +166,25 @@ Definition rename_unaliased (r : renaming)
   option_map (fun '(h, body) => (rename_handler r h, rename_expr r body))
     result.
 
-Lemma unalias_node_equivariant : rewrite_equivariant unalias_node.
+Lemma unalias_node_equivariant : equivariance_of unalias_node.
+Proof. equivariance. Qed.
+#[local] Hint Rewrite unalias_node_equivariant : equivariance.
+
+Section Under.
+
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_in_scope_cons_renamed : equivariance.
+
+Lemma unalias_params_under_equivariant (r : renaming) (e : expr) :
+  ∀ S : stated_in_scope,
+    unalias_params_under (rename_stated_in_scope r S) (rename_expr r e)
+    = rename_expr r (unalias_params_under S e).
 Proof. equivariance. Qed.
 
+End Under.
+
 Lemma unalias_params_renamed : rewrite_equivariant unalias_params.
-Proof. exact (walk_spine_equivariant _ unalias_node_equivariant). Qed.
+Proof. intros r e. exact (unalias_params_under_equivariant r e []). Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
@@ -261,10 +295,10 @@ Proof.
   all: split; [ reflexivity | names ].
 Qed.
 
-Lemma unalias_param_scoped (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) (h' : continuation_handler)
-    (body' : expr) :
-  unalias_param i k h body = Some (h', body') ->
+Lemma unalias_param_scoped (S : stated_in_scope) (i : nat)
+    (k : continuation) (h : continuation_handler) (body : expr)
+    (h' : continuation_handler) (body' : expr) :
+  unalias_param S i k h body = Some (h', body') ->
   scoped (Let_cont_non_recursive k h body)
     (Let_cont_non_recursive k h' body').
 Proof.
@@ -279,24 +313,46 @@ Proof.
   split; [ rewrite andb_true_r; assumption | split; names ].
 Qed.
 
-Lemma unalias_from_scoped (i : nat) :
+Lemma unalias_from_scoped (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
     scoped (Let_cont_non_recursive k h body)
-      (let '(h', body') := unalias_from i k h body in
+      (let '(h', body') := unalias_from S i k h body in
        Let_cont_non_recursive k h' body').
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [unalias_from];
     goal_tests; eauto using scoped_refl, scoped_trans, unalias_param_scoped.
 Qed.
 
-Lemma unalias_node_scoped (e : expr) : scoped e (unalias_node e).
+Lemma unalias_node_scoped (S : stated_in_scope) (e : expr) :
+  scoped e (unalias_node S e).
 Proof.
   unfold unalias_node. goal_tests;
     auto using scoped_refl, unalias_from_scoped.
 Qed.
 
+(* Each layer keeps scope where what is under it does; then the node. *)
+Fixpoint unalias_params_under_scoped (e : expr) :
+  ∀ S : stated_in_scope, scoped e (unalias_params_under S e).
+Proof.
+  destruct e
+    as [ x kind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    intros S; cbn [unalias_params_under];
+    (eapply scoped_trans; [ | apply unalias_node_scoped ]);
+    try apply scoped_refl.
+  - apply scoped_let; [ apply incl_refl | apply unalias_params_under_scoped ].
+  - apply scoped_let_static;
+      [ apply scoped_bindings_refl | apply unalias_params_under_scoped ].
+  - apply scoped_let_cont;
+      [ apply scoped_handler_intro, unalias_params_under_scoped
+      | apply unalias_params_under_scoped ].
+  - apply scoped_let_cont_recursive;
+      [ reflexivity | apply scoped_handlers_refl
+      | apply unalias_params_under_scoped ].
+Qed.
+
 Lemma unalias_params_scoped (e : expr) : scoped e (unalias_params e).
-Proof. exact (walk_spine_scoped _ unalias_node_scoped e). Qed.
+Proof. exact (unalias_params_under_scoped e []). Qed.
 
 Lemma unalias_params_scope : keeps_scope unalias_params.
 Proof. apply keeps_scope_intro, unalias_params_scoped. Qed.

@@ -39,8 +39,8 @@
    FlambdaSimulationProofs.stuttering_refines. That the term refines
    the result is by [lagging_refines], a simulation in which the first
    run may take a step that the second answers one step later. The
-   pass is then the walk of that rewrite
-   (FlambdaSpineWalkProofs.walk_spine_equivalent).
+   pass is then an induction on the term, under what is known of the
+   variables in scope (FlambdaStatedContextProofs.v).
 
    The first run tests the values given at all the positions, the
    second at all but the one taken away. The site is proved where the
@@ -51,9 +51,11 @@
    it is still of under a static environment that has grown
    (FlambdaStatedScopeProofs.value_at_extend). So the two runs are
    related from a state whose static environment extends that of the
-   [Let_cont] ([site_rel_from]), which a step keeps. A handler that
-   states nothing at the position asks nothing here
-   ([says_nothing_given_is_stated]).
+   [Let_cont] ([site_rel_from]), which a step keeps. The pass gives
+   it from what is known of the variables bound around the [Let_cont],
+   which holds where the [Let_cont] runs
+   ([is_stated_at_given_is_stated]). A handler that states nothing at
+   the position asks nothing here ([says_nothing_given_is_stated]).
 
    The one parameter is proved for a parameter that every application
    gives one simple, a variable, a symbol or a constant
@@ -81,8 +83,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaSimulationProofs FlambdaContextSpec FlambdaContextProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedParamsProofs
-  FlambdaSpineWalkSpec FlambdaSpineWalkProofs FlambdaWellFormedSpec
-  FlambdaWellFormedProofs FlambdaStatedScopeSpec FlambdaUnaliasParamsSpec.
+  FlambdaWellFormedSpec FlambdaWellFormedProofs FlambdaStatedScopeSpec
+  FlambdaStatedContextProofs FlambdaUnaliasParamsSpec.
 From OxCamlFlambda2 Require FlambdaStatedScopeProofs.
 Import ListNotations.
 
@@ -1707,11 +1709,11 @@ Qed.
 (* The rewrite                                                              *)
 (* ======================================================================== *)
 
-Lemma unalias_param_equivalent (i : nat) (k : continuation)
-    (h : continuation_handler) (body : expr) (h' : continuation_handler)
-    (body' : expr) :
-  unalias_param i k h body = Some (h', body') ->
-  expr_equivalent (Let_cont_non_recursive k h body)
+Lemma unalias_param_equivalent (S : stated_in_scope) (i : nat)
+    (k : continuation) (h : continuation_handler) (body : expr)
+    (h' : continuation_handler) (body' : expr) :
+  unalias_param S i k h body = Some (h', body') ->
+  expr_equivalent_stated S (Let_cont_non_recursive k h body)
     (Let_cont_non_recursive k h' body').
 Proof.
   destruct h as [params metadata handler]. unfold unalias_param.
@@ -1722,85 +1724,89 @@ Proof.
   destruct
     (negb (hm_is_exn_handler metadata) && all_give_var k i x true body
      && negb (among x params) && negb (among p (drop_nth i params))
-     && says_nothing_at (hm_params_subkinds metadata) i)
+     && is_stated_at S (hm_params_subkinds metadata) i (Var x))
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
-  apply andb_true_iff in Hcond as [Hcond Hnothing].
+  apply andb_true_iff in Hcond as [Hcond Hstated].
   apply andb_true_iff in Hcond as [Hcond Hfresh].
   apply andb_true_iff in Hcond as [Hcond Hx].
   apply andb_true_iff in Hcond as [_ Hgive].
   apply negb_true_iff in Hfresh, Hx.
   rewrite all_give_var_simple in Hgive.
-  exact (given_param_equivalent i k (Var x) p kind params metadata handler
-    body Hparam Hkind Hx Hfresh Hnothing Hgive).
+  intros vars conts statics hp rd Hhold.
+  exact
+    (given_param_equivalent_stated i k (Var x) p kind params metadata handler
+       body Hparam Hkind Hx Hfresh Hgive vars conts statics hp rd_
+       (is_stated_at_given_is_stated statics S vars _ i (Var x) Hhold
+          Hstated)).
 Qed.
 
-Lemma unalias_from_equivalent (i : nat) :
+Lemma unalias_from_equivalent (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
-    expr_equivalent (Let_cont_non_recursive k h body)
-      (Let_cont_non_recursive k (fst (unalias_from i k h body))
-         (snd (unalias_from i k h body))).
+    expr_equivalent_stated S (Let_cont_non_recursive k h body)
+      (Let_cont_non_recursive k (fst (unalias_from S i k h body))
+         (snd (unalias_from S i k h body))).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [unalias_from].
-  - intros vars conts statics hp rd. apply equivalent_refl.
-  - destruct (unalias_param i k h body) as [[h' body'] | ] eqn:Hparam;
+  - apply expr_equivalent_stated_refl.
+  - destruct (unalias_param S i k h body) as [[h' body'] | ] eqn:Hparam;
       [ | apply IH ].
-    exact (expr_equivalent_trans _ _ _
-      (unalias_param_equivalent i k h body h' body' Hparam) (IH k h' body')).
+    exact (expr_equivalent_stated_trans S _ _ _
+      (unalias_param_equivalent S i k h body h' body' Hparam)
+      (IH k h' body')).
 Qed.
 
-(* The rewrite of one node; the pass is then the walk, by
-   FlambdaSpineWalkProofs.walk_spine_equivalent. *)
-Lemma unalias_node_equivalent (e : expr) :
-  expr_equivalent e (unalias_node e).
+(* The rewrite of one node, under what is known of the variables bound
+   around it. *)
+Lemma unalias_node_equivalent (S : stated_in_scope) (e : expr) :
+  expr_equivalent_stated S e (unalias_node S e).
 Proof.
   destruct e as [ | | k [params metadata handler] body | | | | | ];
-    try (intros vars conts statics hp rd; apply equivalent_refl).
+    try apply expr_equivalent_stated_refl.
   cbn [unalias_node].
   pose proof
-    (unalias_from_equivalent (length params) k
+    (unalias_from_equivalent S (length params) k
        (Handler params metadata handler) body)
     as Hfrom.
   destruct
-    (unalias_from (length params) k (Handler params metadata handler) body)
+    (unalias_from S (length params) k (Handler params metadata handler) body)
     as [h' body'].
   exact Hfrom.
 Qed.
 
-Theorem unalias_params_equivalent : unalias_params_equivalent_statement.
-Proof. exact (walk_spine_equivalent _ unalias_node_equivalent). Qed.
-
-(* ======================================================================== *)
-(* The pass is the recursion that it was defined as                         *)
-(* ======================================================================== *)
-
-(* [unalias_params] was defined by a recursion on terms before it was
-   defined by the walk. That recursion, word for word, under another
-   name; and the pass is that function. *)
-Fixpoint unalias_params_by_recursion (e : expr) {struct e} : expr :=
-  match e with
-  | Let x kind d body => Let x kind d (unalias_params_by_recursion body)
-  | Let_static bindings body =>
-    Let_static bindings (unalias_params_by_recursion body)
-  | Let_cont_non_recursive k (Handler params metadata handler) body =>
-    let h := Handler params metadata (unalias_params_by_recursion handler) in
-    let body := unalias_params_by_recursion body in
-    let '(h, body) := unalias_from (length params) k h body in
-    Let_cont_non_recursive k h body
-  | Let_cont_recursive handlers body =>
-    Let_cont_recursive handlers (unalias_params_by_recursion body)
-  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
-  end.
-
-Fixpoint unalias_params_is_the_recursion (e : expr) {struct e} :
-  unalias_params e = unalias_params_by_recursion e.
+(* The pass: each layer under what is known there, by the laws of
+   FlambdaStatedContextProofs.v; then the node. *)
+Fixpoint unalias_params_under_equivalent (e : expr) :
+  ∀ S : stated_in_scope,
+    expr_equivalent_stated S e (unalias_params_under S e).
 Proof.
-  destruct e as [x kind d body | bindings body
-                | k [params metadata handler] body | handlers body
-                | ap | ac | scrutinee arms | ];
-    unfold unalias_params in *;
-    cbn [walk_spine unalias_params_by_recursion unalias_node];
-    rewrite ?(unalias_params_is_the_recursion body),
-      ?(unalias_params_is_the_recursion handler);
-    reflexivity.
+  destruct e
+    as [ x kind d body | bindings body | k [params metadata handler] body
+       | handlers body | ap | ac | scrutinee arms | ];
+    intros S; cbn [unalias_params_under];
+    (eapply expr_equivalent_stated_trans;
+      [ | apply unalias_node_equivalent ]);
+    try apply expr_equivalent_stated_refl.
+  - apply let_equivalent_stated, unalias_params_under_equivalent.
+  - apply let_static_equivalent_stated, unalias_params_under_equivalent.
+  - apply (expr_equivalent_stated_trans S _
+      (Let_cont_non_recursive k
+         (Handler params metadata
+            (unalias_params_under
+               (params_stated params (hm_params_subkinds metadata) S)
+               handler))
+         body)).
+    + apply let_cont_handler_equivalent_stated,
+        unalias_params_under_equivalent.
+    + apply let_cont_body_equivalent_stated,
+        unalias_params_under_equivalent.
+  - apply let_cont_recursive_body_equivalent_stated,
+      unalias_params_under_equivalent.
+Qed.
+
+Theorem unalias_params_equivalent : unalias_params_equivalent_statement.
+Proof.
+  intros e.
+  exact
+    (expr_equivalent_of_stated _ _ (unalias_params_under_equivalent e [])).
 Qed.
