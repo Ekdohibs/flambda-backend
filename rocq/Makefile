@@ -325,6 +325,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/lets/FlambdaReadsAfterSpec.v \
   rewrites/loops/FlambdaRecHandlersProofs.v \
   rewrites/loops/FlambdaRecHandlersSpec.v \
+  rewrites/loops/FlambdaRecHandlersStatedNamesProofs.v \
+  rewrites/loops/FlambdaRecHandlersStatedProofs.v \
+  rewrites/loops/FlambdaRecHandlersStatedSpec.v \
   rewrites/lets/FlambdaRecoverComparisonProofs.v \
   rewrites/lets/FlambdaRecoverComparisonScopeProofs.v \
   rewrites/lets/FlambdaRecoverComparisonScopeSpec.v \

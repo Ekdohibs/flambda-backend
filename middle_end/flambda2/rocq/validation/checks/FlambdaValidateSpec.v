@@ -465,6 +465,8 @@ From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
+  FlambdaRecHandlersStatedSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaMadeLengthsSpec.
@@ -1507,8 +1509,21 @@ Definition tidied_before (rounds : nat) (e : expr) : expr :=
    application gives that parameter one variable, [unalias_params]
    above takes the parameter away. The term before has its
    applications go to their arms in the rounds of its first phase
-   ([first_phase_round]). *)
-Definition tidy_expr_after (e : expr) : expr :=
+   ([first_phase_round]).
+
+   Three rewrites of the round ask what is known of a variable where
+   they take away a parameter that a handler states something of
+   ([give_scrutinees], [unalias_params] and [unalias_rec_params], by
+   FlambdaStatedScopeSpec.is_stated_at: the machine tests what a
+   handler states where it is applied; decision D25, at parameters).
+   The round takes what is known of the variables bound around the
+   term and gives it to those three ([tidy_expr_after_stated]: [S]).
+   The other rewrites of the round that test what a handler states
+   (FlambdaForwardKindedSpec.forward_kinded,
+   FlambdaForwardArmSpec.forward_to_arms_kinded,
+   FlambdaInlineTailSpec.inline_tail_conts_kinded) start from nothing
+   known, here as wherever they are applied. *)
+Definition tidy_expr_after_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_defined_lets_in_loops []
     (follow_aliases_in_loops []
        (follow_aliases []
@@ -1521,12 +1536,31 @@ Definition tidy_expr_after (e : expr) : expr :=
                             (forward_kinded
                                (fold_constants
                                   (numbers_in_arms
-                                     (unalias_rec_params
-                                        (unalias_params
-                                           (give_scrutinees e)))))))))))))).
+                                     (unalias_rec_params_under S
+                                        (unalias_params_under S
+                                           (give_scrutinees_under S
+                                              e)))))))))))))).
 
+(* That round with nothing known. *)
+Definition tidy_expr_after (e : expr) : expr := tidy_expr_after_stated [] e.
+
+(* The same for the body of code: that round with nothing known, and
+   then the round for the handler of each of its recursive
+   continuations, with what the handler states of its parameters and
+   what is known of the variables bound around its [Let_cont]
+   (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated). Inside
+   a loop the three rewrites then know what the loop states of its own
+   parameters: where a continuation of the loop states that its
+   parameter is a tagged immediate, and every application gives it a
+   parameter of the loop that is stated the same, the test of what is
+   stated passes, and the parameter is taken away if the other
+   conditions of the rewrite hold. (In the units with a loop on a
+   boolean flag the term before has lost that parameter.) Nothing is
+   known in the body of code of what the code states of its
+   parameters. *)
 Definition tidy_code_after (body : expr) : expr :=
-  rewrite_rec_handlers tidy_expr_after (tidy_expr_after body).
+  rewrite_rec_handlers_stated tidy_expr_after_stated []
+    (tidy_expr_after body).
 
 Definition tidy_after_round (e : expr) : expr :=
   remove_unused_defined_lets_in_code

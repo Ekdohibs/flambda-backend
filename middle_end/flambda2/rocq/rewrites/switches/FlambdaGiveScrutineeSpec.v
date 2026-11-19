@@ -114,8 +114,8 @@
    first [Switch].
 
    The handlers of recursive continuations and the bodies of code are
-   not gone into by the pass: FlambdaNormaliseSpec.rewrite_code and
-   FlambdaRecHandlersSpec.rewrite_rec_handlers take a pass there.
+   not gone into by the pass: the validation takes a pass there, and
+   FlambdaValidateSpec.v says what is known where each begins.
 
    The result is equivalent to the term
    ([give_scrutinees_equivalent_statement]), under all environments.

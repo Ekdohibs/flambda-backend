@@ -100,6 +100,8 @@ From OxCamlFlambda2 Require FlambdaLiftContsNamesProofs.
 From OxCamlFlambda2 Require FlambdaStaticsInScopeProofs.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require FlambdaUnaliasRecParamsNamesProofs.
+From OxCamlFlambda2 Require Import FlambdaRecHandlersStatedSpec.
+From OxCamlFlambda2 Require FlambdaRecHandlersStatedNamesProofs.
 From OxCamlFlambda2 Require Import FlambdaDemoteSpec.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaLiftObservedSpec.
@@ -4086,16 +4088,34 @@ Proof.
   symmetry. apply groups_up_equivariant.
 Qed.
 
+(* The round of the term after, given what is known: the three
+   rewrites that take it commute with a renaming of the term and of
+   what is known (the lemmas of their own files), the others with a
+   renaming of the term. *)
+Lemma tidy_expr_after_stated_equivariant (r : renaming)
+    (S : stated_in_scope) (e : expr) :
+  tidy_expr_after_stated (rename_stated_in_scope r S) (rename_expr r e)
+  = rename_expr r (tidy_expr_after_stated S e).
+Proof.
+  unfold tidy_expr_after_stated.
+  rewrite FlambdaGiveScrutineeNamesProofs.give_scrutinees_under_equivariant,
+    FlambdaUnaliasParamsNamesProofs.unalias_params_under_equivariant,
+    FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_under_equivariant.
+  rename_outwards. reflexivity.
+Qed.
+
 Lemma tidy_expr_after_equivariant : rewrite_equivariant tidy_expr_after.
 Proof.
-  intros r e. unfold tidy_expr_after. rename_outwards. reflexivity.
+  intros r e. exact (tidy_expr_after_stated_equivariant r [] e).
 Qed.
 
 Lemma tidy_code_after_equivariant : rewrite_equivariant tidy_code_after.
 Proof.
   intros r e. unfold tidy_code_after.
   rewrite tidy_expr_after_equivariant.
-  apply rewrite_rec_handlers_equivariant, tidy_expr_after_equivariant.
+  exact
+    (FlambdaRecHandlersStatedNamesProofs.rewrite_rec_handlers_stated_equivariant
+       tidy_expr_after_stated tidy_expr_after_stated_equivariant r _ []).
 Qed.
 
 Lemma tidy_after_round_equivariant : rewrite_equivariant tidy_after_round.

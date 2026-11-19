@@ -114,6 +114,9 @@ From OxCamlFlambda2Types Require Import FlambdaAliasesSpec
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 From OxCamlFlambda2 Require FlambdaUnboxTogetherProofs.
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
+  FlambdaStatedContextProofs FlambdaRecHandlersStatedSpec
+  FlambdaRecHandlersStatedProofs.
 Import ListNotations.
 
 Lemma expr_equivalent_refl (e : expr) : expr_equivalent e e.
@@ -523,21 +526,42 @@ Proof.
     (expr_equivalent_refines _ _ (groups_up_equivalent _))).
 Qed.
 
-(* That of the term after is an equivalence. *)
+(* That of the term after is an equivalence under the environments in
+   which what it is given holds: the two rewrites that take away a
+   parameter by what is known, by their own proofs under it; the
+   others are equivalences under all environments, the one that gives
+   a scrutinee whatever it is given. *)
+Lemma tidy_expr_after_stated_equivalent (S : stated_in_scope) (e : expr) :
+  expr_equivalent_stated S e (tidy_expr_after_stated S e).
+Proof.
+  unfold tidy_expr_after_stated.
+  repeat
+    (eapply expr_equivalent_stated_trans;
+     [ | solve [ apply expr_equivalent_stated_of; equivalence_step ] ]).
+  eapply expr_equivalent_stated_trans;
+    [ | apply FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent
+    ].
+  eapply expr_equivalent_stated_trans;
+    [ | apply unalias_params_under_equivalent ].
+  apply expr_equivalent_stated_of, give_scrutinees_under_equivalent.
+Qed.
+
 Lemma tidy_expr_after_equivalent (e : expr) :
   expr_equivalent e (tidy_expr_after e).
 Proof.
-  unfold tidy_expr_after.
-  repeat (eapply expr_equivalent_trans; [ | solve [ equivalence_step ] ]).
-  apply expr_equivalent_refl.
+  exact
+    (expr_equivalent_of_stated _ _ (tidy_expr_after_stated_equivalent [] e)).
 Qed.
 
 Lemma tidy_code_after_equivalent (body : expr) :
   expr_equivalent body (tidy_code_after body).
 Proof.
   unfold tidy_code_after.
-  exact (expr_equivalent_trans _ _ _ (tidy_expr_after_equivalent body)
-    (rewrite_rec_handlers_equivalent _ tidy_expr_after_equivalent _)).
+  apply (expr_equivalent_trans _ _ _ (tidy_expr_after_equivalent body)).
+  apply expr_equivalent_of_stated.
+  exact
+    (rewrite_rec_handlers_stated_equivalent_aux tidy_expr_after_stated
+       tidy_expr_after_stated_equivalent _ []).
 Qed.
 
 Lemma tidy_after_round_equivalent (e : expr) :

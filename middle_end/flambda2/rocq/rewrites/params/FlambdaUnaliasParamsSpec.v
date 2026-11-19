@@ -129,9 +129,9 @@
    the handler of a non-recursive continuation the parameters are
    known as what the handler states of them. [unalias_params] is that
    from nothing known. The handlers of recursive continuations and
-   the bodies of code are not gone into:
-   FlambdaNormaliseSpec.rewrite_code and [rewrite_rec_handlers] take a
-   pass there, which starts from nothing known.
+   the bodies of code are not gone into by the pass: the validation
+   takes a pass there, and FlambdaValidateSpec.v says what is known
+   where each begins.
 
    The result is equivalent to the term
    ([unalias_params_equivalent_statement]), under all environments.
