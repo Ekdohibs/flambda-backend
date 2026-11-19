@@ -74,6 +74,14 @@
      [never_returns_of_call] reads are those of the node read, by the
      rules ([fix_arm_never_returns_statement],
      [indirect_fix_arm_never_returns_statement] there).
+   - [fix_arm_never_returns_auto_derived_full_statement]: the same for
+     every call of unknown arity with a group of arguments or more. Each
+     group reads a witness off the node that the previous one returns; a
+     source with a source of the last witness is held in the field of
+     unknown arity of some node ([check_unknown_witnesses]) and has a
+     use, so its code cannot change its calling convention, and holds the
+     result that the continuation unboxes only with no source
+     ([cu0_result]): the call never returns.
    - [unboxed_callee_fails_statement]: the error of an unboxed callee of a
      call whose code keeps its calling convention ("TO CHECK" in the fix,
      now "Unboxed callee ... cannot be applied without changing calling
@@ -350,6 +358,38 @@ Definition fix_arm_never_returns_auto_derived_statement : Prop :=
       (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
       ap_call_kind ap <> Indirect_unknown_arity
       ∨ length (ap_args_arity ap) = 1 ->
+      (∀ (id : code_id) (cd : code_dep),
+         code_id_actually_called F (solution_of_tables T) ap = Some id ->
+         (id, cd) ∈ code_deps ->
+         length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+      wrapper_fails_u ads
+        (map fst
+           (unit_callee_decisions F T cannot_change code_deps unboxed e ap))
+      = true ->
+      apply_never_returns F (solution_of_tables T) code_deps
+        (bound_code_metadata e) ap
+      = true.
+
+Definition fix_arm_never_returns_auto_derived_full_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (max_unbox_size : nat) (lambda_lifting : bool),
+    let F := traverse_unit Auto u e in
+    let code_deps := unit_code_deps Auto u e in
+    let cannot_change := derive_cannot_change F T in
+    let to_unbox :=
+      derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+        lambda_lifting
+    in
+    let unboxed := unit_unboxed F T (derive_dominated T) to_unbox e in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    ∀ (ads : list decision) (ap : apply_expr),
+      (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+      (ap_call_kind ap = Indirect_unknown_arity -> ap_args_arity ap <> []) ->
       (∀ (id : code_id) (cd : code_dep),
          code_id_actually_called F (solution_of_tables T) ap = Some id ->
          (id, cd) ∈ code_deps ->

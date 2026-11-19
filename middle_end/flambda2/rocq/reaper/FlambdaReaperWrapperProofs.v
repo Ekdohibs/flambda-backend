@@ -2272,6 +2272,403 @@ Proof.
                 Hread Hno Hi).
 Qed.
 
+(* ------------------------------------------------------------------------ *)
+(* Calls of unknown arity with several groups of arguments                  *)
+(* ------------------------------------------------------------------------ *)
+
+Lemma unknown_groups_length (ap : apply_expr) :
+  ap_args_arity ap <> [] ->
+  length (FlambdaReaperFlowProofs.call_groups ap) = length (ap_args_arity ap).
+Proof.
+  intros H. unfold FlambdaReaperFlowProofs.call_groups, group_by_parameter.
+  pose proof (group_by_sizes_length
+                (map (@length flambda_kind)
+                   (unarize_per_parameter (ap_args_arity ap)))
+                (ap_args ap)) as E.
+  rewrite length_map in E. unfold unarize_per_parameter in E.
+  rewrite length_map in E.
+  destruct (group_by_sizes _ _) as [ | g gs]; cbn [at_least_one_group];
+    [ | exact E ].
+  cbn in E. destruct (ap_args_arity ap); [ congruence | discriminate ].
+Qed.
+
+(* The witnesses of a call of unknown arity whose result of rank [i] has
+   no source of any source have none. *)
+Lemma chain_no_any_at (returns : list node) (exn called : node) (i : nat)
+    (r : node) :
+  nth_error returns i = Some r -> s_any_source S r = false ->
+  ∀ l first w,
+    FlambdaReaperFlowProofs.caller_chain_edges G returns exn called
+      ((first, w) :: l) ->
+    s_any_source S w = false.
+Proof.
+  intros Hi Hno l.
+  pose proof (fun rk => return_not_local is_local rk Hloc) as Hrl.
+  induction l as [ | [f' w'] l IH]; intros first w Hch.
+  - destruct Hch as (_ & _ & _ & Hres & _).
+    destruct (s_any_source S w) eqn:E; [ | reflexivity ].
+    rewrite (any_source_accessor _ _ _ closedU w _ r E (Hres i r Hi) (Hrl _))
+      in Hno.
+    discriminate.
+  - destruct Hch as (_ & _ & _ & (v & Hv & Hw') & Hrest).
+    pose proof (IH f' w' Hrest) as Hw'0.
+    destruct (s_any_source S w) eqn:E; [ | reflexivity ].
+    pose proof (any_source_accessor _ _ _ closedU w _ v E Hv (Hrl _)) as Hav.
+    rewrite (any_source_accessor _ _ _ closedU v _ w' Hav Hw'
+               (witness_not_local _))
+      in Hw'0.
+    discriminate.
+Qed.
+
+Definition approx_at (cs : allocation_sources) (base : node) : Prop :=
+  match cs with
+  | Any_source => s_any_source S base = true
+  | Sources m => ∀ x, m x = true -> s_sources S base x = true
+  end.
+
+(* A call of unknown arity whose parameter [x] of rank [i] is dominated by
+   an allocation to unbox, along its chain of witnesses: what
+   [never_returns_of_call] reads at a group is among the sources of the
+   node [a] read with the field of unknown arity, which reaches the
+   witness [w] of the group by aliases; at the last group, a source with
+   a source holds the result of rank [i] only with no source, as its code
+   cannot change its calling convention ([cu0_result]). *)
+Lemma chain_arm_never_returns (returns : list node) (exn called : node)
+    (i : nat) (x a0 : node) (nres : nat) :
+  check_unknown_witnesses F T = true ->
+  nth_error returns i = Some x -> (a0, x) ∈ dominated ->
+  mem_node a0 to_unbox = true -> i < nres -> g_any_usage G called ->
+  ∀ l first w (num : list nat) (n : nat) cs base a,
+    FlambdaReaperFlowProofs.caller_chain_edges G returns exn called
+      ((first, w) :: l) ->
+    length num = length l -> approx_at cs base ->
+    g_accessor G a unknown base -> path T a w ->
+    never_returns_of_call F S Unknown_arity_code_pointer cs (n :: num) nres
+    = true.
+Proof.
+  intros Hux Hi Hdx Ha0 Hlt Hcalled_any l.
+  pose proof (dominated_no_any_source a0 x Hdx) as Hasx.
+  pose proof (return_not_local is_local (Normal i) Hloc) as Hrl.
+  induction l as [ | [f' w'] l IH];
+    intros first w num n cs base a Hch Hlen Happ Ha Hpath;
+    pose proof (chain_no_any_at returns exn called i x Hi Hasx _ first w Hch)
+      as Hw;
+    (assert (Hasa : s_any_source S a = false)
+       by (destruct (s_any_source S a) eqn:E; [ | reflexivity ];
+           rewrite (any_source_fwd is_local F T Hleast a w Hpath E) in Hw;
+           discriminate));
+    (assert (Hasb : s_any_source S base = false)
+       by (destruct (s_any_source S base) eqn:E; [ | reflexivity ];
+           rewrite (any_source_accessor _ _ _ closedU base _ a E Ha
+                      (witness_not_local _)) in Hasa;
+           discriminate));
+    (destruct cs as [ | m]; [ cbn [approx_at] in Happ; congruence | ]);
+    cbn [never_returns_of_call]; unfold get_field_sources;
+    (match goal with
+     | |- context [if existsb ?p (f_constructor F) then _ else _] =>
+       destruct (existsb p (f_constructor F)) eqn:Eany
+     end;
+     [ exfalso; apply existsb_exists in Eany as ([[x1 f] y] & Hc & Ht);
+       cbn beta iota in Ht;
+       apply andb_true_iff in Ht as [Ht Hy];
+       apply andb_true_iff in Ht as [Hx1 Hf];
+       apply field_eqb_eq in Hf; subst f;
+       pose proof (alias_accessor_source _ _ _ closedU base x1 _ a y Ha
+                     (Happ x1 Hx1) Hasb Hc) as Hay;
+       rewrite (any_source_alias _ _ _ closedU y a Hay Hy) in Hasa;
+       discriminate | ]);
+    cbn beta iota;
+    (* What the group reads: sources of [a] with a source. *)
+    (assert (Hws :
+               ∀ z,
+                 existsb
+                   (fun '(x1, f', y) =>
+                      m x1 && field_eqb f'
+                               (Field_call_witness Unknown_arity_code_pointer)
+                      && s_sources S y z && s_has_source S z)
+                   (f_constructor F)
+                 = true ->
+                 s_sources S a z = true ∧ s_has_source S z = true)
+     by (intros z Hz; apply existsb_exists in Hz as ([[x1 f] y] & Hc & Ht);
+         cbn beta iota in Ht;
+         apply andb_true_iff in Ht as [Ht Hhz];
+         apply andb_true_iff in Ht as [Ht Hyz];
+         apply andb_true_iff in Ht as [Hx1 Hf];
+         apply field_eqb_eq in Hf; subst f;
+         pose proof (alias_accessor_source _ _ _ closedU base x1 _ a y Ha
+                       (Happ x1 Hx1) Hasb Hc) as Hay;
+         assert (Hasy : s_any_source S y = false)
+           by (destruct (s_any_source S y) eqn:E; [ | reflexivity ];
+               rewrite (any_source_alias _ _ _ closedU y a Hay E) in Hasa;
+               discriminate);
+         exact (conj (sources_alias _ _ _ closedU y a z Hyz Hasy Hay Hasa)
+                  Hhz))).
+  - destruct num as [ | n' num']; [ | discriminate ].
+    destruct Hch as (_ & _ & Hcalled & Hres & _).
+    apply existsb_exists. exists i. split; [ apply in_seq; lia | ].
+    apply negb_true_iff. unfold result_has_source_of.
+    apply Bool.not_true_iff_false. intros E.
+    apply existsb_exists in E as ([[z f] y] & Hc & Ht).
+    cbn beta iota in Ht.
+    apply andb_true_iff in Ht as [Ht Hy].
+    apply andb_true_iff in Ht as [Hz Hf].
+    apply field_eqb_eq in Hf. subst f.
+    destruct (Hws z Hz) as [Hza Hhz].
+    destruct (unknown_source F T a base z Hux Ha Hza Hhz)
+      as [(b & Hb) (codeid & Hcid)].
+    pose proof (path_trans T _ _ _
+                  (sources_path is_local F T Hleast a z Hza) Hpath) as Hpz.
+    assert (Hhu_w : s_has_usage S w = true).
+    { pose proof (has_usage_any _ _ _ closedU _
+                    (any_usage_input _ _ _ closedU _ Hcalled_any)) as H.
+      exact (has_usage_accessor _ _ _ closedU _ _ w H Hcalled). }
+    pose proof (has_usage_back _ _ Hpz Hhu_w) as Hhu_z.
+    pose proof (cc_closed_unknown F T cannot_change b z codeid Hcc Hb Hhu_z
+                  Hcid) as Hin_cc.
+    pose proof (proj1 (link _ _ _ _ _ Hrl Hpz (Hres i x Hi) Hc) Hasx)
+      as Hxy.
+    rewrite (flow_cannot_change is_local F T Hleast cannot_change
+               max_unbox_size lambda_lifting dominated to_unbox Hdom Hunbox x y
+               a0 _ _ _ Hxy (proj2 (mem_pair_In _ _ _) Hdx) Ha0 Hy Hc
+               eq_refl Hcid)
+      in Hin_cc.
+    discriminate.
+  - destruct num as [ | n' num']; [ discriminate | ].
+    cbn [length] in Hlen. injection Hlen as Hlen.
+    destruct Hch as (_ & _ & _ & (v & Hv & Hw') & Hrest).
+    pose proof (chain_no_any_at returns exn called i x Hi Hasx _ f' w' Hrest)
+      as Hw'0.
+    assert (Hasv : s_any_source S v = false).
+    { destruct (s_any_source S v) eqn:E; [ | reflexivity ].
+      rewrite (any_source_accessor _ _ _ closedU v _ w' E Hw'
+                 (witness_not_local _))
+        in Hw'0.
+      discriminate. }
+    assert (Hws' :
+              ∀ z,
+                existsb
+                  (fun '(x1, f', y) =>
+                     m x1 && field_eqb f'
+                              (Field_call_witness Unknown_arity_code_pointer)
+                     && s_sources S y z && s_has_source S z)
+                  (f_constructor F)
+                = true ->
+                s_sources S w z = true).
+    { intros z Hz. destruct (Hws z Hz) as [Hza _].
+      destruct (sources_fwd is_local F T Hleast a w z Hpath Hza) as [H | H];
+        [ rewrite H in Hw; discriminate | exact H ]. }
+    refine (IH f' w' num' n' _ v w' Hrest Hlen _ Hw' (path_refl T w')).
+    unfold get_field_sources.
+    match goal with
+    | |- context [if existsb ?p (f_constructor F) then _ else _] =>
+      destruct (existsb p (f_constructor F)) eqn:Eany2
+    end; cbn [approx_at].
+    + apply existsb_exists in Eany2 as ([[z f] y] & Hc & Ht).
+      cbn beta iota in Ht.
+      apply andb_true_iff in Ht as [Ht Hy].
+      apply andb_true_iff in Ht as [Hz Hf].
+      apply field_eqb_eq in Hf. subst f.
+      pose proof (alias_accessor_source _ _ _ closedU w z _ v y Hv
+                    (Hws' z Hz) Hw Hc) as Hvy.
+      rewrite (any_source_alias _ _ _ closedU y v Hvy Hy) in Hasv.
+      discriminate.
+    + intros x1 Hx1. apply existsb_exists in Hx1 as ([[z f] y] & Hc & Ht).
+      cbn beta iota in Ht.
+      apply andb_true_iff in Ht as [Ht _].
+      apply andb_true_iff in Ht as [Ht Hyx].
+      apply andb_true_iff in Ht as [Hz Hf].
+      apply field_eqb_eq in Hf. subst f.
+      pose proof (alias_accessor_source _ _ _ closedU w z _ v y Hv
+                    (Hws' z Hz) Hw Hc) as Hvy.
+      assert (Hasy : s_any_source S y = false).
+      { destruct (s_any_source S y) eqn:E; [ | reflexivity ].
+        rewrite (any_source_alias _ _ _ closedU y v Hvy E) in Hasv.
+        discriminate. }
+      exact (sources_alias _ _ _ closedU y v x1 Hyx Hasy Hvy Hasv).
+Qed.
+
+(* A call of unknown arity with a group of arguments or more: where its
+   continuation unboxes a result that its callee keeps, it never
+   returns. *)
+Definition call_ok_chain (ads : list decision) (ap : apply_expr) : Prop :=
+  check_unknown_witnesses F T = true ->
+  ∀ i fd kind,
+    ap_call_kind ap = Indirect_unknown_arity -> ap_args_arity ap <> [] ->
+    nth_error (unit_callee_decisions F T cannot_change cds unboxed e0 ap) i
+    = Some (fd, kind) ->
+    arm_pair (apply_decision_at ads i kind) fd = true ->
+    apply_never_returns F S cds (bound_code_metadata e0) ap = true.
+
+Lemma apply_ok_chain (ctx : option code_id) (ce : finite_map (list node))
+    (ds : finite_map (list decision)) (ap : apply_expr) :
+  FlambdaReaperFlowProofs.apply_edges G noted (unit_codes e0) ctx ce ap ->
+  conts_counted (FlambdaReaperFlowProofs.counts ce) (Apply ap) = true ->
+  live ctx -> agree ds ce ->
+  call_ok_chain (match lookup (ap_continuation ap) ds with
+                 | Some decisions => decisions
+                 | None => []
+                 end) ap.
+Proof.
+  intros (_ & _ & _ & returns & exn & Hret & _ & Hcall) Hcount Hlive Hagree
+    Hux i fd kind Hind Hnil Hfd Harm.
+  cbn [conts_counted] in Hcount. apply andb_true_iff in Hcount as [Hcount _].
+  unfold count_ok in Hcount. rewrite lookup_counts in Hcount.
+  destruct (lookup (ap_continuation ap) ce) as [ns | ] eqn:Hk;
+    cbn [option_map] in Hcount; [ | discriminate ].
+  apply Nat.eqb_eq in Hcount.
+  rewrite (Hret ns eq_refl) in Hcall.
+  unfold FlambdaReaperFlowProofs.call_edges in Hcall. rewrite Hind in Hcall.
+  destruct Hcall as (ws & a & called & Hlen & Hchain & Hcalled_any & Hcond
+                     & Hread).
+  unfold unit_callee_decisions, callee_decisions, apply_change_u in Hfd.
+  unfold code_id_actually_called in Hfd. rewrite Hind in Hfd.
+  rewrite nth_error_map in Hfd.
+  destruct (nth_error (unarize (ap_return_arity ap)) i) as [kind0 | ] eqn:Hkd;
+    [ | discriminate ].
+  cbn in Hfd. injection Hfd as <- <-.
+  assert (Hlt : i < length (unarize (ap_return_arity ap)))
+    by (apply nth_error_Some; congruence).
+  assert (Hx : ∃ x, nth_error ns i = Some x).
+  { destruct (nth_error ns i) as [x | ] eqn:E; [ exists x; reflexivity | ].
+    apply nth_error_None in E. lia. }
+  destruct Hx as [x Hx].
+  destruct (apply_decision_facts ds ce _ ns i kind0 x Hagree Hk Hx)
+    as (Had_unbox & _ & _).
+  set (ad := apply_decision_at _ i kind0) in *.
+  destruct (arm_pair_cases ad _ Harm) as [[Hadu _] | (_ & Hfdu)];
+    [ | discriminate Hfdu ].
+  destruct (Had_unbox Hadu) as (a0 & Ha0x & Ha0).
+  pose proof (dominated_no_any_source a0 x Ha0x) as Hasx.
+  rewrite (unknown_groups_length ap Hnil) in Hlen.
+  destruct ws as [ | w ws'];
+    [ destruct (ap_args_arity ap); cbn in Hlen; congruence | ].
+  assert (Hwa : s_alias S w a = true).
+  { specialize (Hcond w eq_refl). destruct ctx as [c | ]; cbn in Hcond.
+    - exact (alias_propagate _ _ _ closedU _ _ _ (Hlive c eq_refl) Hcond).
+    - exact (alias_input _ _ _ closedU _ _ Hcond). }
+  unfold FlambdaReaperFlowProofs.call_groups in Hchain.
+  pose proof (unknown_groups_length ap Hnil) as Hglen.
+  unfold FlambdaReaperFlowProofs.call_groups in Hglen.
+  destruct (at_least_one_group _) as [ | g gs];
+    [ destruct (ap_args_arity ap); cbn in Hglen; congruence | ].
+  cbn [combine] in Hchain.
+  pose proof (chain_no_any_at _ _ _ i x Hx Hasx _ g w Hchain) as Hw.
+  unfold apply_never_returns, code_id_actually_called. rewrite Hind.
+  destruct (ap_callee ap) as [y | sym | c0] eqn:Hcallee; cbv zeta.
+  3:{ exfalso. cbn [node_of_simple] in Hread.
+      pose proof (any_source_input _ _ _ closedU _ Hconsts) as Hac.
+      pose proof (any_source_accessor _ _ _ closedU _ _ a Hac Hread
+                    (witness_not_local _)) as Haa.
+      rewrite (any_source_alias _ _ _ closedU a w Hwa Haa) in Hw.
+      discriminate. }
+  all: remember (map (fun c => length (unarize_component c))
+                   (ap_args_arity ap)) as num eqn:Hnum;
+    assert (Hnl : length num = length (ap_args_arity ap))
+      by (rewrite Hnum; apply length_map);
+    destruct num as [ | n num']; [ destruct (ap_args_arity ap);
+                                   cbn in Hnl; congruence | ];
+    refine (chain_arm_never_returns _ _ _ i x a0 _ Hux Hx Ha0x Ha0 Hlt
+              Hcalled_any _ g w num' n _ _ a Hchain _ _ Hread
+              (path_one T _ _ Hwa));
+    [ rewrite length_combine; cbn in Hlen, Hglen, Hnl; lia
+    | unfold get_direct_sources, approx_at;
+      match goal with
+      | |- context [if s_any_source S ?n then _ else _] =>
+        destruct (s_any_source S n) eqn:E; [ reflexivity | ]
+      end;
+      intros y' Hy; apply andb_true_iff in Hy as [Hy _]; exact Hy ].
+Qed.
+
+(* Every call that the rebuild makes, in the unit and in code, has a
+   property that every call has under the facts of its context. *)
+Lemma calls_with (P : list decision -> apply_expr -> Prop) :
+  (∀ ctx ce ds ap,
+     FlambdaReaperFlowProofs.apply_edges G noted (unit_codes e0) ctx ce ap ->
+     conts_counted (FlambdaReaperFlowProofs.counts ce) (Apply ap) = true ->
+     live ctx -> agree ds ce ->
+     P (match lookup (ap_continuation ap) ds with
+        | Some decisions => decisions
+        | None => []
+        end) ap) ->
+  (∀ e : expr, ∀ ctx ce ds,
+     edges ctx ce e ->
+     conts_counted (FlambdaReaperFlowProofs.counts ce) e = true ->
+     plain_kinds e = true -> live ctx -> agree ds ce ->
+     ∀ ads ap, (ads, ap) ∈ calls ds e -> P ads ap)
+  ∧ (∀ h : continuation_handler, ∀ ctx ce ds,
+       handler_edges ctx ce h ->
+       handler_conts_counted (FlambdaReaperFlowProofs.counts ce) h = true ->
+       handler_plain_kinds h = true -> live ctx -> agree ds ce ->
+       ∀ ads ap, (ads, ap) ∈ handler_calls ds h -> P ads ap).
+Proof.
+  intros HP. apply FlambdaReaperFlowProofs.expr_handler_ind.
+  - intros x kind d body IH ctx ce ds [_ He] Hc Hk Hl Ha ads ap Hin.
+    exact (IH ctx ce ds He Hc Hk Hl Ha ads ap Hin).
+  - intros bindings body IHc IH ctx ce ds [Hb He] Hc Hk Hl Ha ads ap Hin.
+    cbn [plain_kinds] in Hk. apply andb_true_iff in Hk as [Hkb Hk].
+    cbn [rebuilt_calls] in Hin. apply in_app_or in Hin as [Hin | Hin];
+      [ | exact (IH ctx ce ds He Hc Hk Hl Ha ads ap Hin) ].
+    apply in_flat_map in Hin as (b & Hbin & Hin).
+    destruct b as [id c | id | sym const]; cbn [binding_rebuilt_calls] in Hin;
+      [ | destruct Hin | destruct Hin ].
+    destruct (is_code_id_used S id) eqn:Eused; [ | destruct Hin ].
+    pose proof (proj1 (FlambdaMapProofs.every_in _ _ _) Hb _ Hbin) as Hbe.
+    cbn [FlambdaReaperFlowProofs.binding_edges] in Hbe.
+    destruct Hbe as [_ Hce].
+    rewrite forallb_forall in Hkb. pose proof (Hkb _ Hbin) as Hkc.
+    pose proof (IHc id c Hbin) as IHbody.
+    destruct c as [params my_closure ret exn metadata cbody].
+    cbn [code_rebuilt_calls] in Hin. cbn [code_body] in IHbody.
+    cbn [binding_plain_kinds code_plain_kinds] in Hkc.
+    apply andb_true_iff in Hkc as [Hkr Hkc].
+    cbn [FlambdaReaperFlowProofs.code_edges] in Hce.
+    destruct Hce as (cd & Hcd & _ & _ & _ & _ & Hlen & _ & _ & Hne & _ & Hcc'
+                     & Hce).
+    pose proof (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd)
+      as Hlookup.
+    refine (IHbody (Some id) _ _ Hce _ Hkc (used_code_live id Eused)
+              (code_agree id cd metadata ret exn Hlookup Hne Hlen Hkr) ads ap
+              Hin).
+    unfold FlambdaReaperFlowProofs.counts. cbn [map length]. rewrite Hlen.
+    exact Hcc'.
+  - intros k h body IHh IH ctx ce ds [Hh He] Hc Hk Hl Ha ads ap Hin.
+    cbn [conts_counted] in Hc. apply andb_true_iff in Hc as [Hch Hc].
+    cbn [plain_kinds] in Hk. apply andb_true_iff in Hk as [Hkh Hk].
+    cbn [rebuilt_calls] in Hin. apply in_app_or in Hin as [Hin | Hin];
+      [ exact (IHh ctx ce ds Hh Hch Hkh Hl Ha ads ap Hin) | ].
+    destruct (handler_agree (handler_is_exn_handler h) h Hkh) as [Hlen Hok].
+    exact (IH ctx ((k, FlambdaReaperTraversal.handler_params h) :: ce) _ He Hc
+             Hk Hl (agree_cons ds ce k _ _ Ha Hlen Hok) ads ap Hin).
+  - intros handlers body IHh IH ctx ce ds [Hhs He] Hc Hk Hl Ha ads ap Hin.
+    cbn [conts_counted] in Hc. apply andb_true_iff in Hc as [Hch Hc].
+    rewrite counts_rec in Hch, Hc.
+    cbn [plain_kinds] in Hk. apply andb_true_iff in Hk as [Hkh Hk].
+    rewrite forallb_forall in Hch, Hkh.
+    assert (Ha' : agree
+                    (map (fun '(k, h) =>
+                            (k, handler_decisions true S unboxed false h))
+                       handlers
+                     ++ ds)
+                    (FlambdaReaperFlowProofs.rec_conts ce handlers)).
+    { apply agree_app; [ exact Ha | ]. intros k h Hkh'.
+      exact (handler_agree false h (Hkh _ Hkh')). }
+    cbn [rebuilt_calls] in Hin. apply in_app_or in Hin as [Hin | Hin];
+      [ | exact (IH ctx _ _ He Hc Hk Hl Ha' ads ap Hin) ].
+    apply in_flat_map in Hin as ([k h] & Hkh' & Hin).
+    exact (IHh k h Hkh' ctx _ _
+             (proj1 (FlambdaMapProofs.every_in _ _ _) Hhs _ Hkh')
+             (Hch _ Hkh') (Hkh _ Hkh') Hl Ha' ads ap Hin).
+  - intros ap ctx ce ds He Hc _ Hl Ha ads ap' Hin.
+    cbn [rebuilt_calls] in Hin. destruct Hin as [[= <- <-] | []].
+    exact (HP ctx ce ds ap He Hc Hl Ha).
+  - intros ac ctx ce ds _ _ _ _ _ ads ap [].
+  - intros scrutinee arms ctx ce ds _ _ _ _ _ ads ap [].
+  - intros ctx ce ds _ _ _ _ _ ads ap [].
+  - intros params metadata handler IH ctx ce ds He Hc Hk Hl Ha ads ap Hin.
+    cbn [handler_plain_kinds] in Hk. apply andb_true_iff in Hk as [_ Hk].
+    exact (IH ctx ce ds He Hc Hk Hl Ha ads ap Hin).
+Qed.
+
 End Unit.
 
 (* ======================================================================== *)
@@ -2320,6 +2717,50 @@ Proof.
                   (fun id c Hc =>
                      proj1 (unit_codes_edges _ _ _ _ _ _ _ _ _) e None
                        (unit_conts u) Hedges id c Hc))
+           e None (unit_conts u) [] Hedges Hcount Hkinds
+           ltac:(intros c Hc; discriminate) Hagree ads ap Hin).
+Qed.
+
+(* The calls of unknown arity of the unit, with any number of groups. *)
+Lemma arm_chain_unit (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change : list node) (max_unbox_size : nat)
+    (lambda_lifting : bool) (dominated : list (node * node))
+    (to_unbox : list node) :
+  let F := traverse_unit flag u e in
+  let code_deps := unit_code_deps flag u e in
+  let unboxed := unit_unboxed F T dominated to_unbox e in
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  least_solution is_local F T ->
+  check_cc_closed F T cannot_change = true ->
+  check_dominated T dominated = true ->
+  check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+    lambda_lifting to_unbox
+  = true ->
+  check_used_code_ids T = true ->
+  conts_counted (unit_counts u) e = true ->
+  plain_kinds e = true ->
+  ∀ (ads : list decision) (ap : apply_expr),
+    (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e ->
+    call_ok_chain flag u e T cannot_change dominated to_unbox ads ap.
+Proof.
+  intros F code_deps unboxed Hloc Hslots Hfrag Hleast Hcc Hdom Hunbox Hcodes
+    Hcount Hkinds ads ap Hin.
+  destruct (unit_facts flag u e (∀ f : field, is_local f = false) Hfrag
+              Hslots)
+    as (noted & deps & Hedges & Hconsts & Hunit & Hnodup & Hids).
+  assert (Hagree : agree flag u e T dominated to_unbox [] (unit_conts u)).
+  { intros k ns Hk. left. split; [ reflexivity | ].
+    intros n Hn. apply (any_usage_input _ _ _ (closedS _ _ _ Hleast)).
+    apply (Hunit k n). unfold unit_cont_nodes. rewrite Hk. exact Hn. }
+  exact (proj1 (calls_with flag u e T cannot_change dominated to_unbox Hcodes
+                  _ noted deps Hnodup
+                  (call_ok_chain flag u e T cannot_change dominated to_unbox)
+                  (apply_ok_chain flag is_local u e T cannot_change
+                     max_unbox_size lambda_lifting dominated to_unbox Hloc
+                     Hleast Hcc Hdom Hunbox noted Hconsts))
            e None (unit_conts u) [] Hedges Hcount Hkinds
            ltac:(intros c Hc; discriminate) Hagree ads ap Hin).
 Qed.

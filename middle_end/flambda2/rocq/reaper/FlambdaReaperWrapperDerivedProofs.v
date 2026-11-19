@@ -614,6 +614,49 @@ Proof.
            Hcount Hkinds ads ap i fields fd kind Hin Hk Hlen E Hads Harm).
 Qed.
 
+Theorem fix_arm_never_returns_auto_derived_full :
+  fix_arm_never_returns_auto_derived_full_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting F code_deps
+    cannot_change to_unbox unboxed Hloc Hslots Hfrag Hleast Hcount Hkinds ads
+    ap Hin Hnil Har Hfails.
+  destruct (ap_call_kind ap) eqn:Hk.
+  1, 3:
+    refine (fix_arm_never_returns_auto_derived is_local u e T max_unbox_size
+              lambda_lifting Hloc Hslots Hfrag Hleast Hcount Hkinds ads ap Hin
+              _ Har Hfails);
+    left; rewrite Hk; discriminate.
+  pose proof (Hnil eq_refl) as Hne.
+  destruct (wrapper_fails_pos ads _ Hfails)
+    as (i & fields & fd & Hads & Hfd & Harm).
+  rewrite nth_error_map in Hfd.
+  destruct (nth_error
+              (unit_callee_decisions F T cannot_change code_deps unboxed e ap)
+              i)
+    as [[fd' kind] | ] eqn:E; [ | discriminate ].
+  cbn in Hfd. injection Hfd as ->.
+  rewrite <- (FlambdaReaperWrapperProofs.decision_at_unbox ads i fields kind
+                Hads)
+    in Harm.
+  assert (Hunbox :
+            check_to_unbox_fixed is_local F T cannot_change max_unbox_size
+              lambda_lifting to_unbox
+            = true)
+    by (unfold to_unbox; apply derive_to_unbox_fixed_checked).
+  exact (FlambdaReaperWrapperProofs.arm_chain_unit Auto is_local u e T
+           cannot_change max_unbox_size lambda_lifting (derive_dominated T)
+           to_unbox Hloc Hslots Hfrag Hleast
+           (proj1 (FlambdaReaperCallingConventionsProofs
+                     .derive_cannot_change_least F T))
+           (FlambdaReaperWrapperAutoProofs.derive_dominated_checked T) Hunbox
+           (FlambdaReaperWrapperShapeProofs.traverse_used_code_ids Auto
+              is_local u e T Hloc Hleast)
+           Hcount Hkinds ads ap Hin
+           (FlambdaReaperWrapperUnknownProofs.traverse_unknown_witnesses Auto
+              is_local u e T Hloc Hleast)
+           i fd kind Hk Hne E Harm).
+Qed.
+
 (* ------------------------------------------------------------------------ *)
 (* [check_never_returns]                                                    *)
 (* ------------------------------------------------------------------------ *)

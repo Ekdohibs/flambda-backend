@@ -67,10 +67,24 @@
      of the term: its proof needs an inversion of the least solution on
      the facts that reach that node (see S7.md).
 
+   [fix_fails_only_by_unboxed_callee_any_groups_statement]: the same,
+   with [unknown_calls_have_args] in place of [one_group_unknown_calls]:
+   every call of unknown arity has a group of arguments, of any number
+   (the compiler's analysis stops on a call with none). The arm is not
+   reached at such a call
+   ([fix_arm_never_returns_auto_derived_full_statement]): the codes the
+   chain of witnesses reaches cannot change their calling convention, so
+   that, where the continuation unboxes a result, no source with a source
+   of the last witness holds that result with a source ([cu0_result]),
+   and the call [never_returns]. [unused_code_dead] stays.
+   [one_group_unknown_calls_have_args_statement]: the new check is the
+   weaker.
+
    [unboxed_callee_meets_premises_statement]: the unit of
    [unboxed_callee_fails_statement], whose rebuild with the fix stops,
    meets these premises and the others (proved there), so that the
-   statement is not vacuous. *)
+   statement is not vacuous; it meets [unknown_calls_have_args] too, the
+   weaker check. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -120,6 +134,16 @@ Definition one_group_unknown_calls (e : expr) : bool :=
        match ap_call_kind ap with
        | Indirect_unknown_arity => Nat.eqb (length (ap_args_arity ap)) 1
        | Direct _ | Indirect_known_arity _ => true
+       end)
+    (calls_of e).
+
+(* Every call of unknown arity has a group of arguments. *)
+Definition unknown_calls_have_args (e : expr) : bool :=
+  forallb
+    (fun ap =>
+       match ap_call_kind ap, ap_args_arity ap with
+       | Indirect_unknown_arity, [] => false
+       | _, _ => true
        end)
     (calls_of e).
 
@@ -185,6 +209,46 @@ Definition fix_fails_only_by_unboxed_callee_statement : Prop :=
           (static_names code_ids_bound e) (bound_code_metadata e) unboxed ap
         = Not_changing_u
       ∧ unboxed_of unboxed (ap_callee ap) = Some fields.
+
+(* The same for calls of unknown arity of any number of groups. *)
+Definition fix_fails_only_by_unboxed_callee_any_groups_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (max_unbox_size : nat) (lambda_lifting preserve_direct_calls : bool)
+    (tcr : list node),
+    let F := traverse_unit Auto u e in
+    let S := solution_of_tables T in
+    let code_deps := unit_code_deps Auto u e in
+    let cannot_change := derive_cannot_change F T in
+    let dominated := derive_dominated T in
+    let to_unbox :=
+      derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+        lambda_lifting
+    in
+    let unboxed := unit_unboxed F T dominated to_unbox e in
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    least_solution is_local F T ->
+    conts_counted (unit_counts u) e = true ->
+    plain_kinds e = true ->
+    exn_handlers_well_formed e = true ->
+    unknown_calls_have_args e = true ->
+    results_within_codes e = true ->
+    unused_code_dead S e = true ->
+    rebuild_unit_unbox_repr_fixed_fails is_local F T cannot_change code_deps
+      dominated to_unbox tcr preserve_direct_calls e
+    = true ->
+    ∃ (ads : list decision) (ap : apply_expr) (fields : unboxed_fields),
+      (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e
+      ∧ apply_change_u F S (fun n => mem_node n cannot_change) code_deps
+          (static_names code_ids_bound e) (bound_code_metadata e) unboxed ap
+        = Not_changing_u
+      ∧ unboxed_of unboxed (ap_callee ap) = Some fields.
+
+(* The check of one group is stronger. *)
+Definition one_group_unknown_calls_have_args_statement : Prop :=
+  ∀ e : expr,
+    one_group_unknown_calls e = true -> unknown_calls_have_args e = true.
 
 (* The unit at which the rebuild of the fix stops at an unboxed callee
    meets the premises that [unboxed_callee_fails_statement] does not

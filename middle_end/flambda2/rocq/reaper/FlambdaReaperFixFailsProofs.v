@@ -805,6 +805,154 @@ Proof.
     discriminate (eq_trans (eq_sym Hnr) Hcnr).
 Qed.
 
+Theorem fix_fails_only_by_unboxed_callee_any_groups :
+  fix_fails_only_by_unboxed_callee_any_groups_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting pdc tcr F S code_deps
+    cannot_change dominated to_unbox unboxed Hloc Hslots Hfrag Hleast Hcount
+    Hkinds Hwf Hhas Hres Hdead Hfails.
+  destruct (FlambdaReaperWrapperProofs.unit_facts Auto u e
+              (∀ f : field, is_local f = false) Hfrag Hslots)
+    as (noted & deps & Hedges & Hconsts & _ & Hnodup & Hids).
+  pose proof (fun id c Hc =>
+                proj1 (FlambdaReaperWrapperProofs.unit_codes_edges
+                         _ _ _ _ _ _ _ _ _)
+                  e None (unit_conts u) Hedges id c Hc) as Hcode_edges.
+  (* The calls and the code of the unit. *)
+  assert (Hcalls_of :
+            ∀ ads ap,
+              (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e
+              -> ap ∈ calls_of e)
+    by (intros ads ap H;
+        exact (proj1 (rebuilt_calls_of _ _ _ _ _) e [] ads ap H)).
+  assert (Hnil :
+            ∀ ap, ap ∈ calls_of e -> ap_call_kind ap = Indirect_unknown_arity ->
+              ap_args_arity ap <> []).
+  { intros ap Hap Hk E. unfold unknown_calls_have_args in Hhas.
+    rewrite forallb_forall in Hhas. pose proof (Hhas ap Hap) as H.
+    rewrite Hk, E in H. discriminate. }
+  assert (Har :
+            ∀ ap, ap ∈ calls_of e ->
+              ∀ id cd, code_id_actually_called F S ap = Some id ->
+                (id, cd) ∈ code_deps ->
+                length (unarize (ap_return_arity ap)) <= length (cd_return cd)).
+  { intros ap Hap id cd Hid Hcd.
+    assert (Hk : ap_call_kind ap <> Indirect_unknown_arity).
+    { intros Hk. unfold code_id_actually_called in Hid. rewrite Hk in Hid.
+      discriminate. }
+    unfold results_within_codes in Hres. rewrite forallb_forall in Hres.
+    pose proof (Hres ap Hap) as H.
+    assert (Hfa :
+              forallb
+                (fun '(_, c) =>
+                   Nat.leb (length (unarize (ap_return_arity ap)))
+                     (length (code_result_kinds c)))
+                (unit_codes e)
+              = true)
+      by (revert H; destruct (ap_call_kind ap) eqn:Ek; intros H;
+          first [ exact H | exfalso; exact (Hk eq_refl) ]).
+    rewrite forallb_forall in Hfa.
+    assert (Hidin : id ∈ static_names code_ids_of_binding e)
+      by (apply Hids; apply in_map_iff; exists (id, cd); auto).
+    destruct (proj1 FlambdaReaperWrapperProofs.unit_codes_names e id Hidin)
+      as [(c & Hc) _].
+    pose proof (Hfa (id, c) Hc) as Hle. cbv beta iota in Hle.
+    apply Nat.leb_le in Hle.
+    pose proof (Hcode_edges id c Hc) as Hce.
+    destruct c as [params mc ret exn md body].
+    cbn [FlambdaReaperFlowProofs.code_edges] in Hce.
+    destruct Hce as (cd' & Hcd' & _ & _ & _ & _ & Hlen & _).
+    pose proof (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd)
+      as E1.
+    rewrite (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd') in E1.
+    injection E1 as <-.
+    cbn [code_result_kinds code_result_arity] in Hle. rewrite Hlen.
+    exact Hle. }
+  assert (Hcalls :
+            ∀ ads ap,
+              (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e
+              -> (ap_call_kind ap = Indirect_unknown_arity ->
+                  ap_args_arity ap <> [])
+                 ∧ ∀ id cd, code_id_actually_called F S ap = Some id ->
+                     (id, cd) ∈ code_deps ->
+                     length (unarize (ap_return_arity ap))
+                     <= length (cd_return cd)).
+  { intros ads ap H. pose proof (Hcalls_of ads ap H) as Hap. split.
+    - exact (Hnil ap Hap).
+    - exact (Har ap Hap). }
+  assert (Hcounted : ∀ id c, (id, c) ∈ unit_codes e -> code_counted c).
+  { intros id c Hc. pose proof (Hcode_edges id c Hc) as Hce.
+    destruct c as [params mc ret exn md body].
+    cbn [FlambdaReaperFlowProofs.code_edges] in Hce.
+    destruct Hce as (cd & _ & _ & _ & _ & _ & _ & _ & _ & Hne & Hbs & Hcnt
+                     & _).
+    split; [ exact Hne | split; [ exact Hcnt | exact Hbs ] ]. }
+  assert (Hok : codes_ok S (unit_codes e)).
+  { intros id c Hc. split.
+    - intros Hun. unfold unused_code_dead in Hdead.
+      rewrite forallb_forall in Hdead. pose proof (Hdead (id, c) Hc) as H.
+      cbv beta iota in H. rewrite Hun in H. exact H.
+    - pose proof (Hcounted id c Hc) as H. destruct c.
+      exact (proj2 (proj2 H)). }
+  (* The walk. *)
+  unfold rebuild_unit_unbox_repr_fixed_fails in Hfails.
+  assert (Eu : unit_unboxed_fields F T dominated to_unbox e
+               = (unboxed, snd (unit_unboxed_fields F T dominated to_unbox e)))
+    by apply surjective_pairing.
+  rewrite Eu in Hfails. cbv beta iota in Hfails.
+  set (next := snd (unit_unboxed_fields F T dominated to_unbox e)) in Hfails.
+  set (changed :=
+         unit_changed_representations is_local F T dominated to_unbox tcr e)
+    in Hfails.
+  pose proof (proj1 (walk F S (fun n => mem_node n cannot_change) code_deps
+                       pdc (static_names code_ids_bound e)
+                       (bound_code_metadata e) unboxed next changed)
+                e empty_unbox_env Hok Hfails)
+    as Hfound.
+  destruct Hfound as [(ads & ap & Hin & Hat) | (id & c & Hc & Hused & Hnr)].
+  - change ((ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e)
+      in Hin.
+    destruct Hat as [(Hnc & fields & Hf) | (Hnr & Hw)].
+    + exists ads, ap, fields. split; [ exact Hin | split; assumption ].
+    + exfalso.
+      pose proof (proj1 (calls_bounded _ _ _ _ _) e [] (unit_counts u)
+                    (bounded_nil _) Hcount Hcounted ads ap Hin) as Hlen.
+      assert (Hw' :
+                wrapper_fails_u ads
+                  (map fst
+                     (unit_callee_decisions F T cannot_change code_deps
+                        unboxed e ap))
+                = true).
+      { unfold unit_callee_decisions, callee_decisions.
+        unfold callee_returns in Hw. change (solution_of_tables T) with S.
+        destruct (apply_change_u _ _ _ _ _ _ _ ap) as [ | pd rd].
+        - rewrite map_map. exact Hw.
+        - exact (wrapper_fails_combine ads rd _ Hlen Hw). }
+      pose proof (Hcalls_of ads ap Hin) as Hap.
+      pose proof (FlambdaReaperWrapperDerivedProofs
+                    .fix_arm_never_returns_auto_derived_full is_local u e T
+                    max_unbox_size lambda_lifting Hloc Hslots Hfrag Hleast
+                    Hcount Hkinds ads ap Hin (Hnil ap Hap) (Har ap Hap) Hw')
+        as Hnr'.
+      discriminate (eq_trans (eq_sym Hnr') Hnr).
+  - exfalso.
+    pose proof (FlambdaReaperWrapperDerivedProofs.check_never_returns_auto
+                  is_local u e T cannot_change unboxed next changed pdc
+                  Hloc Hslots
+                  Hfrag Hleast Hwf Hcalls id c Hc Hused) as Hcnr.
+    discriminate (eq_trans (eq_sym Hnr) Hcnr).
+Qed.
+
+Theorem one_group_unknown_calls_have_args :
+  one_group_unknown_calls_have_args_statement.
+Proof.
+  intros e H. unfold one_group_unknown_calls in H.
+  unfold unknown_calls_have_args. rewrite forallb_forall in H |- *.
+  intros ap Hap. specialize (H ap Hap). cbv beta in H |- *.
+  destruct (ap_call_kind ap), (ap_args_arity ap); try reflexivity.
+  discriminate H.
+Qed.
+
 Theorem unboxed_callee_meets_premises :
   unboxed_callee_meets_premises_statement.
 Proof. hnf. repeat split; vm_compute; reflexivity. Qed.
