@@ -852,8 +852,8 @@ all: layout $(SOURCES:.v=.vo) claims
 # directories under the same libraries. The recipe itself does not run Rocq.
 #
 # Every .v file of the sources begins with a header. For a file of
-# FLAMBDA2_TRANSCRIBED, which is established as a transcription of a file
-# of the compiler, it is the header of that file: the recipe asks that its
+# FLAMBDA2_TRANSCRIBED it is the header of a file of the compiler, and
+# the comment under it says of which and why: the recipe asks that its
 # first 26 lines be not the licence header of the other .v files and that
 # the lines of comment at its head have the word License, and does not
 # compare them with the file of the compiler. Every other .v file begins
@@ -867,6 +867,7 @@ FLAMBDA2_TRANSCRIBED := \
   rewrites/lets/FlambdaIdentitiesSpec.v \
   semantics/FlambdaPrimitiveSpec.v \
   semantics/FlambdaSemanticsSpec.v \
+  semantics/FlambdaSubkindOrderSpec.v \
   terms/FlambdaKindModel.v \
   terms/FlambdaModel.v \
   terms/FlambdaPrimitiveModel.v \
@@ -989,7 +990,7 @@ layout:
 	      0) bad=1; \
 	        echo "error: $$f: it is a file of FLAMBDA2_TRANSCRIBED and" \
 	          "begins with the licence header of the other .v files, not" \
-	          "with the header of the file that it transcribes" >&2;; \
+	          "with the header of a file of the compiler" >&2;; \
 	      *) echo "error: cmp failed on $$f (status $$s)" >&2; exit 1;; \
 	    esac; \
 	    sed -n '/^(\*.*\*)$$/!q;p' "$$f" > "$$layout_dir/box" \

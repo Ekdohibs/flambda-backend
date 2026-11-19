@@ -1,29 +1,46 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* One part of this file has the structure of a function of the compiler;
+   the file as a whole transcribes no file. The function is
+   [With_subkind.Non_null_value_subkind.compatible] of
+   middle_end/flambda2/kinds/flambda_kind.ml. The part is the comparison of
+   two variants in [subkind_says_at_least], [shapes_say_at_least] and
+   [fields_say_at_least]: the shapes are taken tag by tag; a shape that
+   gives its fields says as much as one that does not, and not the converse;
+   where both give them there must be as many, and they are compared one by
+   one, by recursion. The route that is recorded is not a reading of that
+   function: the three were moved, clause by clause, from a function in
+   OCaml over the compiler's subkinds that the author of this file had
+   written for a measurement, which is not in this tree and which compares
+   two variants in this way already. No record says whether [compatible]
+   was open when that function was written, and it is not claimed that it
+   was written without it. What is not as in [compatible]: the constant
+   constructors and the tags of the first variant need only be among those
+   of the second, where [compatible] asks for the same sets; a variant with
+   no constructor that is a block says as much as a tagged immediate;
+   whether a field or a parameter may be null is compared; the model's
+   subkinds have no shape of a block, which [compatible] compares; of the
+   entries of the first variant for one tag only the first is read. The
+   order on the lists of parameters and the three statements are this
+   work's own.
+
+   The header above is that of
+   middle_end/flambda2/kinds/flambda_kind.ml,
+   the file of the compiler that the lines above name. *)
 
 (* The order on subkinds: one says at least as much as another.
 
