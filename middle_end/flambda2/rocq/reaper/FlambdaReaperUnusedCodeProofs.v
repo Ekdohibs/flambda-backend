@@ -51,7 +51,8 @@
      the unit has the shape.
 
    That the traversal of a unit whose variables are bound once gives the
-   facts this shape is not proved (see S7.md). *)
+   facts this shape is not proved: FlambdaReaperUnusedCodeTraversalProofs.v
+   reduces it to bounds of the facts (see S7.md). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
