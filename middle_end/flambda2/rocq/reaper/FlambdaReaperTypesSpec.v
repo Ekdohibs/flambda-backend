@@ -42,8 +42,9 @@
    on static blocks), [unboxed_values] and
    [block_fields_of_one_kind] (for unboxed variables of code),
    [slot_value_at_path], [changed_closure_rebuilt], [changed_unstored],
-   [reprs_of_sets], [reprs_without_slots] and [changed_at] (for the
-   closures whose representation changes), the statements, and the
+   [reprs_of_sets], [reprs_without_slots], [changed_at] and
+   [function_slots_mutual] (for the closures whose representation
+   changes), the statements, and the
    examples,
    against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
@@ -346,6 +347,26 @@
      slot, the new function slots distinct). The fragment: the
      representations keep no value slot ([reprs_without_slots]). No
      fault found.
+   - [rewrite_changed_type_sound_slots_statement]: the same where the
+     representations keep value slots: the type of each new value slot,
+     a leaf of a field of the representation ([changed_leaves]), the
+     type at its path in the closure type rewritten under the metadata
+     that [patterns_for_unboxed_fields] gives it ([pattern_metadata]),
+     or unknown where it binds no variable, holds of what the closure of
+     the third run has there ([changed_closure_rebuilt]). In place of
+     [reprs_without_slots], what makes the fields of a representation
+     those read from the closures of its set: the table of
+     [dominated_by_allocation_point] checked ([check_dominated]), so
+     that the allocation of a closure is given the representation of the
+     set of a closure of [tcr] that holds it at a function slot; and the
+     closures of a set holding one another ([function_slots_mutual]), so
+     that this closure of [tcr] is of its set. With any table, an
+     allocation may be given the representation of another set, whose
+     fields its own set need not read. For a value slot unboxed in turn,
+     the premises of [rewrite_unboxed_result_type_sound_statement] on the
+     graph and the uses ([block_fields_of_one_kind],
+     [check_unboxed_uses]). [reprs_of_sets] is still a check. No fault
+     found.
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
@@ -382,12 +403,10 @@
    - Unboxing: the rewriting of the types of the closures whose
      representation changes, which [rewrite_arbitrary] forgets and
      [rewrite_arbitrary_u] rewrites as the compiler does, is stated for
-     every closure ([rewrite_changed_type_sound_statement]) only where
-     the representations keep no value slot: the types of the new value
-     slots (the leaves of [changed_leaves], read from the closures of
-     the set by [get_fields_of_constructors], and those of a value slot
-     unboxed in turn) are left, and so is the rebuild with a change of
-     representation in the other statements; the unboxing of closures
+     every closure ([rewrite_changed_type_sound_slots_statement]) with
+     [reprs_of_sets] a check, not derived from the construction of the
+     representations; the rebuild with a change of representation in the
+     other statements is left; the unboxing of closures
      and of names whose uses are called (not of [check_unboxed_uses]);
      the fields of an unboxed [my_closure], which the result types give
      no equation, so that there is nothing to state of them. *)
@@ -1349,6 +1368,77 @@ Definition rewrite_changed_type_sound_statement : Prop :=
       (FlambdaReaperUnboxing.unit_changed_representations is_local F T
          dominated to_unbox tcr e) ->
     reprs_without_slots
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    closure_in_set statics v <> None ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v n v_mid ->
+    metadata_at (solution_of_tables T) m n ->
+    changed_at (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      n v_mid v' ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u all_fixes
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+(* A node that holds a closure at a function slot is held by it at one:
+   the closures of a set hold one another, as the traversal of a set
+   makes them (FlambdaReaperTraversal.record_set_of_closures_deps). *)
+Definition function_slots_mutual (G : graph) : Prop :=
+  ∀ (x b : node) (g : function_slot),
+    g_constructor G x (Field_function_slot g) b ->
+    ∃ g' : function_slot, g_constructor G b (Field_function_slot g') x.
+
+(* [rewrite_changed_type_sound_statement] where the representations keep
+   value slots: the new value slots, each the leaf of a field of the
+   representation ([changed_leaves]), have the type at its path in the
+   type of the closure, rewritten under the metadata that
+   [patterns_for_unboxed_fields] gives it, or unknown. In place of
+   [reprs_without_slots], it asks what makes the fields of the
+   representation those read from the closures of its set: the table of
+   [dominated_by_allocation_point] checked ([check_dominated]), and the
+   closures of a set holding one another ([function_slots_mutual]); and,
+   for a value slot unboxed in turn, the premises of
+   [rewrite_unboxed_result_type_sound_statement] on the graph and the
+   uses of the names unboxed ([block_fields_of_one_kind],
+   [check_unboxed_uses]). *)
+Definition rewrite_changed_type_sound_slots_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v_mid v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    function_slots_mutual (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    changed_unstored (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    reprs_of_sets (graph_of_facts F)
       (FlambdaReaperUnboxing.unit_changed_representations is_local F T
          dominated to_unbox tcr e) ->
     type_in_fragment_with true valuation t ->
