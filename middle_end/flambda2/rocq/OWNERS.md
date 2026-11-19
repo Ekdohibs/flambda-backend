@@ -62,7 +62,8 @@ Owner: C0. Phase 0 was done as C0, and what it created is C0's.
 - `middle_end/flambda2/rocq/requests/C0-well-formed.md` and
   `requests/C0-toplevel-try-body.md` (requests)
 - `middle_end/flambda2/rocq/status/phase0.md` (Phase 0)
-- `middle_end/flambda2/tests/semantics/extracted/` (generated; only the
+- `middle_end/flambda2/tests/semantics/extracted/` (generated, with a
+  `README.md` and the `dune` file, which are written by hand; only the
   integrator commits it, see `rocq/HACKING.md`)
 - `middle_end/flambda2/tests/semantics/extracted_rocq_library/` (the
   generated files of the modules of Rocq's own library that the machine

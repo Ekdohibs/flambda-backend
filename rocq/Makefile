@@ -1175,7 +1175,8 @@ $(EXTRACT:.v=.vo): $(EXTRACT)
 # FlambdaExtract.v writes the machine of the Flambda 2 semantics as OCaml
 # modules into the directory of the test tool that runs it
 # (middle_end/flambda2/tests/semantics/extracted/); nothing there is written
-# by hand but the dune file.
+# by hand but the dune file and README.md, which says under which notice
+# the generated files stand.
 #
 # Rocq also writes there the files of each module of its own library that
 # the machine uses (Datatypes, BinInt and the like). Those files are Rocq's

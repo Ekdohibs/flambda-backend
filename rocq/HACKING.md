@@ -1411,8 +1411,10 @@ not a proof.
   it to `FlambdaExtract.v`, and chain it in `flsemantics.ml`.
 - The machine is extracted by `FlambdaExtract.v` into
   `tests/semantics/extracted/` (`make -C rocq all` regenerates it; the
-  files are committed, and none is written by hand). No part of the
-  compiler is built from it.
+  generated files are committed, and none of them is written by hand).
+  The directory has a `README.md`, written by hand, which says what each
+  file is generated from and under which notice it stands. No part of
+  the compiler is built from it.
 - The modules of Rocq's own library that the machine uses (`Datatypes`,
   `BinInt` and the like) are generated with it. Their files are Rocq's
   and not ours, so the same rule of `rocq/Makefile` moves them to
@@ -1455,7 +1457,7 @@ not a proof.
   tests, and `git diff` after `make -C rocq all` does not show them. To
   see them: delete every `.ml` and `.mli` of `tests/semantics/extracted/`
   and of `tests/semantics/extracted_rocq_library/` (not their `dune`
-  files, which are written by hand, and not `LICENSE` and `README.md` of
+  and `README.md` files, which are written by hand, and not `LICENSE` of
   the second) and
   `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.vo`, and run
   `make -C rocq all`. Look at `git status` of the two directories only
@@ -1908,6 +1910,9 @@ which the file takes and which proofs do not.
   needs the regenerated extracted files is in the last commit, and no
   document or comment cites a commit that is not on the integration
   branch or a file that is not in the tree.
+- The account of provenance of the series says, for each new source or
+  test file, whether anything in it is copied or adapted from a file of
+  the repository, and from which.
 - A change to the body of a definition of a Spec file, or of
   `FlambdaModel.v`, `FlambdaPrimitiveModel.v` or `FlambdaKindModel.v`,
   comes with the list of the statements already in the tree that the
