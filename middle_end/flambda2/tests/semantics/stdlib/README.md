@@ -464,8 +464,13 @@ machine. A unit is in the first alias if its rule takes at most 10
 seconds of processor time, and the first alias as a whole is to stay
 under 2 minutes; the others are in the second alias, by `long.txt`; a
 unit whose check did not end in 30 minutes would be in neither
-(`not_run.txt`). Which unit is where is in those lists, and is changed
-by a commit, not decided when the rules run.
+(`not_run.txt`). That bound says which units are run, and no more: a
+time is no verdict, and a unit is not left out of the two aliases,
+and does not lose its stored file, because its time has passed 10
+minutes while it stays under 30. Whether it is in the first alias or
+in the second is still by the 10 seconds above. Which unit is where
+is in those lists, and is changed by a commit, not decided when the
+rules run.
 
 Measured on 18 November 2026 in a tree built at f5591bb185, one job, on a
 machine that other work shared (so the times place the rules, and are no
@@ -480,6 +485,22 @@ bound):
 - **The second alias**, `map.ml` and `set.ml`: about 9 minutes 40
   seconds of processor time (about 5 minutes for `map.ml` and 4 minutes
   45 seconds for `set.ml`), nearly all of it in the driver's check.
+
+Measured again on 18 November 2026 with the compiler, the driver and the
+library of a build of the files of the commit "C0: the ledger has the two
+lines of an acceptance of an undefined run" (the build was made at an
+earlier placing of the same files in the line of the stage), one job, on
+a machine that other work shared, each alias asked of dune once, as a
+whole. The first alias
+(`runtest-stdlib`, 77 units) took 68 seconds of processor time, user and
+system, and 68 seconds of the clock. The second (`runtest-stdlib-long`:
+the rules of `map.ml` and `set.ml`, one after the other) took 823
+seconds of processor time, about 13 minutes 45 seconds, and 829 seconds
+of the clock. The two units were not measured apart this time, and no
+unit of the first alias alone: the times of single units above, and the
+times beside the two names in `long.txt` (298 and 284 seconds), are
+those of the measure of 18 November 2026 in the tree built at
+f5591bb185. `long.txt` stays as it was; only its names are read.
 
 The rules depend on the driver, which links the whole compiler: any
 change of the compiler runs all 79 again. A change of `stdlib/X.ml` runs

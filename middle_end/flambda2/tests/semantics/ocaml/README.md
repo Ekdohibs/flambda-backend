@@ -205,6 +205,19 @@ unit made from OCaml.
   `-drawfexpr` and the fexpr parser: what is validated is the term the
   parser reads back, which is the term the compiler simplifies only as
   far as printing and parsing lose nothing.
+  The tool prints the word where the validator accepted and the run
+  of the term before that the acceptance is of did not end undefined
+  within the 1,000,000 steps that the tool gives the machine: that
+  run reached an exit, or it was still running when the steps ran
+  out (where it is one of the runs shown, its line ends "still
+  running when the fuel ran out"). A run that goes on past those
+  steps is not shown to be defined, and the word is no statement that
+  the run before is defined. Under "validated with nothing imported"
+  that run is one from the empty static environment, which the tool
+  does not print: the runs shown are those from the imports, and the
+  output does not say how that one ended, only that it was not found
+  undefined. No expected file of this directory has a line of a run
+  that was still running.
   The rules of this directory check each unit in a second way too, in
   which the same check is given the two terms of the compiler's own
   run, and what it prints is compared with `X.expected`, with two
@@ -878,8 +891,10 @@ unit made from OCaml.
   has no step somewhere in the run of the term before, so anything
   refines it and a validation would say nothing. The compiler runs
   these programs: the model is what lacks something, and the table
-  says what. Such a unit is not counted as validated. Where the
-  validator accepts the pair all the same, the line under this one
+  says what. Such a unit is not counted as validated. That is said
+  of a run that the tool found undefined within its steps, and not
+  of one still running when they ran out ("validated", above). Where
+  the validator accepts the pair all the same, the line under this one
   begins "the validation accepts the pair" and goes on with the words
   that a verdict has after "validated": it is no verdict, no line of
   such a unit begins "validated", and the line "the term before is
@@ -3771,8 +3786,7 @@ directory run `own_run.sh` on each unit of this directory, and compare
 what the program prints of the unit in one of three ways.
 
 The ordinary way is that of every unit that the two others do not
-name: at this commit, of every unit but `float_add.ml` and
-`copy_heap.ml`. `own_same.sh`
+name: at this commit, of every unit but `copy_heap.ml`. `own_same.sh`
 compares what the program prints with `X.expected`, the file that what
 the tool prints of the text is compared with, and the two must be the
 same bytes: the same verdict, the same line of the comparison that
@@ -3788,17 +3802,27 @@ the rule of the tool does. No unit is named there at this commit.
 
 The two other ways:
 
-- `float_add.ml`, which `own_run_numbers.txt` names. Both ways say "not
-  checked" of it, in a line that shows the primitive that the model has
-  not got with its two arguments, which are variables. A variable is
-  printed as its name, a slash, the number that the process gave it,
-  and `UV` if it is user-visible or `N` if it is not. The tool and the
-  program print the two variables with the same name and with other
-  numbers, the tool with `UV` and the program with `N`: the numbers
-  are each process's, and the text does not say which variables are
-  user-visible, so the reader makes all of them so (`fresh_var` in
-  `middle_end/flambda2/parser/fexpr_to_flambda_commons.ml`). Of a unit
-  that the list names, `own_same.sh` asks that each of the two files be
+- A unit that `own_run_numbers.txt` names. None is named at this
+  commit. The way is for a unit of which both ways say "not checked" in
+  one line that shows the primitive that the model has not got, where
+  the line shows the variables of the primitive as the compiler prints
+  them: the name, a slash, the number that the process gave the
+  variable, and `UV` if it is user-visible or `N` if it is not. The
+  numbers are each process's, and the text does not say which variables
+  are user-visible, so the reader makes all of them so (`fresh_var` in
+  `middle_end/flambda2/parser/fexpr_to_flambda_commons.ml`): such a
+  line may differ in the two ways. The tool and the program
+  show a variable of that line by its name alone
+  (`print_refused_primitive` in
+  `middle_end/flambda2/tests/tools/flsemantics.ml`), and keep the
+  compiler's print, numbers and all, only where a check that they make
+  of the names fails. `float_add.ml`, which the list named while its
+  line had the numbers, is compared in the ordinary way. A line "not
+  checked" that shows another term than a primitive (a call, a
+  binding, a static constant) has the numbers too, and the list is not
+  for it; no unit of this directory has such a line at this commit. Of
+  a unit that the list names, `own_same.sh` asks that each of the two
+  files be
   one line of the form `X.fl: not checked: the model has not got
   primitive (...)`, with no byte after the newline of that line, no
   null byte and no `/#`. In each line, a word between a space or a
@@ -3809,15 +3833,14 @@ The two other ways:
   line is changed, and the two lines must then be the same bytes. That
   is a substitution in the text of the line and no parser: the script
   takes such a word for a variable with its number, and does not know
-  that it is one. In what the two ways print of `float_add.ml` the
-  words of that form are the two variables. The script fails if the two
+  that it is one. The script fails if the two
   files are the same bytes before the substitution, so that the list
   names only units that need it. This was chosen over a second expected
-  file for the unit: that file would have the numbers that the program
-  gives, which change with anything that makes the compiler make one
-  name more or one fewer before those two. Of this unit the rule shows
-  that the two ways print the same line up to that substitution, and
-  no more.
+  file for such a unit: that file would have the numbers that the
+  program gives, which change with anything that makes the compiler
+  make one name more or one fewer before those of the line. Of such a
+  unit the rule shows that the two ways print the same line up to that
+  substitution, and no more.
 - A unit that has `X.own_expected` is compared with that file, by
   dune's `diff`, in the place of `X.expected`. It is for a unit of
   which the two ways are known not to print the same, which this file
@@ -3857,8 +3880,9 @@ again. If the two ways no longer print the same, the terms, the
 conversion, the options and the load path of the two compilations
 (`OCAMLPARAM` among them) and what each program prints are to be looked
 at, and the difference reported. By itself it does not show that the
-two terms differ: the line of `float_add.ml` differs by how names are
-printed. "What a validation does not say" has the losses of the text
+two terms differ: a line that shows a term with the numbers of its
+names can differ just by how names are printed. "What a validation does not
+say" has the losses of the text
 that are known. `dune promote` offers nothing for a comparison that
 `own_same.sh` makes. Of a unit of `own_run_numbers.txt`, to promote
 what the tool prints is not enough where the two files are then the
