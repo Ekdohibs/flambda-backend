@@ -114,6 +114,7 @@ From OxCamlFlambda2Types Require Import FlambdaAliasesSpec
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 From OxCamlFlambda2 Require FlambdaUnboxTogetherProofs.
+From OxCamlFlambda2 Require FlambdaUntagAtBinderProofs.
 From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
   FlambdaStatedContextProofs FlambdaRecHandlersStatedSpec
   FlambdaRecHandlersStatedProofs FlambdaCodeStatedSpec
@@ -159,7 +160,8 @@ Ltac equivalence_step :=
     | apply give_scrutinees_equivalent
     | apply numbers_in_arms_equivalent
     | apply merge_alias_lets_equivalent
-    | apply share_known_primitives_equivalent ].
+    | apply share_known_primitives_equivalent
+    | apply FlambdaUntagAtBinderProofs.bind_untaggings_equivalent ].
 
 Ltac refinement_step :=
   first

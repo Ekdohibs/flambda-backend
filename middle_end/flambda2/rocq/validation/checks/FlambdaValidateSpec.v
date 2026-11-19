@@ -308,7 +308,14 @@
    applied once, whose handler is put at its application
    ([remove_unused_conts], [sink_let_conts], and [inline_tail_conts]
    or, for the term after,
-   FlambdaInlineTailSpec.inline_tail_conts_kinded). Then
+   FlambdaInlineTailSpec.inline_tail_conts_kinded). Then, in both
+   terms, the untagging of a parameter that states a tagged
+   immediate, of a continuation that a call returns to, is bound at
+   the head of the handler
+   (FlambdaUntagAtBinderSpec.bind_untaggings): where Simplify unboxes
+   such a parameter the term after untags it where the call returns,
+   and the term before untags it where it is read, which may be
+   after another call. Then
    what the handler of the term before computes again is shared with
    the first computation ([share_known_primitives]); aliases are
    followed and the [Let]s left unused are removed. The same is done
@@ -326,6 +333,7 @@
    FlambdaUnusedContsSpec.remove_unused_conts_equivalent_statement,
    FlambdaSinkContsSpec.sink_let_conts_equivalent_statement,
    FlambdaInlineTailSpec.inline_tail_conts_kinded_equivalent_statement,
+   FlambdaUntagAtBinderSpec.bind_untaggings_equivalent_statement,
    FlambdaCseEquivalentSpec.share_known_primitives_equivalent_statement).
    The tidying is not in a round of the normalisations for the reason
    that the placing is not: it needs the continuations placed, and
@@ -465,6 +473,7 @@ From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
+From OxCamlFlambda2 Require Import FlambdaUntagAtBinderSpec.
 From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
   FlambdaRecHandlersStatedSpec FlambdaCodeStatedSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
@@ -1465,10 +1474,20 @@ Definition placed (e : expr) : expr :=
    once is moved to its application and its handler put there
    ([remove_unused_conts], [sink_let_conts], [inline_tail_conts]): a
    round of the normalisation does as much after its own fold, and
-   no round of it follows the placing. Then a primitive that was
+   no round of it follows the placing. Then the untagging of a
+   parameter that states a tagged immediate, of a continuation that
+   a call returns to, is bound at the head of the handler
+   (FlambdaUntagAtBinderSpec.bind_untaggings); a primitive that was
    computed is not computed again; aliases are followed, into the
    handlers of recursive continuations too for what is known where
    they are defined; the [Let]s left unused are removed.
+
+   Decision D25, at parameters. The equivalence of [bind_untaggings]
+   relies on the handler-entry subkind test of this machine. It fails
+   in the unchecked machine described in FlambdaUntagAtBinderSpec.v;
+   carrying this wiring to a machine without that guarantee needs a
+   new justification. The pass takes nothing of [S]: it reads what
+   the metadata of the handler itself states.
 
    The first three rewrites ask what is known of a variable where
    they take away a parameter that a handler states something of
@@ -1481,18 +1500,19 @@ Definition tidy_expr_before_stated (S : stated_in_scope) (e : expr) : expr :=
        (follow_aliases_in_loops []
           (follow_aliases []
              (share_known_primitives
-                (inline_tail_conts
-                   (sink_let_conts
-                      (remove_unused_conts
-                         (merge_switches
-                            (collapse_switches
-                               (forward_applications
-                                  (fold_constants
-                                     (numbers_in_arms
-                                        (unalias_rec_params_under S
-                                           (unalias_params_under S
-                                              (give_scrutinees_under S
-                                                 e))))))))))))))).
+                (bind_untaggings
+                   (inline_tail_conts
+                      (sink_let_conts
+                         (remove_unused_conts
+                            (merge_switches
+                               (collapse_switches
+                                  (forward_applications
+                                     (fold_constants
+                                        (numbers_in_arms
+                                           (unalias_rec_params_under S
+                                              (unalias_params_under S
+                                                 (give_scrutinees_under S
+                                                    e)))))))))))))))).
 
 (* That round with nothing known. *)
 Definition tidy_expr_before (e : expr) : expr := tidy_expr_before_stated [] e.
@@ -1572,18 +1592,19 @@ Definition tidy_expr_after_stated (S : stated_in_scope) (e : expr) : expr :=
     (follow_aliases_in_loops []
        (follow_aliases []
           (share_known_primitives
-             (inline_tail_conts_kinded
-                (sink_let_conts
-                   (remove_unused_conts
-                      (forward_to_arms_kinded
-                         (lift_handler_conts
-                            (forward_kinded
-                               (fold_constants
-                                  (numbers_in_arms
-                                     (unalias_rec_params_under S
-                                        (unalias_params_under S
-                                           (give_scrutinees_under S
-                                              e)))))))))))))).
+             (bind_untaggings
+                (inline_tail_conts_kinded
+                   (sink_let_conts
+                      (remove_unused_conts
+                         (forward_to_arms_kinded
+                            (lift_handler_conts
+                               (forward_kinded
+                                  (fold_constants
+                                     (numbers_in_arms
+                                        (unalias_rec_params_under S
+                                           (unalias_params_under S
+                                              (give_scrutinees_under S
+                                                 e))))))))))))))).
 
 (* That round with nothing known. *)
 Definition tidy_expr_after (e : expr) : expr := tidy_expr_after_stated [] e.

@@ -255,6 +255,7 @@
    then rounds of [give_scrutinees], of [unalias_params], of
    [numbers_in_arms], for the term before of
    FlambdaMergeSwitchesSpec.merge_switches, of
+   FlambdaUntagAtBinderSpec.bind_untaggings, of
    FlambdaCseSpec.share_known_primitives, of following aliases and of
    removing the [Let]s left unused, and then
    FlambdaGroupsUpSpec.groups_up ([tidied_before], [tidied_after]);
@@ -1107,8 +1108,10 @@ Definition placed_equivariant_statement : Prop :=
    FlambdaValidateSpec.tidy_before_round for the term before, of
    [tidy_after_round] for the term after, and then
    FlambdaGroupsUpSpec.groups_up. The rounds are made of rewrites
-   above and of FlambdaCseSpec.share_known_primitives, which is
-   stated to commute with renaming in its file, as [groups_up] is. *)
+   above, of FlambdaCseSpec.share_known_primitives, which is stated
+   to commute with renaming in its file, as [groups_up] is, and of
+   FlambdaUntagAtBinderSpec.bind_untaggings, whose statement is in
+   FlambdaUntagAtBinderNamesSpec.v. *)
 Definition tidied_before_equivariant_statement : Prop :=
   ∀ rounds : nat, rewrite_equivariant (tidied_before rounds).
 
@@ -1565,7 +1568,9 @@ Definition placed_keeps_scope_statement : Prop := keeps_scope placed.
 
 (* So does what the check makes of the term before after that: the
    rewrites of its rounds keep scope (FlambdaKeepsScopeSpec.v,
-   FlambdaLoopsScopeSpec.v, and FlambdaStaticsScopeSpec.v for
+   FlambdaLoopsScopeSpec.v, FlambdaUntagAtBinderNamesSpec.v for
+   FlambdaUntagAtBinderSpec.bind_untaggings, and
+   FlambdaStaticsScopeSpec.v for
    FlambdaUnaliasParamsSpec.unalias_params and for
    FlambdaGroupsUpSpec.groups_up, which comes last). *)
 Definition tidied_before_keeps_scope_statement : Prop :=

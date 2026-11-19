@@ -127,6 +127,7 @@ From OxCamlFlambda2 Require Import FlambdaUnboxParamsSpec
   FlambdaUnboxInScopeRenameSpec FlambdaUnboxInScopeRenameProofs
   FlambdaUnboxLoopsSpec FlambdaUnboxTogetherSpec.
 From OxCamlFlambda2 Require FlambdaUnboxTogetherNamesProofs.
+From OxCamlFlambda2 Require FlambdaUntagAtBinderNamesProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypesSpec FlambdaAliasesSpec.
 From OxCamlFlambda2 Require FlambdaGuardScopeSpec.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
@@ -3826,7 +3827,9 @@ Ltac rename_outwards :=
       | rewrite FlambdaUnaliasRecParamsNamesProofs.unalias_rec_params_renamed
       | rewrite FlambdaGiveScrutineeNamesProofs.give_scrutinees_renamed
       | rewrite FlambdaArmNumbersNamesProofs.numbers_in_arms_renamed
-      | rewrite FlambdaAliasLetsProofs.merge_alias_lets_renamed ].
+      | rewrite FlambdaAliasLetsProofs.merge_alias_lets_renamed
+      | rewrite FlambdaUntagAtBinderNamesProofs.bind_untaggings_equivariant
+      ].
 
 Lemma normalise_expr_before_equivariant :
   rewrite_equivariant normalise_expr_before.
@@ -6565,14 +6568,16 @@ Lemma tidy_tail_before_keeps_scope :
             (follow_aliases_in_loops []
                (follow_aliases []
                   (share_known_primitives
-                     (inline_tail_conts
-                        (sink_let_conts
-                           (remove_unused_conts
-                              (merge_switches
-                                 (collapse_switches
-                                    (forward_applications
-                                       (fold_constants
-                                          (numbers_in_arms e))))))))))))).
+                     (FlambdaUntagAtBinderSpec.bind_untaggings
+                        (inline_tail_conts
+                           (sink_let_conts
+                              (remove_unused_conts
+                                 (merge_switches
+                                    (collapse_switches
+                                       (forward_applications
+                                          (fold_constants
+                                             (numbers_in_arms
+                                                e)))))))))))))).
 Proof.
   refine
     (keeps_scope_compose _ (remove_unused_defined_lets []) _
@@ -6589,6 +6594,9 @@ Proof.
   refine
     (keeps_scope_compose _ share_known_primitives _
        FlambdaKeepsScopeProofs.share_known_primitives_keeps_scope).
+  refine
+    (keeps_scope_compose _ FlambdaUntagAtBinderSpec.bind_untaggings _
+       FlambdaUntagAtBinderNamesProofs.bind_untaggings_keeps_scope).
   refine
     (keeps_scope_compose _ inline_tail_conts _
        FlambdaKeepsScopeProofs.inline_tail_conts_keeps_scope).
