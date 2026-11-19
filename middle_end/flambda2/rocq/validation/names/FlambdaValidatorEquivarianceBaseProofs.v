@@ -304,11 +304,11 @@ Proof.
   - destruct binding as [id c | id | sym const]; intros known_code; simpl;
       try reflexivity.
     rewrite inline_known_calls_in_code_equivariant. reflexivity.
-  - destruct c as [params my_closure ret exn metadata body].
-    intros known_code. simpl.
-    rewrite <-
-      (inline_known_calls_equivariant_under r kept known_symbols body []
-         known_code).
+  - (* what is known in the body of code: what the code states of its
+       parameters, and its closure, renamed with them *)
+    destruct c as [params my_closure ret exn metadata body].
+    intros known_code. cbn [rename_code inline_known_calls_in_code].
+    rewrite code_stated_equivariant, inline_known_calls_equivariant_under.
     reflexivity.
 Qed.
 

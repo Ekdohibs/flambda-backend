@@ -129,9 +129,12 @@
    of what the code states of its parameters: the call tests what the
    code states of a parameter, and a [Let] tests a kind only (decision
    D25, at parameters). What is known of an argument
-   (FlambdaStatedScopeSpec.are_stated) is read from the [Let]s passed
-   on the way to the call; nothing is known of a parameter of a
-   handler, and the body of code starts with nothing known. Code that
+   (FlambdaStatedScopeSpec.are_stated) is read from the binders passed
+   on the way to the call: a [Let] makes its variable known as what
+   its defining expression makes, a handler makes its parameters known
+   as what it states of them, and the body of code starts with its
+   parameters known as what the code states of them and its closure
+   as no null (FlambdaStatedScopeSpec.code_stated). Code that
    states nothing of its parameters passes. It goes where
    [inline_calls] goes, and it too inlines no call of code whose id
    is among those given ([kept]).
@@ -969,9 +972,11 @@ Definition inline_known_apply (S : stated_in_scope) (kept : list code_id)
   end.
 
 (* [S]: what is known of the variables bound around the point. A
-   [Let] adds what its defining expression makes; a parameter of a
-   handler is known as nothing; the body of code starts from the
-   empty scope. *)
+   [Let] adds what its defining expression makes; a handler adds what
+   it states of its parameters; the body of code starts from what the
+   code states of its parameters, and its closure
+   (FlambdaStatedScopeSpec.code_stated): the variables bound around
+   the [Let_static] are not in scope there. *)
 Fixpoint inline_known_calls_under (S : stated_in_scope)
     (kept : list code_id) (known_code : list (code_id * code))
     (known_symbols : list (symbol * option code_id)) (e : expr) : expr :=
@@ -1010,7 +1015,8 @@ with inline_known_calls_in_handler_under (S : stated_in_scope)
   match h with
   | Handler params metadata handler =>
     Handler params metadata
-      (inline_known_calls_under (params_stated params [] S) kept
+      (inline_known_calls_under
+         (params_stated params (hm_params_subkinds metadata) S) kept
          known_code known_symbols handler)
   end
 with inline_known_calls_in_binding (kept : list code_id)
@@ -1028,7 +1034,8 @@ with inline_known_calls_in_code (kept : list code_id)
   match c with
   | Code params my_closure ret exn metadata body =>
     Code params my_closure ret exn metadata
-      (inline_known_calls_under [] kept known_code known_symbols body)
+      (inline_known_calls_under (code_stated params my_closure metadata) kept
+         known_code known_symbols body)
   end.
 
 Definition inline_known_calls (kept : list code_id)

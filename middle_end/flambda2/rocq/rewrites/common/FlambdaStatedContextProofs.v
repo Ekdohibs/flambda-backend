@@ -66,7 +66,25 @@
    enter are of what the handler states, under that static
    environment: the machine has just tested them.
 
-   Not here: the body of code that is entered. *)
+   For a rewrite that keeps its own invariant of the static
+   environment beside what is known (the code and the symbols that a
+   [Let_static] passed has bound), the laws of the handlers are also
+   there for any property of the static environment that an extension
+   keeps (section [Where]): one handler, and the handlers of a
+   recursive [Let_cont] all replaced at once ([handlers_refine_stated],
+   [let_cont_recursive_handlers_refine_stated_where]).
+
+   The body of code that is entered is compared in the same way
+   ([code_refines_stated_where]: the callee is a closure and the
+   values are of what the code states of its parameters, under the
+   static environment of the entry, as
+   FlambdaContextProofs.code_refines_stated has it, and that
+   environment has the property). Two groups of bindings whose code
+   is so related give static environments under which a term runs
+   the same ([related_bindings_equivalent_stated_where]). What is
+   known in the body is then
+   FlambdaStatedScopeProofs.code_stated_bound, which the proof of the
+   rewrite applies. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -185,6 +203,23 @@ Definition handler_refines_stated_where (ok : static_env -> Prop)
     refines (State source handler_vars conts statics hp rd)
       (State target handler_vars conts statics hp rd).
 
+(* The body of code refines another where it is entered under a static
+   environment of which [ok] holds: as
+   FlambdaContextProofs.code_refines_stated, which is this at every
+   static environment. *)
+Definition code_refines_stated_where (ok : static_env -> Prop)
+    (params : list variable) (my_closure : variable)
+    (metadata : code_metadata) (source target : expr) : Prop :=
+  ∀ (vs : list value) (callee : value) (callee_vars : env)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record),
+    ok statics ->
+    map kind_of_value vs = unarize (cm_params_arity metadata) ->
+    closure_of statics callee <> None ->
+    values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+    bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+    refines (State source callee_vars conts statics hp rd)
+      (State target callee_vars conts statics hp rd).
+
 Section Where.
 
 Variable ok : static_env -> Prop.
@@ -260,6 +295,37 @@ Proof.
     intros; exfalso; assumption.
 Qed.
 
+(* Handlers that refine each other's counterparts where they are
+   entered, in the two forms that the frame asks for. *)
+Definition handlers_refine_stated (vars : env)
+    (handlers handlers' : list (continuation * continuation_handler))
+    : Prop :=
+  handlers_related (handler_refines_stated_where ok) vars handlers handlers'
+  ∧ handlers_related refined_stated_where vars handlers' handlers.
+
+(* The same for the handlers of a recursive [Let_cont], any number of
+   them replaced. *)
+Lemma let_cont_recursive_handlers_refine_stated_where
+    (handlers handlers' : list (continuation * continuation_handler))
+    (body : expr) (vars : env) (conts : cont_env) (statics : static_env)
+    (hp : heap) (rd : read_record) :
+  ok statics ->
+  handlers_bind_statics handlers = handlers_bind_statics handlers' ->
+  handlers_refine_stated vars handlers handlers' ->
+  refines (State (Let_cont_recursive handlers body) vars conts statics hp rd)
+    (State (Let_cont_recursive handlers' body) vars conts statics hp rd).
+Proof.
+  intros Hok Hbinds [Hhandlers Hhandlers'].
+  refine
+    (let_cont_recursive_handlers_refine_from (statics_ok ok)
+       (statics_ok_step ok ok_extend) (handler_refines_stated_where ok)
+       refined_stated_where (fun _ _ _ _ _ _ _ _ => False)
+       (fun _ _ _ _ _ _ _ _ => False) stated_where_forwards
+       stated_where_backwards _ _ handlers handlers' body vars conts statics
+       hp rd Hok Hok Hbinds Hhandlers Hhandlers');
+    intros; exfalso; assumption.
+Qed.
+
 (* The same for one handler of a recursive [Let_cont]. *)
 Lemma let_cont_recursive_handler_refines_stated_where
     (before : list (continuation * continuation_handler)) (k : continuation)
@@ -282,22 +348,138 @@ Lemma let_cont_recursive_handler_refines_stated_where
        vars conts statics hp rd).
 Proof.
   intros Hok Hbinds Hhandler.
-  refine
-    (let_cont_recursive_handlers_refine_from (statics_ok ok)
-       (statics_ok_step ok ok_extend) (handler_refines_stated_where ok)
-       refined_stated_where (fun _ _ _ _ _ _ _ _ => False)
-       (fun _ _ _ _ _ _ _ _ => False) stated_where_forwards
-       stated_where_backwards _ _ _ _ body vars conts statics hp rd Hok Hok
-       _ _ _);
-    try (intros; exfalso; assumption).
+  apply let_cont_recursive_handlers_refine_stated_where; [ exact Hok | | ].
   - unfold handlers_bind_statics. rewrite !existsb_app. simpl.
     rewrite Hbinds. reflexivity.
-  - apply Forall2_app; [ apply handlers_related_refl | ].
-    apply Forall2_cons; [ | apply handlers_related_refl ].
-    split; [ reflexivity | ]. apply Handler_related. exact Hhandler.
-  - apply Forall2_app; [ apply handlers_related_refl | ].
-    apply Forall2_cons; [ | apply handlers_related_refl ].
-    split; [ reflexivity | ]. apply Handler_related. exact Hhandler.
+  - split;
+      (apply Forall2_app; [ apply handlers_related_refl | ]);
+      (apply Forall2_cons; [ | apply handlers_related_refl ]);
+      (split; [ reflexivity | ]); apply Handler_related; exact Hhandler.
+Qed.
+
+(* ---- The code of a [Let_static] --------------------------------------- *)
+
+(* The relation of the bodies of code where they are entered, and the
+   same read the other way: the two that
+   FlambdaContextProofs.related_states_refines_from wants. The code id
+   and the two continuations of the code are not looked at. *)
+Definition code_stated_where (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) : expr -> expr -> Prop :=
+  code_refines_stated_where ok params my_closure metadata.
+
+Definition code_refined_stated_where (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (target source : expr) : Prop :=
+  code_refines_stated_where ok params my_closure metadata source target.
+
+Lemma code_stated_where_forwards (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (source target : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record)
+    (slots : list (value_slot * value)) :
+  code_stated_where id params my_closure ret exn metadata source target ->
+  bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+  map kind_of_value vs = unarize (cm_params_arity metadata) ->
+  kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+  refines_from (statics_ok ok)
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp
+       rd).
+Proof.
+  intros Hrefines Hbind Hkinds _ Hclosure Hstated.
+  apply statics_ok_refines_from. intros Hok.
+  apply (Hrefines vs callee callee_vars _ statics hp rd_ Hok Hkinds);
+    [ rewrite Hclosure; discriminate | exact Hstated | exact Hbind ].
+Qed.
+
+Lemma code_stated_where_backwards (id : code_id) (params : list variable)
+    (my_closure : variable) (ret exn : continuation)
+    (metadata : code_metadata) (target source : expr) (vs : list value)
+    (callee : value) (callee_vars : env) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record)
+    (slots : list (value_slot * value)) :
+  code_refined_stated_where id params my_closure ret exn metadata target
+    source ->
+  bind_params params vs [(my_closure, callee)] = Some callee_vars ->
+  map kind_of_value vs = unarize (cm_params_arity metadata) ->
+  kind_of_value callee = Value ->
+  closure_of statics callee = Some (id, slots) ->
+  values_of_subkinds statics vs (cm_params_subkinds metadata) = true ->
+  refines_from (statics_ok ok)
+    (State source callee_vars [(ret, return_to); (exn, exn_to)] statics hp rd)
+    (State target callee_vars [(ret, return_to); (exn, exn_to)] statics hp
+       rd).
+Proof. apply code_stated_where_forwards. Qed.
+
+(* A term refines itself under a static environment whose code has
+   bodies that the bodies of the first refine where they are entered,
+   both having [ok]. *)
+Lemma related_statics_refine_stated_where (e : expr) (vars : env)
+    (conts : cont_env) (statics statics' : static_env) (hp : heap)
+    (rd : read_record) :
+  ok statics ->
+  ok statics' ->
+  statics_related_where code_stated_where statics statics' ->
+  statics_related_where code_refined_stated_where statics' statics ->
+  refines (State e vars conts statics hp rd)
+    (State e vars conts statics' hp rd).
+Proof.
+  intros Hok Hok' Hstatics Hstatics'.
+  exact
+    (related_states_refines_from (statics_ok ok)
+       (statics_ok_step ok ok_extend) (handler_refines_stated_where ok)
+       refined_stated_where code_stated_where code_refined_stated_where
+       stated_where_forwards stated_where_backwards
+       code_stated_where_forwards code_stated_where_backwards e vars conts
+       conts statics statics' hp rd Hok Hok' (cont_env_related_refl _ conts)
+       (cont_env_related_refl _ conts) Hstatics Hstatics').
+Qed.
+
+(* Groups of bindings whose code has bodies that refine their
+   counterparts where they are entered, in the two forms that the
+   frame asks for. *)
+Definition bindings_refine_stated
+    (bindings bindings' : list static_binding) : Prop :=
+  Forall2 (binding_related_where code_stated_where) bindings bindings'
+  ∧ Forall2 (binding_related_where code_refined_stated_where) bindings'
+      bindings.
+
+(* Two such groups, each way, added to one static environment: both
+   fail, or a term runs the same under the two results, where both
+   have [ok]. *)
+Lemma related_bindings_equivalent_stated_where (vars : env)
+    (bindings bindings' : list static_binding) (statics : static_env) :
+  bindings_refine_stated bindings bindings' ->
+  bindings_refine_stated bindings' bindings ->
+  match
+    eval_static_bindings vars bindings statics,
+    eval_static_bindings vars bindings' statics
+  with
+  | Some extended, Some extended' =>
+    ok extended ->
+    ok extended' ->
+    ∀ (e : expr) (vars' : env) (conts : cont_env) (hp : heap)
+      (rd : read_record),
+      equivalent (State e vars' conts extended hp rd)
+        (State e vars' conts extended' hp rd)
+  | None, None => True
+  | _, _ => False
+  end.
+Proof.
+  intros [Hf Hb] [Hf' Hb'].
+  apply (fun H =>
+    eval_static_bindings_related_where _ vars _ _ H statics statics
+      (statics_related_where_refl _ statics)) in Hf, Hb, Hf', Hb'.
+  destruct (eval_static_bindings vars bindings statics) as [extended | ],
+    (eval_static_bindings vars bindings' statics) as [extended' | ];
+    try contradiction; [ | exact I ].
+  intros Hok Hok' e vars' conts hp rd.
+  apply refines_antisymmetric;
+    apply related_statics_refine_stated_where; assumption.
 Qed.
 
 End Where.
