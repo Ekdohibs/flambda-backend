@@ -438,6 +438,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   nominal/FlambdaStateSupportSpec.v \
   semantics/FlambdaStaticProofs.v \
   semantics/FlambdaStaticSpec.v \
+  rewrites/common/FlambdaStatedScopeProofs.v \
+  rewrites/common/FlambdaStatedScopeSpec.v \
   wellformed/FlambdaStaticsInScopeProofs.v \
   wellformed/FlambdaStaticsInScopeSpec.v \
   rewrites/statics/FlambdaStaticsOrderProofs.v \
