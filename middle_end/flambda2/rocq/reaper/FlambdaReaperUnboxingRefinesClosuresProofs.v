@@ -2974,6 +2974,26 @@ Proof.
   - left. intros f. reflexivity.
 Qed.
 
+Theorem repr_never_returns_example : repr_never_returns_example_statement.
+Proof.
+  assert (Heq : rebuild_unit_unbox_repr_fixed no_local ReprNeverExample.facts
+                  ReprNeverExample.tables [] ReprNeverExample.code_deps
+                  ReprNeverExample.dominated ReprNeverExample.to_unbox
+                  ReprNeverExample.tcr true ReprNeverExample.unit_expr
+                = ReprNeverExample.rebuilt)
+    by (vm_compute; reflexivity).
+  do 12 (split; [ vm_compute; reflexivity | ]).
+  split; [ exact Heq | ].
+  rewrite <- Heq.
+  apply (rebuild_repr_fixed_observably_never_returns Auto no_local interface
+           ReprNeverExample.unit_expr ReprNeverExample.tables []
+           ReprNeverExample.dominated ReprNeverExample.to_unbox
+           ReprNeverExample.tcr true ReprNeverExample.nr);
+    try (vm_compute; reflexivity).
+  - exact no_local_slots.
+  - left. intros f. reflexivity.
+Qed.
+
 Theorem unboxed_closure_goes_wrong : unboxed_closure_goes_wrong_statement.
 Proof.
   assert (Hsrc : run 10 (on_its_own unboxed_closure)

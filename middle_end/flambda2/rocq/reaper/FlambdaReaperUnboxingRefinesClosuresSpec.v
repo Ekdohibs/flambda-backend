@@ -158,6 +158,15 @@
    [two_fields_example_statement]: the same of a unit that unboxes a
    block of two fields into two new slots, read and added by the code,
    as unbox_block_in_value_slot.fl does.
+   [repr_never_returns_example_statement]: a unit of [repr_unboxing_nr]
+   that is not of [repr_unboxing]. Its code 50 reads a block in the slot
+   of its closure, whose set changes its representation, switches on a
+   field of it, and calls itself in tail position, so that its result has
+   no source; the unit calls it, returning to a handler. With the tables
+   of the least solution, the rebuild in the mode of the fix makes both
+   calls return to a handler [Invalid] and drops the handler of the unit,
+   which the change of calling conventions alone keeps; the rebuilt unit
+   refines the unit up to observation.
 
    The unboxing of closures ([Unbox_my_closure], lambda lifting). The
    rebuild makes a call of code that takes the fields of its closure as
@@ -885,6 +894,166 @@ Definition two_fields_example_statement : Prop :=
     = Exit 1%positive [Value_const (Tagged_immediate 47)] empty_heap no_reads
   ∧ program_refines_observably TwoFieldsExample.unit_expr
       TwoFieldsExample.rebuilt.
+
+(* A call of code that never returns, through a closure whose set changes
+   its representation. The code 50 reads the slot 80 of its closure, a
+   block, switches on its field 0 (which gives the field a use), and calls
+   itself through its closure in tail position, so that its result has no
+   source; the unit calls it, returning to the handler 20. The block [x10]
+   is unboxed into the new slot 81, the function slot is 82. The tables
+   are the least solution, and the others are derived from them. *)
+Module ReprNeverExample.
+
+Local Open Scope positive_scope.
+
+Definition call (callee : variable) (args : list simple)
+    (k exn : continuation) : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Direct 50; ap_args := args;
+     ap_continuation := k; ap_exn_continuation := exn;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Singleton Value];
+     ap_return_arity := [Singleton Value] |}.
+
+(* The switch on the field [x46], to the handler 21 that runs [loop]. *)
+Definition switch_to (loop : expr) : expr :=
+  Let 47 (Naked_number Kind_naked_immediate)
+    (Prim (Unary Untag_immediate) [Var 46])
+    (Let_cont_non_recursive 21 (Handler [] (make_handler_metadata []) loop)
+       (Switch (Var 47)
+          [(7%Z, {| ac_continuation := 21; ac_args := [];
+                    ac_trap_action := None |})])).
+
+Definition code_50 : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Let 45 Value (Project_value_slot_from 70 80 (Var 41))
+       (Let 46 Value (load 0 (Var 45))
+          (switch_to (Apply (call 41 [Var 40] 3 4))))).
+
+Definition unit_expr : expr :=
+  Let_static [Bind_code 50 code_50]
+    (Let 10 Value (make_block [int 7; int 8])
+       (Let 60 Value (Closure_of_set 70 [(70, 50)] [(80, Var 10)])
+          (Let_cont_non_recursive 20
+             (Handler [30] (make_handler_metadata [Value])
+                (return_to 1 [int 0]))
+             (Apply (call 60 [int 5] 20 2))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match FlambdaReaperLeast.compute_least no_local facts 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables [] max_unbox_size false.
+
+Definition tcr : list node :=
+  derive_to_change_representation no_local facts tables [] max_unbox_size
+    false to_unbox.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+(* The code taken to never return. *)
+Definition nr (id : code_id) : bool := Pos.eqb id 50.
+
+(* 50 deletes its parameter and its result, which have no use. *)
+Definition changed_metadata : code_metadata :=
+  {| cm_params_arity := [Unboxed_product []];
+     cm_result_arity := [Unboxed_product []];
+     cm_is_tupled := false;
+     cm_is_stub := false |}.
+
+Definition changed_call (callee : variable) (k exn : continuation)
+    : apply_expr :=
+  {| ap_callee := Var callee; ap_call_kind := Direct 50; ap_args := [];
+     ap_continuation := k; ap_exn_continuation := exn;
+     ap_exn_extra_args := [];
+     ap_args_arity := [Unboxed_product []];
+     ap_return_arity := [Unboxed_product []] |}.
+
+(* The change of calling conventions alone: the calls return where they
+   did, and the handler 20 is kept, [Invalid] as its parameter has no
+   source. *)
+Definition cc_rebuilt : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [] 41 3 4 changed_metadata
+          (Let 45 Value (Project_value_slot_from 70 80 (Var 41))
+             (Let 46 Value (load 0 (Var 45))
+                (switch_to (Apply (changed_call 41 3 4))))))]
+    (Let 10 Value (make_block [int 7; Const (Poison Value)])
+       (Let 60 Value (Closure_of_set 70 [(70, 50)] [(80, Var 10)])
+          (Let_cont_non_recursive 20
+             (Handler [] (make_handler_metadata []) Invalid)
+             (Apply (changed_call 60 20 2))))).
+
+(* A call of 50 returning to the handler [Invalid] 63. *)
+Definition invalid_call (callee : variable) (exn : continuation) : expr :=
+  Let_cont_non_recursive 63 (Handler [] (make_handler_metadata []) Invalid)
+    (Apply (changed_call callee 63 exn)).
+
+(* The rebuild in the mode of the fix: both calls return to a handler
+   [Invalid], and the handler 20 is dropped. Field 0 of the block is the
+   variable 62, held in the slot 81, which the code reads into the
+   variable 61 of field 0 of [x45]. *)
+Definition rebuilt : expr :=
+  Let_static
+    [Bind_code 50
+       (Code [] 41 3 4 changed_metadata
+          (Let 61 Value (Project_value_slot_from 82 81 (Var 41))
+             (Let 46 Value (Simple (Var 61))
+                (switch_to (invalid_call 41 4)))))]
+    (Let 62 Value (Simple (int 7))
+       (Let 60 Value (Closure_of_set 82 [(82, 50)] [(81, Var 62)])
+          (invalid_call 60 2))).
+
+End ReprNeverExample.
+
+Definition repr_never_returns_example_statement : Prop :=
+  derive_cannot_change ReprNeverExample.facts ReprNeverExample.tables = []
+  ∧ check_dominated ReprNeverExample.tables ReprNeverExample.dominated = true
+  ∧ check_to_unbox no_local ReprNeverExample.facts ReprNeverExample.tables []
+      max_unbox_size false ReprNeverExample.to_unbox
+    = true
+  ∧ check_to_change_representation no_local ReprNeverExample.facts
+      ReprNeverExample.tables [] max_unbox_size false
+      ReprNeverExample.to_unbox ReprNeverExample.tcr
+    = true
+  ∧ check_sets_whole ReprNeverExample.facts ReprNeverExample.tables
+      ReprNeverExample.to_unbox ReprNeverExample.tcr
+    = true
+  ∧ ReprNeverExample.to_unbox = [v 10]
+  ∧ ReprNeverExample.tcr = [v 60; m 4; m 2]
+  ∧ code_never_returns (solution_of_tables ReprNeverExample.tables)
+      ReprNeverExample.code_deps 50%positive
+    = true
+  ∧ repr_unboxing no_local ReprNeverExample.facts ReprNeverExample.tables []
+      ReprNeverExample.code_deps ReprNeverExample.dominated
+      ReprNeverExample.to_unbox ReprNeverExample.tcr ReprNeverExample.unit_expr
+    = false
+  ∧ repr_unboxing_nr ReprNeverExample.nr no_local ReprNeverExample.facts
+      ReprNeverExample.tables [] ReprNeverExample.code_deps
+      ReprNeverExample.dominated ReprNeverExample.to_unbox
+      ReprNeverExample.tcr ReprNeverExample.unit_expr
+    = true
+  ∧ check_unboxed_reads ReprNeverExample.facts ReprNeverExample.tables
+      ReprNeverExample.dominated ReprNeverExample.to_unbox
+    = true
+  ∧ rebuild_unit_cc_from_tables ReprNeverExample.facts ReprNeverExample.tables
+      [] ReprNeverExample.code_deps true ReprNeverExample.unit_expr
+    = ReprNeverExample.cc_rebuilt
+  ∧ rebuild_unit_unbox_repr_fixed no_local ReprNeverExample.facts
+      ReprNeverExample.tables [] ReprNeverExample.code_deps
+      ReprNeverExample.dominated ReprNeverExample.to_unbox
+      ReprNeverExample.tcr true ReprNeverExample.unit_expr
+    = ReprNeverExample.rebuilt
+  ∧ program_refines_observably ReprNeverExample.unit_expr
+      ReprNeverExample.rebuilt.
 
 (* The unboxing of closures: the unit unboxed_closure of
    FlambdaReaperUnboxing.Examples returns 7; its rebuild with lambda
