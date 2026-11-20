@@ -41,7 +41,15 @@
    keeps [minv]: a function slot of a [Let] of a closure is held by each
    of the allocations of its set, which are distinct and include the
    variable of the [Let]; one of a static closure is a symbol of its
-   set. *)
+   set.
+
+   [block_fields_of_one_kind_traversal]: the steps of the traversal add
+   no constructor at a field of a block of a kind other than value
+   ([Kinds.ko_ok], the [ns_ok] of FlambdaReaperClosuresExactProofs.v for
+   [Kinds.bad_fact]).
+
+   [changed_closures_one_allocation_unaliased]: by induction on
+   [derivable], each tuple of a closure is as [ok_atom] says. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -456,6 +464,204 @@ Proof.
   destruct (lookup slot cs) as [s' | ]; [ | discriminate Hw ].
   apply Pos.eqb_eq in Hw. subst s'. reflexivity.
 Qed.
+
+(* ======================================================================== *)
+(* The closures of one allocation                                           *)
+(* ======================================================================== *)
+
+Section OneAllocation.
+
+Variable is_local : field -> bool.
+Variable G : graph.
+Variable S : solution.
+
+Hypothesis Hfun :
+  ∀ (a b b' : node) (g : function_slot),
+    g_constructor G a (Field_function_slot g) b ->
+    g_constructor G a (Field_function_slot g) b' -> b = b'.
+Hypothesis Hmut : function_slots_mutual G.
+Hypothesis Hu : closures_unaliased G.
+
+Definition is_closure (b : node) : Prop :=
+  ∃ (x : node) (g : function_slot), g_constructor G x (Field_function_slot g) b.
+
+(* A read into a closure is at its slot, off a closure that holds it. *)
+Lemma read_closure (t base : node) (f : field) :
+  is_closure t -> g_accessor G t f base ->
+  ∃ h : function_slot,
+    f = Field_function_slot h
+    ∧ g_constructor G base (Field_function_slot h) t ∧ is_closure base.
+Proof.
+  intros (x & g & Hx) Ha.
+  destruct (Hu x t g Hx) as (_ & _ & _ & _ & _ & _ & _ & _ & Hacc).
+  destruct (Hacc f base Ha) as (h & -> & Hb).
+  destruct (Hmut base t h Hb) as (g' & Hb').
+  exists h. split; [ reflexivity | split; [ exact Hb | exists t, g' ] ].
+  exact Hb'.
+Qed.
+
+(* What the rules derive of the closures: an alias into one is from
+   itself, it has no [any_source] and no [reading_field], its sources
+   are itself, and it is a use of itself only. *)
+Definition ok_atom (a : atom) : Prop :=
+  match a with
+  | Atom_alias t f => is_closure t -> f = t
+  | Atom_any_source n => ¬ is_closure n
+  | Atom_sources n y => is_closure n -> y = n
+  | Atom_usages n u => is_closure u -> n = u
+  | Atom_reading_field _ n => ¬ is_closure n
+  | _ => True
+  end.
+
+Ltac contra_into :=
+  let Hc := fresh "Hc" in
+  intros Hc; exfalso; destruct Hc as (x0 & g0 & Hx0);
+  destruct (Hu x0 _ g0 Hx0) as (U1 & U2 & U3 & U4 & U5 & U6 & U7 & U8 & _);
+  first [ eapply U1; eassumption | eapply U2; eassumption
+        | eapply U3; eassumption | eapply U4; eassumption
+        | apply U5; assumption | apply U6; assumption
+        | eapply U7; eassumption | eapply U8; eassumption ].
+
+Ltac alias_read :=
+  let Hc := fresh "Hc" in
+  intros Hc;
+  match goal with
+  | Ha : g_accessor G ?t ?rel ?X, IH : is_closure ?X -> ?Y = ?X,
+    Hk : g_constructor G ?Y ?rel ?f |- ?f = ?t =>
+    let h := fresh "h" in let Hb := fresh "Hb" in let HX := fresh "HX" in
+    destruct (read_closure t X rel Hc Ha) as (h & -> & Hb & HX);
+    rewrite (IH HX) in Hk; exact (Hfun _ _ _ _ Hk Hb)
+  end.
+
+Ltac any_alias :=
+  let Hc := fresh "Hc" in
+  intros Hc;
+  match goal with
+  | IH : is_closure ?t -> ?f = ?t, IH2 : ¬ is_closure ?f |- False =>
+    apply IH2; rewrite (IH Hc); exact Hc
+  end.
+
+Ltac any_read :=
+  let Hc := fresh "Hc" in
+  intros Hc;
+  match goal with
+  | Ha : g_accessor G ?t ?rel ?X, IH : ¬ is_closure ?X |- False =>
+    let HX := fresh "HX" in
+    destruct (read_closure t X rel Hc Ha) as (_ & _ & _ & HX);
+    exact (IH HX)
+  end.
+
+Ltac usages_alias :=
+  let Hc := fresh "Hc" in
+  intros Hc;
+  match goal with
+  | IH1 : is_closure ?u -> ?t = ?u, IH2 : is_closure ?t -> ?f = ?t
+    |- ?f = ?u =>
+    let E := fresh "E" in
+    pose proof (IH1 Hc) as E; rewrite <- E in Hc |- *; exact (IH2 Hc)
+  end.
+
+Ltac sources_alias :=
+  let Hc := fresh "Hc" in
+  intros Hc;
+  match goal with
+  | IH2 : is_closure ?t -> ?f = ?t, IH1 : is_closure ?f -> ?s = ?f
+    |- ?s = ?t =>
+    let E := fresh "E" in
+    pose proof (IH2 Hc) as E; rewrite E in IH1; exact (IH1 Hc)
+  end.
+
+Lemma ok_derivable (a : atom) : derivable is_local G S a -> ok_atom a.
+Proof.
+  intros Hd. induction Hd; cbn [ok_atom] in *;
+    solve [ exact I | intros; reflexivity | contra_into | alias_read
+          | intros ?; contradiction | any_alias | any_read | usages_alias
+          | sources_alias ].
+Qed.
+
+(* A closure has no [multiple_allocation_points] in a solution whose
+   tuples the rules derive. *)
+Lemma closure_one_allocation (x b : node) (g : function_slot) :
+  (∀ a : atom, holds S a = true -> derivable is_local G S a) ->
+  g_constructor G x (Field_function_slot g) b ->
+  ¬ US.multiple_allocation_points_of S b.
+Proof.
+  intros Hder Hxb.
+  assert (Hc : is_closure b) by (exists x, g; exact Hxb).
+  intros [Hany | (y & z & Hy & _ & Hz & _ & Hne)].
+  - exact (ok_derivable _ (Hder (Atom_any_source b) Hany) Hc).
+  - apply Hne.
+    rewrite (ok_derivable _ (Hder (Atom_sources b y) Hy) Hc),
+      (ok_derivable _ (Hder (Atom_sources b z) Hz) Hc).
+    reflexivity.
+Qed.
+
+End OneAllocation.
+
+Theorem changed_closures_one_allocation_unaliased :
+  changed_closures_one_allocation_unaliased_statement.
+Proof.
+  intros is_local F T tcr [_ Hder] Hsets Hmut Hu x b g _ Hxb.
+  exact (closure_one_allocation is_local _ _ (proj1 Hsets) Hmut Hu x b g Hder
+           Hxb).
+Qed.
+
+Lemma forallb_in {A : Type} (p : A -> bool) (l : list A) (x : A) :
+  forallb p l = true -> x ∈ l -> p x = true.
+Proof. intros H Hx. rewrite forallb_forall in H. exact (H x Hx). Qed.
+
+Theorem check_closures_unaliased_sound :
+  check_closures_unaliased_sound_statement.
+Proof.
+  intros F Hck x b g Hxb.
+  pose proof (forallb_in _ _ _ Hck Hxb) as H. cbn beta iota in H.
+  cbn [is_function_slot negb orb] in H.
+  repeat (apply andb_true_iff in H as [H ?]).
+  rename H into Ha.
+  match goal with
+  | H1 : forallb _ (f_propagate F) = true,
+    H2 : forallb _ (f_alias_if_any_source F) = true,
+    H3 : forallb _ (f_parameter F) = true,
+    H4 : negb (mem_node b (f_any_source F)) = true,
+    H5 : negb (mem_node b (f_zero_alloc_source F)) = true,
+    H6 : forallb _ (f_any_source_if_used F) = true,
+    H7 : forallb _ (f_use F) = true,
+    H8 : forallb _ (f_accessor F) = true |- _ =>
+    rename H1 into Hp, H2 into Hi, H3 into Hpa, H4 into Has, H5 into Hz,
+      H6 into Hiu, H7 into Hu, H8 into Hacc
+  end.
+  assert (Hne : ∀ t : node, negb (node_eqb t b) = true -> t <> b).
+  { intros t E ->. rewrite node_eqb_refl in E. discriminate E. }
+  assert (Hnm : ∀ l : list node, negb (mem_node b l) = true -> b ∉ l).
+  { intros l E Hin. apply mem_node_In in Hin. rewrite Hin in E.
+    discriminate E. }
+  cbn [graph_of_facts g_alias g_propagate g_alias_if_any_source g_parameter
+       g_any_source g_zero_alloc_source g_any_source_if_used g_use
+       g_accessor g_constructor].
+  split; [ intros from Hin; exact (Hne _ (forallb_in _ _ _ Ha Hin) eq_refl)
+         | ].
+  split; [ intros c from Hin; exact (Hne _ (forallb_in _ _ _ Hp Hin) eq_refl)
+         | ].
+  split; [ intros c from Hin; exact (Hne _ (forallb_in _ _ _ Hi Hin) eq_refl)
+         | ].
+  split;
+    [ intros base i Hin; exact (Hne _ (forallb_in _ _ _ Hpa Hin) eq_refl)
+    | ].
+  split; [ exact (Hnm _ Has) | split; [ exact (Hnm _ Hz) | ] ].
+  split; [ intros c Hin; exact (Hne _ (forallb_in _ _ _ Hiu Hin) eq_refl) | ].
+  split; [ intros from Hin; exact (Hne _ (forallb_in _ _ _ Hu Hin) eq_refl)
+         | ].
+  intros f base Hin. pose proof (forallb_in _ _ _ Hacc Hin) as E.
+  cbn beta iota in E. rewrite node_eqb_refl in E. cbn [negb orb] in E.
+  apply andb_true_iff in E as [Ef E].
+  apply existsb_exists in E as ([[base' f'] from] & Hc & E).
+  apply andb_true_iff in E as [E Eb]. apply andb_true_iff in E as [Eb' Ef'].
+  apply node_eqb_eq in Eb, Eb'. apply field_eqb_eq in Ef'. subst.
+  destruct f; try discriminate Ef. exists f. split; [ reflexivity | exact Hc ].
+Qed.
+
+Theorem closures_unaliased_examples : closures_unaliased_examples_statement.
+Proof. vm_compute. auto. Qed.
 
 (* ======================================================================== *)
 (* The function slots of the traversal                                      *)
@@ -1155,6 +1361,677 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
+(* The kinds of the fields of blocks                                        *)
+(* ======================================================================== *)
+
+Module Kinds.
+
+(* A constructor fact at a field of a block of a kind other than value. *)
+Definition bad_fact (fct : fact) : Prop :=
+  match fct with
+  | Fact_constructor _ (Field_block _ Value) _ => False
+  | Fact_constructor _ (Field_block _ _) _ => True
+  | _ => False
+  end.
+
+(* From [a] to [a'], facts are added that are not bad facts, and nodes
+   are made: the [ns_ok] of FlambdaReaperClosuresExactProofs.v for
+   [bad_fact]. *)
+Definition ko_ok (a a' : acc) : Prop :=
+  (∀ fct : fact, fct ∈ acc_facts a -> fct ∈ acc_facts a')
+  ∧ (∀ fct : fact,
+       fct ∈ acc_facts a' -> bad_fact fct -> fct ∈ acc_facts a)
+  ∧ (acc_next a <= acc_next a')%positive.
+
+Lemma ko_refl (a : acc) : ko_ok a a.
+Proof. split; [ auto | split; [ auto | lia ] ]. Qed.
+
+Lemma ko_trans (a a1 a2 : acc) : ko_ok a a1 -> ko_ok a1 a2 -> ko_ok a a2.
+Proof.
+  intros (H1 & H2 & H3) (H1' & H2' & H3').
+  split; [ auto | split; [ auto | lia ] ].
+Qed.
+
+Lemma ko_same (a a' : acc) :
+  acc_facts a' = acc_facts a -> (acc_next a <= acc_next a')%positive ->
+  ko_ok a a'.
+Proof.
+  intros E Hn. split; [ rewrite E; auto | split; [ rewrite E; auto | lia ] ].
+Qed.
+
+Lemma ko_add_facts (L : list fact) (a : acc) :
+  (∀ fct : fact, fct ∈ L -> ~ bad_fact fct) -> ko_ok a (add_facts L a).
+Proof.
+  intros HL. unfold ko_ok. cbn [add_facts acc_facts acc_next].
+  split; [ intros fct Hin; apply in_or_app; right; exact Hin | ].
+  split; [ | lia ].
+  intros fct Hin Hs. apply in_app_or in Hin as [Hin | Hin];
+    [ destruct (HL fct Hin Hs) | exact Hin ].
+Qed.
+
+Lemma ko_add_fact (fct : fact) (a : acc) :
+  ~ bad_fact fct -> ko_ok a (add_fact fct a).
+Proof.
+  intros H. apply ko_add_facts. intros fct' [<- | []]. exact H.
+Qed.
+
+(* Shows that the facts of a list are not bad facts. *)
+Ltac bad_free :=
+  let fct := fresh "fct" in let Hin := fresh "Hin" in
+  let Hs := fresh "Hs" in
+  intros fct Hin Hs;
+  repeat match goal with
+  | H : In _ (_ ++ _) |- _ => apply in_app_or in H; destruct H as [H | H]
+  | H : In _ (map _ _) |- _ =>
+    let y := fresh "y" in let Heq := fresh "Heq" in
+    apply in_map_iff in H; destruct H as [y [Heq _]]; subst fct;
+    repeat match goal with
+           | p : (_ * _)%type |- _ => destruct p
+           end
+  | H : In _ (_ :: _) |- _ => destruct H as [H | H]; [ subst fct | ]
+  | H : In _ [] |- _ => destruct H
+  end;
+  cbn [bad_fact] in *; try discriminate; try contradiction.
+
+Lemma ko_fresh (a : acc) : ko_ok a (snd (fresh a)).
+Proof. apply ko_same; cbn; [ reflexivity | lia ]. Qed.
+
+Lemma ko_fresh_list (n : nat) : ∀ a : acc, ko_ok a (snd (fresh_list n a)).
+Proof.
+  induction n as [ | n IH]; intros a; [ apply ko_refl | ].
+  cbn [fresh_list]. destruct (fresh a) as [x a1] eqn:E1.
+  destruct (fresh_list n a1) as [xs a2] eqn:E2. cbn [snd].
+  apply (ko_trans _ a1).
+  - replace a1 with (snd (fresh a)) by (rewrite E1; reflexivity).
+    apply ko_fresh.
+  - replace a2 with (snd (fresh_list n a1)) by (rewrite E2; reflexivity).
+    apply IH.
+Qed.
+
+Lemma ko_note_simple (s : simple) (a : acc) : ko_ok a (note_simple s a).
+Proof. destruct s; apply ko_same; cbn; (reflexivity || lia). Qed.
+
+Lemma ko_fold {A : Type} (f : acc -> A -> acc) (l : list A) :
+  (∀ (a : acc) (x : A), x ∈ l -> ko_ok a (f a x)) ->
+  ∀ a : acc, ko_ok a (List.fold_left f l a).
+Proof.
+  induction l as [ | x l IH]; intros Hf a; [ apply ko_refl | ].
+  cbn [List.fold_left].
+  apply (ko_trans _ (f a x)); [ apply Hf; left; reflexivity | ].
+  apply IH. intros a' y Hy. apply Hf. right. exact Hy.
+Qed.
+
+Lemma ko_note_simples (l : list simple) (a : acc) :
+  ko_ok a (note_simples l a).
+Proof. apply ko_fold. intros a' s _. apply ko_note_simple. Qed.
+
+Lemma ko_push_apply_dep (d : apply_dep) (a : acc) :
+  ko_ok a (push_apply_dep d a).
+Proof. apply ko_same; cbn; (reflexivity || lia). Qed.
+
+Lemma ko_push_closure_dep (d : closure_dep) (a : acc) :
+  ko_ok a (push_closure_dep d a).
+Proof. apply ko_same; cbn; (reflexivity || lia). Qed.
+
+Lemma ko_add_code_dep (id : code_id) (cd : code_dep) (a : acc) :
+  ko_ok a (add_code_dep id cd a).
+Proof. apply ko_same; cbn; (reflexivity || lia). Qed.
+
+Lemma ko_cond_any_usage (env : traverse_env) (s : simple) (a : acc) :
+  ko_ok a (cond_any_usage env s a).
+Proof.
+  unfold cond_any_usage. apply (ko_trans _ (note_simple s a));
+    [ apply ko_note_simple | ].
+  destruct (env_current_code_id env); apply ko_add_fact; cbn; auto.
+Qed.
+
+Lemma ko_cond_alias (env : traverse_env) (from to_ : node) (a : acc) :
+  ko_ok a (cond_alias env from to_ a).
+Proof.
+  unfold cond_alias.
+  destruct (env_current_code_id env); apply ko_add_fact; cbn; auto.
+Qed.
+
+(* Steps whose result is a node and an accumulator. *)
+Ltac ko_let H lem :=
+  match type of H with
+  | ?f = (?x, ?a1) =>
+    let Hn := fresh "Hns" in
+    assert (Hn : ko_ok _ a1)
+      by (change a1 with (snd (x, a1)); rewrite <- H; apply lem)
+  end.
+
+(* ======================================================================== *)
+(* The steps                                                                *)
+(* ======================================================================== *)
+
+Lemma ko_find_cont (env : traverse_env) (k : continuation) (n : nat)
+    (a : acc) :
+  ko_ok a (snd (find_cont env k n a)).
+Proof.
+  unfold find_cont. destruct (lookup k (env_conts env)); [ apply ko_refl | ].
+  destruct (fresh_list n a) as [params a1] eqn:E. ko_let E ko_fresh_list.
+  apply (ko_trans _ _ _ Hns). apply ko_add_facts. bad_free.
+Qed.
+
+Lemma ko_block_deps (base : node) (fields : list simple) (a : acc) :
+  ko_ok a (block_deps base fields a).
+Proof.
+  unfold block_deps. apply (ko_trans _ _ _ (ko_note_simples fields a)).
+  apply ko_add_facts. bad_free.
+Qed.
+
+Lemma ko_traverse_prim (env : traverse_env) (x : variable) (p : prim)
+    (args : list simple) (a : acc) :
+  ko_ok a (traverse_prim env x p args a).
+Proof.
+  assert (Hacc : ∀ (f : field) (s : simple) (a0 : acc),
+             ko_ok a0 (add_fact (Fact_accessor (Node_variable x) f
+                                   (node_of_simple s)) (note_simple s a0))).
+  { intros f s a0. apply (ko_trans _ _ _ (ko_note_simple s a0)).
+    apply ko_add_fact. cbn. auto. }
+  assert (Hdefault :
+            ko_ok a
+              (add_facts
+                 (Fact_any_source (Node_variable x)
+                  :: map (fun from => Fact_use (Node_variable x) from)
+                       (free_names_of_simples args))
+                 (if prim_has_arbitrary_effects p
+                  then cond_any_usage env (Var x) a else a))).
+  { apply (ko_trans _ (if prim_has_arbitrary_effects p
+                        then cond_any_usage env (Var x) a else a)).
+    - destruct (prim_has_arbitrary_effects p);
+        [ apply ko_cond_any_usage | apply ko_refl ].
+    - apply ko_add_facts. bad_free. }
+  unfold traverse_prim; cbv zeta.
+  destruct p as [u0 | b0 | v0 | h0 | r0];
+    [ destruct u0 | | destruct v0 | destruct h0 | destruct r0 ];
+    try (destruct args as [ | arg [ | arg2 args]]);
+    cbv beta iota;
+    try first [ exact Hdefault | apply ko_block_deps | apply ko_refl
+              | exact (Hacc _ _ _) ].
+  all: try (destruct variant_only;
+            first [ exact Hdefault | exact (Hacc _ _ _) ]).
+  - destruct mut; [ | exact (Hacc _ _ _) | exact (Hacc _ _ _) ].
+    eapply ko_trans; [ | apply ko_add_fact; cbn; auto ]. apply Hacc.
+  - apply (ko_trans _ _ _ (ko_note_simple arg a)).
+    apply ko_add_fact. cbn. auto.
+Qed.
+
+Lemma ko_create_known (id : code_id) (params returns : list node)
+    (exn : node) (a : acc) :
+  ko_ok a (snd (create_known_arity_call_witness id params returns exn a)).
+Proof.
+  unfold create_known_arity_call_witness.
+  destruct (fresh a) as [w a1] eqn:E. ko_let E ko_fresh.
+  apply (ko_trans _ _ _ Hns). apply ko_add_facts. bad_free.
+Qed.
+
+Lemma ko_witness_deps (id : code_id) (returns : list node) (exn : node) :
+  ∀ (l : list (list node * node)) (a : acc),
+    ko_ok a (unknown_arity_witness_deps id returns exn l a).
+Proof.
+  induction l as [ | [first w] rest IH]; intros a; [ apply ko_refl | ].
+  cbn [unknown_arity_witness_deps].
+  match goal with
+  | |- context [add_facts ?L a] =>
+    apply (ko_trans _ (add_facts L a)); [ apply ko_add_facts; bad_free | ]
+  end.
+  destruct rest as [ | [? next] rest'].
+  - apply ko_add_facts. bad_free.
+  - match goal with
+    | |- context [fresh ?b] => destruct (fresh b) as [v a1] eqn:E
+    end.
+    ko_let E ko_fresh. apply (ko_trans _ _ _ Hns).
+    match goal with
+    | |- context [add_facts ?L a1] =>
+      apply (ko_trans _ (add_facts L a1)); [ apply ko_add_facts; bad_free | ]
+    end.
+    apply IH.
+Qed.
+
+Lemma ko_create_unknown (id : code_id) (is_tupled : bool) (ar : arity)
+    (params returns : list node) (exn : node) (a : acc) :
+  ko_ok a
+    (snd (create_unknown_arity_call_witnesses id is_tupled ar params returns
+            exn a)).
+Proof.
+  unfold create_unknown_arity_call_witnesses. destruct is_tupled.
+  - unfold create_unknown_arity_tupled_call_witnesses.
+    destruct (fresh a) as [w a1] eqn:E1. ko_let E1 ko_fresh.
+    destruct (fresh a1) as [u a2] eqn:E2.
+    assert (Hns2 : ko_ok a1 a2)
+      by (change a2 with (snd (u, a2)); rewrite <- E2; apply ko_fresh).
+    destruct (fresh a2) as [k a3] eqn:E3.
+    assert (Hns3 : ko_ok a2 a3)
+      by (change a3 with (snd (k, a3)); rewrite <- E3; apply ko_fresh).
+    cbn [snd]. apply (ko_trans _ _ _ Hns), (ko_trans _ _ _ Hns2),
+      (ko_trans _ _ _ Hns3).
+    apply ko_add_facts. bad_free.
+  - unfold create_unknown_arity_non_tupled_call_witnesses.
+    match goal with
+    | |- context [fresh_list ?n a] => destruct (fresh_list n a) as [ws a1] eqn:E
+    end.
+    ko_let E ko_fresh_list. cbn [snd]. apply (ko_trans _ _ _ Hns).
+    apply ko_witness_deps.
+Qed.
+
+Lemma ko_prepare_code (id : code_id) (c : code) (a : acc) :
+  ko_ok a (prepare_code id c a).
+Proof.
+  unfold prepare_code.
+  destruct (fresh_list _ a) as [returns a1] eqn:E1. ko_let E1 ko_fresh_list.
+  destruct (fresh a1) as [exn a2] eqn:E2.
+  assert (Hns2 : ko_ok a1 a2)
+    by (change a2 with (snd (exn, a2)); rewrite <- E2; apply ko_fresh).
+  destruct (fresh a2) as [mc a3] eqn:E3.
+  assert (Hns3 : ko_ok a2 a3)
+    by (change a3 with (snd (mc, a3)); rewrite <- E3; apply ko_fresh).
+  destruct (fresh_list _ a3) as [params a4] eqn:E4.
+  assert (Hns4 : ko_ok a3 a4)
+    by (change a4 with (snd (params, a4)); rewrite <- E4;
+        apply ko_fresh_list).
+  destruct (create_known_arity_call_witness id params returns exn a4)
+    as [known a5] eqn:E5.
+  assert (Hns5 : ko_ok a4 a5)
+    by (change a5 with (snd (known, a5)); rewrite <- E5;
+        apply ko_create_known).
+  destruct (create_unknown_arity_call_witnesses _ _ _ _ _ _ a5)
+    as [unknown a6] eqn:E6.
+  assert (Hns6 : ko_ok a5 a6)
+    by (change a6 with (snd (unknown, a6)); rewrite <- E6;
+        apply ko_create_unknown).
+  apply (ko_trans _ _ _ Hns), (ko_trans _ _ _ Hns2), (ko_trans _ _ _ Hns3),
+    (ko_trans _ _ _ Hns4), (ko_trans _ _ _ Hns5), (ko_trans _ _ _ Hns6).
+  match goal with
+  | |- context [add_fact ?f a6] =>
+    apply (ko_trans _ (add_fact f a6)); [ apply ko_add_fact; cbn; auto | ]
+  end.
+  apply ko_add_code_dep.
+Qed.
+
+Lemma ko_prepare_binding (b : static_binding) (a : acc) :
+  ko_ok a (prepare_binding b a).
+Proof.
+  destruct b; [ apply ko_prepare_code | apply ko_refl | apply ko_refl ].
+Qed.
+
+Lemma ko_make_known (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  ko_ok a (snd (make_known_arity_apply_widget env ap returns exn a)).
+Proof.
+  unfold make_known_arity_apply_widget.
+  destruct (fresh a) as [w a1] eqn:E1. ko_let E1 ko_fresh.
+  destruct (fresh a1) as [called a2] eqn:E2.
+  assert (Hns2 : ko_ok a1 a2)
+    by (change a2 with (snd (called, a2)); rewrite <- E2; apply ko_fresh).
+  destruct (fresh a2) as [an a3] eqn:E3.
+  assert (Hns3 : ko_ok a2 a3)
+    by (change a3 with (snd (an, a3)); rewrite <- E3; apply ko_fresh).
+  cbn [snd].
+  apply (ko_trans _ _ _ Hns), (ko_trans _ _ _ Hns2), (ko_trans _ _ _ Hns3),
+    (ko_trans _ _ _ (ko_note_simples (ap_args ap) a3)).
+  match goal with
+  | |- context [add_facts ?L ?b] =>
+    apply (ko_trans _ (add_facts L b)); [ apply ko_add_facts; bad_free | ]
+  end.
+  apply ko_cond_alias.
+Qed.
+
+Lemma ko_apply_deps (returns : list node) (exn called : node) :
+  ∀ (l : list (list simple * node)) (a : acc),
+    ko_ok a (unknown_arity_apply_deps returns exn called l a).
+Proof.
+  induction l as [ | [first w] rest IH]; intros a; [ apply ko_refl | ].
+  cbn [unknown_arity_apply_deps].
+  match goal with
+  | |- context [add_facts ?L a] =>
+    apply (ko_trans _ (add_facts L a)); [ apply ko_add_facts; bad_free | ]
+  end.
+  destruct rest as [ | [? next] rest'].
+  - apply ko_add_facts. bad_free.
+  - match goal with
+    | |- context [fresh ?b] => destruct (fresh b) as [v a1] eqn:E
+    end.
+    ko_let E ko_fresh. apply (ko_trans _ _ _ Hns).
+    match goal with
+    | |- context [add_facts ?L a1] =>
+      apply (ko_trans _ (add_facts L a1)); [ apply ko_add_facts; bad_free | ]
+    end.
+    apply IH.
+Qed.
+
+Lemma ko_make_unknown (env : traverse_env) (ap : apply_expr)
+    (returns : list node) (exn : node) (a : acc) :
+  ko_ok a (snd (make_unknown_arity_apply_widget env ap returns exn a)).
+Proof.
+  unfold make_unknown_arity_apply_widget.
+  destruct (fresh a) as [called a1] eqn:E1. ko_let E1 ko_fresh.
+  apply (ko_trans _ _ _ Hns).
+  apply (ko_trans _ (add_fact (Fact_any_usage called) a1));
+    [ apply ko_add_fact; cbn; auto | ].
+  match goal with
+  | |- context [fresh_list ?n ?b] => destruct (fresh_list n b) as [ws a2] eqn:E2
+  end.
+  ko_let E2 ko_fresh_list. apply (ko_trans _ _ _ Hns0).
+  apply (ko_trans _ _ _ (ko_note_simples (ap_args ap) a2)).
+  match goal with
+  | |- context [unknown_arity_apply_deps ?r ?x ?c ?l ?b] =>
+    apply (ko_trans _ (unknown_arity_apply_deps r x c l b));
+      [ apply ko_apply_deps | ];
+    destruct (fresh (unknown_arity_apply_deps r x c l b)) as [an a3] eqn:E3
+  end.
+  ko_let E3 ko_fresh. apply (ko_trans _ _ _ Hns1).
+  destruct ws; [ apply ko_refl | apply ko_cond_alias ].
+Qed.
+
+Lemma ko_add_apply (env : traverse_env) (id : code_id) (callee widget : node)
+    (only : bool) (a : acc) :
+  ko_ok a (add_apply env id callee widget only a).
+Proof.
+  unfold add_apply. destruct only; [ | apply ko_push_apply_dep ].
+  destruct (fresh a) as [c1 a1] eqn:E1. ko_let E1 ko_fresh.
+  destruct (fresh a1) as [w1 a2] eqn:E2.
+  assert (Hns2 : ko_ok a1 a2)
+    by (change a2 with (snd (w1, a2)); rewrite <- E2; apply ko_fresh).
+  apply (ko_trans _ _ _ Hns), (ko_trans _ _ _ Hns2).
+  match goal with
+  | |- context [add_facts ?L a2] =>
+    apply (ko_trans _ (add_facts L a2)); [ apply ko_add_facts; bad_free | ]
+  end.
+  apply ko_push_apply_dep.
+Qed.
+
+Lemma ko_traverse_apply (env : traverse_env) (ap : apply_expr) (a : acc) :
+  ko_ok a (traverse_apply env ap a).
+Proof.
+  unfold traverse_apply.
+  destruct (find_cont env (ap_continuation ap) _ a) as [ra a1] eqn:E1.
+  ko_let E1 ko_find_cont.
+  destruct (find_cont env (ap_exn_continuation ap) _ a1) as [ep a2] eqn:E2.
+  assert (Hns2 : ko_ok a1 a2)
+    by (change a2 with (snd (ep, a2)); rewrite <- E2; apply ko_find_cont).
+  apply (ko_trans _ _ _ Hns), (ko_trans _ _ _ Hns2).
+  destruct (match ep with
+            | [] => fresh a2
+            | exn_param :: extra_params =>
+              (exn_param,
+               add_facts
+                 (map (fun '(p, s) => Fact_alias p (node_of_simple s))
+                    (combine extra_params (exn_extra_simples ap)))
+                 (note_simples (exn_extra_simples ap) a2))
+            end)
+    as [exn_arg a3] eqn:E3.
+  assert (Hns3 : ko_ok a2 a3).
+  { destruct ep as [ | p ps].
+    - change a3 with (snd (exn_arg, a3)). rewrite <- E3. apply ko_fresh.
+    - injection E3 as _ <-.
+      apply (ko_trans _ _ _ (ko_note_simples (exn_extra_simples ap) a2)).
+      apply ko_add_facts. bad_free. }
+  apply (ko_trans _ _ _ Hns3).
+  unfold traverse_call_kind.
+  apply (ko_trans _ _ _ (ko_note_simple (ap_callee ap) a3)).
+  destruct (ap_call_kind ap) as [id | | code_ids].
+  - destruct (make_known_arity_apply_widget env ap ra exn_arg
+                (note_simple (ap_callee ap) a3))
+      as [cw a4] eqn:E4.
+    assert (Hns4 : ko_ok (note_simple (ap_callee ap) a3) a4)
+      by (change a4 with (snd (cw, a4)); rewrite <- E4; apply ko_make_known).
+    apply (ko_trans _ _ _ Hns4).
+    match goal with
+    | |- context [add_fact ?f a4] =>
+      apply (ko_trans _ (add_fact f a4)); [ apply ko_add_fact; cbn; auto | ]
+    end.
+    destruct (env_should_preserve_direct_calls env);
+      try apply ko_add_apply.
+    destruct (negb _); [ apply ko_add_apply | apply ko_refl ].
+  - destruct (make_unknown_arity_apply_widget env ap ra exn_arg
+                (note_simple (ap_callee ap) a3))
+      as [cw a4] eqn:E4.
+    assert (Hns4 : ko_ok (note_simple (ap_callee ap) a3) a4)
+      by (change a4 with (snd (cw, a4)); rewrite <- E4;
+          apply ko_make_unknown).
+    apply (ko_trans _ _ _ Hns4). apply ko_add_fact. cbn. auto.
+  - destruct (make_known_arity_apply_widget env ap ra exn_arg
+                (note_simple (ap_callee ap) a3))
+      as [cw a4] eqn:E4.
+    assert (Hns4 : ko_ok (note_simple (ap_callee ap) a3) a4)
+      by (change a4 with (snd (cw, a4)); rewrite <- E4; apply ko_make_known).
+    apply (ko_trans _ _ _ Hns4). apply ko_add_fact. cbn. auto.
+Qed.
+
+Lemma ko_apply_cont_deps (env : traverse_env) (ac : apply_cont) (a : acc) :
+  ko_ok a (apply_cont_deps env ac a).
+Proof.
+  unfold apply_cont_deps.
+  destruct (find_cont env (ac_continuation ac) _ a) as [ps a1] eqn:E1.
+  ko_let E1 ko_find_cont. apply (ko_trans _ _ _ Hns).
+  apply (ko_trans _ _ _ (ko_note_simples (ac_args ac) a1)).
+  apply ko_add_facts. bad_free.
+Qed.
+
+Lemma ko_traverse_switch (env : traverse_env) (scrutinee : simple)
+    (arms : list (Z * apply_cont)) (a : acc) :
+  ko_ok a (traverse_switch env scrutinee arms a).
+Proof.
+  unfold traverse_switch.
+  apply (ko_trans _ _ _ (ko_cond_any_usage env scrutinee a)).
+  apply ko_fold. intros a' [i ac] _. apply ko_apply_cont_deps.
+Qed.
+
+Lemma ko_exn_handler_deps (env : traverse_env) (h : continuation_handler)
+    (a : acc) :
+  ko_ok a (exn_handler_deps env h a).
+Proof.
+  unfold exn_handler_deps. destruct h as [[ | p ps] md body];
+    [ apply ko_refl | ].
+  destruct (hm_is_exn_handler md); [ | apply ko_refl ].
+  eapply ko_trans; [ | apply ko_cond_any_usage ].
+  apply ko_add_fact. cbn. auto.
+Qed.
+
+Lemma ko_record_set (env : traverse_env)
+    (closures : list (node * option code_id))
+    (fs : list (function_slot * node)) (vs : list (value_slot * simple))
+    (a : acc) :
+  ko_ok a (record_set_of_closures_deps env closures fs vs a).
+Proof.
+  destruct (CE.record_set_facts env closures fs vs a) as [(L & HL & HLf) Hn].
+  split; [ | split ].
+  - intros fct Hin. rewrite HL. apply in_or_app. right. exact Hin.
+  - intros fct Hin Hb. rewrite HL in Hin.
+    apply in_app_or in Hin as [Hin | Hin]; [ | exact Hin ].
+    apply HLf in Hin
+      as (base & code & _ & [(w & s & _ & ->) | (f & c & _ & ->)]);
+      cbn in Hb; destruct Hb.
+  - rewrite Hn. lia.
+Qed.
+
+Lemma ko_traverse_static_binding (env : traverse_env) (b : static_binding)
+    (a : acc) :
+  ko_ok a (traverse_static_binding env b a).
+Proof.
+  destruct b as [id c | id | s const];
+    cbn [traverse_static_binding]; try apply ko_refl.
+  destruct const as [id vs | slot cs decls vs | tag fields | contents
+                    | bytes | [ | el els]].
+  - apply ko_record_set.
+  - apply ko_record_set.
+  - apply ko_block_deps.
+  - apply ko_add_facts. unfold boxed_number_facts.
+    destruct (boxed_number_kind contents); [ bad_free | ].
+    destruct contents; bad_free.
+  - apply ko_add_fact. cbn. auto.
+  - apply ko_add_fact. cbn. auto.
+  - apply ko_block_deps.
+Qed.
+
+Lemma ko_traverse_named (env : traverse_env) (x : variable) (d : named)
+    (a : acc) :
+  ko_ok a (traverse_named env x d a).
+Proof.
+  destruct d as [s | p args | id vs | slot decls vs | w c | pf w c | mf mt c];
+    cbn [traverse_named]; cbv zeta.
+  - apply (ko_trans _ _ _ (ko_note_simple s a)). apply ko_add_fact. cbn. auto.
+  - apply ko_traverse_prim.
+  - apply ko_record_set.
+  - unfold traverse_closure_of_set.
+    destruct (among slot (map fst (compact decls))); [ | apply ko_refl ].
+    destruct (closures_of_set x slot (set_closures_of env x) (compact decls) a)
+      as [cl a1] eqn:Ecl.
+    destruct (CE.closures_of_set_spec x slot _ _ a cl a1 Ecl)
+      as (Hf1 & Hn1 & _).
+    apply (ko_trans _ a1); [ apply ko_same; assumption | ].
+    apply ko_record_set.
+  - apply (ko_trans _ _ _ (ko_note_simple c a)). apply ko_add_fact. cbn. auto.
+  - apply (ko_trans _ _ _ (ko_note_simple c a)). apply ko_add_fact. cbn. auto.
+  - apply (ko_trans _ _ _ (ko_note_simple c a)). apply ko_add_fact. cbn. auto.
+Qed.
+
+Lemma ko_code_aliases (my_closure : variable) (params : list variable)
+    (cd : code_dep) (a : acc) :
+  ko_ok a
+    (add_facts
+       (Fact_alias (Node_variable my_closure) (cd_my_closure cd)
+        :: map (fun '(p, arg) => Fact_alias (Node_variable p) arg)
+             (combine params (cd_params cd)))
+       a).
+Proof. apply ko_add_facts. bad_free. Qed.
+
+Lemma ko_add_closure_dep (code_deps : finite_map code_dep) (d : closure_dep)
+    (a : acc) :
+  ko_ok a (add_closure_dep code_deps d a).
+Proof.
+  unfold add_closure_dep.
+  destruct (lookup (cld_closure_code_id d) code_deps) as [cd | ].
+  - apply ko_add_facts.
+    destruct (cd_unknown_arity_call_witnesses cd); bad_free.
+  - destruct (fresh a) as [w a1] eqn:E. ko_let E ko_fresh.
+    apply (ko_trans _ _ _ Hns). apply ko_add_facts. bad_free.
+Qed.
+
+Lemma ko_resolve (unit_symbols : list symbol) (a : acc) :
+  ko_ok a (resolve_delayed_deps unit_symbols a).
+Proof.
+  unfold resolve_delayed_deps. cbv zeta.
+  match goal with
+  | |- context [add_facts (flat_map ?f ?l) a] =>
+    apply (ko_trans _ (add_facts (flat_map f l) a))
+  end.
+  { apply ko_add_facts. intros fct Hin Hs.
+    apply in_flat_map in Hin as (d & _ & Hin). unfold apply_dep_facts in Hin.
+    destruct (lookup _ _); [ | destruct (ad_function_containing_apply_expr d) ];
+      revert fct Hin Hs; try (destruct (ad_function_containing_apply_expr d));
+      bad_free. }
+  cbv zeta.
+  match goal with
+  | |- context [List.fold_left ?f ?l ?b] =>
+    apply (ko_trans _ (List.fold_left f l b));
+      [ apply ko_fold; intros; apply ko_add_closure_dep | ]
+  end.
+  apply ko_add_facts. bad_free.
+Qed.
+
+
+Lemma ko_traverse :
+  (∀ (e : expr) (env : traverse_env) (a : acc), ko_ok a (traverse env e a))
+  ∧ ∀ h : continuation_handler,
+      match h with
+      | Handler _ _ handler =>
+        ∀ (env : traverse_env) (a : acc), ko_ok a (traverse env handler a)
+      end.
+Proof.
+  apply FlambdaReaperFlowProofs.expr_handler_ind.
+  - intros x k d body IH env a. cbn [traverse].
+    exact (ko_trans _ _ _ (ko_traverse_named env x d a) (IH _ _)).
+  - intros bindings body Hcodes IH env a. cbn [traverse].
+    eapply ko_trans; [ | apply IH ].
+    match goal with
+    | |- ko_ok a (List.fold_left _ bindings ?b) =>
+      apply (ko_trans _ b); [ | apply ko_fold ]
+    end.
+    2:{ intros a' [id c | id | s const] Hb;
+        cbn [traverse_binding]; [ | apply ko_refl | apply ko_refl ].
+        destruct c as [params mc ret exn md cbody]. cbn [traverse_code].
+        destruct (lookup id (acc_code_deps a')) as [cd | ];
+          [ | apply ko_refl ].
+        pose proof (Hcodes id (Code params mc ret exn md cbody) Hb) as Hc.
+        cbn in Hc. eapply ko_trans; [ apply ko_code_aliases | apply Hc ]. }
+    match goal with
+    | |- ko_ok a (List.fold_left _ bindings ?b) =>
+      apply (ko_trans _ b);
+        [ | apply ko_fold; intros; apply ko_traverse_static_binding ]
+    end.
+    apply ko_fold. intros. apply ko_prepare_binding.
+  - intros k h body IHh IH env a. destruct h as [params md handler].
+    cbn [traverse traverse_handler] in IHh |- *.
+    eapply ko_trans; [ | apply IH ].
+    eapply ko_trans; [ apply IHh | apply ko_exn_handler_deps ].
+  - intros handlers body IHh IH env a. cbn [traverse].
+    eapply ko_trans; [ | apply IH ].
+    apply ko_fold. intros a' [k h] Hkh. destruct h as [params md handler].
+    pose proof (IHh k _ Hkh) as Hh. cbn [traverse_handler] in Hh |- *.
+    apply Hh.
+  - intros ap env a. apply ko_traverse_apply.
+  - intros ac env a. apply ko_apply_cont_deps.
+  - intros scrutinee arms env a. apply ko_traverse_switch.
+  - intros env a. apply ko_refl.
+  - intros params md handler IH. exact IH.
+Qed.
+
+(* The traversal of a unit makes no bad fact. *)
+Lemma unit_no_bad (flag : reaper_preserve_direct_calls) (u : unit_interface)
+    (e : expr) :
+  ∃ a : acc,
+    traverse_unit flag u e = facts_of_list (acc_facts a)
+    ∧ ∀ fct : fact, fct ∈ acc_facts a -> ~ bad_fact fct.
+Proof.
+  unfold traverse_unit.
+  set (a0 := add_fact (Fact_any_source Node_all_constants) empty_acc).
+  destruct (fresh a0) as [r a1] eqn:E1.
+  destruct (fresh a1) as [x a2] eqn:E2.
+  set (a3 := add_fact (Fact_any_usage x) a2).
+  match goal with
+  | |- context [traverse ?env e a3] => set (env0 := env)
+  end.
+  eexists. split; [ reflexivity | ].
+  assert (Hf3 : ∀ fct, fct ∈ acc_facts a3 -> ~ bad_fact fct).
+  { assert (Hf : acc_facts a3
+                 = [Fact_any_usage x; Fact_any_source Node_all_constants]).
+    { unfold a3. cbn [add_fact add_facts acc_facts app].
+      assert (Hf2 : acc_facts a2 = acc_facts a1)
+        by (change a2 with (snd (x, a2)); rewrite <- E2; reflexivity).
+      assert (Hf1 : acc_facts a1 = acc_facts a0)
+        by (change a1 with (snd (r, a1)); rewrite <- E1; reflexivity).
+      rewrite Hf2, Hf1. reflexivity. }
+    rewrite Hf. intros fct [<- | [<- | []]]; cbn; auto. }
+  assert (Hko : ko_ok a3
+                  (resolve_delayed_deps (static_names symbols_of_binding e)
+                     (add_fact (Fact_any_usage r) (traverse env0 e a3)))).
+  { eapply ko_trans; [ | apply ko_resolve ].
+    eapply ko_trans; [ apply (proj1 ko_traverse) | ].
+    apply ko_add_fact. cbn. auto. }
+  intros fct Hin Hb. exact (Hf3 fct (proj1 (proj2 Hko) fct Hin Hb) Hb).
+Qed.
+
+End Kinds.
+
+Theorem block_fields_of_one_kind_traversal :
+  block_fields_of_one_kind_traversal_statement.
+Proof.
+  intros flag u e a from from' i k k' H H'.
+  destruct (Kinds.unit_no_bad flag u e) as (a0 & Ha & Hok).
+  assert (Hv : ∀ (kk : flambda_kind) (fr : node),
+             g_constructor (graph_of_facts (traverse_unit flag u e)) a
+               (Field_block i kk) fr -> kk = Value).
+  { intros kk fr Hc. rewrite Ha in Hc.
+    apply CE.constructor_of_list in Hc.
+    destruct kk; [ reflexivity | | | ];
+      exfalso; exact (Hok _ Hc I). }
+  rewrite (Hv k from H), (Hv k' from' H'). reflexivity.
+Qed.
+
+(* ======================================================================== *)
 (* The statement                                                            *)
 (* ======================================================================== *)
 
@@ -1172,4 +2049,60 @@ Proof.
     try assumption.
   exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
            Hfs Hmut Hdomc Hone).
+Qed.
+
+Theorem changed_type_sound_traversal : changed_type_sound_traversal_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
+    Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hunst Hu Ht Hcis Hrv Hat Hch Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_changed_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses Hunst
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hcis Hrv Hat Hch Hsat).
+Qed.
+
+(* ======================================================================== *)
+(* A changed closure stored in a block                                      *)
+(* ======================================================================== *)
+
+Theorem changed_unstored_counterexample :
+  changed_unstored_counterexample_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split.
+  { apply (FlambdaReaperLeastProofs.check_least_sound _ _ 100).
+    vm_compute. reflexivity. }
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  intros H.
+  assert (Hc : g_constructor (graph_of_facts StoredExample.facts)
+                 (Node_variable 10%positive) (Field_block 0 Value)
+                 (Node_variable 60%positive)).
+  { cbv [graph_of_facts g_constructor].
+    match goal with
+    | |- In ?x ?l =>
+      let l' := eval vm_compute in l in
+      change (In x l'); repeat first [ left; reflexivity | right ]
+    end. }
+  assert (Hmay : may_come_from (solution_of_tables StoredExample.tables)
+                   (Node_variable 60%positive) (Node_variable 60%positive)).
+  { split; [ vm_compute; reflexivity | ].
+    split; [ right; vm_compute; reflexivity | ].
+    split; [ intros E; exact E | split; [ intros E; exact E | ] ].
+    intros _ u Hu. left. exact Hu. }
+  pose proof (H _ _ _ _ Hc (fun g E => ltac:(discriminate E)) Hmay
+                ltac:(vm_compute; reflexivity)) as E.
+  vm_compute in E. discriminate E.
 Qed.
