@@ -365,7 +365,9 @@
      fields its own set need not read. For a value slot unboxed in turn,
      the premises of [rewrite_unboxed_result_type_sound_statement] on the
      graph and the uses ([block_fields_of_one_kind],
-     [check_unboxed_uses]). [reprs_of_sets] is still a check. No fault
+     [check_unboxed_uses]). [reprs_of_sets] is still a check here;
+     FlambdaReaperTypesTraversalSpec.v derives it, and
+     [function_slots_mutual], for the graph of the traversal. No fault
      found.
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
@@ -404,8 +406,9 @@
      representation changes, which [rewrite_arbitrary] forgets and
      [rewrite_arbitrary_u] rewrites as the compiler does, is stated for
      every closure ([rewrite_changed_type_sound_slots_statement]) with
-     [reprs_of_sets] a check, not derived from the construction of the
-     representations; the rebuild with a change of representation in the
+     [reprs_of_sets] a check, derived from the construction of the
+     representations in FlambdaReaperTypesTraversalSpec.v under a premise
+     on the solution; the rebuild with a change of representation in the
      other statements is left; the unboxing of closures
      and of names whose uses are called (not of [check_unboxed_uses]);
      the fields of an unboxed [my_closure], which the result types give
