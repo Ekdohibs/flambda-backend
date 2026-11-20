@@ -63,9 +63,16 @@
    [cs_keeps]) and the call is in both a full call, an over-application
    or a partial application alike ([closure_call_answered]); what is left
    of an over-application is related ([cont_rel_over]) and called in turn
-   as such a call. The states are related in the body of the unit
-   ([related_main]), in the body of code called ([related_call], with the
-   frame of the caller), or as a call returns ([related_pending]);
+   as such a call. A call of known arity is never an over-application
+   ([known_arity_no_over]), so its shape asks no plain result of the code
+   ([ind_targets_k], [ind_targets_w], [ind_call_answered_k]); nor is a call
+   with one group of arguments, where every code has a parameter
+   ([ind_targets_1], [ind_call_answered_1]), as the partial applications of
+   the first run are made by the machine ([pa_inv], which [related2_answered]
+   takes and [uc_refines] carries beside the relation). The states
+   are related in the body of the unit ([related_main]), in the body of
+   code called ([related_call], with the frame of the caller), or as a
+   call returns ([related_pending]);
    [related2_answered] answers each step of the first run by steps of the
    second, so that the relation is a shrinking simulation.
 
@@ -97,7 +104,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperFlowSpec FlambdaReaperRebuildSpec FlambdaReaperRebuildProofs
   FlambdaReaperCallingConventions FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesSpec FlambdaReaperUnboxingRefinesProofs
-  FlambdaReaperUnboxingRefinesCallsSpec.
+  FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperPartialGroupsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -397,6 +404,44 @@ Definition ind_targets (cs : code_shape) : Prop :=
   ∧ no_unboxed (cs_results cs)
   ∧ cs_result_kinds cs = unarize (cs_result_arity cs).
 
+(* [ind_compat] and [ind_targets] but for the plain result that an
+   over-application calls. *)
+Definition ind_compat_w (cs' cs : code_shape) : Prop :=
+  cs_keeps cs' = true
+  ∧ Forall (fun o => o = Psh_plain) (cs_params cs')
+  ∧ cs_result_kinds cs' = unarize (cs_result_arity cs')
+  ∧ fits (cs_exn cs') (cs_exn cs)
+  ∧ (cs_result_arity cs' = cs_result_arity cs ->
+     Forall2 fits (cs_results cs') (cs_results cs)).
+
+Definition ind_targets_w (cs : code_shape) : Prop :=
+  (∀ (id : code_id) (cs' : code_shape),
+     CS id = Some cs' -> ind_compat_w cs' cs)
+  ∧ Forall (fun o => o = Psh_plain) (cs_params cs)
+  ∧ no_unboxed (cs_results cs)
+  ∧ cs_result_kinds cs = unarize (cs_result_arity cs).
+
+(* A call of known arity is a full call or none: it over-applies
+   nothing. *)
+Definition known_arity_kind (kind : call_kind) : bool :=
+  match kind with
+  | Indirect_known_arity _ => true
+  | Direct _ | Indirect_unknown_arity => false
+  end.
+
+(* The shape of a call of the kind [kind] whose code is not known. *)
+Definition ind_targets_k (kind : call_kind) (cs : code_shape) : Prop :=
+  if known_arity_kind kind then ind_targets_w cs else ind_targets cs.
+
+(* The shape of a call with one group of arguments, every code having a
+   parameter: it over-applies nothing either
+   (FlambdaReaperPartialGroupsProofs.one_group_no_over). *)
+Definition ind_targets_1 (cs : code_shape) : Prop :=
+  length (cs_params_arity cs) = 1
+  ∧ ind_targets_w cs
+  ∧ ∀ (id : code_id) (cs' : code_shape),
+      CS id = Some cs' -> cs_params_arity cs' <> [].
+
 (* The code that two calls call: the code [id] they are known to call,
    directly; or code that is not known, the two calls of the same kind,
    at the arities of the first. *)
@@ -404,7 +449,8 @@ Definition call_target (ap ap' : apply_expr) (cs : code_shape) : Prop :=
   (∃ id : code_id,
      ap_call_kind ap = Direct id ∧ ap_call_kind ap' = Direct id
      ∧ CS id = Some cs)
-  ∨ (ap_call_kind ap' = ap_call_kind ap ∧ ind_targets cs
+  ∨ (ap_call_kind ap' = ap_call_kind ap
+     ∧ (ind_targets_k (ap_call_kind ap) cs ∨ ind_targets_1 cs)
      ∧ ap_args_arity ap = cs_params_arity cs
      ∧ ap_return_arity ap = cs_result_arity cs).
 
@@ -2062,10 +2108,14 @@ Qed.
    of the call taking its results; an over-application enters it, with
    what is left of the over-application taking its one plain result; a
    partial application goes where the call returns. *)
-Lemma closure_call_answered (cs : code_shape) (cl : value)
+Lemma closure_call_answered_g (cs : code_shape) (cl : value)
     (kind0 : call_kind) (vs0 : list value) (ra0 : arity)
     (c c' e e' : cont_value) (S S' : static_env) (rd : read_record) :
-  ind_targets CS cs ->
+  ind_targets_w CS cs ->
+  (∀ (cl0 : value) (c0 : code) (ws rest : list value) (aa ra1 : arity),
+     shape_of_closure_call S cl kind0 vs0 ra0 (cs_result_arity cs)
+     = Some (Over_call cl0 c0 ws rest aa ra1) ->
+     ind_targets CS cs) ->
   cont_rel M dead CS NR (Kshape (cs_results cs) (cs_result_kinds cs) true)
     c c' ->
   cont_rel M dead CS NR (Kshape [cs_exn cs] [Value] false) e e' ->
@@ -2082,12 +2132,13 @@ Lemma closure_call_answered (cs : code_shape) (cl : value)
        (shape_of_closure_call S' cl kind0 vs0 ra0 (cs_result_arity cs))
        (cs_result_arity cs) c' e' S' empty_heap rd).
 Proof.
-  intros Hind Hc He Hans Hst.
+  intros Hind Hovt Hc He Hans Hst. revert Hovt.
   pose proof Hind as (Hcomp & Hpl & Hnu & Hrk).
   pose proof Hst as (Hval & Hkeys & Hcode).
   unfold shape_of_closure_call. cbv zeta.
   rewrite (closure_of_values S S' cl Hval).
-  destruct (closure_of S cl) as [[called slots] | ]; [ | exact I ].
+  destruct (closure_of S cl) as [[called slots] | ];
+    [ | intros _; exact I ].
   (* The tests of a call of known arity read the same code in both. *)
   assert (Hkf : known_arity_full S' called ra0
                 = known_arity_full S called ra0).
@@ -2106,14 +2157,14 @@ Proof.
             | Indirect_known_arity code_ids =>
               code_ids_allow code_ids called
               && known_arity_full S called ra0
-            end); [ | exact I ].
+            end); [ | intros _; exact I ].
   destruct (lookup called (static_code S)) as [cc | ] eqn:Hcc;
-    [ | exact I ].
+    [ | intros _; exact I ].
   destruct (Hcode called cc Hcc) as (cc' & Hcc' & cs' & Hframe & Hbody).
   rewrite Hcc'.
   pose proof Hframe as (Hcs' & Hpa & Hra' & _ & Hkeepa & Htup & Htup' & _).
   destruct (Hcomp called cs' Hcs')
-    as (Hkeeps & Hppl & Hrk' & Hexf & Hresf & Hover).
+    as (Hkeeps & Hppl & Hrk' & Hexf & Hresf).
   destruct (Hkeepa Hkeeps) as [Hpa1 Hra1].
   unfold arguments_for_code. rewrite Htup, Htup'. cbn beta iota.
   rewrite (shape_code_swap cl cc cc' vs0 ra0 (cs_result_arity cs))
@@ -2123,7 +2174,7 @@ Proof.
                 (Forall2_cons _ _ Hexf (Forall2_nil _))).
   destruct (shape_of_code_call cl cc vs0 ra0 (cs_result_arity cs))
     as [[cl0 c0 ws aa | cl0 c0 ws rest aa ra1 | p] | ] eqn:Hshape;
-    [ | | | exact I ].
+    intros Hovt; [ | | | exact I ].
   - (* A full call. *)
     rewrite (shape_full_code _ _ _ _ _ _ _ _ _ Hshape). cbn [run_call].
     destruct (call_code cl0 cc ws aa (cs_result_arity cs) c e S empty_heap rd)
@@ -2142,6 +2193,8 @@ Proof.
     + exists t1, 0, t1. split; [ exact Ht1 | split; [ reflexivity | ] ].
       left. exact Hrel.
   - (* An over-application. *)
+    pose proof (Hovt _ _ _ _ _ _ eq_refl) as Hind'.
+    destruct (proj1 Hind' called cs' Hcs') as (_ & _ & _ & _ & _ & Hover).
     destruct (shape_over_code _ _ _ _ _ _ _ _ _ _ _ Hshape) as [-> Hone].
     cbn [run_call]. rewrite Hra', <- Hra1.
     destruct (call_code cl0 cc ws aa (code_result_arity cc)
@@ -2165,6 +2218,78 @@ Proof.
   - (* A partial application. *)
     cbn [run_call].
     exact (Hans [p] [p] rd (vrel_no_unboxed_refl _ _ Hnu)).
+Qed.
+
+Lemma ind_targets_w_of (cs : code_shape) :
+  ind_targets CS cs -> ind_targets_w CS cs.
+Proof.
+  intros (Hcomp & Hpl & Hnu & Hrk).
+  split; [ | exact (conj Hpl (conj Hnu Hrk)) ].
+  intros id cs' Hcs'.
+  destruct (Hcomp id cs' Hcs') as (H1 & H2 & H3 & H4 & H5 & _).
+  exact (conj H1 (conj H2 (conj H3 (conj H4 H5)))).
+Qed.
+
+Lemma ind_targets_k_of (kind : call_kind) (cs : code_shape) :
+  ind_targets CS cs -> ind_targets_k CS kind cs.
+Proof.
+  intros Hind. unfold ind_targets_k.
+  destruct (known_arity_kind kind); [ exact (ind_targets_w_of cs Hind) | ].
+  exact Hind.
+Qed.
+
+Lemma ind_targets_k_w (kind : call_kind) (cs : code_shape) :
+  ind_targets_k CS kind cs -> ind_targets_w CS cs.
+Proof.
+  unfold ind_targets_k. destruct (known_arity_kind kind); [ exact id | ].
+  exact (ind_targets_w_of cs).
+Qed.
+
+Lemma closure_call_answered (cs : code_shape) (cl : value)
+    (kind0 : call_kind) (vs0 : list value) (ra0 : arity)
+    (c c' e e' : cont_value) (S S' : static_env) (rd : read_record) :
+  ind_targets CS cs ->
+  cont_rel M dead CS NR (Kshape (cs_results cs) (cs_result_kinds cs) true)
+    c c' ->
+  cont_rel M dead CS NR (Kshape [cs_exn cs] [Value] false) e e' ->
+  (∀ (ws ws' : list value) (rd0 : read_record),
+     vrel (cs_results cs) ws ws' ->
+     answers (apply_cont_value c ws S empty_heap rd0)
+       (apply_cont_value c' ws' S' empty_heap rd0)) ->
+  statics_rel M dead CS NR S S' ->
+  answers
+    (run_call (fun p => apply_cont_value c [p] S empty_heap rd)
+       (shape_of_closure_call S cl kind0 vs0 ra0 (cs_result_arity cs))
+       (cs_result_arity cs) c e S empty_heap rd)
+    (run_call (fun p => apply_cont_value c' [p] S' empty_heap rd)
+       (shape_of_closure_call S' cl kind0 vs0 ra0 (cs_result_arity cs))
+       (cs_result_arity cs) c' e' S' empty_heap rd).
+Proof.
+  intros Hind.
+  exact (closure_call_answered_g cs cl kind0 vs0 ra0 c c' e e' S S' rd
+           (ind_targets_w_of cs Hind) (fun _ _ _ _ _ _ _ => Hind)).
+Qed.
+
+(* A call of known arity is never an over-application. *)
+Lemma known_arity_no_over (S : static_env) (v : value)
+    (ids : option (list code_id)) (vs : list value) (ra rta : arity)
+    (cl0 : value) (c0 : code) (ws rest : list value) (aa ra1 : arity) :
+  shape_of_closure_call S v (Indirect_known_arity ids) vs ra rta
+  <> Some (Over_call cl0 c0 ws rest aa ra1).
+Proof.
+  unfold shape_of_closure_call. cbv zeta.
+  destruct (closure_of S v) as [[called slots] | ]; [ | discriminate ].
+  unfold known_arity_full.
+  destruct ra as [ | a ra']; [ rewrite andb_false_r; discriminate | ].
+  destruct (lookup called (static_code S)) as [c | ] eqn:Hc;
+    [ | rewrite andb_false_r; discriminate ].
+  destruct (code_ids_allow ids called); [ | discriminate ].
+  destruct (negb (code_is_tupled c)) eqn:Ht; [ | discriminate ].
+  destruct (Nat.eqb (length (a :: ra')) (length (code_params_arity c)))
+    eqn:Hl; [ | discriminate ].
+  cbn [andb]. unfold arguments_for_code.
+  apply negb_true_iff in Ht. rewrite Ht. cbn beta iota.
+  unfold shape_of_code_call. rewrite Hl. discriminate.
 Qed.
 
 (* A call whose code is not known, made at the shape [cs]. *)
@@ -2195,6 +2320,90 @@ Proof.
   rewrite H1, H2.
   exact (closure_call_answered cs cl kind0 vs0 ra0 c c' e e' S S' rd Hind Hc
            He Hans Hst).
+Qed.
+
+(* The same, at the shape that the kind of the call asks. *)
+Lemma ind_call_answered_k (cs : code_shape) (kind : call_kind) (v : value)
+    (vs : list value) (ra : arity) (c c' e e' : cont_value)
+    (S S' : static_env) (rd : read_record) :
+  ind_targets_k CS kind cs ->
+  cont_rel M dead CS NR (Kshape (cs_results cs) (cs_result_kinds cs) true)
+    c c' ->
+  cont_rel M dead CS NR (Kshape [cs_exn cs] [Value] false) e e' ->
+  (∀ (ws ws' : list value) (rd0 : read_record),
+     vrel (cs_results cs) ws ws' ->
+     answers (apply_cont_value c ws S empty_heap rd0)
+       (apply_cont_value c' ws' S' empty_heap rd0)) ->
+  statics_rel M dead CS NR S S' ->
+  answers
+    (run_call (fun p => apply_cont_value c [p] S empty_heap rd)
+       (shape_of_call S v kind vs ra (cs_result_arity cs))
+       (cs_result_arity cs) c e S empty_heap rd)
+    (run_call (fun p => apply_cont_value c' [p] S' empty_heap rd)
+       (shape_of_call S' v kind vs ra (cs_result_arity cs))
+       (cs_result_arity cs) c' e' S' empty_heap rd).
+Proof.
+  intros Hind. unfold ind_targets_k in Hind.
+  destruct (known_arity_kind kind) eqn:Hk;
+    [ | exact (ind_call_answered cs kind v vs ra c c' e e' S S' rd Hind) ].
+  destruct kind as [id | | ids]; try discriminate Hk.
+  assert (Hsc : ∀ S0 : static_env,
+            shape_of_call S0 v (Indirect_known_arity ids) vs ra
+              (cs_result_arity cs)
+            = shape_of_closure_call S0 v (Indirect_known_arity ids) vs ra
+                (cs_result_arity cs))
+    by (intros S0; unfold shape_of_call;
+        destruct (partial_application_of v) as [[[? ?] ?] | ]; reflexivity).
+  rewrite !Hsc.
+  apply (closure_call_answered_g cs v (Indirect_known_arity ids) vs ra);
+    [ exact Hind | ].
+  intros cl0 c0 ws rest aa ra1 Hov. exfalso.
+  exact (known_arity_no_over S v ids vs ra _ cl0 c0 ws rest aa ra1 Hov).
+Qed.
+
+(* A call with one group of arguments, at the shape [ind_targets_1], of a
+   value whose partial applications the machine made. *)
+Lemma ind_call_answered_1 (cs : code_shape) (kind : call_kind) (v : value)
+    (vs : list value) (ra : arity) (c c' e e' : cont_value)
+    (S S' : static_env) (rd : read_record) :
+  ind_targets_1 CS cs -> ra = cs_params_arity cs -> pa_ok S v ->
+  cont_rel M dead CS NR (Kshape (cs_results cs) (cs_result_kinds cs) true)
+    c c' ->
+  cont_rel M dead CS NR (Kshape [cs_exn cs] [Value] false) e e' ->
+  (∀ (ws ws' : list value) (rd0 : read_record),
+     vrel (cs_results cs) ws ws' ->
+     answers (apply_cont_value c ws S empty_heap rd0)
+       (apply_cont_value c' ws' S' empty_heap rd0)) ->
+  statics_rel M dead CS NR S S' ->
+  answers
+    (run_call (fun p => apply_cont_value c [p] S empty_heap rd)
+       (shape_of_call S v kind vs ra (cs_result_arity cs))
+       (cs_result_arity cs) c e S empty_heap rd)
+    (run_call (fun p => apply_cont_value c' [p] S' empty_heap rd)
+       (shape_of_call S' v kind vs ra (cs_result_arity cs))
+       (cs_result_arity cs) c' e' S' empty_heap rd).
+Proof.
+  intros (Hone & Hind & Hpar) Hra Hv Hc He Hans Hst.
+  rewrite <- Hra in Hone.
+  destruct ra as [ | g [ | g' ra']]; try discriminate Hone.
+  assert (Hcodes :
+    ∀ (id : code_id) (cc : code),
+      lookup id (static_code S) = Some cc ->
+      code_is_tupled cc = false ∧ code_params_arity cc <> []).
+  { intros id cc Hcc. pose proof Hst as (_ & _ & Hcode).
+    destruct (Hcode id cc Hcc) as (cc' & _ & cs' & Hframe & _).
+    destruct Hframe as (Hcs' & _ & _ & Hlen & _ & Htup & _).
+    split; [ exact Htup | intros Hnil ].
+    apply (Hpar id cs' Hcs'). rewrite Hnil in Hlen.
+    destruct (cs_params_arity cs'); [ reflexivity | discriminate Hlen ]. }
+  destruct (shape_of_call_cases S S' v kind vs [g] (cs_result_arity cs))
+    as [Hn | (cl & kind0 & vs0 & ra0 & H1 & H2)];
+    [ rewrite Hn; exact I | ].
+  rewrite H1, H2.
+  apply (closure_call_answered_g cs cl kind0 vs0 ra0); try assumption.
+  intros cl0 c0 ws rest aa ra1 Hov. exfalso. rewrite <- H1 in Hov.
+  exact (one_group_no_over S v kind vs g _ cl0 c0 ws rest aa ra1 Hv Hcodes
+           Hov).
 Qed.
 
 (* A call that returns to a continuation that is no way out does not
@@ -2356,11 +2565,13 @@ Qed.
 (* A call related is answered by the call of related code: of the code
    it is known to call, or of the code of the closure called. *)
 Lemma call_answered (s t : state) :
-  related_call M dead CS NR s t -> call_answers (step s) (step t).
+  related_call M dead CS NR s t -> pa_inv s ->
+  call_answers (step s) (step t).
 Proof.
+  intros Hrc Hinv.
   destruct s as [p vars conts S hp rd], t as [q vars' conts' S' hp' rd'].
-  intros (ap & ap' & cs & Hp & Hq & Hcall & Hvars & Hret & Hexn & Hst & Hhp
-          & Hhp' & Hrd).
+  destruct Hrc as (ap & ap' & cs & Hp & Hq & Hcall & Hvars & Hret & Hexn & Hst
+                   & Hhp & Hhp' & Hrd).
   cbn [state_expr state_vars state_conts state_statics state_heap
        state_reads] in *.
   subst p q hp hp' rd'.
@@ -2390,7 +2601,8 @@ Proof.
             (Kshape (cs_results cs) (cs_result_kinds cs) true)
             (resolve (ap_continuation ap) conts)
             (resolve (ap_continuation ap') conts')))
-    ∨ (ap_call_kind ap' = ap_call_kind ap ∧ ind_targets CS cs
+    ∨ (ap_call_kind ap' = ap_call_kind ap
+       ∧ (ind_targets_k CS (ap_call_kind ap) cs ∨ ind_targets_1 CS cs)
        ∧ ap_args_arity ap = cs_params_arity cs
        ∧ ap_return_arity ap = cs_result_arity cs
        ∧ cont_rel M dead CS NR
@@ -2415,13 +2627,27 @@ Proof.
                        | (Hkind & Hind & Haa0 & Hra0 & Hret)].
   2: {
     (* A call whose code is not known. *)
-    pose proof Hind as (_ & Hpl & _ & _).
+    assert (Hw : ind_targets_w CS cs)
+      by (destruct Hind as [Hind | (_ & Hind & _)];
+          [ exact (ind_targets_k_w _ _ Hind) | exact Hind ]).
+    pose proof Hw as (_ & Hpl & _ & _).
     assert (Hvv : vs' = vs) by exact (vrel_plain_eq _ _ _ Hv Hpl).
     subst vs'.
     rewrite Hkind, Haa, Hra, <- Haa0, Hra0.
     unfold call_function.
+    destruct Hind as [Hind | Hind1].
+    2: {
+      exact (answers_call _ _
+               (ind_call_answered_1 cs (ap_call_kind ap) callee vs
+                  (ap_args_arity ap) _ _ _ _ S S' rd Hind1 Haa0
+                  (pa_inv_eval_simple _ _ _ Hinv Hcv) Hret Hexc
+                  (fun ws ws' rd0 Hw0 =>
+                     cont_answered _ _ _ Hret ws ws' S S' rd0 Hw0 Hst)
+                  Hst)
+               (fun k ws hp1 rd1 =>
+                  run_call_no_exit _ _ _ _ _ _ _ _ _ k ws hp1 rd1 Hret)). }
     exact (answers_call _ _
-             (ind_call_answered cs (ap_call_kind ap) callee vs
+             (ind_call_answered_k cs (ap_call_kind ap) callee vs
                 (ap_args_arity ap) _ _ _ _ S S' rd Hind Hret Hexc
                 (fun ws ws' rd0 Hw =>
                    cont_answered _ _ _ Hret ws ws' S S' rd0 Hw Hst)
@@ -2659,11 +2885,15 @@ Qed.
 (* The second run steps into the call through its wrapper, the first
    into the call: both then at related calls. *)
 Lemma main_answered (s t : state) :
-  related_main M dead CS NR s t -> answered R eq measure s t.
+  related_main M dead CS NR s t -> pa_inv s -> answered R eq measure s t.
 Proof.
+  intros Hrm Hinv0.
   destruct s as [p vars conts statics hp rcd],
     t as [q vars' conts' statics' hp' rcd'].
-  intros (K & Hub & Hvars & Hconts & Hst & Hhp & Hhp' & Hrcd).
+  assert (Hinv : ∀ e : expr, pa_inv (State e vars conts statics hp rcd))
+    by (intros e; exact Hinv0).
+  clear Hinv0.
+  destruct Hrm as (K & Hub & Hvars & Hconts & Hst & Hhp & Hhp' & Hrcd).
   cbn [state_expr state_vars state_conts state_statics state_heap
        state_reads] in *.
   subst hp hp' rcd'. unfold answered. revert Hconts.
@@ -2991,7 +3221,7 @@ Proof.
         intros extra Hextra. rewrite Hexn_eq.
         exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
                  extra Hextra). }
-    exact (call_answers_answered _ _ (call_answered _ _ Hc)).
+    exact (call_answers_answered _ _ (call_answered _ _ Hc (Hinv _))).
   - (* A call through a wrapper of the second run. *)
     pose proof Hcall as (_ & _ & _ & _ & _ & _ & _ & _ & _ & Hexn_eq).
     assert (Hc : related_call M dead CS NR
@@ -3019,7 +3249,8 @@ Proof.
           by (intros Heq; exact (Hwe (eq_sym Heq))).
         exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
                  extra Hextra). }
-    pose proof (call_answered _ _ Hc) as Hans. unfold call_answers in Hans.
+    pose proof (call_answered _ _ Hc (Hinv _)) as Hans.
+    unfold call_answers in Hans.
     destruct (step (State (Apply ap) vars conts statics empty_heap rcd))
       as [s1 | k0 ws hp rd1 | ]; [ | destruct Hans | exact I ].
     destruct Hans as (t0 & n & t1 & Ht0 & Hn & Hrel).
@@ -3076,7 +3307,8 @@ Proof.
         by (intros Heq; exact (Hwe (eq_sym Heq))).
       exact (exn_rel K conts conts' vars vars' _ ap ap' Hconts Hvars Hexn
                extra Hextra). }
-    pose proof (call_answered _ _ Hc) as Hans. unfold call_answers in Hans.
+    pose proof (call_answered _ _ Hc (Hinv _)) as Hans.
+    unfold call_answers in Hans.
     destruct (step (State (Apply ap) vars conts statics empty_heap rcd))
       as [s1 | k0 ws hp rd1 | ]; [ | destruct Hans | exact I ].
     destruct Hans as (t0 & n & t1 & Ht0 & Hn & Hrel).
@@ -3113,12 +3345,29 @@ Proof.
     split; [ exact Hst | repeat split ].
 Qed.
 
-Lemma related2_answered (s t : state) : R s t -> answered R eq measure s t.
+Lemma related2_answered (s t : state) :
+  R s t -> pa_inv s -> answered R eq measure s t.
 Proof.
-  intros [Hm | [Hc | Hp]].
-  - exact (main_answered s t Hm).
-  - exact (call_answers_answered s t (call_answered s t Hc)).
+  intros [Hm | [Hc | Hp]] Hinv.
+  - exact (main_answered s t Hm Hinv).
+  - exact (call_answers_answered s t (call_answered s t Hc Hinv)).
   - exact (pending_answered s t Hp).
+Qed.
+
+(* The relation with the invariant of the first run. *)
+Lemma answered_pa_inv (s t : state) :
+  pa_inv s -> answered R eq measure s t ->
+  answered (fun s0 t0 => R s0 t0 ∧ pa_inv s0) eq measure s t.
+Proof.
+  intros Hinv. unfold answered.
+  destruct (step s) as [s' | k vs hp rd1 | ] eqn:Hs;
+    [ | exact (fun H => H) | exact (fun H => H) ].
+  pose proof (pa_inv_step s s' Hinv Hs) as Hinv'.
+  intros [H | [(t' & Ht & Hr) | [(Hlt & Hr) | (t' & n & Ht & Hr)]]].
+  - left. exact H.
+  - right. left. exists t'. exact (conj Ht (conj Hr Hinv')).
+  - right. right. left. exact (conj Hlt (conj Hr Hinv')).
+  - right. right. right. exists t', n. exact (conj Ht (conj Hr Hinv')).
 Qed.
 
 (* Related terms, run on their own, refine each other. *)
@@ -3127,10 +3376,13 @@ Lemma uc_refines (p q : expr) :
   refines (State p [] [] empty_static_env empty_heap no_reads)
     (State q [] [] empty_static_env empty_heap no_reads).
 Proof.
-  intros Huc. apply (shrinking_refines R eq measure).
-  - exact related2_answered.
+  intros Huc.
+  apply (shrinking_refines (fun s0 t0 => R s0 t0 ∧ pa_inv s0) eq measure).
+  - intros s0 t0 [Hr Hinv].
+    exact (answered_pa_inv s0 t0 Hinv (related2_answered s0 t0 Hr Hinv)).
   - intros vs vs' ->. reflexivity.
-  - left. exists []. split; [ exact Huc | ].
+  - split; [ | apply pa_inv_initial ].
+    left. exists []. split; [ exact Huc | ].
     split; [ apply env_rel2_empty | split; [ constructor | ] ].
     split; [ apply statics_rel_empty | repeat split ].
 Qed.
