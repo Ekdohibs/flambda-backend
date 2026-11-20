@@ -31,11 +31,15 @@
    graph and of the solution (the first section); [follow_field] and
    [metadata_for_name] keep [metadata_at] (the second); the rewriting is
    then proved sound by induction on its fuel, [rewrite_arbitrary] and
-   [rewrite] together ([rewrite_sound]), with the lemma that a metadata
-   that forgets gives a type that every value of the kind has
-   ([rewrite_forgets]). The closure case ([closure_sound]) reads the
-   closure off the head of its type ([meet_closures_head],
-   [closure_of_type]) and off the rebuild ([closure_rebuilt_view]); the
+   [rewrite] together ([rewrite_sound]), for the fixes of [fixes_sound],
+   with either fix of the aliases: at a field that its allocation does
+   not use, [follow_field] gives [At_least_one_source_no_usages]
+   ([follow_field_unused]), which [fix_deleted_field] forgets, and under
+   which, with [fix_alias], the rewriting gives a type that every value
+   of the kind has ([rewrite_forgets]). The closure case
+   ([closure_sound]) reads the closure off the head of its type
+   ([meet_closures_head], [closure_of_type]) and off the rebuild
+   ([closure_rebuilt_view]); the
    set of the closure is among those that [refine_sets_of_closures]
    keeps ([refine_keeps]: in a least solution an allocation is a source
    of each usage of it that has not any source,
@@ -893,12 +897,13 @@ Local Abbreviation sol := (solution_of_tables (rc_tables ctx)).
 
 Hypothesis Hc : closed is_local G sol.
 
-(* A field that the allocation does not use: [follow_field] forgets. *)
-Lemma follow_field_forgets (m : rewrite_metadata) (a from : node)
+(* A field that the allocation does not use: [follow_field] gives
+   [At_least_one_source_no_usages]. *)
+Lemma follow_field_unused (m : rewrite_metadata) (a from : node)
     (f : field) :
   describes sol m a -> forgets m = false -> g_constructor G a f from ->
   is_local f = false -> s_field_used sol a f = false ->
-  forgets (follow_field ctx m f) = true.
+  follow_field ctx m f = At_least_one_source_no_usages.
 Proof.
   intros Hd Hm Hcons Hloc Hfu.
   assert (Hnot_any : s_any_usage sol a = false).
@@ -929,6 +934,18 @@ Proof.
       rewrite (field_used_usage _ _ _ Hc a f from u y Hcons Hau_u Hy Hhu)
         in Hfu.
       discriminate Hfu.
+Qed.
+
+(* So [follow_field] forgets. *)
+Lemma follow_field_forgets (m : rewrite_metadata) (a from : node)
+    (f : field) :
+  describes sol m a -> forgets m = false -> g_constructor G a f from ->
+  is_local f = false -> s_field_used sol a f = false ->
+  forgets (follow_field ctx m f) = true.
+Proof.
+  intros Hd Hm Hcons Hloc Hfu.
+  rewrite (follow_field_unused m a from f Hd Hm Hcons Hloc Hfu).
+  reflexivity.
 Qed.
 
 (* The metadata of the field read by the uses given, of an allocation
@@ -2147,7 +2164,7 @@ Section Sound.
 
 Variable fx : fixes.
 Hypothesis Hfix_boxed : fix_boxed fx = true.
-Hypothesis Hfix_alias : fix_alias fx = true.
+Hypothesis Hfix_fields : fix_alias fx = true ∨ fix_deleted_field fx = true.
 Hypothesis Hfix_refine : fix_refine fx = true.
 Hypothesis Hfix_null : fix_null fx = true.
 
@@ -2365,8 +2382,8 @@ Proof.
   unfold rewrite_rule. destruct (forgets m); [ discriminate | reflexivity ].
 Qed.
 
-(* Under a metadata that forgets. *)
-Lemma rewrite_forgets (fuel : nat) :
+(* Under a metadata that forgets, with [fix_alias]. *)
+Lemma rewrite_forgets (Hfix_alias : fix_alias fx = true) (fuel : nat) :
   rw_forgets (rewrite_arbitrary fx ctx tenv canon fuel)
   ∧ rw_forgets (rewrite fx ctx tenv canon fuel).
 Proof.
@@ -2390,6 +2407,33 @@ Proof.
     + exact Hk.
   - cbn [rewrite]. rewrite (rule_forgets m t Hm).
     exact (sat_unknown_of_kind v v' t Hv Hk).
+Qed.
+
+(* A type that is not an alias, under a metadata that forgets, with any
+   fixes. *)
+Lemma rewrite_forgets_not_alias (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (v v' : value) :
+  forgets m = true -> get_alias_opt t = None ->
+  type_satisfied statics valuation v t ->
+  kind_of_value v' = kind_of_value v ->
+  type_satisfied statics' valuation' v'
+    (rewrite_arbitrary fx ctx tenv canon fuel m t).
+Proof.
+  intros Hm Ha Hv Hk.
+  destruct fuel as [ | [ | fuel]]; cbn [rewrite_arbitrary rewrite];
+    try rewrite Ha; try rewrite (rule_forgets m t Hm);
+    exact (sat_unknown_of_kind v v' t Hv Hk).
+Qed.
+
+(* At a field of a block that no use reads: the field is forgotten
+   ([fix_deleted_field]), or so is an alias under a metadata that forgets
+   ([fix_alias]). *)
+Lemma fields_forget (fuel : nat) :
+  fix_deleted_field fx = true
+  ∨ rw_forgets (rewrite_arbitrary fx ctx tenv canon fuel).
+Proof.
+  destruct Hfix_fields as [Ha | Hd]; [ right | left; exact Hd ].
+  exact (proj1 (rewrite_forgets Ha fuel)).
 Qed.
 
 (* A block of the first run, and what the second has for it. *)
@@ -2494,7 +2538,7 @@ Section With_rw.
 
 Variable rw : rewrite_metadata -> flambda_type -> flambda_type.
 Hypothesis Hrw : rw_sound_ext rw.
-Hypothesis Hrwf : rw_forgets rw.
+Hypothesis Hrwf : fix_deleted_field fx = true ∨ rw_forgets rw.
 
 (* A field of a block. *)
 Lemma field_sound (m : rewrite_metadata) (a : node) (k : nat)
@@ -2503,10 +2547,17 @@ Lemma field_sound (m : rewrite_metadata) (a : node) (k : nat)
   field_rebuilt G sol (rebuilt_value G sol) a k field field' ->
   type_in_fragment_with loose valuation ty ->
   type_satisfied statics valuation field ty ->
-  type_satisfied statics' valuation' field' (rw (block_slot ctx m k ty) ty).
+  type_satisfied statics' valuation' field' (rewrite_field fx ctx rw m k ty).
 Proof.
   intros Hm Hd (from & Hcons & Hused & Hunused) Hfr Hsat.
-  unfold block_slot. rewrite <- (type_satisfied_kind _ _ _ _ Hsat).
+  assert (Hk : kind_of_value field' = kind_of_value field).
+  { destruct (s_field_used sol a (Field_block k (kind_of_value field)));
+      [ exact (rebuilt_value_kind G sol _ _ _ (proj2 (Hused eq_refl)))
+      | rewrite (Hunused eq_refl); reflexivity ]. }
+  unfold rewrite_field, block_slot. cbv zeta.
+  destruct (deleted_field fx (follow_field ctx m (Field_block k (kind ty))))
+    eqn:Hdel; [ exact (sat_unknown_of_kind field field' ty Hsat Hk) | ].
+  rewrite <- (type_satisfied_kind _ _ _ _ Hsat) in Hdel |- *.
   destruct (s_field_used sol a (Field_block k (kind_of_value field)))
     eqn:Hfu.
   - destruct (Hused eq_refl) as [Hhu Hrv].
@@ -2516,10 +2567,13 @@ Proof.
     exact (follow_field_at ctx is_local Hc m a from _ Hd Hm Hcons
              (not_local_block k _) Hfu).
   - rewrite (Hunused eq_refl).
-    apply (Hrwf _ ty field _
-             (follow_field_forgets ctx is_local Hc m a from _ Hd Hm Hcons
-                (not_local_block k _) Hfu)
-             Hfr Hsat).
+    pose proof (follow_field_unused ctx is_local Hc m a from _ Hd Hm Hcons
+                  (not_local_block k _) Hfu) as Hff.
+    rewrite Hff in Hdel |- *.
+    destruct Hrwf as [Hdf | Hrwf'];
+      [ unfold deleted_field in Hdel; rewrite Hdf in Hdel;
+        discriminate Hdel | ].
+    apply (Hrwf' At_least_one_source_no_usages ty field _ eq_refl Hfr Hsat).
     reflexivity.
 Qed.
 
@@ -2533,7 +2587,7 @@ Lemma fields_sound (m : rewrite_metadata) (a : node) :
        ty ∈ tys -> type_in_fragment_with loose valuation ty) ->
     fields_satisfied (type_satisfied statics valuation) tys fields ->
     fields_satisfied (type_satisfied statics' valuation')
-      (map (fun p => rw (block_slot ctx m (fst p) (snd p)) (snd p))
+      (map (fun p => rewrite_field fx ctx rw m (fst p) (snd p))
          (combine (seq k (length tys)) tys))
       fields'.
 Proof.
@@ -2560,7 +2614,7 @@ Lemma block_case_sound (m : rewrite_metadata) (a : node) (tag : Z)
      ty ∈ case_maps_to case -> type_in_fragment_with loose valuation ty) ->
   row_like_block_case_satisfied statics valuation tag fields case ->
   row_like_block_case_satisfied statics' valuation' tag fields'
-    (rewrite_block_case ctx rw m case).
+    (rewrite_block_case fx ctx rw m case).
 Proof.
   intros Hm Hd Hfields Hfr [Hidx [Hfs _]].
   destruct case as [tys idx ext].
@@ -2586,7 +2640,7 @@ Lemma blocks_sound (m : rewrite_metadata) (a : node) (tag : Z)
        eval_simple valuation s = Some w -> unallocated w) ->
   row_like_for_blocks_satisfied statics valuation tag fields blocks ->
   row_like_for_blocks_satisfied statics' valuation' tag fields'
-    (rewrite_row_like_for_blocks ctx rw m blocks).
+    (rewrite_row_like_for_blocks fx ctx rw m blocks).
 Proof.
   intros Hm Hd Hfields [Hcf Hal] Hsat.
   destruct blocks as [known other am].
@@ -3461,7 +3515,7 @@ Proof.
   - cbn [rewrite].
     destruct (rewrite_rule fx ctx tenv m t) as [ | | spec] eqn:Hrule.
     + exact (identity_sound (rewrite_arbitrary fx ctx tenv canon fuel) IHa
-               (proj1 (rewrite_forgets fuel)) m t v v'
+               (fields_forget fuel) m t v v'
                (rule_identity_not_forgets m t Hrule) Ht Hv Hsat).
     + exact (sat_unknown_of_kind v v' t Hsat
                (ext_kind m v v' Hv)).
@@ -3472,8 +3526,27 @@ Qed.
 
 End Sound.
 
+(* The fixes under which the rewriting is proved sound: those of boxed
+   numbers, of [refine_sets_of_closures] and of the nullability of
+   closure types, and one of the two of the aliases. *)
+Definition fixes_sound (fx : fixes) : Prop :=
+  fix_boxed fx = true
+  ∧ (fix_alias fx = true ∨ fix_deleted_field fx = true)
+  ∧ fix_refine fx = true ∧ fix_null fx = true.
+
+Lemma all_fixes_sound : fixes_sound all_fixes.
+Proof.
+  split; [ reflexivity | split; [ left; reflexivity | split; reflexivity ] ].
+Qed.
+
+Lemma landed_fixes_sound : fixes_sound landed_fixes.
+Proof.
+  split; [ reflexivity | split; [ right; reflexivity | split; reflexivity ] ].
+Qed.
+
 (* The rewriting is sound in the fragment of [loose]. *)
-Lemma rewrite_type_sound_in (loose : bool) :
+Lemma rewrite_type_sound_in (fx : fixes) (loose : bool) :
+  fixes_sound fx ->
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -3493,13 +3566,13 @@ Lemma rewrite_type_sound_in (loose : bool) :
     rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
-         canon fuel m t).
+      (rewrite_arbitrary fx (plain_context is_local F T sets) tenv canon fuel
+         m t).
 Proof.
-  intros is_local F T sets tenv canon statics statics' valuation valuation'
-    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole Hcopies
-    Ht Hv Hsat.
-  exact (proj1 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
+  intros (Hb & Hal & Hr & Hn) is_local F T sets tenv canon statics statics'
+    valuation valuation' fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc
+    Hst Hwhole Hcopies Ht Hv Hsat.
+  exact (proj1 (rewrite_sound fx Hb Hal Hr Hn
                   is_local F T sets tenv canon statics statics' valuation
                   valuation' loose (least_closed_tables is_local F T Hleast)
                   Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
@@ -3512,7 +3585,8 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_type_sound_in false); try assumption.
+  apply (rewrite_type_sound_in all_fixes false all_fixes_sound);
+    try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3521,7 +3595,19 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_type_sound_in false); try assumption.
+  apply (rewrite_type_sound_in all_fixes false all_fixes_sound);
+    try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_type_sound_local_landed :
+  rewrite_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_type_sound_in landed_fixes false landed_fixes_sound);
+    try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3531,7 +3617,19 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_type_sound_in true); try assumption.
+  apply (rewrite_type_sound_in all_fixes true all_fixes_sound);
+    try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_type_sound_landed :
+  rewrite_unaliased_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_type_sound_in landed_fixes true landed_fixes_sound);
+    try assumption.
   intros _. exact Hwhole.
 Qed.
 
@@ -3541,12 +3639,25 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_type_sound_in true); try assumption.
+  apply (rewrite_type_sound_in all_fixes true all_fixes_sound);
+    try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_type_sound_local_landed :
+  rewrite_unaliased_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_type_sound_in landed_fixes true landed_fixes_sound);
+    try assumption.
   intros _. exact Hwhole.
 Qed.
 
 (* The type of a symbol in the fragment of [loose]. *)
-Lemma rewrite_symbol_type_sound_in (loose : bool) :
+Lemma rewrite_symbol_type_sound_in (fx : fixes) (loose : bool) :
+  fixes_sound fx ->
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -3564,11 +3675,11 @@ Lemma rewrite_symbol_type_sound_in (loose : bool) :
     copies_valued tenv canon valuation valuation' ->
     lookup s (static_values statics) = Some allocated ->
     type_satisfied statics' valuation' (Value_symbol s)
-      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
-         canon s).
+      (rewrite_symbol_type fx (plain_context is_local F T sets) tenv canon s).
 Proof.
-  intros is_local F T sets tenv canon statics statics' valuation valuation' s
-    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl.
+  intros (Hb & Hal & Hr & Hn) is_local F T sets tenv canon statics statics'
+    valuation valuation' s allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst
+    Hwhole Hcopies Hl.
   unfold rewrite_symbol_type, rewrite_concrete_type_of.
   set (ty := concrete_type_of tenv (Name_symbol s) Value).
   assert (Hty : type_in_fragment_with loose valuation ty
@@ -3584,7 +3695,7 @@ Proof.
   destruct Hty as [Hfr Hsat].
   pose proof (metadata_for_name_at (plain_context is_local F T sets)
                 (Node_symbol s)) as [Hat Hhu].
-  apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
+  apply (proj2 (rewrite_sound fx Hb Hal Hr Hn
                   is_local F T sets tenv canon statics statics' valuation
                   valuation' loose (least_closed_tables is_local F T Hleast)
                   Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
@@ -3602,7 +3713,8 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_symbol_type_sound_in false); try assumption.
+  apply (rewrite_symbol_type_sound_in all_fixes false all_fixes_sound);
+    try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3612,7 +3724,19 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_symbol_type_sound_in false); try assumption.
+  apply (rewrite_symbol_type_sound_in all_fixes false all_fixes_sound);
+    try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_symbol_type_sound_local_landed :
+  rewrite_symbol_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_symbol_type_sound_in landed_fixes false landed_fixes_sound);
+    try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3622,7 +3746,19 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_symbol_type_sound_in true); try assumption.
+  apply (rewrite_symbol_type_sound_in all_fixes true all_fixes_sound);
+    try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_symbol_type_sound_landed :
+  rewrite_unaliased_symbol_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_symbol_type_sound_in landed_fixes true landed_fixes_sound);
+    try assumption.
   intros _. exact Hwhole.
 Qed.
 
@@ -3632,7 +3768,19 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation' s
     allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_symbol_type_sound_in true); try assumption.
+  apply (rewrite_symbol_type_sound_in all_fixes true all_fixes_sound);
+    try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_symbol_type_sound_local_landed :
+  rewrite_unaliased_symbol_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_symbol_type_sound_in landed_fixes true landed_fixes_sound);
+    try assumption.
   intros _. exact Hwhole.
 Qed.
 
@@ -3661,7 +3809,8 @@ Proof.
 Qed.
 
 (* The type of a result in the fragment of [loose]. *)
-Lemma rewrite_result_type_sound_in (loose : bool) :
+Lemma rewrite_result_type_sound_in (fx : fixes) (loose : bool) :
+  fixes_sound fx ->
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -3682,12 +3831,12 @@ Lemma rewrite_result_type_sound_in (loose : bool) :
     rebuilt_value (graph_of_facts F) (solution_of_tables T) v
       (Node_variable code_var) v' ->
     type_satisfied statics' valuation' v'
-      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
-         canon code_var type_var).
+      (rewrite_result_type fx (plain_context is_local F T sets) tenv canon
+         code_var type_var).
 Proof.
-  intros is_local F T sets tenv canon statics statics' valuation valuation'
-    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole
-    Hcopies Hfind Hl Hv.
+  intros (Hb & Hal & Hr & Hn) is_local F T sets tenv canon statics statics'
+    valuation valuation' code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag
+    Halloc Hst Hwhole Hcopies Hfind Hl Hv.
   unfold rewrite_result_type, rewrite_concrete_type_of, kind_of_name.
   destruct (Typing_env.find tenv (Name_var type_var) None) as [ty0 | ] eqn:Hf;
     [ | contradiction ].
@@ -3697,7 +3846,7 @@ Proof.
                 None ty0 v Henv Hf Hl) as Hsat.
   pose proof (metadata_for_name_at (plain_context is_local F T sets)
                 (Node_variable code_var)) as [Hat Hhu].
-  apply (proj2 (rewrite_sound all_fixes eq_refl eq_refl eq_refl eq_refl
+  apply (proj2 (rewrite_sound fx Hb Hal Hr Hn
                   is_local F T sets tenv canon statics statics' valuation
                   valuation' loose (least_closed_tables is_local F T Hleast)
                   Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hwhole
@@ -3713,8 +3862,9 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_result_type_sound_in false is_local F T sets tenv canon statics
-           statics' valuation valuation'); try assumption.
+  apply (rewrite_result_type_sound_in all_fixes false all_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3724,8 +3874,21 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_result_type_sound_in false is_local F T sets tenv canon statics
-           statics' valuation valuation'); try assumption.
+  apply (rewrite_result_type_sound_in all_fixes false all_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_result_type_sound_local_landed :
+  rewrite_result_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_result_type_sound_in landed_fixes false landed_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
   intros H. discriminate H.
 Qed.
 
@@ -3735,8 +3898,21 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  apply (rewrite_result_type_sound_in true is_local F T sets tenv canon statics
-           statics' valuation valuation'); try assumption.
+  apply (rewrite_result_type_sound_in all_fixes true all_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_result_type_sound_landed :
+  rewrite_unaliased_result_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_result_type_sound_in landed_fixes true landed_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
   intros _. exact Hwhole.
 Qed.
 
@@ -3746,8 +3922,21 @@ Proof.
   intros is_local F T sets tenv canon statics statics' valuation valuation'
     code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  apply (rewrite_result_type_sound_in true is_local F T sets tenv canon statics
-           statics' valuation valuation'); try assumption.
+  apply (rewrite_result_type_sound_in all_fixes true all_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem rewrite_unaliased_result_type_sound_local_landed :
+  rewrite_unaliased_result_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hwhole.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  apply (rewrite_result_type_sound_in landed_fixes true landed_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
   intros _. exact Hwhole.
 Qed.
 
@@ -3755,19 +3944,25 @@ Qed.
 (* The two runs                                                             *)
 (* ======================================================================== *)
 
-Theorem exported_types_sound : exported_types_sound_statement.
+Lemma exported_types_sound_gen (fx : fixes) :
+  fixes_sound fx -> exported_types_sound_with fx.
 Proof.
-  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
-    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
-    Hstep Henv Hfrag Hcopies Hl.
+  intros Hfx flag is_local u e T preserve_direct_calls sets tenv canon
+    valuation valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets
+    Hrel Hrun Hstep Henv Hfrag Hcopies Hl.
   destruct (Hrel n s k vs hp rd Hrun Hstep)
     as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst)].
   exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
-  exact (rewrite_symbol_type_sound is_local (traverse_unit flag u e) T sets
-           tenv canon (state_statics s) (state_statics t) valuation
-           valuation' sym allocated
-           Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl).
+  apply (rewrite_symbol_type_sound_in fx false Hfx is_local
+           (traverse_unit flag u e) T sets tenv canon (state_statics s)
+           (state_statics t) valuation valuation' sym allocated);
+    try assumption.
+  - left. exact Hleast.
+  - intros H. discriminate H.
 Qed.
+
+Theorem exported_types_sound : exported_types_sound_statement.
+Proof. exact (exported_types_sound_gen all_fixes all_fixes_sound). Qed.
 
 Theorem exported_types_sound_local : exported_types_sound_local_statement.
 Proof.
@@ -3780,6 +3975,21 @@ Proof.
   exact (rewrite_symbol_type_sound_local is_local (traverse_unit flag u e) T
            sets tenv canon (state_statics s) (state_statics t) valuation
            valuation' sym allocated
+           Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl).
+Qed.
+
+Theorem exported_types_sound_local_landed :
+  exported_types_sound_local_landed_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_symbol_type_sound_local_landed is_local
+           (traverse_unit flag u e) T sets tenv canon (state_statics s)
+           (state_statics t) valuation valuation' sym allocated
            Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies Hl).
 Qed.
 
@@ -3798,6 +4008,21 @@ Proof.
            Hwhole Hcopies Hl).
 Qed.
 
+Theorem exported_unaliased_types_sound_landed :
+  exported_unaliased_types_sound_landed_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst & Hwhole)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_unaliased_symbol_type_sound_landed is_local
+           (traverse_unit flag u e) T sets tenv canon (state_statics s)
+           (state_statics t) valuation valuation' sym allocated Hleast Hlocal
+           Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl).
+Qed.
+
 Theorem exported_unaliased_types_sound_local :
   exported_unaliased_types_sound_local_statement.
 Proof.
@@ -3808,6 +4033,21 @@ Proof.
     as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst & Hwhole)].
   exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
   exact (rewrite_unaliased_symbol_type_sound_local is_local
+           (traverse_unit flag u e) T sets tenv canon (state_statics s)
+           (state_statics t) valuation valuation' sym allocated Hleast Hlocal
+           Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl).
+Qed.
+
+Theorem exported_unaliased_types_sound_local_landed :
+  exported_unaliased_types_sound_local_landed_statement.
+Proof.
+  intros flag is_local u e T preserve_direct_calls sets tenv canon valuation
+    valuation' n s k vs hp rd sym allocated Hlocal Hleast Hsets Hrel Hrun
+    Hstep Henv Hfrag Hcopies Hl.
+  destruct (Hrel n s k vs hp rd Hrun Hstep)
+    as [Halloc (m & t & vs' & rd' & Hrun' & Hstep' & Hst & Hwhole)].
+  exists m, t, vs', rd'. split; [ exact Hrun' | split; [ exact Hstep' | ] ].
+  exact (rewrite_unaliased_symbol_type_sound_local_landed is_local
            (traverse_unit flag u e) T sets tenv canon (state_statics s)
            (state_statics t) valuation valuation' sym allocated Hleast Hlocal
            Hsets Henv Hfrag Halloc Hst Hwhole Hcopies Hl).
@@ -3866,7 +4106,7 @@ Proof.
                 BoxedCounterexample.rebuilt) as Hsound.
   clear H.
   apply type_satisfied_b_iff in Hsound.
-  - destruct fx as [b1 b2 b3 b4]. cbn in Hfx. subst b1.
+  - destruct fx as [b1 b2 b3 b4 b5]. cbn in Hfx. subst b1.
     vm_compute in Hsound. discriminate Hsound.
   - apply (check_least_sound _ _ 100). vm_compute. reflexivity.
   - intros f Hf. discriminate Hf.
@@ -4016,6 +4256,9 @@ Proof.
   - apply type_satisfied_b_iff. vm_compute. reflexivity.
 Qed.
 
+Theorem deleted_field_example : deleted_field_example_statement.
+Proof. split; vm_compute; reflexivity. Qed.
+
 (* The function slots of the closures of the unit of the refinement are
    those of its two sets. *)
 Lemma refine_graph_function_slots (a : node) (g : function_slot) (b : node) :
@@ -4114,6 +4357,9 @@ Qed.
 Theorem refine_example : refine_example_statement.
 Proof. split; vm_compute; reflexivity. Qed.
 
+Theorem refine_example_landed : refine_example_landed_statement.
+Proof. split; vm_compute; reflexivity. Qed.
+
 
 
 Theorem rewrite_keeps_null : rewrite_keeps_null_statement.
@@ -4146,7 +4392,13 @@ Qed.
 Theorem example : example_statement.
 Proof. split; vm_compute; reflexivity. Qed.
 
+Theorem example_landed : example_landed_statement.
+Proof. split; vm_compute; reflexivity. Qed.
+
 Theorem result_types_example : result_types_example_statement.
+Proof. split; vm_compute; reflexivity. Qed.
+
+Theorem result_types_example_landed : result_types_example_landed_statement.
 Proof. split; vm_compute; reflexivity. Qed.
 
 (* ======================================================================== *)
@@ -4774,7 +5026,7 @@ Section Unboxed_sound.
 
 Variable fx : fixes.
 Hypothesis Hfix_boxed : fix_boxed fx = true.
-Hypothesis Hfix_alias : fix_alias fx = true.
+Hypothesis Hfix_fields : fix_alias fx = true ∨ fix_deleted_field fx = true.
 Hypothesis Hfix_refine : fix_refine fx = true.
 Hypothesis Hfix_null : fix_null fx = true.
 
@@ -4823,19 +5075,25 @@ Lemma rw_sound_arbitrary (fuel : nat) (m : rewrite_metadata)
     (rewrite_arbitrary fx ctx tenv canon fuel m t).
 Proof.
   intros Ht Hv Hsat.
-  exact (proj1 (rewrite_sound fx Hfix_boxed Hfix_alias Hfix_refine Hfix_null
+  exact (proj1 (rewrite_sound fx Hfix_boxed Hfix_fields Hfix_refine Hfix_null
                   is_local F T sets tenv canon statics statics' valuation
                   valuation' loose Hcl Hleast Hlocal Hsets Henv Hfrag Halloc
                   Hst Hcopies Hwhole fuel)
            m t v v' Ht (or_introl Hv) Hsat).
 Qed.
 
-Lemma rw_forgets_arbitrary (fuel : nat) :
-  rw_forgets statics statics' valuation valuation' loose
-    (rewrite_arbitrary fx ctx tenv canon fuel).
+Lemma rw_forgets_unknown (fuel : nat) (m : rewrite_metadata)
+    (k : flambda_kind) (w' : value) :
+  forgets m = true -> kind_of_value w' = k ->
+  type_satisfied statics' valuation' w'
+    (rewrite_arbitrary fx ctx tenv canon fuel m (unknown k)).
 Proof.
-  exact (proj1 (rewrite_forgets fx Hfix_alias is_local F T sets tenv canon
-                  statics statics' valuation valuation' loose Henv fuel)).
+  intros Hm Hk.
+  apply (rewrite_forgets_not_alias fx is_local F T sets tenv canon statics
+           statics' valuation valuation' fuel m (unknown k) w' w' Hm);
+    [ destruct k as [ | [] | | ]; reflexivity
+    | apply unknown_satisfied; exact Hk
+    | reflexivity ].
 Qed.
 
 Lemma unboxed_not_local_block (i : nat) (k : flambda_kind) :
@@ -5071,9 +5329,7 @@ Lemma forgotten_sound (ty : flambda_type) (P : list (list field * flambda_kind))
 Proof.
   induction 1 as [ | [p k] w' P ws [_ Hk] _ IH]; constructor; [ | exact IH ].
   cbn [leaf_rewritten fst snd] in *.
-  apply (rw_forgets_arbitrary _ At_least_one_source_no_usages (unknown k) w'
-           w' eq_refl (unknown_fragment valuation k));
-    [ apply unknown_satisfied; exact Hk | reflexivity ].
+  exact (rw_forgets_unknown _ At_least_one_source_no_usages k w' eq_refl Hk).
 Qed.
 
 Lemma forgotten_leaves_eq (f : field) (u : U.unboxed_field) :
@@ -5474,9 +5730,7 @@ Lemma rwn_result_sound (k : flambda_kind) (w' : value) :
   kind_of_value w' = k -> type_satisfied statics' valuation' w' (rwn_result k).
 Proof.
   intros Hk.
-  apply (rw_forgets_arbitrary _ At_least_one_source_no_usages (unknown k) w'
-           w' eq_refl (unknown_fragment valuation k));
-    [ apply unknown_satisfied; exact Hk | reflexivity ].
+  exact (rw_forgets_unknown _ At_least_one_source_no_usages k w' eq_refl Hk).
 Qed.
 
 Lemma rw_result_sound (m : rewrite_metadata) (t : flambda_type)
@@ -5678,9 +5932,9 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
-            eq_refl eq_refl is_local F T sets tenv canon statics statics'
-            valuation valuation' false);
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl
+            (or_introl eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' false);
     try eassumption.
   intros H. discriminate H.
 Qed.
@@ -5692,9 +5946,23 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
-            eq_refl eq_refl is_local F T sets tenv canon statics statics'
-            valuation valuation' false);
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl
+            (or_introl eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' false);
+    try eassumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_unboxed_result_type_sound_local_landed :
+  rewrite_unboxed_result_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in landed_fixes eq_refl
+            (or_intror eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' false);
     try eassumption.
   intros H. discriminate H.
 Qed.
@@ -5706,9 +5974,23 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
-  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
-            eq_refl eq_refl is_local F T sets tenv canon statics statics'
-            valuation valuation' true);
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl
+            (or_introl eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' true);
+    try eassumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem unaliased_unboxed_result_type_sound_landed :
+  unaliased_unboxed_result_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in landed_fixes eq_refl
+            (or_intror eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' true);
     try eassumption.
   intros _. exact Hwhole.
 Qed.
@@ -5720,9 +6002,23 @@ Proof.
     valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
     Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
   assert (Hle : least_either is_local F T) by (right; exact Hleast).
-  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl eq_refl
-            eq_refl eq_refl is_local F T sets tenv canon statics statics'
-            valuation valuation' true);
+  eapply (rewrite_unboxed_result_type_sound_in all_fixes eq_refl
+            (or_introl eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' true);
+    try eassumption.
+  intros _. exact Hwhole.
+Qed.
+
+Theorem unaliased_unboxed_result_type_sound_local_landed :
+  unaliased_unboxed_result_type_sound_local_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hwhole Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (right; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in landed_fixes eq_refl
+            (or_intror eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' true);
     try eassumption.
   intros _. exact Hwhole.
 Qed.
@@ -6163,6 +6459,22 @@ Proof.
            (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
 Qed.
 
+Theorem exported_types_sound_end_to_end_local_landed :
+  exported_types_sound_end_to_end_local_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals
+    Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  destruct (least_local_checks is_local _ T Hleast) as [Hcheck Hlrs].
+  apply (exported_types_sound_local_landed flag is_local u e T b sets tenv canon
+           valuation valuation' n s k vs hp rd sym allocated Hlocal Hleast
+           Hsets);
+    try assumption.
+  exact (rebuild_exit_relation_holds_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck Hlrs
+           (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
+Qed.
+
 Theorem exported_types_sound_end_to_end :
   exported_types_sound_end_to_end_statement.
 Proof.
@@ -6174,6 +6486,25 @@ Proof.
            (least_local_of_least is_local _ T Hleast
               (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
                  is_local u e T Hlocal Hslots))).
+Qed.
+
+Lemma exported_types_sound_end_to_end_gen (fx : fixes) :
+  fixes_sound fx -> exported_types_sound_end_to_end_with fx.
+Proof.
+  intros Hfx flag is_local u e T b sets tenv canon valuation valuation' n s k
+    vs hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+    Hvals Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  pose proof (least_local_of_least is_local _ T Hleast
+                (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+                   is_local u e T Hlocal Hslots)) as Hll.
+  destruct (least_local_checks is_local _ T Hll) as [Hcheck Hlrs].
+  apply (exported_types_sound_gen fx Hfx flag is_local u e T b sets tenv canon
+           valuation valuation' n s k vs hp rd sym allocated Hlocal Hleast
+           Hsets);
+    try assumption.
+  exact (rebuild_exit_relation_holds_local flag is_local u e T b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck Hlrs
+           (least_field_used_exact_local is_local _ T Hll) Honce Hvals).
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -6555,12 +6886,41 @@ Proof.
            (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
 Qed.
 
+Theorem exported_unaliased_types_end_to_end_local_landed :
+  exported_unaliased_types_end_to_end_local_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals
+    Hsets Hrun Hstep Henv Hfr Hcopies Hl.
+  destruct (least_local_checks is_local _ T Hleast) as [Hcheck Hlrs].
+  apply (exported_unaliased_types_sound_local_landed flag is_local u e T b
+           sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hleast Hsets);
+    try assumption.
+  exact (rebuild_exit_relation_whole_holds_local flag is_local u e T b Hlocal
+           Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs
+           (least_field_used_exact_local is_local _ T Hleast) Honce Hvals).
+Qed.
+
 Theorem exported_unaliased_types_sound_end_to_end :
   exported_unaliased_types_sound_end_to_end_statement.
 Proof.
   intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
     hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast.
   exact (exported_unaliased_types_sound_end_to_end_local flag is_local u e T b
+           sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hfrag Hdc Hrk Hwf Hexits
+           (least_local_of_least is_local _ T Hleast
+              (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+                 is_local u e T Hlocal Hslots))).
+Qed.
+
+Theorem exported_unaliased_types_sound_end_to_end_landed :
+  exported_unaliased_types_sound_end_to_end_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast.
+  exact (exported_unaliased_types_end_to_end_local_landed flag is_local u e T b
            sets tenv canon valuation valuation' n s k vs hp rd sym allocated
            Hlocal Hfrag Hdc Hrk Hwf Hexits
            (least_local_of_least is_local _ T Hleast
@@ -6688,6 +7048,15 @@ Proof.
     split; [ vm_compute; reflexivity | ].
     vm_compute. constructor; [ split; reflexivity | constructor ].
   - apply type_satisfied_b_iff. vm_compute. reflexivity.
+Qed.
+
+Theorem changed_example_landed : changed_example_landed_statement.
+Proof.
+  destruct changed_example as (Hreprs & _ & _ & Hrest).
+  split; [ exact Hreprs | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  exact Hrest.
 Qed.
 
 (* The closures of the example are related as the simulation of the
@@ -7469,7 +7838,7 @@ Section Changed_sound.
 
 Variable fx : fixes.
 Hypothesis Hfix_boxed : fix_boxed fx = true.
-Hypothesis Hfix_alias : fix_alias fx = true.
+Hypothesis Hfix_fields : fix_alias fx = true ∨ fix_deleted_field fx = true.
 Hypothesis Hfix_refine : fix_refine fx = true.
 Hypothesis Hfix_null : fix_null fx = true.
 
@@ -7680,7 +8049,9 @@ Section With_rw_u.
 
 Variable rw : rewrite_metadata -> flambda_type -> flambda_type.
 Hypothesis Hrw : rw_sound_u rw.
-Hypothesis Hrwf : rw_forgets statics statics' valuation valuation' loose rw.
+Hypothesis Hrwf :
+  fix_deleted_field fx = true
+  ∨ rw_forgets statics statics' valuation valuation' loose rw.
 
 Lemma field_sound_u (m : rewrite_metadata) (a : node) (k : nat)
     (field field' : value) (ty : flambda_type) :
@@ -7688,10 +8059,17 @@ Lemma field_sound_u (m : rewrite_metadata) (a : node) (k : nat)
   field_rebuilt G sol (rebuilt_value G sol) a k field field' ->
   type_in_fragment_with loose valuation ty ->
   type_satisfied statics valuation field ty ->
-  type_satisfied statics' valuation' field' (rw (block_slot ctx m k ty) ty).
+  type_satisfied statics' valuation' field' (rewrite_field fx ctx rw m k ty).
 Proof.
   intros Hm Hd (from & Hcons & Hused & Hunused) Hfr Hsat.
-  unfold block_slot. rewrite <- (type_satisfied_kind _ _ _ _ Hsat).
+  assert (Hk : kind_of_value field' = kind_of_value field).
+  { destruct (s_field_used sol a (Field_block k (kind_of_value field)));
+      [ exact (rebuilt_value_kind G sol _ _ _ (proj2 (Hused eq_refl)))
+      | rewrite (Hunused eq_refl); reflexivity ]. }
+  unfold rewrite_field, block_slot. cbv zeta.
+  destruct (deleted_field fx (follow_field ctx m (Field_block k (kind ty))))
+    eqn:Hdel; [ exact (sat_unknown_of_kind _ _ _ _ field field' ty Hsat Hk) | ].
+  rewrite <- (type_satisfied_kind _ _ _ _ Hsat) in Hdel |- *.
   destruct (s_field_used sol a (Field_block k (kind_of_value field)))
     eqn:Hfu.
   - destruct (Hused eq_refl) as [Hhu Hrv].
@@ -7703,10 +8081,13 @@ Proof.
     + apply (unchanged_field a from _ Hcons). intros g Habs.
       discriminate Habs.
   - rewrite (Hunused eq_refl).
-    apply (Hrwf _ ty field _
-             (follow_field_forgets ctx is_local Hc m a from _ Hd Hm Hcons
-                (not_local_block is_local Hlocal k _) Hfu)
-             Hfr Hsat).
+    pose proof (follow_field_unused ctx is_local Hc m a from _ Hd Hm Hcons
+                  (not_local_block is_local Hlocal k _) Hfu) as Hff.
+    rewrite Hff in Hdel |- *.
+    destruct Hrwf as [Hdf | Hrwf'];
+      [ unfold deleted_field in Hdel; rewrite Hdf in Hdel;
+        discriminate Hdel | ].
+    apply (Hrwf' At_least_one_source_no_usages ty field _ eq_refl Hfr Hsat).
     reflexivity.
 Qed.
 
@@ -7719,7 +8100,7 @@ Lemma fields_sound_u (m : rewrite_metadata) (a : node) :
        ty ∈ tys -> type_in_fragment_with loose valuation ty) ->
     fields_satisfied (type_satisfied statics valuation) tys fields ->
     fields_satisfied (type_satisfied statics' valuation')
-      (map (fun p => rw (block_slot ctx m (fst p) (snd p)) (snd p))
+      (map (fun p => rewrite_field fx ctx rw m (fst p) (snd p))
          (combine (seq k (length tys)) tys))
       fields'.
 Proof.
@@ -7745,7 +8126,7 @@ Lemma block_case_sound_u (m : rewrite_metadata) (a : node) (tag : Z)
      ty ∈ case_maps_to case -> type_in_fragment_with loose valuation ty) ->
   row_like_block_case_satisfied statics valuation tag fields case ->
   row_like_block_case_satisfied statics' valuation' tag fields'
-    (rewrite_block_case ctx rw m case).
+    (rewrite_block_case fx ctx rw m case).
 Proof.
   intros Hm Hd Hfields Hfr [Hidx [Hfs _]].
   destruct case as [tys idx ext].
@@ -7770,7 +8151,7 @@ Lemma blocks_sound_u (m : rewrite_metadata) (a : node) (tag : Z)
        eval_simple valuation s = Some w -> unallocated w) ->
   row_like_for_blocks_satisfied statics valuation tag fields blocks ->
   row_like_for_blocks_satisfied statics' valuation' tag fields'
-    (rewrite_row_like_for_blocks ctx rw m blocks).
+    (rewrite_row_like_for_blocks fx ctx rw m blocks).
 Proof.
   intros Hm Hd Hfields [Hcf Hal] Hsat.
   destruct blocks as [known other am].
@@ -7945,7 +8326,7 @@ Lemma changed_rule_forgets (m : rewrite_metadata) (t : flambda_type) :
   forgets m = true -> changed_rule fx ctxu tenv reprs m t = None.
 Proof. intros H. unfold changed_rule. rewrite H. reflexivity. Qed.
 
-Lemma rewrite_forgets_u (fuel : nat) :
+Lemma rewrite_forgets_u (Hfix_alias : fix_alias fx = true) (fuel : nat) :
   rw_forgets statics statics' valuation valuation' loose
     (rewrite_arbitrary_u fx ctxu tenv canon cm reprs fuel)
   ∧ rw_forgets statics statics' valuation valuation' loose
@@ -7974,6 +8355,16 @@ Proof.
   - cbn [rewrite_u]. rewrite (changed_rule_forgets m t Hm).
     unfold rewrite_rule. rewrite Hm.
     exact (sat_unknown_of_kind _ _ _ _ v v' t Hv Hk).
+Qed.
+
+(* At a field of a block that no use reads, as [fields_forget]. *)
+Lemma fields_forget_u (fuel : nat) :
+  fix_deleted_field fx = true
+  ∨ rw_forgets statics statics' valuation valuation' loose
+      (rewrite_arbitrary_u fx ctxu tenv canon cm reprs fuel).
+Proof.
+  destruct Hfix_fields as [Ha | Hd]; [ right | left; exact Hd ].
+  exact (proj1 (rewrite_forgets_u Ha fuel)).
 Qed.
 
 (* [closure_under_view], with the allocations named. *)
@@ -9586,7 +9977,7 @@ Proof.
         destruct (forgets m); [ discriminate Hrule | reflexivity ]. }
       exact (identity_sound_u (rewrite_arbitrary_u fx ctxu tenv canon cm reprs
                                  fuel)
-               IHa (proj1 (rewrite_forgets_u fuel)) m t v v' Hm Ht Hv Hsat).
+               IHa (fields_forget_u fuel) m t v v' Hm Ht Hv Hsat).
     + exact (sat_unknown_of_kind _ _ _ _ v v' t Hsat (rel_u_kind m v v' Hv)).
     + destruct Hv as [Hun | Hchg].
       * exact (closure_sound_u (rewrite_arbitrary_u fx ctxu tenv canon cm
@@ -9640,10 +10031,30 @@ Proof.
     Hat Hch Hsat.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
   pose proof (least_closed_tables is_local F T Hle) as Hc.
-  exact (proj1 (rewrite_sound_u all_fixes eq_refl eq_refl eq_refl eq_refl
-                  is_local F T sets tenv canon statics statics' valuation
-                  valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag Halloc Hst
-                  Hcopies (fun _ => Hwhole) Hunst Hreprs
+  exact (proj1 (rewrite_sound_u all_fixes eq_refl (or_introl eq_refl) eq_refl
+                  eq_refl is_local F T sets tenv canon statics statics'
+                  valuation valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag
+                  Halloc Hst Hcopies (fun _ => Hwhole) Hunst Hreprs
+                  (reprs_leaves_ok_of_no_slots is_local F T _ _ Hnoslots) fuel)
+           m t v v' Ht
+           (or_intror (changed_ext_of_runs F T statics _ m n v v_mid v'
+                         is_local Hc Hcis Hrv Hat Hch))
+           Hsat).
+Qed.
+
+Theorem rewrite_changed_type_sound_landed :
+  rewrite_changed_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hleast Hlocal Hsets
+    Henv Hfrag Halloc Hst Hwhole Hcopies Hunst Hreprs Hnoslots Ht Hcis Hrv
+    Hat Hch Hsat.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  pose proof (least_closed_tables is_local F T Hle) as Hc.
+  exact (proj1 (rewrite_sound_u landed_fixes eq_refl (or_intror eq_refl) eq_refl
+                  eq_refl is_local F T sets tenv canon statics statics'
+                  valuation valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag
+                  Halloc Hst Hcopies (fun _ => Hwhole) Hunst Hreprs
                   (reprs_leaves_ok_of_no_slots is_local F T _ _ Hnoslots) fuel)
            m t v v' Ht
            (or_intror (changed_ext_of_runs F T statics _ m n v v_mid v'
@@ -9909,10 +10320,10 @@ Proof.
     Ht Hcis Hrv Hat Hch Hsat.
   assert (Hle : least_either is_local F T) by (left; exact Hleast).
   pose proof (least_closed_tables is_local F T Hle) as Hc.
-  exact (proj1 (rewrite_sound_u all_fixes eq_refl eq_refl eq_refl eq_refl
-                  is_local F T sets tenv canon statics statics' valuation
-                  valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag Halloc Hst
-                  Hcopies (fun _ => Hwhole) Hunst Hreprs
+  exact (proj1 (rewrite_sound_u all_fixes eq_refl (or_introl eq_refl) eq_refl
+                  eq_refl is_local F T sets tenv canon statics statics'
+                  valuation valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag
+                  Halloc Hst Hcopies (fun _ => Hwhole) Hunst Hreprs
                   (unit_reprs_leaves_ok is_local F T dominated to_unbox tcr e
                      Hle Hkinds Hmut Hdomc Huses)
                   fuel)
@@ -9920,4 +10331,95 @@ Proof.
            (or_intror (changed_ext_of_runs F T statics _ m n v v_mid v'
                          is_local Hc Hcis Hrv Hat Hch))
            Hsat).
+Qed.
+
+Theorem rewrite_changed_type_sound_slots_landed :
+  rewrite_changed_type_sound_slots_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hleast Hlocal Hsets
+    Hkinds Hmut Henv Hfrag Halloc Hst Hwhole Hcopies Hdomc Huses Hunst Hreprs
+    Ht Hcis Hrv Hat Hch Hsat.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  pose proof (least_closed_tables is_local F T Hle) as Hc.
+  exact (proj1 (rewrite_sound_u landed_fixes eq_refl (or_intror eq_refl) eq_refl
+                  eq_refl is_local F T sets tenv canon statics statics'
+                  valuation valuation' true _ _ Hc Hle Hlocal Hsets Henv Hfrag
+                  Halloc Hst Hcopies (fun _ => Hwhole) Hunst Hreprs
+                  (unit_reprs_leaves_ok is_local F T dominated to_unbox tcr e
+                     Hle Hkinds Hmut Hdomc Huses)
+                  fuel)
+           m t v v' Ht
+           (or_intror (changed_ext_of_runs F T statics _ m n v v_mid v'
+                         is_local Hc Hcis Hrv Hat Hch))
+           Hsat).
+Qed.
+
+(* ======================================================================== *)
+(* The fixes to land                                                        *)
+(* ======================================================================== *)
+
+Theorem rewrite_type_sound_landed : rewrite_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    fuel m t v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst Hcopies.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_type_sound_in landed_fixes false landed_fixes_sound);
+    try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_symbol_type_sound_landed :
+  rewrite_symbol_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation' s
+    allocated Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_symbol_type_sound_in landed_fixes false landed_fixes_sound);
+    try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem exported_types_sound_landed : exported_types_sound_landed_statement.
+Proof. exact (exported_types_sound_gen landed_fixes landed_fixes_sound). Qed.
+
+Theorem rewrite_result_type_sound_landed :
+  rewrite_result_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets tenv canon statics statics' valuation valuation'
+    code_var type_var v v' Hleast Hlocal Hsets Henv Hfrag Halloc Hst.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  apply (rewrite_result_type_sound_in landed_fixes false landed_fixes_sound
+           is_local F T sets tenv canon statics statics' valuation
+           valuation'); try assumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_unboxed_result_type_sound_landed :
+  rewrite_unboxed_result_type_sound_landed_statement.
+Proof.
+  intros is_local F T sets dominated to_unbox e tenv canon statics statics'
+    valuation valuation' code_var type_var fields v v_mid ws Hleast Hlocal
+    Hsets Hkinds Henv Hfrag Halloc Hst Hcopies Huses Hlk Hv Hrv Hws.
+  assert (Hle : least_either is_local F T) by (left; exact Hleast).
+  eapply (rewrite_unboxed_result_type_sound_in landed_fixes eq_refl
+            (or_intror eq_refl) eq_refl eq_refl is_local F T sets tenv canon
+            statics statics' valuation valuation' false);
+    try eassumption.
+  intros H. discriminate H.
+Qed.
+
+Theorem rewrite_keeps_null_landed : rewrite_keeps_null_landed_statement.
+Proof.
+  intros ctx tenv canon statics statics' valuation valuation' fuel m t Henv
+    Hcopies Hsat.
+  exact (proj1 (rewrite_keeps_null_fuel landed_fixes eq_refl ctx tenv canon
+                  statics statics' valuation valuation' Henv Hcopies fuel)
+           m t Hsat).
+Qed.
+
+Theorem exported_types_sound_end_to_end_landed :
+  exported_types_sound_end_to_end_landed_statement.
+Proof.
+  exact (exported_types_sound_end_to_end_gen landed_fixes landed_fixes_sound).
 Qed.

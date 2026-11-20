@@ -1868,3 +1868,18 @@ Proof.
            (closures_unaliased_traversal u e Hfrag Hwfu Honce)
            Ht Hcis Hrv Hat Hch Hsat).
 Qed.
+
+Theorem changed_type_sound_full_landed :
+  changed_type_sound_full_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
+    Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hunst Ht Hcis Hrv Hat Hch Hsat.
+  exact (TT.changed_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv
+           Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hunst
+           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
+           Ht Hcis Hrv Hat Hch Hsat).
+Qed.

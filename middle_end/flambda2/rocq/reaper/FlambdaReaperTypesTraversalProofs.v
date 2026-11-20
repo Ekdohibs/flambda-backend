@@ -2051,6 +2051,22 @@ Proof.
            Hfs Hmut Hdomc Hone).
 Qed.
 
+Theorem rewrite_changed_type_sound_traversal_landed :
+  rewrite_changed_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
+    Hleast Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc
+    Huses Hunst Hone Ht Hcis Hrv Hat Hch Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  apply (TP.rewrite_changed_type_sound_slots_landed is_local
+           (traverse_unit Auto u e) T sets dominated to_unbox tcr e tenv
+           canon statics statics' valuation valuation' fuel m t n v v_mid v');
+    try assumption.
+  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
+           Hfs Hmut Hdomc Hone).
+Qed.
+
 Theorem changed_type_sound_traversal : changed_type_sound_traversal_statement.
 Proof.
   intros is_local u T sets dominated to_unbox tcr e tenv canon statics
@@ -2059,6 +2075,24 @@ Proof.
     Hunst Hu Ht Hcis Hrv Hat Hch Hsat.
   destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
   exact (rewrite_changed_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses Hunst
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hcis Hrv Hat Hch Hsat).
+Qed.
+
+Theorem changed_type_sound_traversal_landed :
+  changed_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
+    Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hunst Hu Ht Hcis Hrv Hat Hch Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_changed_type_sound_traversal_landed is_local u T sets dominated
            to_unbox tcr e tenv canon statics statics' valuation valuation'
            fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets
            (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc

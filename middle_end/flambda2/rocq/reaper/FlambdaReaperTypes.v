@@ -68,8 +68,9 @@
    [expand_head] and [Provers.meet_single_closures_entry] of the core.
 
    The faults. Four rules of the compiler are not sound, and a flag of
-   [fixes] gives each the fix proposed ([all_fixes]; [compiler_fixes] is
-   the compiler, all off):
+   [fixes] gives each the fix proposed, two for the second ([all_fixes];
+   [compiler_fixes] is the compiler, all off; [landed_fixes], the fixes
+   to land):
    - [fix_boxed]: a boxed number whose contents no use reads is made
      poison by the rebuild ([rebuild.ml], [reaper_unused_boxed_number]),
      and [Rewriter.rewrite] keeps its type ([Rule.identity] for a value
@@ -82,6 +83,12 @@
      stands for every position of the name under that metadata, though
      the rebuild may have made one of them poison and kept another. The
      fix rewrites such an alias to the unknown type.
+   - [fix_deleted_field]: the fix proposed for the aliases of deleted
+     fields, in place of [fix_alias]. [block_slot] answers [Unknown]
+     where [follow_field] gives [At_least_one_source_no_usages], and the
+     traversal gives the field the unknown type, alias or not
+     ([rewrite_arbitrary_type]); everywhere else an alias is rewritten
+     as without the fix ([rewrite_fields], [deleted_field]).
    - [fix_refine]: where [refine_sets_of_closures] recovers the sources
      of a closure from its usages, it keeps only the sets whose closure
      is among them; [join_metadata] makes a closure that escapes
@@ -176,14 +183,19 @@ Record fixes : Type := Fixes {
   fix_boxed : bool;
   fix_alias : bool;
   fix_refine : bool;
-  fix_null : bool
+  fix_null : bool;
+  fix_deleted_field : bool
 }.
 
 (* The compiler. *)
-Definition compiler_fixes : fixes := Fixes false false false false.
+Definition compiler_fixes : fixes := Fixes false false false false false.
 
 (* Every fix. *)
-Definition all_fixes : fixes := Fixes true true true true.
+Definition all_fixes : fixes := Fixes true true true true true.
+
+(* The fixes to land: that of the aliases of deleted fields in place of
+   [fix_alias]. *)
+Definition landed_fixes : fixes := Fixes true false true true true.
 
 (* ======================================================================== *)
 (* The context                                                              *)
@@ -485,6 +497,17 @@ Definition forgets (m : rewrite_metadata) : bool :=
   | Many_sources_usages usages => is_nil usages
   | Single_source _ | Many_sources_any_usage => false
   end.
+
+(* The metadata of a field of a block for which [block_slot] answers
+   [Unknown], with [fix_deleted_field]. *)
+Definition deleted_field (fx : fixes) (m : rewrite_metadata) : bool :=
+  fix_deleted_field fx
+  && match m with
+     | At_least_one_source_no_usages => true
+     | No_source | Single_source _ | Many_sources_any_usage
+     | Many_sources_usages _ =>
+       false
+     end.
 
 Section Metadata.
 
@@ -966,13 +989,20 @@ Definition block_slot (m : rewrite_metadata) (i : nat) (ty : flambda_type)
     : rewrite_metadata :=
   follow_field ctx m (Field_block i (kind ty)).
 
-(* [rewrite_int_indexed_product] with [block_slot]. The argument [rw]
-   stands for [rewrite_arbitrary_type] in this and the definitions that
-   follow, as the recursion is through it. *)
+(* [rewrite_int_indexed_product] with [block_slot]; a field that
+   [deleted_field] marks has the unknown type. The argument [rw] stands
+   for [rewrite_arbitrary_type] in this and the definitions that follow,
+   as the recursion is through it. *)
+Definition rewrite_field
+    (rw : rewrite_metadata -> flambda_type -> flambda_type)
+    (m : rewrite_metadata) (i : nat) (ty : flambda_type) : flambda_type :=
+  let m' := block_slot m i ty in
+  if deleted_field fx m' then unknown (kind ty) else rw m' ty.
+
 Definition rewrite_fields
     (rw : rewrite_metadata -> flambda_type -> flambda_type)
     (m : rewrite_metadata) (tys : list flambda_type) : list flambda_type :=
-  map (fun p => rw (block_slot m (fst p) (snd p)) (snd p))
+  map (fun p => rewrite_field rw m (fst p) (snd p))
     (combine (seq 0 (length tys)) tys).
 
 (* [rewrite_row_like_for_blocks]: the fields of each case, the
@@ -1193,7 +1223,10 @@ Variable tenv : Typing_env.t.
    [rw] reaches. *)
 Definition reached_fields (rw : rewrite_metadata -> flambda_type -> list reach)
     (m : rewrite_metadata) (tys : list flambda_type) : list reach :=
-  flat_map (fun p => rw (block_slot ctx m (fst p) (snd p)) (snd p))
+  flat_map
+    (fun p =>
+       let m' := block_slot ctx m (fst p) (snd p) in
+       if deleted_field fx m' then [] else rw m' (snd p))
     (combine (seq 0 (length tys)) tys).
 
 Definition reached_row_like_for_blocks

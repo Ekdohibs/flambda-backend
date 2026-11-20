@@ -467,6 +467,17 @@ Proof.
            (unit_of_values_exits e Hvals)).
 Qed.
 
+Theorem types_end_to_end_term_landed : types_end_to_end_term_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+    Hvals.
+  exact (exported_types_sound_end_to_end_landed flag is_local u e T b sets
+           tenv canon valuation valuation' n s k vs hp rd sym allocated Hlocal
+           Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+           (unit_of_values_exits e Hvals)).
+Qed.
+
 Theorem unaliased_types_end_to_end_term :
   unaliased_types_end_to_end_term_statement.
 Proof.
@@ -476,6 +487,18 @@ Proof.
   exact (exported_unaliased_types_sound_end_to_end flag is_local u e T b sets
            tenv canon valuation valuation' n s k vs hp rd sym allocated Hlocal
            Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+           (unit_of_values_exits e Hvals)).
+Qed.
+
+Theorem unaliased_types_end_to_end_term_landed :
+  unaliased_types_end_to_end_term_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+    Hvals.
+  exact (exported_unaliased_types_sound_end_to_end_landed flag is_local u e T
+           b sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hslots Hfrag Hdc Hrk Hwf Hexits Hleast Honce
            (unit_of_values_exits e Hvals)).
 Qed.
 
@@ -507,12 +530,34 @@ Proof.
            Hdc Hrk Hwf Hexits Hleast Honce (unit_of_values_exits e Hvals)).
 Qed.
 
+Theorem types_end_to_end_term_local_landed :
+  types_end_to_end_term_local_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals.
+  exact (exported_types_sound_end_to_end_local_landed flag is_local u e T b
+           sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+           (unit_of_values_exits e Hvals)).
+Qed.
+
 Theorem unaliased_types_end_to_end_term_local :
   unaliased_types_end_to_end_term_local_statement.
 Proof.
   intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
     hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals.
   exact (exported_unaliased_types_sound_end_to_end_local flag is_local u e T b
+           sets tenv canon valuation valuation' n s k vs hp rd sym allocated
+           Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce
+           (unit_of_values_exits e Hvals)).
+Qed.
+
+Theorem unaliased_types_end_to_end_term_local_landed :
+  unaliased_types_end_to_end_term_local_landed_statement.
+Proof.
+  intros flag is_local u e T b sets tenv canon valuation valuation' n s k vs
+    hp rd sym allocated Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce Hvals.
+  exact (exported_unaliased_types_end_to_end_local_landed flag is_local u e T b
            sets tenv canon valuation valuation' n s k vs hp rd sym allocated
            Hlocal Hfrag Hdc Hrk Hwf Hexits Hleast Honce
            (unit_of_values_exits e Hvals)).

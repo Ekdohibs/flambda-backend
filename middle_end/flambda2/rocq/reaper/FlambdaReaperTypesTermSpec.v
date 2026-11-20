@@ -79,7 +79,9 @@
      (of [exported_types_sound_end_to_end_statement]),
      [unaliased_types_end_to_end_term_statement]
      (of [exported_unaliased_types_sound_end_to_end_statement]), and
-     each with [_local] (of the statement with [_local]).
+     each with [_local] (of the statement with [_local]). Those of types
+     each with [_landed], for the fixes to land
+     (FlambdaReaperTypes.landed_fixes).
 
    What is left out: static blocks whose fields are not all values. The
    compiler reads a static block at its shape, which the model has not
@@ -215,7 +217,7 @@ Definition exit_relation_whole_term_statement : Prop :=
          preserve_direct_calls e).
 
 (* [exported_types_sound_end_to_end_statement] of FlambdaReaperTypesSpec.v. *)
-Definition types_end_to_end_term_statement : Prop :=
+Definition types_end_to_end_term_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -249,13 +251,19 @@ Definition types_end_to_end_term_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
 
+Definition types_end_to_end_term_statement : Prop :=
+  types_end_to_end_term_with all_fixes.
+
+Definition types_end_to_end_term_landed_statement : Prop :=
+  types_end_to_end_term_with landed_fixes.
+
 (* [exported_unaliased_types_sound_end_to_end_statement]
    of FlambdaReaperTypesSpec.v. *)
-Definition unaliased_types_end_to_end_term_statement : Prop :=
+Definition unaliased_types_end_to_end_term_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -289,9 +297,15 @@ Definition unaliased_types_end_to_end_term_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition unaliased_types_end_to_end_term_statement : Prop :=
+  unaliased_types_end_to_end_term_with all_fixes.
+
+Definition unaliased_types_end_to_end_term_landed_statement : Prop :=
+  unaliased_types_end_to_end_term_with landed_fixes.
 
 (* ======================================================================== *)
 (* Local fields                                                             *)
@@ -339,7 +353,7 @@ Definition exit_relation_whole_term_local_statement : Prop :=
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e).
 
-Definition types_end_to_end_term_local_statement : Prop :=
+Definition types_end_to_end_term_local_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -372,11 +386,17 @@ Definition types_end_to_end_term_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
 
-Definition unaliased_types_end_to_end_term_local_statement : Prop :=
+Definition types_end_to_end_term_local_statement : Prop :=
+  types_end_to_end_term_local_with all_fixes.
+
+Definition types_end_to_end_term_local_landed_statement : Prop :=
+  types_end_to_end_term_local_with landed_fixes.
+
+Definition unaliased_types_end_to_end_term_local_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -409,6 +429,12 @@ Definition unaliased_types_end_to_end_term_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition unaliased_types_end_to_end_term_local_statement : Prop :=
+  unaliased_types_end_to_end_term_local_with all_fixes.
+
+Definition unaliased_types_end_to_end_term_local_landed_statement : Prop :=
+  unaliased_types_end_to_end_term_local_with landed_fixes.

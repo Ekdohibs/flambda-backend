@@ -48,7 +48,8 @@
      FlambdaReaperTypesTraversalSpec.changed_type_sound_traversal_statement
      without [closures_unaliased]: the closure types of a set whose
      representation changes are rewritten soundly, for the graph of the
-     traversal of such a unit. *)
+     traversal of such a unit. [changed_type_sound_full_landed_statement]:
+     the same for the fixes to land (FlambdaReaperTypes.landed_fixes). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -76,7 +77,7 @@ Definition closures_unaliased_traversal_statement : Prop :=
 
 (* FlambdaReaperTypesTraversalSpec.changed_type_sound_traversal_statement
    without [closures_unaliased] of the graph. *)
-Definition changed_type_sound_full_statement : Prop :=
+Definition changed_type_sound_full_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
@@ -116,7 +117,7 @@ Definition changed_type_sound_full_statement : Prop :=
       n v_mid v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary_u all_fixes
+      (rewrite_arbitrary_u fx
          (Rewrite_context (traverse_unit Auto u e) T is_local sets
             (map fst
                (FlambdaReaperUnboxing.unit_changed_representations is_local
@@ -125,3 +126,9 @@ Definition changed_type_sound_full_statement : Prop :=
          (FlambdaReaperUnboxing.unit_changed_representations is_local
             (traverse_unit Auto u e) T dominated to_unbox tcr e)
          fuel m t).
+
+Definition changed_type_sound_full_statement : Prop :=
+  changed_type_sound_full_with all_fixes.
+
+Definition changed_type_sound_full_landed_statement : Prop :=
+  changed_type_sound_full_with landed_fixes.

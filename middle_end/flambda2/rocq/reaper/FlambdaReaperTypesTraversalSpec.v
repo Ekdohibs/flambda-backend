@@ -85,6 +85,9 @@
      [rewrite_changed_type_sound_traversal_statement] with
      [block_fields_of_one_kind] discharged, and [closures_unaliased] of
      the graph asked in place of [changed_closures_one_allocation].
+   - [rewrite_changed_type_sound_traversal_landed_statement] and
+     [changed_type_sound_traversal_landed_statement]: the two for the
+     fixes to land (FlambdaReaperTypes.landed_fixes).
    - [changed_unstored_counterexample_statement]: [changed_unstored] does
      not follow from the tables. In [StoredExample], a unit of the
      premises of the statements, the closure [x60] is stored in a block,
@@ -262,7 +265,7 @@ Definition closures_unaliased_examples_statement : Prop :=
    traversal of a unit [e] of the flow fragment, well formed and binding
    each variable once: [function_slots_mutual] holds, and
    [reprs_of_sets] follows from [changed_closures_one_allocation]. *)
-Definition rewrite_changed_type_sound_traversal_statement : Prop :=
+Definition rewrite_changed_type_sound_traversal_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
@@ -305,7 +308,7 @@ Definition rewrite_changed_type_sound_traversal_statement : Prop :=
       n v_mid v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary_u all_fixes
+      (rewrite_arbitrary_u fx
          (Rewrite_context (traverse_unit Auto u e) T is_local sets
             (map fst
                (FlambdaReaperUnboxing.unit_changed_representations is_local
@@ -315,11 +318,17 @@ Definition rewrite_changed_type_sound_traversal_statement : Prop :=
             (traverse_unit Auto u e) T dominated to_unbox tcr e)
          fuel m t).
 
+Definition rewrite_changed_type_sound_traversal_statement : Prop :=
+  rewrite_changed_type_sound_traversal_with all_fixes.
+
+Definition rewrite_changed_type_sound_traversal_landed_statement : Prop :=
+  rewrite_changed_type_sound_traversal_with landed_fixes.
+
 (* [rewrite_changed_type_sound_traversal_statement] with
    [block_fields_of_one_kind] discharged, and [closures_unaliased], a
    condition on the graph, in place of [changed_closures_one_allocation],
    a condition on the solution. *)
-Definition changed_type_sound_traversal_statement : Prop :=
+Definition changed_type_sound_traversal_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
@@ -360,7 +369,7 @@ Definition changed_type_sound_traversal_statement : Prop :=
       n v_mid v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary_u all_fixes
+      (rewrite_arbitrary_u fx
          (Rewrite_context (traverse_unit Auto u e) T is_local sets
             (map fst
                (FlambdaReaperUnboxing.unit_changed_representations is_local
@@ -369,6 +378,12 @@ Definition changed_type_sound_traversal_statement : Prop :=
          (FlambdaReaperUnboxing.unit_changed_representations is_local
             (traverse_unit Auto u e) T dominated to_unbox tcr e)
          fuel m t).
+
+Definition changed_type_sound_traversal_statement : Prop :=
+  changed_type_sound_traversal_with all_fixes.
+
+Definition changed_type_sound_traversal_landed_statement : Prop :=
+  changed_type_sound_traversal_with landed_fixes.
 
 (* ======================================================================== *)
 (* A changed closure stored in a block                                      *)

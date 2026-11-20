@@ -276,8 +276,9 @@
      the fix are corollaries.
    - [boxed_fix_needed_statement] and [alias_fix_needed_statement]: the
      first statement is false without the fix of a boxed number whose
-     contents have no use, and without that of the aliases under a
-     metadata that forgets; [compiler_rewrite_unsound_statement]: so it
+     contents have no use, and without both fixes of the aliases (under
+     a metadata that forgets, [fix_alias]; of deleted fields,
+     [fix_deleted_field]); [compiler_rewrite_unsound_statement]: so it
      is false of the compiler's rewriting. Each is a counterexample on a
      small graph whose least solution passes the checks of
      FlambdaReaperSolution.v. The program of the second, compiled from
@@ -289,6 +290,36 @@
      it the type of the box, which the rebuild makes poison (compiled
      from OCaml, [-flambda2-result-types-all-functions] exports such a
      result type; no use of it was found that goes wrong).
+   - The statements with the fixes to land ([landed_fixes]: the fix
+     proposed for the aliases of deleted fields in place of
+     [fix_alias]): [rewrite_type_sound_landed_statement],
+     [rewrite_symbol_type_sound_landed_statement],
+     [exported_types_sound_landed_statement],
+     [exported_types_sound_end_to_end_landed_statement],
+     [rewrite_result_type_sound_landed_statement],
+     [rewrite_unboxed_result_type_sound_landed_statement] and
+     [rewrite_keeps_null_landed_statement], those of the same names
+     without [_landed] with these fixes. No fault: the rebuild changes
+     what a position of a type holds only at a field of a block that no
+     use reads, where [follow_field] gives
+     [At_least_one_source_no_usages] and the fix forgets the field, at
+     the contents of a boxed number, which [fix_boxed] forgets, and at a
+     value slot that no closure of the set uses, which the rewriting
+     drops; elsewhere an alias under a metadata that forgets is to a
+     constant or a symbol that the rebuild keeps there, and its copy
+     holds. [deleted_field_example_statement]: the block type of the
+     counterexample of the aliases, rewritten with these fixes, has both
+     fields unknown; with neither fix of the aliases, both are aliases to
+     the symbol. Each other statement stated with every fix
+     ([all_fixes]), of the fragment [loose], with local fields, of
+     closures whose representation changes, or an example, has one for
+     these fixes, of its name with [_landed], but three, shortened:
+     [unaliased_unboxed_result_type_sound_landed_statement] and
+     [unaliased_unboxed_result_type_sound_local_landed_statement] (of
+     [rewrite_unaliased_unboxed_result_type_sound_statement] and that
+     with [_local]), and
+     [exported_unaliased_types_end_to_end_local_landed_statement]. Their
+     proofs take either fix of the aliases.
    - [refine_fix_needed_statement]: the first statement is false without
      the fix of [refine_sets_of_closures], on a closure type of the
      closure of one of two copies of a set of closures, with local value
@@ -866,8 +897,9 @@ Definition rewrite_type_sound_statement : Prop :=
   rewrite_type_sound_with all_fixes.
 
 (* The type of a symbol, rewritten as the rewriting of the environment
-   rewrites it, holds of the symbol in the second run. *)
-Definition rewrite_symbol_type_sound_statement : Prop :=
+   rewrites it, holds of the symbol in the second run; with the fixes
+   [fx]. *)
+Definition rewrite_symbol_type_sound_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -883,13 +915,15 @@ Definition rewrite_symbol_type_sound_statement : Prop :=
     copies_valued tenv canon valuation valuation' ->
     lookup s (static_values statics) = Some allocated ->
     type_satisfied statics' valuation' (Value_symbol s)
-      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
-         canon s).
+      (rewrite_symbol_type fx (plain_context is_local F T sets) tenv canon s).
+
+Definition rewrite_symbol_type_sound_statement : Prop :=
+  rewrite_symbol_type_sound_with all_fixes.
 
 (* The first statement for the types whose closure types need not be
    aliases ([type_in_fragment_with true], of every type of the
    environment too), the static sets of closures being kept whole. *)
-Definition rewrite_unaliased_type_sound_statement : Prop :=
+Definition rewrite_unaliased_type_sound_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -908,11 +942,17 @@ Definition rewrite_unaliased_type_sound_statement : Prop :=
     rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_arbitrary fx (plain_context is_local F T sets) tenv
          canon fuel m t).
 
+Definition rewrite_unaliased_type_sound_statement : Prop :=
+  rewrite_unaliased_type_sound_with all_fixes.
+
+Definition rewrite_unaliased_type_sound_landed_statement : Prop :=
+  rewrite_unaliased_type_sound_with landed_fixes.
+
 (* The second statement for those types. *)
-Definition rewrite_unaliased_symbol_type_sound_statement : Prop :=
+Definition rewrite_unaliased_symbol_type_sound_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -929,8 +969,14 @@ Definition rewrite_unaliased_symbol_type_sound_statement : Prop :=
     copies_valued tenv canon valuation valuation' ->
     lookup s (static_values statics) = Some allocated ->
     type_satisfied statics' valuation' (Value_symbol s)
-      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_symbol_type fx (plain_context is_local F T sets) tenv
          canon s).
+
+Definition rewrite_unaliased_symbol_type_sound_statement : Prop :=
+  rewrite_unaliased_symbol_type_sound_with all_fixes.
+
+Definition rewrite_unaliased_symbol_type_sound_landed_statement : Prop :=
+  rewrite_unaliased_symbol_type_sound_with landed_fixes.
 
 (* The type that the result types of code give a parameter or a result,
    [type_var], which holds of its value [v] in the first run (the
@@ -966,7 +1012,7 @@ Definition rewrite_result_type_sound_statement : Prop :=
 (* [rewrite_result_type_sound_statement] for the types whose closure
    types need not be aliases, the static sets of closures being kept
    whole. *)
-Definition rewrite_unaliased_result_type_sound_statement : Prop :=
+Definition rewrite_unaliased_result_type_sound_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -986,8 +1032,14 @@ Definition rewrite_unaliased_result_type_sound_statement : Prop :=
     rebuilt_value (graph_of_facts F) (solution_of_tables T) v
       (Node_variable code_var) v' ->
     type_satisfied statics' valuation' v'
-      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_result_type fx (plain_context is_local F T sets) tenv
          canon code_var type_var).
+
+Definition rewrite_unaliased_result_type_sound_statement : Prop :=
+  rewrite_unaliased_result_type_sound_with all_fixes.
+
+Definition rewrite_unaliased_result_type_sound_landed_statement : Prop :=
+  rewrite_unaliased_result_type_sound_with landed_fixes.
 
 (* The field [f] of a value: a field of a block, or the contents of a
    boxed number (as FlambdaReaperUnboxingRefinesProofs.field_value). *)
@@ -1086,7 +1138,8 @@ Definition rewrite_unboxed_result_type_sound_statement : Prop :=
 (* [rewrite_unboxed_result_type_sound_statement] for the types whose
    closure types need not be aliases, the static sets of closures being
    kept whole. *)
-Definition rewrite_unaliased_unboxed_result_type_sound_statement : Prop :=
+Definition rewrite_unaliased_unboxed_result_type_sound_with
+    (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
@@ -1118,9 +1171,15 @@ Definition rewrite_unaliased_unboxed_result_type_sound_statement : Prop :=
       (Node_variable code_var) v_mid ->
     unboxed_values fields v_mid ws ->
     Forall2 (type_satisfied statics' valuation') ws
-      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
+      (rewrite_unboxed_result_type fx (plain_context is_local F T sets)
          tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
          type_var fields).
+
+Definition rewrite_unaliased_unboxed_result_type_sound_statement : Prop :=
+  rewrite_unaliased_unboxed_result_type_sound_with all_fixes.
+
+Definition unaliased_unboxed_result_type_sound_landed_statement : Prop :=
+  rewrite_unaliased_unboxed_result_type_sound_with landed_fixes.
 
 (* ======================================================================== *)
 (* Closures whose representation changes                                    *)
@@ -1246,18 +1305,18 @@ End ChangedExample.
    of the code 52 with [= 7] at 81, where [rewrite_arbitrary] forgets it;
    it holds of [closure'], which the two rebuilds relate to [closure], of
    which the type holds. *)
-Definition changed_example_statement : Prop :=
+Definition changed_example_with (fx : fixes) : Prop :=
   ChangedExample.reprs
   = [(ChangedExample.x60, FlambdaReaperUnboxing.Examples.block_in_slot_repr);
      (Node_made 5%positive,
       FlambdaReaperUnboxing.Examples.block_in_slot_repr);
      (Node_variable 41%positive,
       FlambdaReaperUnboxing.Examples.block_in_slot_repr)]
-  ∧ rewrite_arbitrary_u all_fixes ChangedExample.context Typing_env.create
+  ∧ rewrite_arbitrary_u fx ChangedExample.context Typing_env.create
       (fun n _ _ => n) ChangedExample.code_my_closures ChangedExample.reprs
       6 (Single_source ChangedExample.x60) ChangedExample.closure_type
     = ChangedExample.rewritten
-  ∧ rewrite_arbitrary all_fixes ChangedExample.context Typing_env.create
+  ∧ rewrite_arbitrary fx ChangedExample.context Typing_env.create
       (fun n _ _ => n) 6 (Single_source ChangedExample.x60)
       ChangedExample.closure_type
     = unknown Value
@@ -1272,6 +1331,12 @@ Definition changed_example_statement : Prop :=
       ChangedExample.closure_mid ChangedExample.closure'
   ∧ type_satisfied empty_static_env [] ChangedExample.closure'
       ChangedExample.rewritten.
+
+Definition changed_example_statement : Prop :=
+  changed_example_with all_fixes.
+
+Definition changed_example_landed_statement : Prop :=
+  changed_example_with landed_fixes.
 
 (* No allocation holds a closure whose representation changes ([reprs])
    in a field other than a function slot: in a block, a value slot or
@@ -1350,7 +1415,7 @@ Definition changed_at (sol : solution)
    ([changed_unstored]), and of the representations that they be those
    of sets ([reprs_of_sets]) and keep no value slot
    ([reprs_without_slots]). *)
-Definition rewrite_changed_type_sound_statement : Prop :=
+Definition rewrite_changed_type_sound_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
@@ -1386,7 +1451,7 @@ Definition rewrite_changed_type_sound_statement : Prop :=
       n v_mid v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary_u all_fixes
+      (rewrite_arbitrary_u fx
          (Rewrite_context F T is_local sets
             (map fst
                (FlambdaReaperUnboxing.unit_changed_representations is_local F
@@ -1395,6 +1460,12 @@ Definition rewrite_changed_type_sound_statement : Prop :=
          (FlambdaReaperUnboxing.unit_changed_representations is_local F T
             dominated to_unbox tcr e)
          fuel m t).
+
+Definition rewrite_changed_type_sound_statement : Prop :=
+  rewrite_changed_type_sound_with all_fixes.
+
+Definition rewrite_changed_type_sound_landed_statement : Prop :=
+  rewrite_changed_type_sound_with landed_fixes.
 
 (* A node that holds a closure at a function slot is held by it at one:
    the closures of a set hold one another, as the traversal of a set
@@ -1417,7 +1488,7 @@ Definition function_slots_mutual (G : graph) : Prop :=
    [rewrite_unboxed_result_type_sound_statement] on the graph and the
    uses of the names unboxed ([block_fields_of_one_kind],
    [check_unboxed_uses]). *)
-Definition rewrite_changed_type_sound_slots_statement : Prop :=
+Definition rewrite_changed_type_sound_slots_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
@@ -1457,7 +1528,7 @@ Definition rewrite_changed_type_sound_slots_statement : Prop :=
       n v_mid v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary_u all_fixes
+      (rewrite_arbitrary_u fx
          (Rewrite_context F T is_local sets
             (map fst
                (FlambdaReaperUnboxing.unit_changed_representations is_local F
@@ -1466,6 +1537,12 @@ Definition rewrite_changed_type_sound_slots_statement : Prop :=
          (FlambdaReaperUnboxing.unit_changed_representations is_local F T
             dominated to_unbox tcr e)
          fuel m t).
+
+Definition rewrite_changed_type_sound_slots_statement : Prop :=
+  rewrite_changed_type_sound_slots_with all_fixes.
+
+Definition rewrite_changed_type_sound_slots_landed_statement : Prop :=
+  rewrite_changed_type_sound_slots_with landed_fixes.
 
 (* ======================================================================== *)
 (* The two runs                                                             *)
@@ -1514,8 +1591,8 @@ Definition exits_of_values (e : expr) : Prop :=
    whose static environment and a valuation satisfy a typing environment
    of the fragment, the rebuilt unit exits through the same continuation,
    and the type of each symbol bound, rewritten, holds of the symbol
-   there, given [rebuild_exit_relation]. *)
-Definition exported_types_sound_statement : Prop :=
+   there, given [rebuild_exit_relation]; with the fixes [fx]. *)
+Definition exported_types_sound_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -1545,9 +1622,12 @@ Definition exported_types_sound_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_types_sound_statement : Prop :=
+  exported_types_sound_with all_fixes.
 
 (* [rebuild_exit_relation], with the static sets of closures kept whole
    in the static environments of the two exits ([static_sets_whole]):
@@ -1569,7 +1649,7 @@ Definition rebuild_exit_relation_whole (G : graph) (sol : solution)
 (* The statement of the two runs for the types whose closure types need
    not be aliases ([env_in_fragment_with true]), given
    [rebuild_exit_relation_whole]. *)
-Definition exported_unaliased_types_sound_statement : Prop :=
+Definition exported_unaliased_types_sound_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -1599,9 +1679,15 @@ Definition exported_unaliased_types_sound_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_unaliased_types_sound_statement : Prop :=
+  exported_unaliased_types_sound_with all_fixes.
+
+Definition exported_unaliased_types_sound_landed_statement : Prop :=
+  exported_unaliased_types_sound_with landed_fixes.
 
 (* ======================================================================== *)
 (* The fixes that are needed                                                *)
@@ -1767,21 +1853,38 @@ Definition valuation : env := [(20%positive, BoxedCounterexample.boxed)].
 End BoxedResultCounterexample.
 
 Definition boxed_fix_needed_statement : Prop :=
-  ~ rewrite_type_sound_with (Fixes false true true true).
+  ~ rewrite_type_sound_with (Fixes false true true true true).
 
 Definition alias_fix_needed_statement : Prop :=
-  ~ rewrite_type_sound_with (Fixes true false true true).
+  ~ rewrite_type_sound_with (Fixes true false true true false).
+
+(* The block type of that counterexample, rewritten: with the fixes to
+   land, the fields of no use are of the unknown type; with neither fix
+   of the aliases, they are aliases to [s50]. *)
+Definition deleted_field_example_statement : Prop :=
+  let context :=
+    plain_context AliasCounterexample.is_local AliasCounterexample.graph
+      AliasCounterexample.solution []
+  in
+  rewrite_arbitrary landed_fixes context Typing_env.create (fun n _ _ => n) 5
+    AliasCounterexample.metadata AliasCounterexample.block_type
+  = immutable_block false 0%Z (Scannable Value_only) Alloc_mode.Heap
+      [unknown Value; unknown Value]
+  ∧ rewrite_arbitrary (Fixes true false true true false) context
+      Typing_env.create (fun n _ _ => n) 5 AliasCounterexample.metadata
+      AliasCounterexample.block_type
+    = AliasCounterexample.block_type.
 
 Definition compiler_rewrite_unsound_statement : Prop :=
   ~ rewrite_type_sound_with compiler_fixes.
 
 Definition boxed_result_fix_needed_statement : Prop :=
-  ~ rewrite_result_type_sound_with (Fixes false true true true).
+  ~ rewrite_result_type_sound_with (Fixes false true true true true).
 
 (* Without the fix of [refine_sets_of_closures], the fix proposed for
    the rewriting of types, the first statement is false. *)
 Definition refine_fix_needed_statement : Prop :=
-  ~ rewrite_type_sound_with (Fixes true true false true).
+  ~ rewrite_type_sound_with (Fixes true true false true true).
 
 (* The closure type of that counterexample, rewritten: with the fixes,
    the type of a closure at the slot 70; without the fix of
@@ -1795,8 +1898,24 @@ Definition refine_example_statement : Prop :=
   rewrite_arbitrary all_fixes context Typing_env.create (fun n _ _ => n) 5
     RefineCounterexample.metadata RefineCounterexample.closure_type
   = at_least_this_closure 70%positive [] [] [] Alloc_mode.Heap
-  ∧ rewrite_arbitrary (Fixes true true false true) context Typing_env.create
-      (fun n _ _ => n) 5 RefineCounterexample.metadata
+  ∧ rewrite_arbitrary (Fixes true true false true true) context
+      Typing_env.create (fun n _ _ => n) 5 RefineCounterexample.metadata
+      RefineCounterexample.closure_type
+    = at_least_this_closure 70%positive [] []
+        [(1%positive, unknown Value)] Alloc_mode.Heap.
+
+(* The same with the fixes to land, and with those but the fix of
+   [refine_sets_of_closures]. *)
+Definition refine_example_landed_statement : Prop :=
+  let context :=
+    plain_context RefineCounterexample.is_local RefineCounterexample.graph
+      RefineCounterexample.solution RefineCounterexample.sets
+  in
+  rewrite_arbitrary landed_fixes context Typing_env.create (fun n _ _ => n) 5
+    RefineCounterexample.metadata RefineCounterexample.closure_type
+  = at_least_this_closure 70%positive [] [] [] Alloc_mode.Heap
+  ∧ rewrite_arbitrary (Fixes true false false true true) context
+      Typing_env.create (fun n _ _ => n) 5 RefineCounterexample.metadata
       RefineCounterexample.closure_type
     = at_least_this_closure 70%positive [] []
         [(1%positive, unknown Value)] Alloc_mode.Heap.
@@ -1865,7 +1984,35 @@ End NullCounterexample.
 (* Without the fix of the nullability of closure types, the statement is
    false: so it is of the compiler. *)
 Definition null_fix_needed_statement : Prop :=
-  ~ rewrite_keeps_null_with (Fixes true true true false).
+  ~ rewrite_keeps_null_with (Fixes true true true false true).
+
+(* ======================================================================== *)
+(* The fixes to land                                                        *)
+(* ======================================================================== *)
+
+(* With the fix proposed for the aliases of deleted fields in place of
+   [fix_alias] ([landed_fixes]), the statements hold: of a type, of the
+   type of a symbol, of the types of the two runs (with and without the
+   premise on the runs), of a result type, of the result types of an
+   unboxed variable, and of [Null]. The other statements with [_landed]
+   are next to those of every fix. *)
+Definition rewrite_type_sound_landed_statement : Prop :=
+  rewrite_type_sound_with landed_fixes.
+
+Definition rewrite_symbol_type_sound_landed_statement : Prop :=
+  rewrite_symbol_type_sound_with landed_fixes.
+
+Definition exported_types_sound_landed_statement : Prop :=
+  exported_types_sound_with landed_fixes.
+
+Definition rewrite_result_type_sound_landed_statement : Prop :=
+  rewrite_result_type_sound_with landed_fixes.
+
+Definition rewrite_unboxed_result_type_sound_landed_statement : Prop :=
+  rewrite_unboxed_result_type_sound_with landed_fixes.
+
+Definition rewrite_keeps_null_landed_statement : Prop :=
+  rewrite_keeps_null_with landed_fixes.
 
 (* ======================================================================== *)
 (* An example                                                               *)
@@ -1932,24 +2079,30 @@ End RewriteExample.
 (* The least solution passes the check of closure, and the rewriting
    gives [s50] the type of the blocks of two fields, [= 7] and unknown,
    and [s51] the unknown type. *)
-Definition example_statement : Prop :=
+Definition example_with (fx : fixes) : Prop :=
   check_closed RewriteExample.is_local RewriteExample.graph
     RewriteExample.solution = true
-  ∧ rewrite_typing_env all_fixes RewriteExample.context RewriteExample.tenv
+  ∧ rewrite_typing_env fx RewriteExample.context RewriteExample.tenv
     = [(Name_symbol 50%positive, RewriteExample.rewritten_s50);
        (Name_symbol 51%positive, unknown Value)].
+
+Definition example_statement : Prop :=
+  example_with all_fixes.
+
+Definition example_landed_statement : Prop :=
+  example_with landed_fixes.
 
 (* The result types of code that returns the box of
    [BoxedCounterexample], kept: the new parameter [x21] is an alias to the
    copy of [x20], whose type is forgotten to that of a value that is not
    null; the compiler keeps the type of the box, which the rebuild makes
    poison. *)
-Definition result_types_example_statement : Prop :=
+Definition result_types_example_with (fx : fixes) : Prop :=
   let context :=
     plain_context BoxedCounterexample.is_local BoxedCounterexample.graph
       BoxedCounterexample.solution []
   in
-  rewrite_result_types all_fixes context BoxedResultCounterexample.tenv
+  rewrite_result_types fx context BoxedResultCounterexample.tenv
     [(10%positive, Keep, 20%positive)] []
   = Rewritten_result_types [21%positive] [] [20%positive]
       [(Name_var 21%positive, alias_type_of Value (Var 20%positive));
@@ -1960,6 +2113,12 @@ Definition result_types_example_statement : Prop :=
          [])
     = [(Name_var 21%positive, alias_type_of Value (Var 20%positive));
        (Name_var 20%positive, BoxedCounterexample.boxed_type)].
+
+Definition result_types_example_statement : Prop :=
+  result_types_example_with all_fixes.
+
+Definition result_types_example_landed_statement : Prop :=
+  result_types_example_with landed_fixes.
 
 (* ======================================================================== *)
 (* The exit relation and the rebuild                                        *)
@@ -2149,8 +2308,8 @@ Definition rebuild_exit_relation_holds_statement : Prop :=
    where the unit exits from a state whose static environment and a
    valuation satisfy a typing environment of the fragment, the rebuilt
    unit exits through the same continuation, and the type of each symbol
-   bound, rewritten, holds of the symbol there. *)
-Definition exported_types_sound_end_to_end_statement : Prop :=
+   bound, rewritten, holds of the symbol there; with the fixes [fx]. *)
+Definition exported_types_sound_end_to_end_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2184,9 +2343,16 @@ Definition exported_types_sound_end_to_end_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_types_sound_end_to_end_statement : Prop :=
+  exported_types_sound_end_to_end_with all_fixes.
+
+(* With the fixes to land (the section The fixes to land). *)
+Definition exported_types_sound_end_to_end_landed_statement : Prop :=
+  exported_types_sound_end_to_end_with landed_fixes.
 
 (* [rebuild_exit_relation_whole] holds under the premises of
    [rebuild_exit_relation_holds_statement]. The rebuild keeps or removes
@@ -2219,7 +2385,7 @@ Definition rebuild_exit_relation_whole_holds_statement : Prop :=
    but [exits_of_values], for a unit of the premises of
    [rebuild_exit_relation_whole_holds_statement] and the least solution
    of its graph, as [exported_types_sound_end_to_end_statement]. *)
-Definition exported_unaliased_types_sound_end_to_end_statement : Prop :=
+Definition exported_unaliased_types_sound_end_to_end_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2253,9 +2419,15 @@ Definition exported_unaliased_types_sound_end_to_end_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_unaliased_types_sound_end_to_end_statement : Prop :=
+  exported_unaliased_types_sound_end_to_end_with all_fixes.
+
+Definition exported_unaliased_types_sound_end_to_end_landed_statement : Prop :=
+  exported_unaliased_types_sound_end_to_end_with landed_fixes.
 
 (* ======================================================================== *)
 (* Local fields                                                             *)
@@ -2280,7 +2452,7 @@ Definition exported_unaliased_types_sound_end_to_end_statement : Prop :=
 
 (* The statements of a graph and its tables, for a least solution of the
    rules with the fix. *)
-Definition rewrite_type_sound_local_statement : Prop :=
+Definition rewrite_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2298,10 +2470,16 @@ Definition rewrite_type_sound_local_statement : Prop :=
     rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_arbitrary fx (plain_context is_local F T sets) tenv
          canon fuel m t).
 
-Definition rewrite_symbol_type_sound_local_statement : Prop :=
+Definition rewrite_type_sound_local_statement : Prop :=
+  rewrite_type_sound_local_with all_fixes.
+
+Definition rewrite_type_sound_local_landed_statement : Prop :=
+  rewrite_type_sound_local_with landed_fixes.
+
+Definition rewrite_symbol_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2317,10 +2495,16 @@ Definition rewrite_symbol_type_sound_local_statement : Prop :=
     copies_valued tenv canon valuation valuation' ->
     lookup s (static_values statics) = Some allocated ->
     type_satisfied statics' valuation' (Value_symbol s)
-      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_symbol_type fx (plain_context is_local F T sets) tenv
          canon s).
 
-Definition rewrite_unaliased_type_sound_local_statement : Prop :=
+Definition rewrite_symbol_type_sound_local_statement : Prop :=
+  rewrite_symbol_type_sound_local_with all_fixes.
+
+Definition rewrite_symbol_type_sound_local_landed_statement : Prop :=
+  rewrite_symbol_type_sound_local_with landed_fixes.
+
+Definition rewrite_unaliased_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2339,10 +2523,16 @@ Definition rewrite_unaliased_type_sound_local_statement : Prop :=
     rebuilt_under (graph_of_facts F) (solution_of_tables T) m v v' ->
     type_satisfied statics valuation v t ->
     type_satisfied statics' valuation' v'
-      (rewrite_arbitrary all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_arbitrary fx (plain_context is_local F T sets) tenv
          canon fuel m t).
 
-Definition rewrite_unaliased_symbol_type_sound_local_statement : Prop :=
+Definition rewrite_unaliased_type_sound_local_statement : Prop :=
+  rewrite_unaliased_type_sound_local_with all_fixes.
+
+Definition rewrite_unaliased_type_sound_local_landed_statement : Prop :=
+  rewrite_unaliased_type_sound_local_with landed_fixes.
+
+Definition rewrite_unaliased_symbol_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2359,10 +2549,16 @@ Definition rewrite_unaliased_symbol_type_sound_local_statement : Prop :=
     copies_valued tenv canon valuation valuation' ->
     lookup s (static_values statics) = Some allocated ->
     type_satisfied statics' valuation' (Value_symbol s)
-      (rewrite_symbol_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_symbol_type fx (plain_context is_local F T sets) tenv
          canon s).
 
-Definition rewrite_result_type_sound_local_statement : Prop :=
+Definition rewrite_unaliased_symbol_type_sound_local_statement : Prop :=
+  rewrite_unaliased_symbol_type_sound_local_with all_fixes.
+
+Definition rewrite_unaliased_symbol_type_sound_local_landed_statement : Prop :=
+  rewrite_unaliased_symbol_type_sound_local_with landed_fixes.
+
+Definition rewrite_result_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2381,10 +2577,16 @@ Definition rewrite_result_type_sound_local_statement : Prop :=
     rebuilt_value (graph_of_facts F) (solution_of_tables T) v
       (Node_variable code_var) v' ->
     type_satisfied statics' valuation' v'
-      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_result_type fx (plain_context is_local F T sets) tenv
          canon code_var type_var).
 
-Definition rewrite_unaliased_result_type_sound_local_statement : Prop :=
+Definition rewrite_result_type_sound_local_statement : Prop :=
+  rewrite_result_type_sound_local_with all_fixes.
+
+Definition rewrite_result_type_sound_local_landed_statement : Prop :=
+  rewrite_result_type_sound_local_with landed_fixes.
+
+Definition rewrite_unaliased_result_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (tenv : Typing_env.t) (canon : canon_fn)
     (statics statics' : static_env) (valuation valuation' : env)
@@ -2404,10 +2606,16 @@ Definition rewrite_unaliased_result_type_sound_local_statement : Prop :=
     rebuilt_value (graph_of_facts F) (solution_of_tables T) v
       (Node_variable code_var) v' ->
     type_satisfied statics' valuation' v'
-      (rewrite_result_type all_fixes (plain_context is_local F T sets) tenv
+      (rewrite_result_type fx (plain_context is_local F T sets) tenv
          canon code_var type_var).
 
-Definition rewrite_unboxed_result_type_sound_local_statement : Prop :=
+Definition rewrite_unaliased_result_type_sound_local_statement : Prop :=
+  rewrite_unaliased_result_type_sound_local_with all_fixes.
+
+Definition rewrite_unaliased_result_type_sound_local_landed_statement : Prop :=
+  rewrite_unaliased_result_type_sound_local_with landed_fixes.
+
+Definition rewrite_unboxed_result_type_sound_local_with (fx : fixes) : Prop :=
   ∀ (is_local : field -> bool) (F : facts) (T : tables)
     (sets : list set_of_closures) (dominated : list (node * node))
     (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
@@ -2438,49 +2646,62 @@ Definition rewrite_unboxed_result_type_sound_local_statement : Prop :=
       (Node_variable code_var) v_mid ->
     unboxed_values fields v_mid ws ->
     Forall2 (type_satisfied statics' valuation') ws
-      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
+      (rewrite_unboxed_result_type fx (plain_context is_local F T sets)
+         tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
+         type_var fields).
+
+Definition rewrite_unboxed_result_type_sound_local_statement : Prop :=
+  rewrite_unboxed_result_type_sound_local_with all_fixes.
+
+Definition rewrite_unboxed_result_type_sound_local_landed_statement : Prop :=
+  rewrite_unboxed_result_type_sound_local_with landed_fixes.
+
+Definition rewrite_unaliased_unboxed_result_type_sound_local_with
+    (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (code_var type_var : variable)
+    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
+    (ws : list value),
+    least_solution_local is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    static_sets_whole (solution_of_tables T) statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    Keyed.lookup node_eqb (Node_variable code_var)
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = Some fields ->
+    lookup type_var valuation = Some v ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
+      (Node_variable code_var) v_mid ->
+    unboxed_values fields v_mid ws ->
+    Forall2 (type_satisfied statics' valuation') ws
+      (rewrite_unboxed_result_type fx (plain_context is_local F T sets)
          tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
          type_var fields).
 
 Definition rewrite_unaliased_unboxed_result_type_sound_local_statement : Prop :=
-  ∀ (is_local : field -> bool) (F : facts) (T : tables)
-    (sets : list set_of_closures) (dominated : list (node * node))
-    (to_unbox : list node) (e : expr) (tenv : Typing_env.t)
-    (canon : canon_fn) (statics statics' : static_env)
-    (valuation valuation' : env) (code_var type_var : variable)
-    (fields : FlambdaReaperUnboxing.unboxed_fields) (v v_mid : value)
-    (ws : list value),
-    least_solution_local is_local F T ->
-    is_local_slots_only is_local ->
-    sets_of_graph (graph_of_facts F) sets ->
-    block_fields_of_one_kind (graph_of_facts F) ->
-    typing_env_satisfied_strictly statics valuation tenv ->
-    env_in_fragment_with true valuation tenv ->
-    statics_allocated (solution_of_tables T) statics ->
-    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
-      statics' ->
-    static_sets_whole (solution_of_tables T) statics statics' ->
-    copies_valued tenv canon valuation valuation' ->
-    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
-      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
-              e))
-    = true ->
-    Keyed.lookup node_eqb (Node_variable code_var)
-      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
-              e))
-    = Some fields ->
-    lookup type_var valuation = Some v ->
-    rebuilt_value (graph_of_facts F) (solution_of_tables T) v
-      (Node_variable code_var) v_mid ->
-    unboxed_values fields v_mid ws ->
-    Forall2 (type_satisfied statics' valuation') ws
-      (rewrite_unboxed_result_type all_fixes (plain_context is_local F T sets)
-         tenv (FlambdaReaperUnboxing.bound_code_my_closures e) canon code_var
-         type_var fields).
+  rewrite_unaliased_unboxed_result_type_sound_local_with all_fixes.
+
+Definition unaliased_unboxed_result_type_sound_local_landed_statement : Prop :=
+  rewrite_unaliased_unboxed_result_type_sound_local_with landed_fixes.
 
 (* The statements of the two runs given the relation of the runs, for a
    least solution of the rules with the fix. *)
-Definition exported_types_sound_local_statement : Prop :=
+Definition exported_types_sound_local_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2510,11 +2731,17 @@ Definition exported_types_sound_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
 
-Definition exported_unaliased_types_sound_local_statement : Prop :=
+Definition exported_types_sound_local_statement : Prop :=
+  exported_types_sound_local_with all_fixes.
+
+Definition exported_types_sound_local_landed_statement : Prop :=
+  exported_types_sound_local_with landed_fixes.
+
+Definition exported_unaliased_types_sound_local_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2544,9 +2771,15 @@ Definition exported_unaliased_types_sound_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_unaliased_types_sound_local_statement : Prop :=
+  exported_unaliased_types_sound_local_with all_fixes.
+
+Definition exported_unaliased_types_sound_local_landed_statement : Prop :=
+  exported_unaliased_types_sound_local_with landed_fixes.
 
 (* The statements of the exit, with the check of the fix. *)
 Definition rebuild_exits_local_statement : Prop :=
@@ -2617,7 +2850,7 @@ Definition rebuild_exit_relation_whole_holds_local_statement : Prop :=
 
 (* The statements of the two runs with no premise on the runs, for the
    least solution of the rules with the fix. *)
-Definition exported_types_sound_end_to_end_local_statement : Prop :=
+Definition exported_types_sound_end_to_end_local_with (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2650,11 +2883,18 @@ Definition exported_types_sound_end_to_end_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
 
-Definition exported_unaliased_types_sound_end_to_end_local_statement : Prop :=
+Definition exported_types_sound_end_to_end_local_statement : Prop :=
+  exported_types_sound_end_to_end_local_with all_fixes.
+
+Definition exported_types_sound_end_to_end_local_landed_statement : Prop :=
+  exported_types_sound_end_to_end_local_with landed_fixes.
+
+Definition exported_unaliased_types_sound_end_to_end_local_with
+    (fx : fixes) : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (preserve_direct_calls : bool) (sets : list set_of_closures)
@@ -2687,6 +2927,12 @@ Definition exported_unaliased_types_sound_end_to_end_local_statement : Prop :=
       = Step t
       ∧ step t = Exit k vs' hp rd'
       ∧ type_satisfied (state_statics t) valuation' (Value_symbol sym)
-          (rewrite_symbol_type all_fixes
+          (rewrite_symbol_type fx
              (plain_context is_local (traverse_unit flag u e) T sets) tenv
              canon sym).
+
+Definition exported_unaliased_types_sound_end_to_end_local_statement : Prop :=
+  exported_unaliased_types_sound_end_to_end_local_with all_fixes.
+
+Definition exported_unaliased_types_end_to_end_local_landed_statement : Prop :=
+  exported_unaliased_types_sound_end_to_end_local_with landed_fixes.
