@@ -90,7 +90,11 @@
 
    - Where FLREAPER_WRAPPER_PREMISES is set, each unit is first said to meet, or
    not, the premises on the term of the statements of
-   FlambdaReaperWrapperDerivedSpec.v ([print_wrapper_premises]).
+   FlambdaReaperWrapperDerivedSpec.v, FlambdaReaperNeverReturnsSpec.v and
+   FlambdaReaperFixFailsSpec.v, the premise on the graph of the statements of
+   FlambdaReaperTypesTraversalSpec.v, and the premise on the graph and its
+   solution of [fix_never_fails_callees_statement] (FlambdaReaperFixFailsSpec.v)
+   ([print_wrapper_premises]).
 
    This is a test and not a proof. What is trusted: the conversion of
    flsemantics.ml (its header says what that is), and, for the comparison only,
@@ -3090,13 +3094,28 @@ let compare_least ~indent ~names ~(model_facts : Graph_spec.facts)
    FlambdaReaperWrapperDerivedSpec.v ([arm_needs_no_source_auto_derived] and the
    two after it): [conts_counted] of the continuations of the unit
    ([unit_counts]), [plain_kinds] and [in_flow_fragment], and [projection_free],
-   which they ask for where a field is local. The term is the one that the
-   model's traversal is given. The verdicts are the extracted checks; what is
-   said of where a check fails is found here, by walks that follow the
-   definitions, and is not trusted. Nothing depends on any of it. *)
+   which they ask for where a field is local. Then the checks of the term that
+   other statements ask: [keys_and_groups_ok] (FlambdaReaperNeverReturnsSpec.v),
+   [unknown_calls_have_args], [results_within_codes] and
+   [results_within_callees] (FlambdaReaperFixFailsSpec.v). Then the checks of
+   the graph of the model's traversal with [Auto], as in the statements,
+   whatever the command line says: [check_closures_unaliased]
+   (FlambdaReaperTypesTraversalSpec.v), the test of [closures_unaliased]; and
+   [callees_promised] (FlambdaReaperFixFailsSpec.v), with the solution that
+   [solve] finds for that graph; the statement asks for a least solution, which
+   this one is not checked to be. The term is the one that the model's traversal
+   is given. The verdicts are the extracted checks; what is said of where a
+   check fails is found here, by walks that follow the definitions, and is not
+   trusted. Nothing depends on any of it. *)
 
 module Flow_spec = Flambda2_rocq_semantics.FlambdaReaperFlowSpec
 module Wrapper_spec = Flambda2_rocq_semantics.FlambdaReaperWrapperSpec
+module Never_returns_spec =
+  Flambda2_rocq_semantics.FlambdaReaperNeverReturnsSpec
+module Fix_fails_spec = Flambda2_rocq_semantics.FlambdaReaperFixFailsSpec
+
+module Types_traversal_spec =
+  Flambda2_rocq_semantics.FlambdaReaperTypesTraversalSpec
 
 let wrapper_premises_wanted () =
   match Sys.getenv_opt "FLREAPER_WRAPPER_PREMISES" with
@@ -3108,6 +3127,12 @@ let continuation_shown k =
   | Some k -> Format.asprintf "%a" Continuation.print k
   | None ->
     Format.asprintf "the continuation %d of the conversion" (int_of_positive k)
+
+(* A code id by its name, as [print_node] shows it. *)
+let code_shown id =
+  match Flsemantics.Code_ids.name_of id with
+  | Some id -> Code_id.name id
+  | None -> Printf.sprintf "c%d" (int_of_positive id)
 
 let kind_shown (kind : Kinds.flambda_kind) =
   match kind with
@@ -3201,13 +3226,8 @@ let plain_kinds_failure (e : Rocq_model.expr) : string option =
     | Bind_code (id, Code (_, _, _, _, metadata, body)) -> (
       match not_plain (Rocq_model.unarize metadata.cm_result_arity) with
       | Some kind ->
-        let code =
-          match Flsemantics.Code_ids.name_of id with
-          | Some id -> Format.asprintf "%a" Code_id.print id
-          | None -> string_of_int (int_of_positive id)
-        in
         Some
-          (Printf.sprintf "the code %s has a result of kind %s" code
+          (Printf.sprintf "the code %s has a result of kind %s" (code_shown id)
              (kind_shown kind))
       | None -> expr body)
     | Bind_deleted_code _ | Bind_symbol _ -> None
@@ -3288,12 +3308,245 @@ let flow_fragment_misses (e : Rocq_model.expr) : string list =
   then miss "code ids bound twice";
   List.rev !misses
 
+(* The calls and the switches of a term, in its handlers and in the body of
+   every code it binds, as [keys_and_groups_ok] and [calls_of] walk it, each
+   with the code it is in. *)
+let calls_and_switches (e : Rocq_model.expr) : (string * Rocq_model.expr) list =
+  let rec expr place acc (e : Rocq_model.expr) =
+    match e with
+    | Let (_, _, _, body) -> expr place acc body
+    | Let_static (bindings, body) ->
+      let acc =
+        List.fold_left
+          (fun acc (binding : Rocq_model.static_binding) ->
+            match binding with
+            | Bind_code (id, Code (_, _, _, _, _, body)) ->
+              expr ("in the code " ^ code_shown id) acc body
+            | Bind_deleted_code _ | Bind_symbol _ -> acc)
+          acc bindings
+      in
+      expr place acc body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      expr place (expr place acc handler) body
+    | Let_cont_recursive (handlers, body) ->
+      let acc =
+        List.fold_left
+          (fun acc (_, Rocq_model.Handler (_, _, handler)) ->
+            expr place acc handler)
+          acc handlers
+      in
+      expr place acc body
+    | Apply _ | Switch _ -> (place, e) :: acc
+    | Apply_cont _ | Invalid -> acc
+  in
+  List.rev (expr "outside code" [] e)
+
+let simple_shown (simple : Rocq_model.simple) =
+  match simple with
+  | Var v -> Format.asprintf "%a" print_node (Graph_spec.Node_variable v)
+  | Symbol s -> Format.asprintf "%a" print_node (Graph_spec.Node_symbol s)
+  | Const _ -> "a constant"
+
+let call_shown (ap : Rocq_model.apply_expr) =
+  match ap.ap_call_kind with
+  | Direct id ->
+    Printf.sprintf "a direct call of the code %s, of %s" (code_shown id)
+      (simple_shown ap.ap_callee)
+  | Indirect_known_arity _ ->
+    Printf.sprintf "a call of known arity of %s" (simple_shown ap.ap_callee)
+  | Indirect_unknown_arity ->
+    Printf.sprintf "a call of unknown arity of %s" (simple_shown ap.ap_callee)
+
+(* The first of [failures], with the number of the others. *)
+let first_of failures =
+  match failures with
+  | [] -> None
+  | [failure] -> Some failure
+  | failure :: others ->
+    Some
+      (Printf.sprintf "%s (and %d other places)" failure (List.length others))
+
+(* Where a call of unknown arity has no group of arguments. *)
+let without_args place (ap : Rocq_model.apply_expr) =
+  match ap.ap_call_kind, ap.ap_args_arity with
+  | Indirect_unknown_arity, [] ->
+    Some
+      (Printf.sprintf "%s, %s has no group of arguments" place (call_shown ap))
+  | _, _ -> None
+
+(* The places where [unknown_calls_have_args e] fails. *)
+let unknown_calls_without_args (e : Rocq_model.expr) : string list =
+  List.filter_map
+    (fun (place, (e : Rocq_model.expr)) ->
+      match e with Apply ap -> without_args place ap | _ -> None)
+    (calls_and_switches e)
+
+(* The places where [keys_and_groups_ok e] fails. *)
+let keys_and_groups_failures (e : Rocq_model.expr) : string list =
+  List.filter_map
+    (fun (place, (e : Rocq_model.expr)) ->
+      match e with
+      | Apply ap -> without_args place ap
+      | Switch (scrutinee, arms) -> (
+        let keys = List.map (fun (key, _) -> Flsemantics.int_of_z key) arms in
+        let twice =
+          List.sort_uniq compare
+            (List.filter
+               (fun key -> List.length (List.filter (Int.equal key) keys) > 1)
+               keys)
+        in
+        match twice with
+        | [] -> None
+        | _ :: _ ->
+          Some
+            (Printf.sprintf "%s, a Switch on %s has more than one arm of %s"
+               place (simple_shown scrutinee)
+               (String.concat ", " (List.map string_of_int twice))))
+      | _ -> None)
+    (calls_and_switches e)
+
+(* The places where a call expects more results than code of the unit that
+   [callee ap id code] picks returns, with the first such code, said with
+   [which]. *)
+let results_failures ~callee ~which (e : Rocq_model.expr) : string list =
+  let codes = Flow_spec.unit_codes e in
+  let returned code = List.length (Rocq_model.code_result_kinds code) in
+  List.filter_map
+    (fun (place, (e : Rocq_model.expr)) ->
+      match e with
+      | Apply ap -> (
+        let expected = unarized_count ap.ap_return_arity in
+        match
+          List.find_opt
+            (fun (id, code) -> callee ap id code && returned code < expected)
+            codes
+        with
+        | Some (id, code) ->
+          Some
+            (Printf.sprintf
+               "%s, %s expects %d results, and the code %s%s returns %d" place
+               (call_shown ap) expected (code_shown id) which (returned code))
+        | None -> None)
+      | _ -> None)
+    (calls_and_switches e)
+
+(* The places where [results_within_codes e] fails: a call not of unknown arity,
+   with the first code of the unit that returns fewer results than it
+   expects. *)
+let results_within_codes_failures =
+  results_failures ~which:"" ~callee:(fun (ap : Rocq_model.apply_expr) _ _ ->
+      match ap.ap_call_kind with
+      | Direct _ | Indirect_known_arity _ -> true
+      | Indirect_unknown_arity -> false)
+
+(* The places where [results_within_callees e] fails: a call, with the first
+   code of the unit that it promises to call ([call_promises]) and that returns
+   fewer results than it expects. *)
+let results_within_callees_failures =
+  results_failures ~which:", which it promises to call,"
+    ~callee:Fix_fails_spec.call_promises
+
+(* Why the call [ap] does not promise to call the code [id], [code]. *)
+let unpromised_why (ap : Rocq_model.apply_expr) id code =
+  match ap.ap_call_kind, ap.ap_args_arity with
+  | Direct named, _ -> Printf.sprintf "it names the code %s" (code_shown named)
+  | Indirect_unknown_arity, _ -> "it is of unknown arity"
+  | Indirect_known_arity _, [] -> "it has no group of arguments"
+  | Indirect_known_arity (Some ids), _ :: _
+    when not (Flambda2_rocq_semantics.FlambdaMapSpec.among id ids) ->
+    "its list of code ids leaves it out"
+  | Indirect_known_arity _, _ :: _ when Rocq_model.code_is_tupled code ->
+    "the code is tupled"
+  | Indirect_known_arity _, (_ :: _ as groups) ->
+    Printf.sprintf "it has %d groups of arguments, and the code %d parameters"
+      (List.length groups)
+      (List.length (Rocq_model.code_params_arity code))
+
+(* The places where [callees_promised f t e] fails: a call, with the code of the
+   unit that the flow finds it to call ([code_id_actually_called]) and that it
+   does not promise to call. *)
+let callees_unpromised (f : Graph_spec.facts) (t : Graph_spec.tables)
+    (e : Rocq_model.expr) : string list =
+  let codes = Flow_spec.unit_codes e in
+  let solution = solution_of_tables t in
+  List.filter_map
+    (fun (place, (e : Rocq_model.expr)) ->
+      match e with
+      | Apply ap -> (
+        match Cc.code_id_actually_called f solution ap with
+        | Some id -> (
+          match
+            List.find_opt
+              (fun (id', code) ->
+                id' = id && not (Fix_fails_spec.call_promises ap id' code))
+              codes
+          with
+          | Some (_, code) ->
+            Some
+              (Printf.sprintf
+                 "%s, the flow finds that %s calls the code %s, which it does \
+                  not promise to call: %s"
+                 place (call_shown ap) (code_shown id)
+                 (unpromised_why ap id code))
+          | None -> None)
+        | None -> None)
+      | _ -> None)
+    (calls_and_switches e)
+
+(* The facts that [check_closures_unaliased] finds putting something into a
+   closure (a node held at a function slot) other than a constructor of its set
+   or a read of its function slot off a closure that holds it there. *)
+let closures_unaliased_failures (f : Graph_spec.facts) : string list =
+  let closures =
+    List.filter_map
+      (fun ((_, (field : Graph_spec.field)), closure) ->
+        match field with Field_function_slot _ -> Some closure | _ -> None)
+      f.f_constructor
+  in
+  let is_closure node = List.mem node closures in
+  let read_off_its_set closure (field : Graph_spec.field) base =
+    match field with
+    | Field_function_slot _ -> List.mem ((base, field), closure) f.f_constructor
+    | _ -> false
+  in
+  List.filter_map
+    (fun fact ->
+      let puts_into =
+        match fact with
+        | Alias (to_, _)
+        | Use (to_, _)
+        | Parameter (_, _, to_)
+        | Propagate (_, to_, _)
+        | Alias_if_any_source (_, to_, _)
+        | Any_source to_
+        | Any_source_if_used (_, to_)
+        | Zero_alloc_source to_ ->
+          is_closure to_
+        | Accessor (to_, field, base) ->
+          is_closure to_ && not (read_off_its_set to_ field base)
+        | Constructor _ | Argument _ | Any_usage _ -> false
+      in
+      if puts_into then Some (Format.asprintf "%a" print_fact fact) else None)
+    (dedup (facts_of f))
+
 let print_wrapper_premises ~filename (input : Flsemantics.converted) =
   let e = input.body in
   let counts = Wrapper_spec.unit_counts (Flsemantics.interface input) in
   let counted = Flow_spec.conts_counted counts e in
   let plain = Wrapper_spec.plain_kinds e in
   let in_fragment = Flow_spec.in_flow_fragment e in
+  let keys_and_groups = Never_returns_spec.keys_and_groups_ok e in
+  let unknown_args = Fix_fails_spec.unknown_calls_have_args e in
+  let within_codes = Fix_fails_spec.results_within_codes e in
+  let within_callees = Fix_fails_spec.results_within_callees e in
+  let facts =
+    Traversal.traverse_unit Traversal.Auto
+      (Flsemantics.interface input)
+      input.body
+  in
+  let unaliased = Types_traversal_spec.check_closures_unaliased facts in
+  let tables = solve facts in
+  let promised = Fix_fails_spec.callees_promised facts tables e in
   let region_params =
     Continuation.Map.fold
       (fun _ places n -> n + List.length (List.filter Fun.id places))
@@ -3301,11 +3554,14 @@ let print_wrapper_premises ~filename (input : Flsemantics.converted) =
   in
   Format.printf
     "%s: the premises of the wrapper: conts_counted %s, plain_kinds %s, \
-     in_flow_fragment %s, projection_free %s; parameters of kind Region \
-     dropped by the conversion: %d@."
+     in_flow_fragment %s, projection_free %s, keys_and_groups_ok %s, \
+     unknown_calls_have_args %s, results_within_codes %s, \
+     results_within_callees %s, check_closures_unaliased %s, callees_promised \
+     %s; parameters of kind Region dropped by the conversion: %d@."
     filename (passes counted) (passes plain) (passes in_fragment)
     (passes (Flow_spec.projection_free e))
-    region_params;
+    (passes keys_and_groups) (passes unknown_args) (passes within_codes)
+    (passes within_callees) (passes unaliased) (passes promised) region_params;
   let reason = function Some why -> why | None -> "no place found here" in
   if not counted
   then
@@ -3321,7 +3577,31 @@ let print_wrapper_premises ~filename (input : Flsemantics.converted) =
     Format.printf "  in_flow_fragment: %s@."
       (match flow_fragment_misses e with
       | [] -> "no place found here"
-      | misses -> String.concat "; " misses)
+      | misses -> String.concat "; " misses);
+  if not keys_and_groups
+  then
+    Format.printf "  keys_and_groups_ok: %s@."
+      (reason (first_of (keys_and_groups_failures e)));
+  if not unknown_args
+  then
+    Format.printf "  unknown_calls_have_args: %s@."
+      (reason (first_of (unknown_calls_without_args e)));
+  if not within_codes
+  then
+    Format.printf "  results_within_codes: %s@."
+      (reason (first_of (results_within_codes_failures e)));
+  if not within_callees
+  then
+    Format.printf "  results_within_callees: %s@."
+      (reason (first_of (results_within_callees_failures e)));
+  if not unaliased
+  then
+    Format.printf "  check_closures_unaliased: %s@."
+      (reason (first_of (closures_unaliased_failures facts)));
+  if not promised
+  then
+    Format.printf "  callees_promised: %s@."
+      (reason (first_of (callees_unpromised facts tables e)))
 
 (* ---- One example ------------------------------------------------------ *)
 
