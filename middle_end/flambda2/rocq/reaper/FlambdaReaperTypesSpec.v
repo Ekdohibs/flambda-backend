@@ -398,10 +398,13 @@
    - For result types, the relation of the values of the runs at a
      return of code (of the two runs, and for an unboxed variable, of
      the three).
-   - A premise on the term in place of [exits_of_values], a premise on
-     the runs: the fields of the static blocks of kind value. The check
-     of FlambdaWellKindedSpec.v asks it, among much else; the compiler
-     reads a static block at its shape, which the model has not got.
+   - Static blocks whose fields are not all values: the compiler reads a
+     static block at its shape, which the model has not got. The
+     statements take [exits_of_values], a premise on the runs;
+     FlambdaReaperTypesTermSpec.v gives it of a check of the term, the
+     fields of the static blocks of kind value ([unit_of_values], which
+     the check of FlambdaWellKindedSpec.v implies), and restates them
+     with that check in its place.
    - Unboxing: the rewriting of the types of the closures whose
      representation changes, which [rewrite_arbitrary] forgets and
      [rewrite_arbitrary_u] rewrites as the compiler does, is stated for
@@ -1497,7 +1500,8 @@ Definition rebuild_exit_relation (G : graph) (sol : solution) (e e' : expr)
         ∧ statics_rebuilt G sol (state_statics s) (state_statics t).
 
 (* Where the unit exits, its static values are of the fragment
-   ([statics_of_values]): its static blocks hold values. *)
+   ([statics_of_values]): its static blocks hold values. A check of the
+   term gives it (FlambdaReaperTypesTermSpec.unit_of_values). *)
 Definition exits_of_values (e : expr) : Prop :=
   ∀ (n : nat) (s : state) (k : continuation) (vs : list value) (hp : heap)
     (rd : read_record),
