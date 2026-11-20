@@ -1919,6 +1919,37 @@ Proof.
              to_unbox tcr Hloc Hfrag Hewf Hkg (or_introl Hleast) Hcalls).
 Qed.
 
+Theorem never_returns_local_cc : never_returns_local_cc_statement.
+Proof.
+  intros is_local u e T cannot_change dominated to_unbox pdc Hloc Hfrag Hewf
+    Hkg Hleast Hcalls Hreads.
+  destruct (LP.least_local_checks is_local _ T Hleast) as [Hclosed _].
+  apply (RCP.rebuild_unbox_fixed_refines_cc_never_returns
+           Auto is_local u e T cannot_change dominated to_unbox pdc
+           (used_never_returns (solution_of_tables T)
+              (unit_code_deps Auto u e)));
+    try assumption.
+  unfold calls_unboxing_unchecked in Hcalls. unfold calls_unboxing_nr.
+  apply andb_true_iff in Hcalls as [Hcalls Huses].
+  rewrite Huses, andb_true_r.
+  exact (unit_checked_either is_local u e T _ _ Hloc Hfrag Hewf Hkg
+           (or_intror Hleast) Hcalls).
+Qed.
+
+Theorem repr_never_returns_local_cc : repr_never_returns_local_cc_statement.
+Proof.
+  intros is_local u e T cannot_change dominated to_unbox tcr pdc Hloc Hfrag
+    Hewf Hkg Hleast Hcalls Hreads.
+  destruct (LP.least_local_checks is_local _ T Hleast) as [Hclosed _].
+  apply (RCL.rebuild_repr_fixed_refines_cc_never_returns
+           Auto is_local u e T cannot_change dominated to_unbox tcr pdc
+           (used_never_returns (solution_of_tables T)
+              (unit_code_deps Auto u e)));
+    try assumption.
+  exact (repr_unboxing_checked is_local u e T cannot_change dominated
+           to_unbox tcr Hloc Hfrag Hewf Hkg (or_intror Hleast) Hcalls).
+Qed.
+
 Theorem never_returns_derived_example :
   never_returns_derived_example_statement.
 Proof.

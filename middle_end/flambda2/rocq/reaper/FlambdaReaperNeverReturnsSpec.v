@@ -78,6 +78,10 @@
    not asked. [repr_never_returns_derived_example_statement]: the unit of
    RCS.repr_never_returns_example_statement, with its tables, meets the
    premises of the first.
+   [never_returns_local_cc_statement] and
+   [repr_never_returns_local_cc_statement]: the two [_refines_cc] forms
+   with tables that are a least solution with the fix of local fields;
+   [check_closed] is not asked.
 
    Why the return continuation [ret] of such code is not live in its body
    (FlambdaReaperDeadFramesSpec.v for the first):
@@ -567,6 +571,50 @@ Definition repr_never_returns_derived_refines_cc_statement : Prop :=
     exn_handlers_well_formed e = true ->
     keys_and_groups_ok e = true ->
     least_solution is_local (traverse_unit Auto u e) T ->
+    repr_unboxing_unchecked
+      (used_never_returns (solution_of_tables T) (unit_code_deps Auto u e))
+      is_local (traverse_unit Auto u e) T cannot_change
+      (unit_code_deps Auto u e) dominated to_unbox tcr e
+    = true ->
+    check_unboxed_reads (traverse_unit Auto u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit Auto u e) T cannot_change
+         (unit_code_deps Auto u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_repr_fixed is_local (traverse_unit Auto u e) T
+         cannot_change (unit_code_deps Auto u e) dominated to_unbox tcr
+         preserve_direct_calls e).
+
+(* The two [_refines_cc] forms with the fix of local fields. *)
+Definition never_returns_local_cc_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change : list node) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    exn_handlers_well_formed e = true ->
+    keys_and_groups_ok e = true ->
+    least_solution_local is_local (traverse_unit Auto u e) T ->
+    calls_unboxing_unchecked
+      (used_never_returns (solution_of_tables T) (unit_code_deps Auto u e))
+      (traverse_unit Auto u e) T cannot_change (unit_code_deps Auto u e)
+      dominated to_unbox e
+    = true ->
+    check_unboxed_reads (traverse_unit Auto u e) T dominated to_unbox = true ->
+    program_refines
+      (rebuild_unit_cc_from_tables (traverse_unit Auto u e) T cannot_change
+         (unit_code_deps Auto u e) preserve_direct_calls e)
+      (rebuild_unit_unbox_fixed (traverse_unit Auto u e) T cannot_change
+         (unit_code_deps Auto u e) dominated to_unbox preserve_direct_calls e).
+
+Definition repr_never_returns_local_cc_statement : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change : list node) (dominated : list (node * node))
+    (to_unbox tcr : list node) (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    exn_handlers_well_formed e = true ->
+    keys_and_groups_ok e = true ->
+    least_solution_local is_local (traverse_unit Auto u e) T ->
     repr_unboxing_unchecked
       (used_never_returns (solution_of_tables T) (unit_code_deps Auto u e))
       is_local (traverse_unit Auto u e) T cannot_change

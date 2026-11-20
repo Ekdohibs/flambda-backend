@@ -53,7 +53,20 @@
    with its return continuation at the results of the code dep
    ([unit_codes_edges]); an [Apply_cont] to it, not under a binding of it,
    aliases each result to its argument ([applies_to_edges]), so that an
-   argument with a source would give one to the result. *)
+   argument with a source would give one to the result.
+
+   Calls of unknown arity, the run only ([marked_indirect_run]): the call
+   is entered as the flow proof enters it ([call_ok]), with its return
+   continuation the renamed handler at the nodes of the results of the
+   call, rank [i] replaced by [x]. That is a continuation of the
+   invariant if nothing reaches the results of rank [i] of what the last
+   witness of the call stands for ([dead_rank], [pending_marked]). Not
+   shown here: that [never_returns_of_call] gives [call_dead_rank]. It
+   reads the witnesses of the sources of the callee; [call_dead_rank]
+   asks it of every source of the call's own witness, to which tables
+   that are only closed may give more sources. With a least solution and
+   a check of the facts, FlambdaReaperIndirectDeadFramesProofs.v shows
+   it. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -1059,3 +1072,349 @@ Proof.
     vm_compute. reflexivity.
   - repeat split; vm_compute; reflexivity.
 Qed.
+
+(* ======================================================================== *)
+(* Calls of unknown arity                                                   *)
+(* ======================================================================== *)
+
+(* The list [l] with its element of rank [i] replaced by [a]; [l] if it
+   has none. *)
+Fixpoint replace_nth {A : Type} (i : nat) (a : A) (l : list A) : list A :=
+  match l, i with
+  | [], _ => []
+  | _ :: l, O => a :: l
+  | b :: l, S i => b :: replace_nth i a l
+  end.
+
+Lemma replace_nth_other {A : Type} (i j : nat) (a : A) (l : list A) :
+  j <> i -> nth_error (replace_nth i a l) j = nth_error l j.
+Proof.
+  revert i j. induction l as [ | b l IH]; intros i j Hji;
+    [ destruct i, j; reflexivity | ].
+  destruct i as [ | i], j as [ | j]; simpl;
+    [ contradiction | reflexivity | reflexivity | ].
+  apply IH. lia.
+Qed.
+
+Lemma replace_nth_at {A : Type} (i : nat) (a b : A) (l : list A) :
+  nth_error (replace_nth i a l) i = Some b -> b = a.
+Proof.
+  revert i. induction l as [ | c l IH]; intros i H;
+    [ destruct i; discriminate H | ].
+  destruct i as [ | i]; simpl in H; [ congruence | exact (IH i H) ].
+Qed.
+
+Lemma replace_nth_length {A : Type} (i : nat) (a : A) (l : list A) :
+  length (replace_nth i a l) = length l.
+Proof.
+  revert i. induction l as [ | c l IH]; intros i; [ destruct i; reflexivity | ].
+  destruct i as [ | i]; simpl; [ reflexivity | rewrite IH; reflexivity ].
+Qed.
+
+Section Unknown.
+
+Variable is_local : field -> bool.
+Variable G : graph.
+Variable sol : solution.
+Variable noted : symbol -> Prop.
+Variable deps : closure_dep -> Prop.
+Variable cds : finite_map code_dep.
+Variable keep : value_slot -> bool.
+Variable codes : list (code_id * code).
+Variable symbols : list symbol.
+Variable u : unit_interface.
+Hypothesis Hc : closed is_local G sol.
+Hypothesis Hlocal : is_local_slots_only is_local.
+Hypothesis Hconsts : g_any_source G Node_all_constants.
+Hypothesis Hsyms :
+  ∀ s : symbol, noted s -> may_come_from sol (Node_symbol s) (Node_symbol s).
+Hypothesis Hunit_syms :
+  ∀ s : symbol,
+    among s symbols = true -> may_come_from sol (Node_symbol s) (Node_symbol s).
+Hypothesis Hdeps : ∀ d : closure_dep, deps d -> closure_dep_facts G cds d.
+Hypothesis Hnd : NoDup (map fst cds).
+Hypothesis Hcds :
+  ∀ (id : code_id) (cd : code_dep),
+    lookup id cds = Some cd -> known_witness_edges G id cd.
+Hypothesis Hlrs : FlambdaReaperLocalFieldsSpec.local_reads_used is_local G sol.
+
+Local Abbreviation inv_ := (inv G sol noted deps cds keep codes symbols u).
+Local Abbreviation flows_ := (flows G sol keep (called_by G cds) no_location).
+Local Abbreviation pending_ :=
+  (FlambdaReaperFlowProofs.pending G sol cds keep no_location).
+
+(* The results of rank [i] of what the last witness of the call [ap] of
+   unknown arity stands for have no source, whatever chain of witnesses
+   the graph gives the call. *)
+Definition dead_rank (ap : apply_expr) (i : nat) : Prop :=
+  ∀ (ws returns : list node) (exn called w W R : node),
+    length ws = length (call_groups ap) ->
+    caller_chain_edges G returns exn called (combine (call_groups ap) ws) ->
+    nth_error ws (pred (length ws)) = Some w ->
+    may_come_from sol W w ->
+    g_constructor G W (Field_return_of_call (Normal i)) R ->
+    s_has_source sol R = false.
+
+(* The same, of the chains of witnesses that the call reads off its
+   callee: the first is an alias of the read of the call witness of
+   unknown arity off the callee. *)
+Definition call_dead_rank (ap : apply_expr) (i : nat) : Prop :=
+  ∀ (ctx : option code_id) (ws returns : list node)
+    (exn called apply_node w W R : node),
+    length ws = length (call_groups ap) ->
+    caller_chain_edges G returns exn called (combine (call_groups ap) ws) ->
+    (∀ w0 : node, hd_error ws = Some w0 -> cond_alias_edge G ctx w0 apply_node)
+    ->
+    g_accessor G apply_node (Field_call_witness Unknown_arity_code_pointer)
+      (node_of_simple (ap_callee ap)) ->
+    nth_error ws (pred (length ws)) = Some w ->
+    may_come_from sol W w ->
+    g_constructor G W (Field_return_of_call (Normal i)) R ->
+    s_has_source sol R = false.
+
+Lemma dead_rank_call (ap : apply_expr) (i : nat) :
+  dead_rank ap i -> call_dead_rank ap i.
+Proof.
+  intros Hdead ctx ws returns exn called apply_node w W R Hlen Hch _ _.
+  exact (Hdead ws returns exn called w W R Hlen Hch).
+Qed.
+
+(* A call whose last witness gives no source at rank [i] may return to
+   nodes whose rank [i] is a variable with no source. *)
+Lemma pending_marked (start : node) (ws : list node) (vs : list value)
+    (a : arity) (returns : list node) (exn : node) (i : nat) (x : variable) :
+  (∀ (w W R : node),
+     nth_error ws (pred (length ws)) = Some w ->
+     may_come_from sol W w ->
+     g_constructor G W (Field_return_of_call (Normal i)) R ->
+     s_has_source sol R = false) ->
+  pending_ start ws vs a returns exn ->
+  pending_ start ws vs a (replace_nth i (Node_variable x) returns) exn.
+Proof.
+  intros Hdead (Hl & Hch & Hargs & Hlast & Hexn & Hused).
+  split; [ exact Hl | split; [ exact Hch | split; [ exact Hargs | ] ] ].
+  split; [ | split; [ exact Hexn | exact Hused ] ].
+  intros w Hw. destruct (Hlast w Hw) as [Hres H0]. split.
+  - intros j r W R v Hr HW HR Hv.
+    destruct (Nat.eq_dec j i) as [-> | Hji].
+    + exfalso.
+      pose proof (flows_hs is_local G sol keep _ no_location Hc _ _ Hv) as H.
+      rewrite (Hdead w W R Hw HW HR) in H. discriminate H.
+    + rewrite replace_nth_other in Hr by exact Hji.
+      exact (Hres j r W R v Hr HW HR Hv).
+  - intros r y Hr Hy.
+    destruct (Nat.eq_dec 0 i) as [<- | H0i].
+    + exfalso. destruct Hy as (W & R & HW & HR & (Hhs & _)).
+      rewrite (Hdead w W R Hw HW HR) in Hhs. discriminate Hhs.
+    + rewrite replace_nth_other in Hr by (intros E; apply H0i; exact E).
+      exact (H0 r y Hr Hy).
+Qed.
+
+
+(* The call of unknown arity [ap] of [s], made with its continuation the
+   handler it returns to with its parameter of rank [i] renamed: if the
+   results of rank [i] of its last witness have no source, the step keeps
+   the invariant. *)
+Lemma marked_indirect_call_at (s : state) (ap : apply_expr) (i : nat)
+    (h : continuation_handler) (vars0 : env) (K0 : cont_env)
+    (rec0 : list (continuation * continuation_handler)) (x : variable) :
+  inv_ s -> state_expr s = Apply ap ->
+  ap_call_kind ap = Indirect_unknown_arity ->
+  ap_exn_continuation ap <> ap_continuation ap ->
+  call_dead_rank ap i ->
+  resolve (ap_continuation ap) (state_conts s) = Closure h vars0 K0 rec0 ->
+  s_has_source sol (Node_variable x) = false ->
+  match
+    step
+      (State (Apply ap) (state_vars s)
+         ((ap_continuation ap, Closure (rename_param i x h) vars0 K0 rec0)
+          :: state_conts s)
+         (state_statics s) (state_heap s) (state_reads s))
+  with
+  | Step s1 => inv_ s1
+  | _ => True
+  end.
+Proof.
+  intros Hs Hexpr Hkind Hexn_ne Hdead Hres Hx.
+  destruct s as [e0 vars K statics hp rd]. simpl in *. subst e0.
+  destruct Hs as (ctx & ce & He & Hlive & Hcount & Hvars & Hconts & Hst
+                  & Hcodes & Hpa).
+  destruct Hpa as (Hvars_pa & Hspa & Hconts_pa). simpl in *.
+  destruct He as (Hfrag & Hnoted_callee & Hnoted_args & returns & exn & Hret
+                  & Hexn & Hedges).
+  unfold call_edges in Hedges. rewrite Hkind in Hedges.
+  destruct Hedges as (ws & apply_node & called_node & Hlen & Hch & Hused
+                      & Hcond & Happly).
+  set (marker := Closure (rename_param i x h) vars0 K0 rec0).
+  set (returns' := replace_nth i (Node_variable x) returns).
+  match goal with
+  | |- match ?r with Step _ => _ | _ => _ end =>
+    enough (Hr : result_ok G sol noted deps cds keep codes symbols u False
+                   no_location True r)
+  end.
+  { match goal with
+    | |- match ?r with Step _ => _ | _ => _ end => destruct r
+    end; [ exact Hr | exact I | exact I ]. }
+  rewrite step_apply.
+  destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hcallee;
+    [ | exact I ].
+  destruct (eval_simples vars (ap_args ap)) as [vs | ] eqn:Hvs; [ | exact I ].
+  destruct (eval_simples vars (exn_extra_simples ap)) as [extra | ] eqn:Hextra;
+    [ | exact I ].
+  destruct (apply_conts is_local G sol noted deps cds keep codes symbols u
+              False no_location True Hc Hconsts Hsyms ctx ce ap vars K statics
+              extra returns exn Hcount Hvars Hvars_pa Hconts Hconts_pa Hret
+              Hexn Hextra)
+    as ((Hret_ok & Hret_fits & Hret_pa) & Hexn_ok & Hexn_pa).
+  rewrite resolve_head, (resolve_other _ _ _ _ Hexn_ne), Hkind.
+  rewrite Hres in Hret_ok, Hret_fits, Hret_pa.
+  assert (Hind : FlambdaReaperFlowProofs.indirect_ok codes).
+  { intros id c Hin. unfold apply_in_flow_fragment in Hfrag.
+    rewrite Hkind in Hfrag. rewrite forallb_forall in Hfrag.
+    specialize (Hfrag (id, c) Hin). simpl in Hfrag.
+    destruct (code_is_tupled c); [ exact Hfrag | ].
+    apply negb_true_iff in Hfrag.
+    intros H; rewrite H in Hfrag; discriminate Hfrag. }
+  assert (Hlen' : length returns' = length returns)
+    by apply replace_nth_length.
+  assert (Hmok : cont_ok G sol noted deps cds keep codes symbols u False
+                   no_location True marker returns').
+  { apply (marker_ok G sol noted deps cds keep codes symbols u h vars0 K0
+             rec0 returns returns' i x Hret_ok).
+    - intros j n' n v Hji Hn' Hn Hv. unfold returns' in Hn'.
+      rewrite (replace_nth_other _ _ _ _ Hji), Hn in Hn'.
+      injection Hn' as <-. exact Hv.
+    - left. exact Hlen'.
+    - intros n' v Hn' Hv. unfold returns' in Hn'.
+      apply replace_nth_at in Hn'. subst n'.
+      rewrite (flows_hs is_local G sol keep _ no_location Hc _ _ Hv) in Hx.
+      discriminate Hx. }
+  assert (Hmfits : ∀ n : nat,
+             FlambdaReaperFlowProofs.fits u
+               (Closure h vars0 K0 rec0) returns n ->
+             FlambdaReaperFlowProofs.fits u marker returns' n).
+  { intros n [Hf | (t & Ht & Hle)]; [ left; rewrite Hlen'; exact Hf | ].
+    right. exists t. split; [ | rewrite Hlen'; exact Hle ].
+    simpl in Ht |- *. destruct h as [params md body].
+    unfold handler_params in Ht |- *. simpl in Ht |- *.
+    rewrite length_map, rename_nth_length. rewrite length_map in Ht.
+    exact Ht. }
+  assert (Hmpa : cont_pa_ok statics marker).
+  { destruct (cont_pa_closure_inv _ _ _ _ _ Hret_pa) as [Hpa1 Hpa2].
+    exact (Closure_pa _ _ _ _ _ Hpa1 Hpa2). }
+  apply (call_ok is_local G sol noted deps cds keep codes symbols u False
+           no_location True Hc Hlocal Hnd Hcds callee
+           (node_of_simple (ap_callee ap)) vs (ap_args_arity ap)
+           (ap_return_arity ap) ws returns' exn marker _ statics hp rd Hind);
+    try assumption.
+  - exact (simple_flows is_local G sol noted cds keep no_location Hc Hconsts
+             Hsyms vars _ _ Hvars Hnoted_callee Hcallee).
+  - exact (simple_pa_ok _ _ _ _ Hvars_pa Hcallee).
+  - intros Hne. apply pending_marked.
+    + intros w W R Hw HW HR.
+      exact (Hdead ctx ws returns exn called_node apply_node w W R Hlen Hch
+               Hcond Happly Hw HW HR).
+    + exact (indirect_pending is_local G sol noted cds keep no_location Hc
+               Hlocal Hconsts Hsyms ctx ap vars vs returns exn ws apply_node
+               called_node Hlive Hvars Hnoted_args Hvs Hne Hlen Hch Hused
+               Hcond Happly).
+  - exact (simples_pa_ok _ _ _ _ Hvars_pa Hvs).
+  - exact (Hmfits _ Hret_fits).
+  - intros v Hv Hv_pa Hone.
+    apply (apply_ok is_local G sol noted deps cds keep codes symbols u False
+             no_location True Hc Hlocal Hnd Hcds marker returns' [v] statics
+             hp rd Hmok Hmpa);
+      try assumption.
+    + intros [ | j] y r Hy Hr; [ injection Hy as <-; exact (Hv r Hr)
+                               | destruct j; discriminate Hy ].
+    + split; [ exact Hv_pa | exact I ].
+    + apply Hmfits. destruct Hret_fits as [Hf | Hf]; [ left | right; exact Hf ].
+      rewrite <- Hf, Hone. reflexivity.
+Qed.
+
+Lemma marked_indirect_call (s : state) (ap : apply_expr) (i : nat)
+    (h : continuation_handler) (vars0 : env) (K0 : cont_env)
+    (rec0 : list (continuation * continuation_handler)) (x : variable) :
+  inv_ s -> state_expr s = Apply ap ->
+  ap_call_kind ap = Indirect_unknown_arity ->
+  ap_exn_continuation ap <> ap_continuation ap ->
+  dead_rank ap i ->
+  resolve (ap_continuation ap) (state_conts s) = Closure h vars0 K0 rec0 ->
+  s_has_source sol (Node_variable x) = false ->
+  match
+    step
+      (State (Apply ap) (state_vars s)
+         ((ap_continuation ap, Closure (rename_param i x h) vars0 K0 rec0)
+          :: state_conts s)
+         (state_statics s) (state_heap s) (state_reads s))
+  with
+  | Step s1 => inv_ s1
+  | _ => True
+  end.
+Proof.
+  intros Hs Hexpr Hkind Hexn_ne Hdead.
+  exact (marked_indirect_call_at s ap i h vars0 K0 rec0 x Hs Hexpr Hkind
+           Hexn_ne (dead_rank_call ap i Hdead)).
+Qed.
+
+(* The run from the call of [marked_indirect_call_at] never binds [x]. *)
+Lemma marked_indirect_run_at (s : state) (ap : apply_expr) (i : nat)
+    (h : continuation_handler) (vars0 : env) (K0 : cont_env)
+    (rec0 : list (continuation * continuation_handler)) (x : variable)
+    (m : nat) (s' : state) :
+  inv_ s -> state_expr s = Apply ap ->
+  ap_call_kind ap = Indirect_unknown_arity ->
+  ap_exn_continuation ap <> ap_continuation ap ->
+  call_dead_rank ap i ->
+  resolve (ap_continuation ap) (state_conts s) = Closure h vars0 K0 rec0 ->
+  s_has_source sol (Node_variable x) = false ->
+  run m
+    (State (Apply ap) (state_vars s)
+       ((ap_continuation ap, Closure (rename_param i x h) vars0 K0 rec0)
+        :: state_conts s)
+       (state_statics s) (state_heap s) (state_reads s))
+  = Step s' ->
+  lookup x (state_vars s') = None.
+Proof.
+  intros Hs Hexpr Hkind Hexn_ne Hdead Hres Hx Hrun.
+  destruct m as [ | m].
+  - simpl in Hrun. injection Hrun as <-.
+    exact (inv_unbound is_local G sol noted deps cds keep codes symbols u Hc
+             s x Hs Hx).
+  - rewrite run_succ in Hrun.
+    pose proof (marked_indirect_call_at s ap i h vars0 K0 rec0 x Hs Hexpr
+                  Hkind Hexn_ne Hdead Hres Hx) as Hs1.
+    destruct (step _) as [s1 | | ]; try discriminate Hrun.
+    exact (inv_unbound is_local G sol noted deps cds keep codes symbols u Hc
+             s' x
+             (inv_run is_local G sol noted deps cds keep codes symbols u Hc
+                Hlocal Hconsts Hsyms Hunit_syms Hdeps Hnd Hcds Hlrs m s1 s'
+                Hs1 Hrun)
+             Hx).
+Qed.
+
+(* The run from the call of [marked_indirect_call] never binds [x]. *)
+Lemma marked_indirect_run (s : state) (ap : apply_expr) (i : nat)
+    (h : continuation_handler) (vars0 : env) (K0 : cont_env)
+    (rec0 : list (continuation * continuation_handler)) (x : variable)
+    (m : nat) (s' : state) :
+  inv_ s -> state_expr s = Apply ap ->
+  ap_call_kind ap = Indirect_unknown_arity ->
+  ap_exn_continuation ap <> ap_continuation ap ->
+  dead_rank ap i ->
+  resolve (ap_continuation ap) (state_conts s) = Closure h vars0 K0 rec0 ->
+  s_has_source sol (Node_variable x) = false ->
+  run m
+    (State (Apply ap) (state_vars s)
+       ((ap_continuation ap, Closure (rename_param i x h) vars0 K0 rec0)
+        :: state_conts s)
+       (state_statics s) (state_heap s) (state_reads s))
+  = Step s' ->
+  lookup x (state_vars s') = None.
+Proof.
+  intros Hs Hexpr Hkind Hexn_ne Hdead.
+  exact (marked_indirect_run_at s ap i h vars0 K0 rec0 x m s' Hs Hexpr Hkind
+           Hexn_ne (dead_rank_call ap i Hdead)).
+Qed.
+
+End Unknown.
