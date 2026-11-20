@@ -41,7 +41,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperFixFailsSpec.
 From OxCamlFlambda2 Require FlambdaReaperWrapperProofs
   FlambdaReaperWrapperDerivedProofs FlambdaReaperFlowProofs FlambdaMapProofs
-  FlambdaReaperUnusedCodeTraversalProofs.
+  FlambdaReaperUnusedCodeTraversalProofs FlambdaReaperLeastProofs.
 From OxCamlFlambda2 Require Import FlambdaBindersSpec.
 Import ListNotations.
 
@@ -658,17 +658,75 @@ End Lengths.
 (* The statement                                                            *)
 (* ======================================================================== *)
 
-Theorem fix_never_fails : fix_never_fails_statement.
+(* The code dep of code of the unit has as many results as the code. *)
+Lemma code_dep_results (u : unit_interface) (e : expr) (id : code_id)
+    (cd : code_dep) :
+  in_flow_fragment e = true -> (id, cd) ∈ unit_code_deps Auto u e ->
+  ∃ c, (id, c) ∈ unit_codes e
+       ∧ length (code_result_kinds c) = length (cd_return cd).
 Proof.
-  intros is_local u e T max_unbox_size lambda_lifting pdc tcr F S code_deps
-    cannot_change dominated to_unbox Hloc Hslots Hfrag Hleast Hcount Hkinds
-    Hwf Hhas Hres Hdead.
+  intros Hfrag Hcd.
+  destruct (FlambdaReaperWrapperProofs.unit_facts Auto u e True Hfrag
+              (or_introl I))
+    as (noted & deps & Hedges & _ & _ & Hnodup & Hids).
+  assert (Hidin : id ∈ static_names code_ids_of_binding e)
+    by (apply Hids; apply in_map_iff; exists (id, cd); auto).
+  destruct (proj1 FlambdaReaperWrapperProofs.unit_codes_names e id Hidin)
+    as [(c & Hc) _].
+  exists c. split; [ exact Hc | ].
+  pose proof (proj1 (FlambdaReaperWrapperProofs.unit_codes_edges
+                       _ _ _ _ _ _ _ _ _)
+                e None (unit_conts u) Hedges id c Hc) as Hce.
+  destruct c as [params mc ret exn md body].
+  cbn [FlambdaReaperFlowProofs.code_edges] in Hce.
+  destruct Hce as (cd' & Hcd' & _ & _ & _ & _ & Hlen & _).
+  pose proof (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd)
+    as E1.
+  rewrite (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd') in E1.
+  injection E1 as <-.
+  cbn [code_result_kinds code_result_arity]. rewrite Hlen. reflexivity.
+Qed.
+
+(* [fix_never_fails_statement] with what its proof reads of the arities:
+   a call of the term expects no more results than the code dep of the
+   code it is known to call has. *)
+Lemma fix_never_fails_arities (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (max_unbox_size : nat)
+    (lambda_lifting pdc : bool) (tcr : list node) :
+  let F := traverse_unit Auto u e in
+  let S := solution_of_tables T in
+  let code_deps := unit_code_deps Auto u e in
+  let cannot_change := derive_cannot_change F T in
+  let dominated := derive_dominated T in
+  let to_unbox :=
+    derive_to_unbox_fixed is_local F T cannot_change max_unbox_size
+      lambda_lifting
+  in
+  is_local_slots_only is_local ->
+  (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+  in_flow_fragment e = true ->
+  least_solution is_local F T ->
+  conts_counted (unit_counts u) e = true ->
+  plain_kinds e = true ->
+  exn_handlers_well_formed e = true ->
+  unknown_calls_have_args e = true ->
+  (∀ ap, ap ∈ calls_of e ->
+     ∀ id cd, code_id_actually_called F S ap = Some id ->
+       (id, cd) ∈ code_deps ->
+       length (unarize (ap_return_arity ap)) <= length (cd_return cd)) ->
+  unused_code_dead S e = true ->
+  rebuild_unit_unbox_repr_fixed_fails is_local F T cannot_change code_deps
+    dominated to_unbox tcr pdc e
+  = false.
+Proof.
+  intros F S code_deps cannot_change dominated to_unbox Hloc Hslots Hfrag
+    Hleast Hcount Hkinds Hwf Hhas Har Hdead.
   pose (unboxed := unit_unboxed F T dominated to_unbox e).
   destruct (rebuild_unit_unbox_repr_fixed_fails _ _ _ _ _ _ _ _ _ _)
     eqn:Hfails; [ exfalso | reflexivity ].
   destruct (FlambdaReaperWrapperProofs.unit_facts Auto u e
               (∀ f : field, is_local f = false) Hfrag Hslots)
-    as (noted & deps & Hedges & Hconsts & _ & Hnodup & Hids).
+    as (noted & deps & Hedges & _ & _ & _ & _).
   pose proof (fun id c Hc =>
                 proj1 (FlambdaReaperWrapperProofs.unit_codes_edges
                          _ _ _ _ _ _ _ _ _)
@@ -686,43 +744,6 @@ Proof.
   { intros ap Hap Hk E. unfold unknown_calls_have_args in Hhas.
     rewrite forallb_forall in Hhas. pose proof (Hhas ap Hap) as H.
     rewrite Hk, E in H. discriminate. }
-  assert (Har :
-            ∀ ap, ap ∈ calls_of e ->
-              ∀ id cd, code_id_actually_called F S ap = Some id ->
-                (id, cd) ∈ code_deps ->
-                length (unarize (ap_return_arity ap)) <= length (cd_return cd)).
-  { intros ap Hap id cd Hid Hcd.
-    assert (Hk : ap_call_kind ap <> Indirect_unknown_arity).
-    { intros Hk. unfold code_id_actually_called in Hid. rewrite Hk in Hid.
-      discriminate. }
-    unfold results_within_codes in Hres. rewrite forallb_forall in Hres.
-    pose proof (Hres ap Hap) as H.
-    assert (Hfa :
-              forallb
-                (fun '(_, c) =>
-                   Nat.leb (length (unarize (ap_return_arity ap)))
-                     (length (code_result_kinds c)))
-                (unit_codes e)
-              = true)
-      by (revert H; destruct (ap_call_kind ap) eqn:Ek; intros H;
-          first [ exact H | exfalso; exact (Hk eq_refl) ]).
-    rewrite forallb_forall in Hfa.
-    assert (Hidin : id ∈ static_names code_ids_of_binding e)
-      by (apply Hids; apply in_map_iff; exists (id, cd); auto).
-    destruct (proj1 FlambdaReaperWrapperProofs.unit_codes_names e id Hidin)
-      as [(c & Hc) _].
-    pose proof (Hfa (id, c) Hc) as Hle. cbv beta iota in Hle.
-    apply Nat.leb_le in Hle.
-    pose proof (Hcode_edges id c Hc) as Hce.
-    destruct c as [params mc ret exn md body].
-    cbn [FlambdaReaperFlowProofs.code_edges] in Hce.
-    destruct Hce as (cd' & Hcd' & _ & _ & _ & _ & Hlen & _).
-    pose proof (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd)
-      as E1.
-    rewrite (FlambdaReaperFlowProofs.lookup_nodup_in _ _ _ Hnodup Hcd') in E1.
-    injection E1 as <-.
-    cbn [code_result_kinds code_result_arity] in Hle. rewrite Hlen.
-    exact Hle. }
   assert (Hcalls :
             ∀ ads ap,
               (ads, ap) ∈ unit_rebuilt_calls T cannot_change code_deps unboxed e
@@ -795,6 +816,35 @@ Proof.
     discriminate (eq_trans (eq_sym Hnr) Hcnr).
 Qed.
 
+Theorem fix_never_fails : fix_never_fails_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting pdc tcr F S code_deps
+    cannot_change dominated to_unbox Hloc Hslots Hfrag Hleast Hcount Hkinds
+    Hwf Hhas Hres Hdead.
+  apply (fix_never_fails_arities is_local u e T max_unbox_size lambda_lifting
+           pdc tcr Hloc Hslots Hfrag Hleast Hcount Hkinds Hwf Hhas);
+    [ | exact Hdead ].
+  intros ap Hap id cd Hid Hcd.
+  assert (Hk : ap_call_kind ap <> Indirect_unknown_arity).
+  { intros Hk. unfold code_id_actually_called in Hid. rewrite Hk in Hid.
+    discriminate. }
+  unfold results_within_codes in Hres. rewrite forallb_forall in Hres.
+  pose proof (Hres ap Hap) as H.
+  assert (Hfa :
+            forallb
+              (fun '(_, c) =>
+                 Nat.leb (length (unarize (ap_return_arity ap)))
+                   (length (code_result_kinds c)))
+              (unit_codes e)
+            = true)
+    by (revert H; destruct (ap_call_kind ap) eqn:Ek; intros H;
+        first [ exact H | exfalso; exact (Hk eq_refl) ]).
+  rewrite forallb_forall in Hfa.
+  destruct (code_dep_results u e id cd Hfrag Hcd) as (c & Hc & Hlen).
+  pose proof (Hfa (id, c) Hc) as Hle. cbv beta iota in Hle.
+  apply Nat.leb_le in Hle. rewrite <- Hlen. exact Hle.
+Qed.
+
 (* [unused_code_dead] holds of a least solution where the unit binds each
    variable once (FlambdaReaperUnusedCodeTraversalProofs.v). *)
 Theorem fix_never_fails_full : fix_never_fails_full_statement.
@@ -806,6 +856,60 @@ Proof.
            Hloc Hslots Hfrag Hleast Hcount Hkinds Hwf Hhas Hres).
   exact (FlambdaReaperUnusedCodeTraversalProofs.unused_code_dead_traversal
            is_local u e T Hfrag Hbound Hloc Hleast).
+Qed.
+
+(* What the proof reads of the arities, of [results_within_callees] and
+   [callees_promised]: the code the flow finds is code of the unit that
+   the call promises to call. *)
+Lemma callees_arities (u : unit_interface) (e : expr) (T : tables) :
+  in_flow_fragment e = true ->
+  results_within_callees e = true ->
+  callees_promised (traverse_unit Auto u e) T e = true ->
+  ∀ ap, ap ∈ calls_of e ->
+    ∀ id cd,
+      code_id_actually_called (traverse_unit Auto u e) (solution_of_tables T)
+        ap
+      = Some id ->
+      (id, cd) ∈ unit_code_deps Auto u e ->
+      length (unarize (ap_return_arity ap)) <= length (cd_return cd).
+Proof.
+  intros Hfrag Hres Hprom ap Hap id cd Hid Hcd.
+  destruct (code_dep_results u e id cd Hfrag Hcd) as (c & Hc & Hlen).
+  unfold callees_promised in Hprom. rewrite forallb_forall in Hprom.
+  pose proof (Hprom ap Hap) as Hp. cbv beta in Hp. rewrite Hid in Hp.
+  rewrite forallb_forall in Hp. pose proof (Hp (id, c) Hc) as Hpc.
+  cbv beta iota in Hpc. rewrite Pos.eqb_refl in Hpc. cbn [negb orb] in Hpc.
+  unfold results_within_callees in Hres. rewrite forallb_forall in Hres.
+  pose proof (Hres ap Hap) as Hr. rewrite forallb_forall in Hr.
+  pose proof (Hr (id, c) Hc) as Hrc. cbv beta iota in Hrc.
+  rewrite Hpc in Hrc. cbn [negb orb] in Hrc.
+  apply Nat.leb_le in Hrc. rewrite <- Hlen. exact Hrc.
+Qed.
+
+Theorem fix_never_fails_callees : fix_never_fails_callees_statement.
+Proof.
+  intros is_local u e T max_unbox_size lambda_lifting pdc tcr F code_deps
+    cannot_change dominated to_unbox Hloc Hslots Hfrag Hleast Hcount Hkinds
+    Hwf Hhas Hres Hprom Hbound.
+  apply (fix_never_fails_arities is_local u e T max_unbox_size lambda_lifting
+           pdc tcr Hloc Hslots Hfrag Hleast Hcount Hkinds Hwf Hhas).
+  - exact (callees_arities u e T Hfrag Hres Hprom).
+  - exact (FlambdaReaperUnusedCodeTraversalProofs.unused_code_dead_traversal
+             is_local u e T Hfrag Hbound Hloc Hleast).
+Qed.
+
+Theorem results_within_codes_callees :
+  results_within_codes_callees_statement.
+Proof.
+  intros e H. unfold results_within_codes in H.
+  unfold results_within_callees. rewrite forallb_forall in H |- *.
+  intros ap Hap. specialize (H ap Hap). rewrite forallb_forall.
+  intros [id c] Hc. cbv beta iota.
+  destruct (call_promises ap id c) eqn:Ep; [ cbn [negb orb] | reflexivity ].
+  revert H. destruct (ap_call_kind ap) eqn:Ek; intros H.
+  - rewrite forallb_forall in H. exact (H (id, c) Hc).
+  - unfold call_promises in Ep. rewrite Ek in Ep. discriminate.
+  - rewrite forallb_forall in H. exact (H (id, c) Hc).
 Qed.
 
 (* The rebuild of the fix no longer stops at an unboxed callee, and the
@@ -847,3 +951,23 @@ Qed.
 Theorem unboxed_callee_meets_premises :
   unboxed_callee_meets_premises_statement.
 Proof. hnf. repeat split; vm_compute; reflexivity. Qed.
+
+Theorem known_arity_callees : known_arity_callees_statement.
+Proof.
+  hnf. split.
+  { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity. }
+  repeat match goal with |- _ ∧ _ => split end; vm_compute; reflexivity.
+Qed.
+
+Theorem unpromised_callee : unpromised_callee_statement.
+Proof.
+  hnf. split.
+  { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity. }
+  repeat match goal with |- _ ∧ _ => split end;
+  lazymatch goal with
+  | |- _ ∈ _ => vm_compute; left; reflexivity
+  | |- _ => vm_compute; reflexivity
+  end.
+Qed.
