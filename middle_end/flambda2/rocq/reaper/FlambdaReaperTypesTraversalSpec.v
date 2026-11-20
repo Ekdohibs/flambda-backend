@@ -99,16 +99,11 @@
      the second run hold ([changed_at], [changed_closure_rebuilt]);
      without it, that run would change the closures held in fields too.
 
-   What is left out: [closures_unaliased] of the graph of the traversal.
-   It should hold of a unit of the flow fragment that binds each
-   variable once: nothing but a constructor puts anything into the
-   variable of a [Let] of a closure, a symbol of a static closure or a
-   node made for a closure of a set ([closures_of_set]), and into the
-   variable of a projection that [set_closures] records nothing but its
-   read; the check passes on the examples. A proof needs an invariant of
-   the traversal on the variables of the closures and on the nodes made
-   for them, as that of FlambdaReaperUnusedCodeTraversalProofs.v on the
-   [my_closure] nodes of the code deps. And [changed_unstored]. *)
+   [closures_unaliased] of the graph of the traversal of such a unit is
+   proved in FlambdaReaperTypesTraversalUnaliasedSpec.v, which states
+   [changed_type_sound_traversal_statement] without it.
+
+   What is left out: [changed_unstored]. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
