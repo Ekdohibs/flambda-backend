@@ -1401,25 +1401,25 @@ let known_arity_call_met : bool ref = ref false
    tool's line that begins "(decision D65:", under the verdict line).
 
    A measure, made once and outside the build: no rule of the tree runs it. On
-   19 November 2026, before stage 134 had landed, two programs were run on the
-   same inputs, one process at a time. One was the test tool as it was before
-   this reading: the tool of the integrator's build of a frozen tip of stage
-   134; its build of the tip that landed made a tool of the same bytes. The
-   other was this tool as the reading then had it, built from the commits of the
-   reading carried over that frozen tip; built again over the tip that landed,
-   it had the same bytes. The inputs: the 79 files of stdlib/ of this repository
-   that tests/semantics/stdlib names, each compiled at two settings (the flags
-   of the build, and -O3); and 395 units of one function each, cut from 13 of
-   those files: 228 by the stream N1 (from list.ml, seq.ml and string.ml) and
-   167 by the stream X1 (from bool.ml, char.ml, either.ml, fun.ml, int.ml,
-   option.ml, pair.ml, queue.ml, result.ml and stack.ml), for their own probes.
-   As this is written, the files of those 395 units are not in this tree and no
-   commit of its history adds a file of their names; what they hold is text of
-   the library, and the two streams keep them outside the repository with the
-   scripts that cut them. What the measure found: no output of a unit that ran
-   before changes class; ten outputs of the files and two of the units change,
-   in what is in front of the terms and in the lines of the two runs (the count
-   of imports).
+   19 November 2026, before stage 134 had landed, two versions of this check
+   were run on the same inputs, one process at a time, each in the driver of the
+   compiler's own run (ownrun/flsemantics_ownrun.ml), not in this tool: the
+   check before this reading, in the integrator's build of a frozen tip of stage
+   134, and the check as the reading then had it, built from the commits of the
+   reading carried over that frozen tip. Each driver, built again over the tip
+   that landed (the first by the integrator), had the same bytes. The inputs:
+   the 79 files of stdlib/ of this repository that tests/semantics/stdlib names,
+   each compiled at two settings (the flags of the build, and -O3); and 395
+   units of one function each, cut from 13 of those files: 228 by the stream N1
+   (from list.ml, seq.ml and string.ml) and 167 by the stream X1 (from bool.ml,
+   char.ml, either.ml, fun.ml, int.ml, option.ml, pair.ml, queue.ml, result.ml
+   and stack.ml), for their own probes. As this is written, the files of those
+   395 units are not in this tree and no commit of its history adds a file of
+   their names; what they hold is text of the library, and the two streams keep
+   them outside the repository with the scripts that cut them. What the measure
+   found: no output of a unit that ran before changes class; ten outputs of the
+   files and two of the units change, in what is in front of the terms and in
+   the lines of the two runs (the count of imports).
 
    What is left out. Simplify makes a primitive of seven comparisons
    ([caml_compare], [caml_equal], [caml_notequal], [caml_lessequal],

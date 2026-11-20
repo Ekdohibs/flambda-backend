@@ -131,7 +131,7 @@
    discrepancy T4-10). What is to be proved sound is
    [Meet.meet join repaired_choices fuel].
 
-   What the model has, in the order of the file, and how each differs
+   What the model has, and how each differs
    from the compiler's:
    - [map_return_value], [combine_meet_return_values], [set_meet],
      [meet_mapping], [Map_meet.meet] ([map_meet]), [meet_alloc_mode],

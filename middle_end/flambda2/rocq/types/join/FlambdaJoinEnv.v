@@ -13,12 +13,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* This file transcribes into Gallina the functions of the compiler's
+(* This file transcribes into Gallina functions of the compiler's
    join_env.ml, the environment side of the n-way join of typing
-   environments, in the order of that file and with its names; its last
-   definition transcribes the n-way entry of join_levels.ml. The comment
-   below lists what is here against join_env.ml and the differences from
-   the OCaml.
+   environments; its last definition transcribes the n-way entry of
+   join_levels.ml. The comment below describes what is here against
+   join_env.ml and differences from the OCaml.
 
    The header above is that of
    middle_end/flambda2/types/env/join_env.ml,
@@ -39,12 +38,12 @@
    This file is to be reviewed line by line against
    middle_end/flambda2/types/env/join_env.ml, as FlambdaTypingEnv.v is
    against typing_env.ml, and its last function against the n-way
-   entry of types/join_levels.ml. It holds definitions only, in modules
-   that have the compiler's names. What the join guarantees is
+   entry of types/join_levels.ml. It holds definitions only; its modules
+   have the compiler's names. What the join guarantees is
    FlambdaJoinSpec.v. [Type_grammar.project_variables_out], which the
    join calls, is FlambdaTypeProject.v.
 
-   What is here, against join_env.ml, in the order of that file:
+   What is here, against join_env.ml:
    - [Index]: the environments joined are numbered from 0 in the order
      of the list given ([Index.fold_list]). An index is a position, not
      a name: renaming leaves it alone. [Index.choose] is

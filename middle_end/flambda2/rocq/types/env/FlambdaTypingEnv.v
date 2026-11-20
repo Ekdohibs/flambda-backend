@@ -19,8 +19,13 @@
    middle_end/flambda2/types/env/typing_env.ml (the levels and the functions
    of the environment), typing_env_level.ml and cached_level.ml of the same
    directory (what a level adds, and the environment proper), and, for the
-   module [Scope], middle_end/flambda2/term_basics/scope.ml. The comment
-   below says what is left out and what differs.
+   module [Scope], middle_end/flambda2/term_basics/scope.ml. Not so named:
+   [cut_loop], which is the function [loop] that is local to [cut] in
+   typing_env.ml, and the field [add_alias_result_t], which is the field
+   [t] of the compiler's record [add_alias_result]. This file's own, and
+   no transcription: [insert_binding_time], [sort_binding_times] and
+   [variables_in_order], which give [fold_on_defined_vars] its order. The
+   comment below says what is left out and what differs.
 
    The header above is that of
    middle_end/flambda2/types/env/typing_env.ml,

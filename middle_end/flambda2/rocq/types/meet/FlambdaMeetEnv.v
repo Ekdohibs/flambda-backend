@@ -40,7 +40,7 @@
    it extracts. What each function
    guarantees is FlambdaMeetSpec.v.
 
-   What the model has of [Meet_env], in the order of the file:
+   What the model has of [Meet_env]:
    - [meet_return_value] and [meet_result]: in full. The constructors of
      [meet_result] are in a module, [Meet_result.Bottom] and
      [Meet_result.Ok], as those of [Or_bottom.t] are in

@@ -14,11 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* This file transcribes into Gallina functions of the compiler, each under
-   the name of the OCaml function: project_variables_out to
-   project_variant_extensions of type_grammar.ml, and project_variables_out
-   of type_descr.ml. The comment below lists the differences from the
-   OCaml.
+(* This file transcribes into Gallina functions of the compiler: functions
+   of the recursive definition of type_grammar.ml that runs from
+   project_variables_out to project_variant_extensions, and
+   project_variables_out of type_descr.ml. The comment below describes
+   differences from the OCaml.
 
    The header above is that of
    middle_end/flambda2/types/grammar/type_grammar.ml,

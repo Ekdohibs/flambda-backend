@@ -30,12 +30,23 @@
 
    This file is the model's copy of
    middle_end/flambda2/types/env/aliases.ml: the structure and the
-   functions on it, written as the OCaml is, function by function and
-   under its names, in a module [Aliases]. One definition that stands
-   before that module, [name_is_symbol], is the model's form of the
-   function [is_symbol] of middle_end/flambda2/identifiers/name.ml: a
-   match on the two forms of a name, where the OCaml calls
-   [pattern_match]. The file extracts. What the
+   functions on it, in a module [Aliases]. The functions are written
+   as the OCaml is and, but for those named next, under its names.
+   Three functions of the module have names that are not names of
+   functions of aliases.ml; each is a part of one of its functions,
+   written apart: [at_mode] (a lookup that the OCaml writes in line),
+   [disjoint_alias_sets] (a test of its [invariant]) and
+   [add_alias_of_set] (the function [add_alias] that its
+   [add_alias_set] defines for itself). One type and three fields have
+   other names than the OCaml's: [is_canonical_or_alias] is its type
+   [canonical], and [set_const], [set_names] and [add_result_t] are
+   its fields [const], [names] and [t]. Four definitions stand before
+   the module. [name_is_symbol] is the model's form of the function
+   [is_symbol] of middle_end/flambda2/identifiers/name.ml: a match on
+   the two forms of a name, where the OCaml calls [pattern_match].
+   [name_of_simple], [const_eqb] and [simple_equal] are not names of
+   functions of aliases.ml; the comment at each says what it stands
+   for. The file extracts. What the
    structure means and what the functions guarantee is
    FlambdaEnvAliasesSpec.v, whose header says what is to be read here
    against the OCaml and lists every difference; in short:

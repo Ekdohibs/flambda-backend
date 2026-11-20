@@ -243,8 +243,10 @@
      [meet_project_value_slot_simple_value] reads off the value slot
      ([Value_slot.kind]) is an argument, the last of
      [meet_project_value_slot_simple].
-   - The arguments are in the compiler's order, the environment
-     first; a labelled argument is an ordinary one. *)
+   - A labelled argument of the compiler is an ordinary argument here.
+     Where a definition here has the name of a function that provers.ml
+     defines at its top level, the arguments that both have are in the
+     compiler's order. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlOption.

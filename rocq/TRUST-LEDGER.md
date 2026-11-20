@@ -1785,27 +1785,31 @@ it gave back.
   under the verdict line).
   A MEASURE, made once and outside the build: no rule of the tree
   runs it. On 19 November 2026, before stage 134 had landed, two
-  programs were run on the same inputs. One was the tool as it was
-  before this reading: the test tool of the integrator's build of a
-  frozen tip of stage 134; its build of the tip that landed made a
-  tool of the same bytes. The other was the tool of this reading as
-  it then was, built from the commits of the reading carried over
-  that frozen tip; built again over the tip that landed, it had the
-  same bytes. The inputs: the 79 files of `stdlib/` of this
-  repository that `tests/semantics/stdlib` names, each at two
-  settings (the flags of the build, and `-O3`); and 395 units of one
-  function each, cut from 13 of those files: 228 by the stream N1
-  (from `list.ml`, `seq.ml` and `string.ml`) and 167 by the stream
-  X1 (from ten other files), for their own probes. As this is
-  written, the files of those 395 units are not in the tree and no
-  commit of its history adds a file of their names; what they hold
-  is text of the library, and the two streams keep them outside the
-  repository with the scripts that cut them. What the measure found:
-  no output of a unit that ran before changes class; ten outputs of
-  the files and two of the units change, in what is in front of the
-  terms and in the lines of the two runs (the count of imports).
-  That no unit measured lost a verdict is a fact of that run on
-  those inputs and not of the design.
+  versions of the check were run on the same inputs. One was the
+  check as it was before this reading, in the integrator's build of
+  a frozen tip of stage 134; its build of the tip that landed made
+  programs of the same bytes. The other was the check of this
+  reading as it then was, built from the commits of the reading
+  carried over that frozen tip; built again over the tip that
+  landed, its programs had the same bytes. A version is two programs
+  built from the one source of the check: the test tool, and the
+  driver of the compiler's own run (`flsemantics_ownrun`). The
+  inputs named here were given to that driver, of each version, and
+  not to the test tool: the 79 files of `stdlib/` of this repository
+  that `tests/semantics/stdlib` names, each at two settings (the
+  flags of the build, and `-O3`); and 395 units of one function
+  each, cut from 13 of those files: 228 by the stream N1 (from
+  `list.ml`, `seq.ml` and `string.ml`) and 167 by the stream X1
+  (from ten other files), for their own probes. As this is written,
+  the files of those 395 units are not in the tree and no commit of
+  its history adds a file of their names; what they hold is text of
+  the library, and the two streams keep them outside the repository
+  with the scripts that cut them. What the measure found: no output
+  of a unit that ran before changes class; ten outputs of the files
+  and two of the units change, in what is in front of the terms and
+  in the lines of the two runs (the count of imports). That no unit
+  measured lost a verdict is a fact of that run on those inputs and
+  not of the design.
   LEFT OUT. Simplify makes a primitive of seven comparisons
   (`caml_compare`, `caml_equal`, `caml_notequal`, `caml_lessequal`,
   `caml_lessthan`, `caml_greaterequal`, `caml_greaterthan`) where it

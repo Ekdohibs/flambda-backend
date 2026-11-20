@@ -171,8 +171,9 @@
      records in a mutual definition. The others are records, their
      fields prefixed where the name is taken.
    - [Or_unknown.t], [Or_bottom.t], [Row_like_index_domain.t] and
-     [Alloc_mode.For_types.t] are in modules of those names, so that
-     [Or_unknown.Unknown], [Or_bottom.Bottom] and
+     [Alloc_mode.For_types.t] are in modules of those names (the last
+     in [Alloc_mode], as [Alloc_mode.t]: there is no [For_types] here),
+     so that [Or_unknown.Unknown], [Or_bottom.Bottom] and
      [Row_like_index_domain.Known] are told from the [Unknown], [Ok] and
      [Bottom] of [Or_unknown_or_bottom.t], which are not in a module, and
      from [Or_unknown.Known]. [Relation.descr] is [Relation.t].
