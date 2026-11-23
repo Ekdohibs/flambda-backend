@@ -53,14 +53,29 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+FLAMBDA2_DIR = "middle_end/flambda2/rocq"
+
+
+def makefile_folders(variable):
+    """The folders of FLAMBDA2_DIR that rocq/Makefile lists in [variable]:
+    the Makefile is what says which folder is of which library."""
+    with open(os.path.join(ROOT, "rocq", "Makefile")) as f:
+        text = f.read().replace("\\\n", " ")
+    m = re.search(r"^%s\s*:=(.*)$" % re.escape(variable), text, re.M)
+    if not m:
+        sys.exit("proof-map: rocq/Makefile does not define %s" % variable)
+    return [os.path.join(FLAMBDA2_DIR, d) for d in m.group(1).split()]
+
+
 LIBRARIES = [
-    # (directory, library name, short title)
-    ("rocq", "OxCamlStdlib", "OxCaml's own types"),
-    ("backend/rocq", "OxCamlBackend", "Backend-wide"),
-    ("backend/ssa/rocq", "OxCamlSsa", "SSA graph"),
-    ("backend/ssa/loop/rocq", "OxCamlLoop", "SSA loop passes"),
-    ("middle_end/flambda2/rocq", "OxCamlFlambda2", "Flambda 2 terms"),
-    ("middle_end/flambda2/types/rocq", "OxCamlFlambda2Types",
+    # (directories, library name, short title)
+    (["rocq"], "OxCamlStdlib", "OxCaml's own types"),
+    (["backend/rocq"], "OxCamlBackend", "Backend-wide"),
+    (["backend/ssa/rocq"], "OxCamlSsa", "SSA graph"),
+    (["backend/ssa/loop/rocq"], "OxCamlLoop", "SSA loop passes"),
+    (makefile_folders("FLAMBDA2_FOLDERS"), "OxCamlFlambda2",
+     "Flambda 2 terms"),
+    (makefile_folders("FLAMBDA2_TYPES_FOLDERS"), "OxCamlFlambda2Types",
      "Flambda 2 types"),
 ]
 
@@ -184,6 +199,9 @@ class File:
         self.library = library
         self.libtitle = libtitle
         self.module = os.path.basename(path)[:-2]
+        folder = os.path.dirname(self.rel)
+        self.folder = os.path.relpath(folder, FLAMBDA2_DIR) \
+            if folder.startswith(FLAMBDA2_DIR + os.sep) else folder
         m = self.module
         if m.endswith("Spec"):
             self.role, self.stem = "spec", m[:-4]
@@ -429,17 +447,24 @@ class Development:
     def __init__(self, focus):
         self.files = []
         self.by_module = {}
-        for d, lib, title in LIBRARIES:
-            full = os.path.join(ROOT, d)
-            if not os.path.isdir(full):
-                continue
-            for fn in sorted(os.listdir(full)):
-                if fn.endswith(".v"):
-                    f = File(os.path.join(full, fn), lib, title)
-                    self.files.append(f)
-                    self.by_module[f.module] = f
+        for dirs, lib, title in LIBRARIES:
+            paths = []
+            for d in dirs:
+                full = os.path.join(ROOT, d)
+                if os.path.isdir(full):
+                    paths += [os.path.join(full, fn)
+                              for fn in os.listdir(full)
+                              if fn.endswith(".v")]
+            for path in sorted(paths, key=os.path.basename):
+                f = File(path, lib, title)
+                self.files.append(f)
+                self.by_module[f.module] = f
         for f in self.files:
             parse_file(f)
+            # A file of tactics that states lemmas for them is proof.
+            m = re.match(r"(.*)Tactics?$", f.module)
+            if m and any(it.kind == "theorem" for it in f.items):
+                f.role, f.stem = "proofs", m.group(1)
         self.items = []
         for f in self.files:
             for it in f.items:
@@ -1119,8 +1144,9 @@ def dot_layout(nodes, edges, rankdir="LR", ranksep=0.9, nodesep=0.12,
         lines.append("%s [width=%.3f, height=%.3f];"
                      % (keys[k], w / 2.54, h / 2.54))
     for i, (name, members) in enumerate((clusters or {}).items()):
-        lines.append("subgraph cluster_%d { %s }" % (
-            i, " ".join(keys[m] + ";" for m in members if m in keys)))
+        lines.append("subgraph cluster_%d { label=\"x\"; fontsize=9; %s }"
+                     % (i, " ".join(keys[m] + ";" for m in members
+                                    if m in keys)))
     for a, b in edges:
         lines.append("%s -> %s;" % (keys[a], keys[b]))
     lines.append("}")
@@ -1176,10 +1202,11 @@ def reduce_edges(edges):
 
 def draw_graph(page, x0, y0, w0, h0, nodes, edges, draw_node,
                edge_colour="faint", max_scale=1.0, rankdirs=("RL", "TB"),
-               **kw):
+               draw_clusters=None, **kw):
     """Lay the graph out, whichever way fills the box given best, and
     draw it there. [draw_node] is called with a list to add TikZ to, the
-    key and the centre."""
+    key and the centre; [draw_clusters], with the list and the centres,
+    before anything else is drawn."""
     best = None
     for rankdir in rankdirs:
         w, h, pos, splines = dot_layout(nodes, edges, rankdir=rankdir, **kw)
@@ -1193,6 +1220,8 @@ def draw_graph(page, x0, y0, w0, h0, nodes, edges, draw_node,
     oy = y0 + (h0 - h * scale) / 2
     out = [r"\begin{scope}[shift={(%.3f,%.3f)}, scale=%.4f, "
            r"transform shape]" % (ox, oy, scale)]
+    if draw_clusters:
+        draw_clusters(out, pos)
     for a, b, pts in splines:
         path = "(%.3f,%.3f)" % pts[0]
         for i in range(1, len(pts) - 2, 3):
@@ -1769,61 +1798,44 @@ class Report:
 
     # -- pages: the maps ---------------------------------------------------
 
-    def model_map(self, library, title):
+    def _models(self):
+        """What the maps of folders and of models are drawn from: for
+        each model, its lines by kind and its folder, and the models
+        its definitions are written with."""
         an = self.an
-        files = [f for f in an.focus if f.library == library]
         models = collections.defaultdict(list)
-        for f in files:
+        for f in an.focus:
             models[f.stem].append(f)
-        model_of = {f: f.stem for f in files}
         info = {}
         for stem, fs in models.items():
             d = {"spec": 0, "impl": 0, "proofs": 0, "model": 0,
-                 "extract": 0}
+                 "extract": 0, "models": 1}
             for f in fs:
                 d[f.role] += f.code_lines
             items = [it for f in fs for it in f.items]
             d["must"] = lines_of(it for it in items if it in self.f_must)
-            d["subject"] = lines_of(it for it in items
-                                    if it in self.f_tests)
             d["results"] = sum(1 for it in items if it.kind == "statement"
                                and an.claims[it].is_result)
             d["featured"] = [c for c in self.featured
                              if c.statement.file in fs]
             d["defs"] = d["spec"] + d["impl"] + d["model"]
+            home = sorted(fs, key=lambda f: f.role == "proofs")[0]
+            d["folder"], d["library"] = home.folder, home.library
             info[stem] = d
-        shown = [s for s, d in info.items() if d["defs"]]
-        proof_only = [s for s, d in info.items() if not d["defs"]]
-        edges = set()
-        outside = collections.Counter()
-        for f in files:
-            if f.role == "proofs" or f.stem not in shown:
+        edges = collections.Counter()
+        for f in an.focus:
+            if f.role == "proofs" or not info[f.stem]["defs"]:
                 continue
             for it in f.items:
                 for dd in it.sdeps:
                     g = dd.file
-                    if g.role == "proofs" or g is f:
-                        continue
-                    if g in model_of:
-                        if model_of[g] != f.stem:
-                            edges.add((f.stem, model_of[g]))
-                    elif g.library in self.dev.focus:
-                        outside[f.stem] += 1
-        edges = reduce_edges(edges)
-        nw, nh = 3.3, 1.0
-        p = Page(title,
-                 "Each box is a model: its Spec, implementation and "
-                 "Proofs files together. An arrow goes from a model to "
-                 "one whose definitions its own definitions are written "
-                 "with (proofs left out; arrows implied by others are "
-                 "not drawn), so what everything stands on is where the "
-                 "arrows end. The deeper the blue, the more of the model "
-                 "is meaning of %s."
-                 % ("the chosen results" if self.chosen else
-                    "the %d results that carry the most" %
-                    len(self.featured)))
-        biggest = max(d["defs"] + d["proofs"] for d in info.values())
+                    if g.role != "proofs" and g.stem in info \
+                            and g.stem != f.stem:
+                        edges[f.stem, g.stem] += 1
+        return info, edges
 
+    def _box(self, info, nw, nh, biggest, label):
+        """How a model, or a folder of models, is drawn."""
         def draw(out, k, cx, cy):
             d = info[k]
             share = d["must"] / d["defs"] if d["defs"] else 0
@@ -1838,14 +1850,17 @@ class Report:
                    ("meaning" if d["must"] else "faint"),
                    1.4 if feat else 0.5, cx - nw / 2, cy - nh / 2,
                    cx + nw / 2, cy + nh / 2))
-            name = short(k)
+            name = label(k)
             size = 7.0 if len(name) < 22 else 7.0 * 22 / len(name)
             out.append(
                 r"\node[anchor=west, inner sep=0, text=%s, font="
                 r"\fontsize{%.2f}{8}\selectfont\bfseries] at (%.3f,%.3f) "
                 r"{%s};" % ("paper" if dark else "ink", size,
-                            cx - nw / 2 + 0.14, cy + 0.2, esc(name)))
+                            cx - nw / 2 + 0.14, cy + nh / 2 - 0.3,
+                            esc(name)))
             note = []
+            if d["models"] > 1:
+                note.append("%d models" % d["models"])
             if d["must"]:
                 note.append("read %s" % num(d["must"]))
             if d["results"]:
@@ -1855,11 +1870,12 @@ class Report:
                 r"\node[anchor=west, inner sep=0, text=%s, font="
                 r"\fontsize{5.2}{6}\selectfont] at (%.3f,%.3f) {%s};"
                 % ("paper" if dark else "soft", cx - nw / 2 + 0.14,
-                   cy - 0.1, r" \,·\, ".join(note)))
+                   cy + nh / 2 - 0.6, r" \,·\, ".join(note)))
             # the bar: Spec, implementation, Proofs
             total = d["defs"] + d["proofs"]
             bw = (nw - 0.28) * (total / biggest) ** 0.5
             bx = cx - nw / 2 + 0.14
+            lo, hi = cy - nh / 2 + 0.12, cy - nh / 2 + 0.22
             for v, colour in ((d["spec"] + d["model"], "meaning"),
                               (d["impl"], "subject"),
                               (d["proofs"], "proof")):
@@ -1867,32 +1883,168 @@ class Report:
                 if ww > 0:
                     out.append(
                         r"\path[fill=%s] (%.3f,%.3f) rectangle "
-                        r"(%.3f,%.3f);" % (colour, bx, cy - 0.38, bx + ww,
-                                           cy - 0.28))
+                        r"(%.3f,%.3f);" % (colour, bx, lo, bx + ww, hi))
                 bx += ww
             if dark:
                 out.append(
                     r"\path[draw=paper, line width=0.2pt] (%.3f,%.3f) "
                     r"rectangle (%.3f,%.3f);"
-                    % (cx - nw / 2 + 0.14, cy - 0.38,
-                       cx - nw / 2 + 0.14 + bw, cy - 0.28))
-        nodes = {k: (nw, nh) for k in shown}
-        draw_graph(p, 0, 1.3, PAGE_W, p.top - 1.5, nodes, edges, draw,
-                   ranksep=0.55, nodesep=0.08)
+                    % (cx - nw / 2 + 0.14, lo, cx - nw / 2 + 0.14 + bw,
+                       hi))
+        return draw
+
+    def _map_legend(self, p, unit):
         x = legend(p, 0, 0.3, [
             ("meaning", "Spec and Model lines"),
             ("subject", "implementation lines"),
             ("proof", "Proofs lines (bar length: square root of the "
-             "model's size)")])
+             "%s's size)" % unit)])
         p.rect(x, 0.16, 0.42, 0.28, draw="result", lw=1.4, r=0.05)
         p.text(x + 0.58, 0.3, "holds one of the results featured", size=8.5,
                colour="soft")
-        if proof_only:
-            p.text(0, 0.85, "Proof-only modules, not drawn: "
-                   + ", ".join(esc(short(s)) for s in sorted(proof_only)),
-                   size=7, colour="faint", width=PAGE_W,
-                   anchor="west")
+
+    def _featured_words(self):
+        return "the chosen results" if self.chosen else \
+            "the %d results that carry the most" % len(self.featured)
+
+    def folder_map(self, info, edges):
+        """One box for each folder of .v files."""
+        folders = {}
+        for d in info.values():
+            fd = folders.setdefault(d["folder"], collections.Counter())
+            for k in ("spec", "impl", "proofs", "model", "must",
+                      "results", "defs", "models"):
+                fd[k] += d[k]
+            fd["featured"] = fd["featured"] or bool(d["featured"])
+            fd["library"] = d["library"]
+        weight = collections.Counter()
+        for (a, b), n in edges.items():
+            if info[a]["folder"] != info[b]["folder"]:
+                weight[info[a]["folder"], info[b]["folder"]] += n
+        # Folders are not layered: where two refer to each other, the
+        # direction with fewer references is listed, not drawn.
+        back = sorted(((n, a, b) for (a, b), n in weight.items()
+                       if 0 < weight[b, a] and
+                       (n, b) < (weight[b, a], a)), reverse=True)
+        fedges = reduce_edges(set(weight) - {(a, b) for _, a, b in back})
+        libs = collections.defaultdict(list)
+        for k, fd in folders.items():
+            libs[fd["library"]].append(k)
+        p = Page("The folders",
+                 "Each box is a folder of %s: the models in it, taken "
+                 "together. An arrow goes from a folder to one whose "
+                 "definitions its own definitions are written with "
+                 "(proofs left out; arrows implied by others are not "
+                 "drawn), so what everything stands on is where the "
+                 "arrows end. The deeper the blue, the more of the "
+                 "folder is meaning of %s. The pages that follow open "
+                 "the folders up."
+                 % (esc(FLAMBDA2_DIR), self._featured_words()))
+        nw, nh = 4.4, 1.25
+        biggest = max(d["defs"] + d["proofs"] for d in folders.values())
+        low = 1.0
+        if back:
+            shown = back[:14]
+            p.text(0, 1.2, "%d pairs of folders refer to each other. The "
+                   "direction with fewer references is not drawn: %s%s."
+                   % (len(back), ", ".join(
+                       r"%s $\rightarrow$ %s (%d)" % (esc(a), esc(b), n)
+                       for n, a, b in shown),
+                      " and %d more" % (len(back) - len(shown))
+                      if len(back) > len(shown) else ""),
+                   size=7.5, colour="soft", width=PAGE_W, anchor="west")
+            low = 1.9
+        draw_graph(p, 0, low, PAGE_W, p.top - low - 0.2,
+                   {k: (nw, nh) for k in folders}, fedges,
+                   self._box(folders, nw, nh, biggest, lambda k: k),
+                   max_scale=1.6, ranksep=1.1, nodesep=0.3, clusters=libs,
+                   draw_clusters=self._clusters(libs, nw, nh))
+        self._map_legend(p, "folder")
         self.add(p)
+
+    def _clusters(self, clusters, nw, nh):
+        """Draws a frame around the members of each cluster, with its
+        name above them."""
+        def draw(out, pos):
+            for name, members in clusters.items():
+                at = [pos[m] for m in members if m in pos]
+                if not at:
+                    continue
+                x0 = min(x for x, _ in at) - nw / 2 - 0.2
+                x1 = max(x for x, _ in at) + nw / 2 + 0.2
+                y0 = min(y for _, y in at) - nh / 2 - 0.2
+                y1 = max(y for _, y in at) + nh / 2 + 0.55
+                out.append(
+                    r"\path[fill=faint!9!paper, draw=faint!45!paper, "
+                    r"line width=0.4pt, rounded corners=0.12cm] "
+                    r"(%.3f,%.3f) rectangle (%.3f,%.3f);"
+                    % (x0, y0, x1, y1))
+                out.append(
+                    r"\node[anchor=west, inner sep=0, text=soft, font="
+                    r"\fontsize{7.5}{9}\selectfont] at (%.3f,%.3f) {%s};"
+                    % (x0 + 0.18, y1 - 0.27, esc(name)))
+        return draw
+
+    def model_maps(self, info, edges, library):
+        """The models of a library, a page for each run of folders that
+        fits on one."""
+        by_folder = collections.defaultdict(list)
+        for stem, d in info.items():
+            if d["library"] == library and d["defs"]:
+                by_folder[d["folder"]].append(stem)
+        dirs = [os.path.relpath(d, FLAMBDA2_DIR)
+                for ds, lib, _ in LIBRARIES if lib == library for d in ds]
+        order = sorted(by_folder, key=lambda k: dirs.index(k)
+                       if k in dirs else len(dirs))
+        pages, here = [[]], 0
+        for k in order:
+            n = len(by_folder[k])
+            new_area = pages[-1] and \
+                pages[-1][-1].split("/")[0] != k.split("/")[0]
+            if pages[-1] and (here + n > 62 or (new_area and here >= 30)):
+                pages.append([])
+                here = 0
+            pages[-1].append(k)
+            here += n
+        proof_only = sorted(s for s, d in info.items()
+                            if d["library"] == library and not d["defs"])
+        biggest = max(d["defs"] + d["proofs"] for d in info.values()
+                      if d["library"] == library)
+        nw, nh = 3.3, 1.0
+        for i, folders in enumerate(pages):
+            shown = {s for k in folders for s in by_folder[k]}
+            inside = reduce_edges({(a, b) for a, b in edges
+                                   if a in shown and b in shown})
+            p = Page("The models of %s%s" % (
+                         library, " (%d of %d)" % (i + 1, len(pages))
+                         if len(pages) > 1 else ""),
+                     "The folders %s. "
+                     "Each box is a model: its Spec, implementation and "
+                     "Proofs files together, in the frame of its folder. "
+                     "An arrow goes from a model to one whose definitions "
+                     "its own definitions are written with (proofs left "
+                     "out; arrows implied by others, and arrows to the "
+                     "models of other pages, are not drawn). The deeper "
+                     "the blue, the more of the model is meaning of %s."
+                     % (", ".join(esc(k) for k in folders),
+                        self._featured_words()))
+            clusters = {k: by_folder[k] for k in folders}
+            last = i == len(pages) - 1 and proof_only
+            draw_graph(p, 0, 1.8 if last else 1.0, PAGE_W,
+                       p.top - (2.0 if last else 1.2),
+                       {k: (nw, nh) for k in shown}, inside,
+                       self._box(info, nw, nh, biggest, short),
+                       max_scale=1.6, ranksep=0.55, nodesep=0.08,
+                       clusters=clusters,
+                       draw_clusters=self._clusters(clusters, nw, nh))
+            self._map_legend(p, "model")
+            if last:
+                p.text(0, 1.2, "Modules of %s that hold proofs only, not "
+                       "drawn: " % library
+                       + ", ".join(esc(short(s)) for s in proof_only),
+                       size=7, colour="faint", width=PAGE_W,
+                       anchor="west")
+            self.add(p)
 
     # -- page: the results ---------------------------------------------------
 
@@ -2439,9 +2591,11 @@ class Report:
     def build(self, check):
         self.overview()
         self.separation()
-        for d, lib, title in LIBRARIES:
+        info, edges = self._models()
+        self.folder_map(info, edges)
+        for _, lib, _ in LIBRARIES:
             if lib in self.dev.focus:
-                self.model_map(lib, "The models of %s" % lib)
+                self.model_maps(info, edges, lib)
         self.results_page()
         self.reading_page()
         self.bearing_page()
