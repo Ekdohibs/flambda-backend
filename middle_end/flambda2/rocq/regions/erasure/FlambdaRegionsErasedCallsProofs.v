@@ -45,8 +45,11 @@
 
    - [shape_of_call_back]: what the call is. A partial application
      that the call makes reaches only symbols that may be evaluated.
-   - [call_code_back]: a full call that has a step has one whatever
-     the values are, if they are of the same kinds and as many.
+   - [call_code_back]: a full call that has a step has one. The
+     arguments that code is given reach only symbols that may be
+     evaluated, so the test of what the code states of its parameters
+     passes on the machine of regions where it passes in the second
+     state.
    - [apply_cont_value_back] and [call_function_back]: a continuation
      that takes no region, and a call. *)
 
@@ -96,7 +99,7 @@ Lemma usable_values_back (rs : region_state) (vs vs' : list value) :
   forallb (value_all (live_symbol rs)) vs = true ->
   Forall2 (erased_back rs) vs' vs.
 Proof.
-  induction 1 as [ | v v' vs vs' [_ Hv] _ IH]; simpl; intros Hall;
+  induction 1 as [ | v v' vs vs' (_ & _ & Hv) _ IH]; simpl; intros Hall;
     [ constructor | ].
   apply andb_true_iff in Hall as [Hhead Htail].
   constructor; [ | exact (IH Htail) ].
@@ -117,13 +120,13 @@ Proof.
   - exact (IH vs vs' _ _ bound' Hvs).
 Qed.
 
-(* A partial application that a call makes reaches only symbols that
-   may be evaluated. *)
-Definition partial_shape_live (rs : region_state) (shape : call_shape)
-    : Prop :=
+(* A partial application that a call makes, and the arguments that a
+   call gives code, reach only symbols that may be evaluated. *)
+Definition shape_live (rs : region_state) (shape : call_shape) : Prop :=
   match shape with
   | Partial_call partial => value_all (live_symbol rs) partial = true
-  | Full_call _ _ _ _ | Over_call _ _ _ _ _ _ => True
+  | Full_call _ _ vs _ | Over_call _ _ vs _ _ _ =>
+    forallb (value_all (live_symbol rs)) vs = true
   end.
 
 (* ======================================================================== *)
@@ -201,7 +204,7 @@ Lemma shape_of_closure_call_back (closure' closure : value) (kind : call_kind)
       return_arity
     = Some shape
     ∧ shape_erased rs shape shape'
-    ∧ partial_shape_live rs shape.
+    ∧ shape_live rs shape.
 Proof.
   pose proof Hstatics as (Hcode & Hreturns & _ & _).
   intros [Hclosure Hclosure_live] Hvs. unfold shape_of_closure_call.
@@ -244,7 +247,8 @@ Proof.
   pose proof (Hreturns called c Hcalled) as Hc_returns.
   pose proof (back_values_usable rs ws' ws Hws) as Hws_usable.
   destruct (Nat.eqb (length args_arity') (length (code_params_arity c))).
-  - intros [= <-]. eexists. split; [ reflexivity | ]. split; [ | exact I ].
+  - intros [= <-]. eexists. split; [ reflexivity | ].
+    split; [ | exact (proj2 (back_values rs ws' ws Hws)) ].
     apply Full_call_erased; assumption.
   - destruct
       (negb
@@ -257,7 +261,15 @@ Proof.
          (cardinal_unarized (code_params_arity c)) ws ws' Hws_usable)
       as [Hfirst Hrest].
     destruct (Nat.ltb (length (code_params_arity c)) (length args_arity')).
-    + intros [= <-]. eexists. split; [ reflexivity | ]. split; [ | exact I ].
+    + intros [= <-]. eexists. split; [ reflexivity | ].
+      split;
+        [ | exact
+              (proj2
+                 (back_values rs _ _
+                    (proj1
+                       (Forall2_firstn_skipn (erased_back rs)
+                          (cardinal_unarized (code_params_arity c)) ws' ws
+                          Hws)))) ].
       apply Over_call_erased; assumption.
     + destruct (code_is_tupled c); [ discriminate | ].
       intros [= <-]. eexists. split; [ reflexivity | ]. split.
@@ -281,7 +293,7 @@ Lemma shape_of_call_back (callee' callee : value) (kind : call_kind)
     shape_of_call (live_statics rs) callee kind vs args_arity return_arity
     = Some shape
     ∧ shape_erased rs shape shape'
-    ∧ partial_shape_live rs shape.
+    ∧ shape_live rs shape.
 Proof.
   intros Hcallee Hvs. unfold shape_of_call.
   destruct kind as [named | | code_ids];
@@ -310,14 +322,14 @@ Proof.
 Qed.
 
 (* A full call that has a step in the second state has one under the
-   static environment of the frames: the tests are of the code and of
-   the kinds of the arguments, and the parameters are as many as the
-   arguments. *)
+   static environment of the frames: the tests are of the code, of
+   the kinds of the arguments and of what the code states of its
+   parameters, and the parameters are as many as the arguments. *)
 Lemma call_code_back (closure closure' : value) (c : code)
     (vs vs' : list value) (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value) (hp hp' : heap)
     (rd : read_record) :
-  Forall2 (value_erased_if_usable rs) vs vs' ->
+  Forall2 (erased_back rs) vs' vs ->
   call_code closure' (erase_code c) vs' args_arity return_arity return_to'
     exn_to' statics' hp' rd
   <> Undefined ->
@@ -325,11 +337,12 @@ Lemma call_code_back (closure closure' : value) (c : code)
     (live_statics rs) hp rd
   <> Undefined.
 Proof.
-  intros Hvs. unfold call_code.
+  intros Hback. pose proof (back_values_usable rs vs' vs Hback) as Hvs.
+  unfold call_code.
   rewrite erase_code_body, erase_binds_statics, erase_code_params_arity,
     erase_code_result_arity, erase_code_params, erase_code_my_closure,
     erase_code_return_continuation, erase_code_exn_continuation,
-    (kinds_of_values_if_usable rs vs vs' Hvs).
+    erase_code_params_subkinds, (kinds_of_values_if_usable rs vs vs' Hvs).
   destruct (binds_statics (code_body c)); [ exact (fun H => H) | ].
   destruct
     (negb
@@ -338,6 +351,13 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact (fun H => H) | ].
+  destruct (values_of_subkinds statics' vs' (code_params_subkinds c))
+    eqn:Hstated; cbn [negb];
+    [ | intros H; contradiction (H eq_refl) ].
+  rewrite
+    (values_of_subkinds_back rs statics' Hfresh Hstatics Hlive vs' vs _ Hback
+       Hstated).
+  cbn [negb].
   destruct (bind_params (code_params c) vs' [(code_my_closure c, closure')])
     as [bound' | ] eqn:Hbind';
     [ | intros H; contradiction (H eq_refl) ].
@@ -382,8 +402,9 @@ Proof.
            remaining_arity Hclosure Hc Hws Hremaining
        | partial partial' Hp ];
     simpl.
-  - apply call_code_back. exact Hws.
-  - rewrite erase_code_result_arity. apply call_code_back. exact Hws.
+  - apply call_code_back. exact (usable_values_back rs ws ws' Hws Hshape_live).
+  - rewrite erase_code_result_arity. apply call_code_back.
+    exact (usable_values_back rs ws ws' Hws Hshape_live).
   - simpl in Hshape_live. apply Hpartial. exact (conj Hp Hshape_live).
 Qed.
 
@@ -417,6 +438,12 @@ Proof.
     rewrite (back_values_kinds rs vs' vs Hvs).
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact (fun H => H) ].
+    destruct (values_of_subkinds statics' vs' (hm_params_subkinds metadata))
+      eqn:Hstated;
+      [ | intros H; contradiction (H eq_refl) ].
+    rewrite
+      (values_of_subkinds_back rs statics' Hfresh Hstatics Hlive vs' vs _ Hvs
+         Hstated).
     destruct (bind_params params vs' vars') as [bound' | ] eqn:Hbind';
       [ | intros H; contradiction (H eq_refl) ].
     destruct

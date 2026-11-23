@@ -1,0 +1,7 @@
+(* An opaque identity whose kind the text writes, that of naked immediates,
+   on an argument of that kind. The tool keeps a kind that the text wrote,
+   and here it is the kind of the argument: the unit returns. *)
+let x = %opaque.`imm` (1i) in
+let y = %tag_imm (x) in
+let $camlKinds_opaque_written = Block 0 (y) in
+cont done ($camlKinds_opaque_written)

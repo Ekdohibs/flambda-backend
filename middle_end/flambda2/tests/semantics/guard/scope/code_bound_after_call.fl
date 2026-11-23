@@ -1,0 +1,29 @@
+(* MUST BE REFUSED: a code id is not in scope. The counterpart for a code id
+   of ../../statics_scope_bound_after_call.fl. A call that raises, in the body
+   of a try. The code n_0 is bound after the call, in the handler that the
+   call returns to; the exception handler of the call allocates a closure of
+   n_0. A call counts as a way to its exception continuation with what is
+   bound before it. *)
+let $Bucket = Block 0 (1) in
+let code inline(never) size(10) f_0 (x) my_closure &my_region my_depth
+      -> k * e =
+  cont e pop(regular e) ($Bucket)
+in
+let $F = closure f_0 @f &toplevel in
+let a = %opaque (3) in
+(((cont k_body push(k_h)
+     where k_body =
+       (apply direct(f_0 &toplevel) $F (a) -> k_ret * k_h
+          where k_ret (r) =
+            let code size(1) n_0 (x) my_closure &my_region my_depth
+                  -> k * e =
+              cont k (x)
+            in
+            let g = closure n_0 @n &toplevel in
+            cont k_end pop(k_h) (g)))
+    where k_h exn (caught : val) =
+      let h = closure n_0 @n &toplevel in
+      cont k_end (h))
+   where k_end (p) =
+     let $camlCode_bound_after_call = Block 0 (p) in
+     cont done ($camlCode_bound_after_call))

@@ -74,23 +74,29 @@ a `CR` at the place in the `Spec` file.
   test it; tags in `[0, 251)` are a condition of well-formedness.
   Decided.
 - **D24.** Blocks with no fields are allowed. Ruled.
-- **D25.** What the kind of a `Make_block` field promises. Open;
-  meanwhile the tool reads every field of a `Make_block` at block kind
-  `Values` as any value (provisional): its check of the kinds of the
-  fields asks that each be of kind value, and drops the subkind of
-  each field, and whether it may be null, as the conversion does of a
-  parameter (at first the check refused a block whose kinds said
-  either). So a wrong subkind of a field is not seen, and
-  that the subkind of a field has no bearing on what the program
-  computes is not proved. The question is whether they are dropped or
-  come into the model; goes with kinds.
+- **D25.** What a subkind promises. At a parameter of a continuation
+  or of code: ruled by the human on 18 November 2026. A run is
+  undefined where such a parameter is bound to a value that is not of
+  what its subkind states (`FlambdaSubkindSpec.v`: the machine has no
+  step there); a `Let` binds with no subkind test, and what code
+  states of its results is not tested. Of a field of a `Make_block`:
+  open; meanwhile the tool reads every field of a `Make_block` at
+  block kind `Values` as any value (provisional): its check of the
+  kinds of the fields asks that each be of kind value, and drops the
+  subkind of each field, and whether it may be null (at first the
+  check refused a block whose kinds said either). So a wrong subkind
+  of a field is not seen, and that the subkind of a field has no
+  bearing on what the program computes is not proved. The question
+  is whether the subkinds of fields are dropped or come into the
+  block kind of a `Make_block`; goes with kinds.
 - **D26.** Types of names that hold poison. Typing facts are about
   values that are not poison; an environment asks nothing of the type
   of a name whose value is poison; an `Is_int` or `Get_tag` relation
   is never true of a scrutinee that is poison; `Is_null` relates
   poison to 0; aliases are exact, poison included. Decided.
 - **D27.** The meet and join transcribed first are those of
-  `types/meet_and_n_way_join.ml` (the n-way join). Ruled.
+  `types/meet_and_n_way_join.ml` (the n-way join). Ruled. The binary
+  pair is not transcribed after them: D61.
 - **D28.** The functions of a set of closures have distinct code ids,
   and so have the sets bound in one static binding group. Ruled.
 - **D29.** The renaming action reaches into code, and is defined on
@@ -302,19 +308,23 @@ a `CR` at the place in the `Spec` file.
   run that has a meaning. Open, and the human's: whether the rule
   is to be his, or one under which the move of X5-3 is right, that
   bytes of which a view has been read are never written again.
-- **D50.** What a call of a C function shows of its arguments where
-  the model has no answer for it. The table of
+- **D50.** What a call of a C function is where the model says
+  nothing of the function. A run is undefined at the call. The test
+  tool takes such a call as a direct call of code that is not bound,
+  for which the machine has no step (`requests/P1-c-calls.md`, "The
+  reading (U)"; `rocq/TRUST-LEDGER.md`, "Calls of C functions", for
+  what a verdict then says and does not say). The model says nothing
+  of any C function yet, so that is every call: the table of
   `FlambdaExtcallSpec.v` answers fourteen comparisons, on two strings
-  or on two tagged immediates; a program that compares two lists
-  calls one of them outside that. Such a call is to be neither
-  undefined nor a raise, so the run would end there, and a statement
-  that relates the term before to the term after has to say what of
-  the two ends is the same: the arguments as values, what is
-  reachable from them, what they read as, or what every term that
-  could follow sees of them. Meanwhile no call of a C function has a
-  meaning in the model: the conversion refuses every one and nothing
-  uses the table. Open, and the human's: `requests/P1-c-calls.md`,
-  "The open choice", has the ways to answer and what each costs.
+  or on two tagged immediates, and nothing uses it. The question had
+  been put otherwise: what such a call shows of its arguments if it is
+  neither undefined nor a raise (`requests/P1-c-calls.md`, "The open
+  choice"); that was not taken. Ruled, on 18 November 2026, with the
+  word that C functions are to be given a meaning in the model by
+  their names in the runtime, a fair number of those that the
+  standard library calls and not all. That is decision D69, which is
+  being designed: nothing of it is in the model.
+- **D51.** Not used: no decision has this label.
 - **D52.** A field read as immutable from a block that can be
   written: a `Block_load` marked `Immutable` or `Immutable_unique` of
   a block made mutable. The front end marks the read of a field by
@@ -633,6 +643,140 @@ a `CR` at the place in the `Spec` file.
   of its own run, differs from the definition, which reads the term,
   and asks whether that reading will do. Decided for the interim;
   open.
+- **D61.** The binary meet and join are not transcribed. The compiler
+  has two pairs: `types/meet_and_join.ml` with
+  `types/join_levels_old.ml` (the binary pair, which it runs unless
+  `-flambda2-join-algorithm` says otherwise), and
+  `types/meet_and_n_way_join.ml` with `types/env/join_env.ml` (the
+  n-way pair). The functions of the model's meet and join are the
+  transcription of the n-way pair (D27). No function of the binary
+  pair is transcribed and no theorem is proved of one: the theorems
+  that the transcribed functions have their contracts are not about
+  the pair that the compiler runs by default today. What is not
+  about one pair is as it was: the meaning of types, the predicates
+  on types, and the contracts, each a proposition about any function
+  of the type that the compiler's function has (the theorem of the
+  traversal of the meet is for every join that has its contract,
+  `FlambdaMeetClosuresSpec.meet_to_prove_sound_statement`). The tests
+  of types apply the meaning and the predicates to what each pair of
+  the compiler answers, which proves nothing of either
+  (`rocq/TRUST-LEDGER.md`, "The tests of types"). The human, on 17
+  November 2026: "I think we should not model the binary join at this
+  point, as we want to move to n-way everywhere". Not decided by it:
+  any change under `types/` (the four candidate repairs, for T1-1,
+  T4-1, T4-9 and T5-10, are not in the tree), the compiler's default,
+  and the default of the tests of this tree, whose Simplify runs the
+  binary pair where no flag says otherwise. Ruled.
+- **D62.** Where a check of regions accepts the term given to Simplify
+  and not the term that it returns, the test tool, under a switch that
+  is off unless asked for, does not print the unit's caption as
+  validated; the verdict of the validation is not changed. Decided,
+  provisionally; open; not yet in the tree.
+- **D63.** Atomics are cells of a model that has one thread: a verdict
+  is of runs with one thread. The addition was approved by the human on
+  18 November 2026. Decided, provisionally; not yet in the tree.
+- **D64.** A pause (`Cpu_relax`) has no effect in the model. The
+  model has no primitive for a pause and no event of a pause or of a
+  poll: it has no time and one thread, and what a polling point may
+  run (a finaliser, a signal handler) it has for no allocation
+  either. Chosen: the conversion of the test tool gives the primitive
+  as `Opaque_identity` of the unit value (`convert_prim` of
+  `tests/tools/flsemantics.ml`), which binds the unit value that the
+  primitive returns, leaves the heap as it is, costs the step of a
+  `Let` and records no effect of pausing. No statement and no
+  definition of the model has it. What that gives away: the theorem
+  of a validation is about the converted terms, and it does not
+  establish that Simplify kept a pause, nor where, nor how many
+  times. Whether the validator accepts a term in which Simplify had
+  removed a pause, moved it or made it twice is promised neither
+  way: the opaque `Let`s stay in the terms that it compares, since
+  none of its rewrites folds an `Opaque_identity`, removes its `Let`
+  for being unused or shares two. Nothing is claimed of the two runs
+  that the tool makes: a `Let` is a step, so their numbers of steps
+  may differ with the pauses, and the bound of steps may end one. In
+  the ordinary conversion the form is the one that the end of the
+  region of a handler has, and there the model does not tell a pause
+  from one. The trust ledger has the paragraph ("What the conversion
+  of terms leaves out", *A pause*), and the `CR` is at the case of
+  the conversion. Decided provisionally by the team while the human
+  was away, with the conversion and not before it; his to overrule.
+- **D65.** In a unit that has no `Apply` outside the bodies of its
+  code, the two tests of a lifting look outside those bodies only.
+  Yes, provisionally, by the human on 18 November 2026; to be come
+  back to. Each of the four liftings, and the copy of code for a set
+  of closures that a `Let` makes
+  (`FlambdaCopyLetsSpec.copy_let_code`), is made only in a unit that
+  passes a test of its exits and a guard of the heap (D40, D43). Both
+  looked into the bodies of the unit's code
+  (`FlambdaLiftSpec.exits_plain_knowing`,
+  `FlambdaHeapFreeSpec.expr_free_of_heap`): code that raises a block
+  which it makes, or that has a primitive of the heap, kept every
+  such lifting from its unit. The five functions ask finer tests
+  (`FlambdaLiftSpec.exits_plain_fine`,
+  `FlambdaHeapFreeSpec.free_of_heap_fine`): a unit that has no
+  `Apply` outside the bodies of its code, so that its own run enters
+  none of them, is tested outside those bodies only. Their statements
+  keep their text and are proved. What is given away is in no
+  statement: the statement of a verdict that rests on a lifting is of
+  the unit's own run, and for such a unit it says nothing of the
+  bodies of its functions; the tests of before, which are of the text
+  of all the code of a unit, entered or not, kept a lifting, and a
+  verdict that rests on one, from a unit whose code fails them. With
+  the finer tests a module of a library that calls nothing outside
+  its code can pass though its functions raise what they make or
+  store; where the other checks of a lifting pass it may be lifted,
+  and a verdict may rest on that lifting, on a run that calls none of
+  its functions. The finer tests are not the conservative side. The
+  other answers were: the tests as they were, when no such lifting is
+  made and a pair that needs it stays not validated unless another
+  comparison succeeds (with the second check of D43 for what that
+  accepts); or to wait for a statement about the functions of a unit
+  under every caller. `requests/C3-finer-guards.md` has the measure,
+  and a `CR` at each of the two finer tests says what a verdict that
+  rests on them does not say. The test tool prints one line more
+  under the line of an acceptance at the step that names a lifting,
+  where the term before, as the validation was given it, does not
+  pass the tests as they were: the line begins "(decision D65:", and
+  the trust ledger has its two forms ("The mark of decision D65"). A
+  unit whose output has that line carries the mark of this decision.
+  The mark is a sign, neither necessary nor sufficient for the
+  acceptance to rest on the finer tests: it is of the term as given,
+  and the ledger says where an acceptance may rest on them with no
+  such line. The units whose acceptance rests on the finer tests are
+  counted by running the validation with the tests as they were and
+  with the finer ones on the same units, not by the mark. The test
+  tool has no switch that asks the tests as they were; one is owed.
+- **D66.** The bit pattern of a NaN is not guaranteed to be preserved.
+  Ruled (18 November 2026); not yet in the tree. Open: whether a run
+  that observes those bits is undefined, or exits are compared up to
+  which NaN it is.
+- **D67.** How an array that may hold floats is read: the model is to
+  say least. The addition of such arrays was approved by the human on 18
+  November 2026. Open.
+- **D68.** What bytes hold before they are filled: the model is to say
+  least. The addition of bytes was approved by the human on 18 November
+  2026. Open.
+- **D69.** Named C functions are to have their meaning in the model: one
+  Rocq spec, under the names of the runtime, of what a call of each
+  does. Ruled (18 November 2026); not yet in the tree.
+- **D70.** Undefined: a store into a block not made mutable, an array
+  access out of bounds, making a mutable array of no elements, the byte
+  after the last of a string. Decided, provisionally; whether that byte
+  reads as 0 is open.
+- **D71.** Not modelled: the blocks that tail-modulo-cons fills by
+  initialising stores, and the copy of a record by `Duplicate_block`.
+  Ruled.
+- **D72.** A predefined exception is an identity: two are equal exactly
+  when they are one symbol, and one is never equal to a value that the
+  unit allocates. Decided, provisionally.
+- **D73.** The machine has no stack of exception handlers and reads no
+  trap action; on a second machine, which has the stack, some terms that
+  break the discipline of traps are undefined. Decided, provisionally.
+- **D74.** What a validation is about: the initialisation of one unit,
+  run on its own, and no later call of what the unit exports. Decided,
+  provisionally.
+- **D75.** A verdict may rest on what the `.cmx` files of other units
+  say, which is trusted. Ruled (18 November 2026), for now.
 
 ## Discrepancies with the compiler
 
@@ -671,11 +815,13 @@ says so. Only the labels that this tree cites are listed.
 - **C1-9.** Simplify folds an arithmetic shift right by 63 of a negative
   naked immediate to 0, and of a tagged immediate to -1.
 - **C1-10.** fexpr reads `%is_int` as the variant-only `Is_int`, and
-  prints the other one the same way.
+  prints the other one the same way. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C1-11.** The reader of the text of terms fails on an integer constant
   beyond 63 bits where it stands in an expression, though the printer
   writes it, and wraps an out-of-range `int8` or `int16` literal without
-  a word.
+  a word. Mended in part on this branch, for a constant beyond 63 bits:
+  see `rocq/HACKING.md`, the changes to the compiler.
 - **C1-12.** A constant of the model holds any integer; the compiler's
   constants are in the range of their kind by construction.
 - **C1-13.** The kinds of the fields of a `Make_block` come from the
@@ -693,7 +839,8 @@ says so. Only the labels that this tree cites are listed.
   whatever the flags, while others of the same sort become `Invalid`.
 - **C2-5.** The fexpr parser gives a direct call, and an indirect call
   with no annotation, the arity in which every argument and result is a
-  `Value`; the printer leaves the arity of such calls out.
+  `Value`; the printer leaves the arity of such calls out. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-6.** Nothing checks that the arities in a code's metadata are the
   kinds of its parameters.
 - **C2-7.** A call with fewer or more arguments than the code has
@@ -716,13 +863,20 @@ says so. Only the labels that this tree cites are listed.
   toplevel" goes by that name.
 - **C2-14.** The printer of fexpr writes the name of a poison constant
   without quotes and the parser reads a string there, so the compiler's
-  own fexpr text of a term with poison is not read back.
+  own fexpr text of a term with poison is not read back. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
+- **C2-15.** `-drawfexpr-to` on a unit that performs an effect stops the
+  compiler with a fatal error: the syntax of fexpr has no call kind for
+  an effect. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
 - **C2-17.** The handler of a probe is called only while the probe is
   enabled, which a mark on the call says and the text of a term does
-  not; the model has no probe.
+  not; the model has no probe. On this branch the text of a term says
+  it: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-18.** The kind that `Make_block` gives each field is read by
   Simplify and by nothing after it, and the text of a term does not
-  write it.
+  write it. On this branch the text of a term writes it for a block of
+  values: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-19.** Simplify, with `-g` and phantom lets on, keeps a `Let` whose
   variable is unused as a phantom binding where it would delete it;
   `to_cmm` runs nothing for such a `Let`, and the text of a term does
@@ -747,21 +901,27 @@ says so. Only the labels that this tree cites are listed.
   of occurrences, whether code uses its closure, whether a value slot
   is always an immediate); the conversion reads none of it.
 - **C2-26.** The text of a term writes both forms of `Is_int` as
-  `%is_int`, and its reader gives the form for variants.
+  `%is_int`, and its reader gives the form for variants. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-27.** The text of a term does not write the kind of
-  `Opaque_identity`, and its reader gives the kind of values.
+  `Opaque_identity`, and its reader gives the kind of values. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **C2-28.** The reader of the text of a term reads the kind `int32` of
   `%invalid` and of `%optimised_out` as naked int8, and `int64` as naked
   int16; the printer has no word for naked int32 and int64 there and
-  stops.
+  stops. Mended on this branch: see `rocq/HACKING.md`, the changes to
+  the compiler.
 - **C2-29.** The text of a term does not write the shape of a static
   block, and its reader gives the shape of values only; Simplify stops
   with a fatal error on a constant record with an unboxed field that is
-  read back.
+  read back. On this branch the text of a term writes the kinds of the
+  fields of such a block, and its reader makes the shape from them: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C2-30.** The text of a term writes nothing for an argument or a
   parameter of no kind (the unboxed product of nothing); read back, a
   partial application or an over-application can be a full application,
-  and a full application a partial one.
+  and a full application a partial one. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **C3-1.** Simplify answers a projection that names the wrong function
   slot on one of its two paths and makes it `Invalid` on the other; the
   slot named is not checked where the term is built.
@@ -839,7 +999,8 @@ says so. Only the labels that this tree cites are listed.
   Simplify was not run on it. Since decision D60 a well-formed unit
   of the model may have such a binding.
 - **N1-1.** `Compare` writes the reverse maps of function slots and
-  value slots into the forward maps.
+  value slots into the forward maps. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **N1-2.** `pattern_match_pair` on code and on recursive handlers stops
   the compiler where the lists of bound names differ in length.
 - **N1-3.** That the names of a binder are distinct is checked for
@@ -857,7 +1018,17 @@ says so. Only the labels that this tree cites are listed.
   renamings do not compose in general.
 - **N1-9.** The comparison of terms of the compiler (`Compare`) has no
   case for a primitive of four arguments, so it judges a term that has
-  one different from itself.
+  one different from itself. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
+- **N3-2.** A fault of a tool of the tests, not of the compiler. What
+  the test tool printed before Simplify had run, and every line where
+  it did not run Simplify (the option `-after`), had a name or a kind
+  of the compiler between the escape sequences of a terminal, whatever
+  the output was written to: the compiler colours what it prints
+  unless that has been decided otherwise before the first name is
+  printed, and in the tool only the entry point through which it runs
+  Simplify decided it (`Flambda2.flambda_to_flambda`). The tool now
+  decides it, against colours, before it prints anything.
 - **P1-1.** Simplify folds `Phys_equal` of a poison against another
   constant to 0, and the backend makes a poison of kind `Value` a tagged
   immediate.
@@ -869,7 +1040,8 @@ says so. Only the labels that this tree cites are listed.
   modulo 64.
 - **P1-4.** The fexpr parser reads `%bytes_length` as `String_length
   String`, and the printer writes `String_length Bytes` as
-  `%bytes_length`.
+  `%bytes_length`. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **P1-5.** An unsafe load of several bytes at the end of a string reads
   the byte after the last, which is 0 on the machine and which the model
   has not got; the model is stricter.
@@ -881,11 +1053,22 @@ says so. Only the labels that this tree cites are listed.
   reproduced on x86-64 for x86-64; open for cross compilation.
 - **P1-9.** The fexpr printer writes `Array_load` and `Array_set` with
   their array kind only, so a load kind or a set kind that differs from
-  it is lost.
+  it is lost. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
+  Before the mend, a repair for it was kept outside the tree, as a
+  candidate change with the team's record of P1-9, written by the
+  author of the mend; it changed
+  `middle_end/flambda2/parser/fexpr_prim.ml` alone, and its lines are
+  those that the commit whose subject begins "Flambda 2 Rocq: T6: the
+  text of a term has the kind of each read and write of an array"
+  applies to that file, unchanged.
 - **P1-10.** Simplify stops with a fatal error on two array primitives
   that the terms let anyone build.
 - **P1-11.** Simplify looks at the array kind of a load and of a store
   and not at that of `Array_length`, whose compiled code depends on it.
+- **P1-12.** The printer of fexpr writes a float `compare` as
+  `%float_comp.lt`, and the parser reads it back as `<`. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **R1-1.** Unboxing records `Get_tag` on the paths where the value is
   an immediate, and supplies a dummy tag of zero.
 - **R1-2.** The types library evaluates `Is_null` of poison as false.
@@ -933,7 +1116,8 @@ says so. Only the labels that this tree cites are listed.
 - **R2-11.** Simplify removes a dead use of a continuation at the wrong
   kind before checking it.
 - **R2-12.** Printing a term as fexpr and parsing it back loses the
-  arities of calls.
+  arities of calls. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **R2-15.** Sharing code between static sets succeeds in separate
   groups but fails within one group.
 - **R2-16.** The checks for duplicate parameters compare the whole
@@ -957,10 +1141,13 @@ says so. Only the labels that this tree cites are listed.
 - **R5-3.** `Static_const.compare` has no case for two immutable float
   blocks: a float block does not compare equal to itself, and a float
   block and a float array of the same numbers compare equal in one order
-  and not in the other.
+  and not in the other. Not mended in `Static_const.compare`: on this
+  branch the comparison of units does not ask it of two float blocks
+  (see `rocq/HACKING.md`, the changes to the compiler).
 - **R6-1.** The printer of fexpr writes the naked kinds `int8`, `int16`
   and `mask`, and the parser has no rule for them, so a poison constant
-  of one of those kinds that is printed is not read back.
+  of one of those kinds that is printed is not read back. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **T1-1.** After unboxing, the compiler's own types say that the
   arguments passed for a constant constructor are impossible (the
   `Get_tag` reduction of meet).
@@ -1063,6 +1250,16 @@ says so. Only the labels that this tree cites are listed.
   closure symbols are defined first, the others in order, each after its
   own constant). Run from fexprs at default flags. The model is wider
   than what the compiler accepts; no bug of the compiler is claimed.
+- **T3-22.** The text of a term omits or changes more, and is read back
+  with no complaint or is not read at all: the unboxed fields of a block
+  in an access and in a kind, the marks of a C call, an inlining
+  attribute that is not used and the mark of an inlined body under
+  `-Oclassic`, and the kind of a boxed vector. Mended on this branch,
+  but for what the stack of debugging information of the mark of an
+  inlined body holds: the text keeps the inlining attribute of the mark
+  and whether its stack is empty, and not what the stack holds, the
+  assumptions of zero allocation that the backend's checker reads
+  included (see `rocq/HACKING.md`, the changes to the compiler).
 - **T4-1.** After the n-way join, the meet defines a second time the
   variables that the join imported from a branch.
 - **T4-2.** A meet that reads the type of a name holding poison can
@@ -1093,11 +1290,21 @@ says so. Only the labels that this tree cites are listed.
   every kind of values that is written as never null, and Simplify, run
   on the term read back, can remove a test of null that the compiler
   keeps. The pair validated is then not the pair that the compiler
-  made; the compiler's own code is right.
+  made; the compiler's own code is right. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
+- **T4-14.** The parser of fexpr raises an exception on the load of an
+  unboxed field of a mixed block, as the printer of fexpr writes it.
+  Mended on this branch: see `rocq/HACKING.md`, the changes to the
+  compiler.
 - **T4-15.** The text of a closure that holds a variable of an unboxed
   kind is not read back: the projection, which comes first in the text,
   makes the value slot at the kind of values, and the definition of the
-  closure then stops the parser with a fatal error.
+  closure then stops the parser with a fatal error. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
+- **T4-16.** A load from an array of unboxed products is read back from
+  fexpr as a load from an array of the kind loaded, with "Unexpected
+  parameter" on the standard error and no failure. Mended on this
+  branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **T4-21.** The model's meet can add equations on the same names again
   in opposite orders: where one environment is joined, the join adds
   the equations that the level has for variables of the target in the
@@ -1148,6 +1355,14 @@ says so. Only the labels that this tree cites are listed.
   the model's reading of Simplify's rule too
   (`FlambdaWellFormedSpec.continuations_used`), and a well-formed
   unit is not asked that rule.
+- **T5b-17.** The test tool does not refuse the stores of
+  tail-modulo-cons, which its comment says it refuses: read from the
+  text of a term they are assignments, the conversion takes them, and
+  the run of a unit with a function marked `[@tail_mod_cons]` is
+  undefined at the store. Mended on this branch: the text of a term says
+  that such a store is the first write of the field, and the test tool,
+  which then sees one, says that the model has not got it (see
+  `rocq/HACKING.md`, the changes to the compiler).
 - **T6-1.** A prover answers what the environment says of a name, which
   is not true of a name that holds poison (one case reaches a number
   that is not poison).
@@ -1160,11 +1375,22 @@ says so. Only the labels that this tree cites are listed.
 - **T6-7.** Unboxing a continuation parameter adds, at a use, a load
   that names the tag and the size, justified only by the subkind of a
   binder.
+- **T6-9.** The reader of fexpr reads an array kind that is an unboxed
+  product wrongly: a read or a write becomes one of another array, with
+  "Unexpected parameter" on the standard error, and a product inside a
+  product changes place, with no message. Mended on this branch: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **T6-11.** `Flambda_kind.With_subkind.equal` compares the constructors
   of a variant kind as the balanced trees that hold them: two kinds that
   are the same variant can compare unequal when their constructors were
   added in different orders, as the front end and the reader of texts
-  add them.
+  add them. Not mended in `Flambda_kind`: on this branch the comparison
+  of units compares two kinds by what they hold (see `rocq/HACKING.md`,
+  the changes to the compiler).
+- **T6-12.** The printer of fexpr writes the inlining attribute
+  `inlined(forward)` of a call, and the grammar of the reader has no
+  rule for it. Mended on this branch: see `rocq/HACKING.md`, the changes
+  to the compiler.
 - **T7-1.** No function of the compiler makes the allocation mode
   `Local` of a type; the converter of types refuses it.
 - **T7-2.** `Equal_types_for_debug.equal_type` overflows the stack on a
@@ -1264,9 +1490,12 @@ says so. Only the labels that this tree cites are listed.
   tree; which fold over names decides was not traced.
 - **V2-1.** The fexpr printer prints a call of a C function, and a
   method call, without its allocation mode, in a form that the fexpr
-  parser refuses.
+  parser refuses. Mended on this branch: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **V2-2.** The fexpr printer drops the kinds of the fields of a
-  `Make_block`, and the parser reads back `any_value` for each.
+  `Make_block`, and the parser reads back `any_value` for each. Mended
+  on this branch for a block of values: see `rocq/HACKING.md`, the
+  changes to the compiler.
 - **V2-3.** The conversion gives a meaning to a local allocation read
   after its region has ended.
 - **V2-4.** A handler that catches an exception by name is undefined in
@@ -1282,7 +1511,9 @@ says so. Only the labels that this tree cites are listed.
   functors, and a functor no larger than `small_functor_size` is to be
   inlined; the tool's Simplify, to which the functor is a function,
   compares it with the thresholds for functions and may leave the call.
-  The pair validated is then not the pair that the compiler made.
+  The pair validated is then not the pair that the compiler made. Mended
+  in part on this branch: the text of a term says that code is the code
+  of a functor (see `rocq/HACKING.md`, the changes to the compiler).
 - **V2-7.** A fault of a tool of the tests, not of the compiler. The
   driver of the compiler's own run
   (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) made
@@ -1308,15 +1539,26 @@ says so. Only the labels that this tree cites are listed.
 - **V4-3.** Simplify makes no shortcut through an exception handler and
   keeps its exception parameter though unused, where the machine would
   allow both.
+- **X1-5.** A fault of a tool of the tests, not of the compiler. A
+  line "not checked" of the test tool showed a term as the compiler
+  prints it, each variable with the stamp that the process gave it, so
+  the line of one refusal changed with the number of variables made
+  before it: with one more binding in the example, or in the
+  compiler's own run of the file. The line of a primitive that the
+  model has not got shows a variable by its name alone since; a
+  binding, a static constant, a call and a variable used as a value
+  are still shown with the stamps.
 - **X2-8.** The reader of the text of terms stops with a fatal error on
   a variable whose name has a `/` in it: an operator with a `/` in its
   name, an anonymous function when the path of the source has a
-  directory, or a variable that the reaper names from others.
+  directory, or a variable that the reaper names from others. Mended on
+  this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **X2-9.** The text of a term names code of another unit like code of
   its own; the reader stops on a closure over it and reads a direct
   call of it as a call of code that does not exist.
 - **X2-10.** The kinds of unboxed 8-bit and 16-bit integers are printed
-  in the text of a term and are not in the grammar of the reader.
+  in the text of a term and are not in the grammar of the reader. Mended
+  on this branch: see `rocq/HACKING.md`, the changes to the compiler.
 - **X2-18.** A fault of a tool of the tests, not of the compiler. The
   driver of the compiler's own run
   (`middle_end/flambda2/tests/tools/ownrun/flsemantics_ownrun.ml`) did
@@ -1334,6 +1576,13 @@ says so. Only the labels that this tree cites are listed.
   print the same under all 24 names.
 - **X3-5.** The n-way join of two variants that carry only a relation
   answers unknown and drops the relation it has just joined.
+- **X3-8.** `Coercion.change_depth` gives the identity for a change of
+  depth between two equal depths only if the two are the same value in
+  memory; otherwise it gives a coercion that is not the identity, and
+  terms that Simplify returns have such coercions. Not mended in
+  `Coercion`: on this branch the reader of the text of a term reads such
+  a change, which the text writes, as a change of depth and not as the
+  identity (see `rocq/HACKING.md`, the changes to the compiler).
 - **X4-1.** The output of Simplify binds the same variable in two
   places: the names stored in a term are not unique.
 - **X4-3.** Where every set of closures in what a check converted (the
@@ -1354,6 +1603,10 @@ says so. Only the labels that this tree cites are listed.
 - **X5-3.** A load from a string has no coeffect,
   `Bytes.unsafe_to_string` is erased, and `to_cmm` moves the load after
   a write to the bytes.
+- **X5-8.** The lexer of fexpr reads a string that ends with a backslash
+  past its closing quote, and raises an exception that nothing catches.
+  Mended on this branch: see `rocq/HACKING.md`, the changes to the
+  compiler.
 - **X5-9.** Simplify leaves the module block bound in a handler that
   its own rule does not hold to be at toplevel, where a cold handler
   stays out of line. Since decision D60 a well-formed unit of the
@@ -1368,9 +1621,15 @@ says so. Only the labels that this tree cites are listed.
 - **X5-12.** The text of a term gives no arity for a call of unknown
   arity, and the reader gives its result one value; where the result
   is an unboxed pair or an unboxed number, Simplify stops with a fatal
-  error on the term read.
+  error on the term read. Mended on this branch: see `rocq/HACKING.md`,
+  the changes to the compiler.
 - **X5-13.** Simplify turns a switch whose arms are all one action into
   that action only when the arms have the same debugging information.
+- **X5-32.** The text of a term loses the load kind and the set kind of
+  a vector access to an array of integers (P1-9, from plain source), and
+  the test tool validates a unit whose run in the model is not the
+  program's. On this branch the text of a term writes the two kinds: see
+  `rocq/HACKING.md`, the changes to the compiler.
 - **X5-34.** In classic mode, where Simplify is not run, closure
   conversion can bind at the head of the unit a block all of whose
   fields are symbols before it binds one of those symbols, a block

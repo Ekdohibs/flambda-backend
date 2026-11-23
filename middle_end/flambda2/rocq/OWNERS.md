@@ -24,6 +24,10 @@ How to read it and keep it current:
 - `middle_end/flambda2/rocq/status/<stream>.md` is its stream's, and
   needs no entry.
 - A file that no section covers is C0's.
+- The files of a stream that is unassigned are answered for by C0, the
+  integrator, until an agent has the stream: the owner's word on a
+  change of one of them is C0's. When the stream has an owner the files
+  and the word are that owner's.
 - C0 keeps the layout of this file; the sections are their streams'.
 
 Paths are from the root of the repository.
@@ -58,8 +62,14 @@ Owner: C0. Phase 0 was done as C0, and what it created is C0's.
 - `middle_end/flambda2/rocq/requests/C0-well-formed.md` and
   `requests/C0-toplevel-try-body.md` (requests)
 - `middle_end/flambda2/rocq/status/phase0.md` (Phase 0)
-- `middle_end/flambda2/tests/semantics/extracted/` (generated; only the
+- `middle_end/flambda2/tests/semantics/extracted/` (generated, with a
+  `README.md` and the `dune` file, which are written by hand; only the
   integrator commits it, see `rocq/HACKING.md`)
+- `middle_end/flambda2/tests/semantics/extracted_rocq_library/` (the
+  generated files of the modules of Rocq's own library that the machine
+  uses, with the licence of that library, `LICENSE`, a `README.md` and
+  the `dune` file; only the integrator commits it, see
+  `rocq/HACKING.md`)
 - `middle_end/flambda2/tests/semantics/dune`,
   `middle_end/flambda2/tests/semantics/gen_rules.sh` and
   `middle_end/flambda2/tests/semantics/run/dune` (Phase 0: the rules that
@@ -97,9 +107,10 @@ design out; that is the request, not the change.
     and `requests/C1-int-ops.py` beside it (the generator of the
     examples that compare the integer primitives with a reference)
   - `middle_end/flambda2/rocq/**/FlambdaPrimitive*` (the primitives, what
-    they compute and the laws they obey; adding a primitive changes
-    these files and no other `.v` file; see C0's section for what of
-    them is the core's)
+    they compute and the laws they obey; a primitive is added in
+    these files, and it adds a case to the definitions and the proofs
+    that go by cases on the primitives in other `.v` files, each with
+    its owner's word; see C0's section for what of them is the core's)
   - the conversion of primitives and of constants in
     `middle_end/flambda2/tests/tools/flsemantics.ml`, until V3 has an
     owner
@@ -124,7 +135,9 @@ design out; that is the request, not the change.
     `.expected` files, and `middle_end/flambda2/tests/semantics/guard/`
     (the controls of the two tests that the tool asks of each term
     before a verdict: where a static binding stands, and that a static
-    name is in scope where it is mentioned; decision D60)
+    name is in scope where it is mentioned; decision D60). The
+    directory `scope` under `guard/` is T5b's, on
+    `flambda2-rocq/T5b-scope-controls`.
   - `middle_end/flambda2/tests/tools/scope_diagnosis_control.ml` (a
     control of the words that the tool has for what is out of scope,
     on terms made by hand)
@@ -148,6 +161,21 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/tests/semantics/roundtrip/` (the rules that
     take every example through the round trip, and the answers that
     are not "the same", with their reasons)
+  - `middle_end/flambda2/rocq/semantics/FlambdaSubkindSpec.v`,
+    `middle_end/flambda2/rocq/semantics/FlambdaSubkindProofs.v` and
+    `middle_end/flambda2/rocq/semantics/FlambdaSubkindBinder*` (whether
+    a value is of what a binder states of it beyond its kind, which
+    the machine tests where a parameter is bound, and what follows
+    from the test; decision D25, at parameters)
+  - `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedScope*`,
+    `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedSymbols*`,
+    `middle_end/flambda2/rocq/rewrites/common/FlambdaCodeStated*` and
+    `middle_end/flambda2/rocq/rewrites/loops/FlambdaRecHandlersStated*`
+    (what is known, at a point of a term, of the variables and of the
+    symbols in scope to be of what a binder states, for the rewrites
+    of the validation that ask it; and a rewrite applied in the body
+    of code and in the handler of a recursive continuation with what
+    is known there)
 - C3, sets of closures. Owner: C3, on `flambda2-rocq/C3-closures`.
   - `middle_end/flambda2/rocq/requests/C3-closures.md`
   - `middle_end/flambda2/rocq/requests/C3-partial-application.md`
@@ -188,6 +216,17 @@ design out; that is the request, not the change.
     step keeps; for the second pass of
     `FlambdaClosureOfCodeSpec.know_own_closures`; S4's once it is
     staffed)
+  - `middle_end/flambda2/rocq/rewrites/closures/FlambdaSlotsThrough*` (in the body of
+    code, a value slot read through the closure that a closure of
+    known code holds in a value slot is read from that closure itself,
+    where every set of closures of the unit with the code gave the two
+    value slots one simple, with a property of states that a step
+    keeps; the closure of known code is `my_closure` or one that the
+    body projects from a closure so known; with
+    `FlambdaClosureOfCodeSpec.know_own_closures` before it, it is
+    extracted and ends a round of the validation where a lifting asks
+    for it, `FlambdaValidateSpec.normalise_lifted_round_own`; S4's once
+    it is staffed)
   - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
@@ -249,6 +288,12 @@ design out; that is the request, not the change.
     call of known arity comes to: the call of unknown arity where it is
     a full call of code that is not tupled, undefined elsewhere;
     decisions D58 and D59)
+  - `middle_end/flambda2/tests/tools/flknownaritylists.ml` and the
+    directory `middle_end/flambda2/tests/semantics/known_arity_lists/`
+    (controls of what the test tool does with the list of code ids of
+    a call of known arity, on terms of the model that the program
+    makes: the extension of a list under "newer version of", and the
+    test of a state that has no step; decision D59)
   - `middle_end/flambda2/rocq/status/C4.md`
 - C5, exceptions. Owner: C5, on `flambda2-rocq/C5-epoch`.
   - `middle_end/flambda2/rocq/requests/C5-exceptions.md` (the request)
@@ -264,6 +309,13 @@ design out; that is the request, not the change.
   - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaDemote*` (the demotion of an
     exception handler that no call can raise to, as a rewrite, with
     what it keeps)
+  - `middle_end/flambda2/rocq/validation/**/FlambdaValidateDemoted*`
+    (the validation asked of the term after with its exception
+    handlers that no call can raise to made ordinary continuations)
+  - `middle_end/flambda2/tests/semantics/debug_info/` (controls that
+    run the test tool given `-g`: when a stage changes the text or
+    the output of a unit of `tests/semantics/ocaml/` that they read,
+    their expected files are C5's to make again)
   - `middle_end/flambda2/rocq/requests/C5-never-returns.md` (a
     request: calls that never return)
   - `middle_end/flambda2/rocq/rewrites/calls/FlambdaNeverReturns*` (the rewrite of
@@ -369,6 +421,11 @@ In the folders of `middle_end/flambda2/rocq/types/`, library
   - `middle_end/flambda2/rocq/types/grammar/FlambdaTypeProject.v`
     (`Type_grammar.project_variables_out`)
   - `middle_end/flambda2/rocq/requests/T5-join.md`
+- T5b, controls of the scope of static names in a handler. Owner: T5b,
+  on `flambda2-rocq/T5b-scope-controls`.
+  - `middle_end/flambda2/tests/semantics/guard/scope/` (texts that the
+    check of static names must refuse and texts that it must pass, each
+    run as the term before and as the term after; decision D60)
 - T6, provers and reification. Owner: T6, on `flambda2-rocq/T6-provers`.
   - `middle_end/flambda2/rocq/requests/T6-provers.md` (the plan: the
     provers, the shape of their statements, the order)
@@ -396,7 +453,9 @@ In the folders of `middle_end/flambda2/rocq/types/`, library
     the generator of types; the differential tests and their dune
     rules). What it links of the model is extracted by
     `FlambdaExtract.v`, which is C0's, into
-    `middle_end/flambda2/tests/semantics/extracted/`.
+    `middle_end/flambda2/tests/semantics/extracted/`, and what it links
+    of Rocq's own library into
+    `middle_end/flambda2/tests/semantics/extracted_rocq_library/`.
 
 ## S1 to S7: simplifier rewrites
 
@@ -529,6 +588,19 @@ pass into the validator.
     a refinement of two units passes two tests, the symbols at its
     exit are bound in its static environment, which a refinement
     alone does not say; same stream)
+  - `middle_end/flambda2/rocq/rewrites/common/FlambdaStatedContextProofs.v`
+    (the equivalence and the refinement of two terms under what is
+    known of the variables in scope, with their laws through the
+    binders: lemmas for the rewrites that read what a binder states;
+    no statement; same stream)
+  - `middle_end/flambda2/tests/tools/prefix_fault_control.ml` and the
+    directory `middle_end/flambda2/tests/semantics/prefix_fault/` (two
+    controls of a prefix that declares code deleted, on prefixes and
+    units made by hand: the test that the test tool makes of a prefix
+    before it uses one, and the steps of a run; same stream)
+  - `middle_end/flambda2/tests/semantics/lifting_guess/` (a control of
+    the test tool's guess of what Simplify lifted, on a pair of texts
+    written by hand, the term after given with `-after`; same stream)
   - `middle_end/flambda2/rocq/status/V3.md`
 - S6, unboxing of continuation parameters. Owner: unassigned.
 - S7, the reaper. Out of scope for now, unassigned.
@@ -556,6 +628,10 @@ stays C0's for now.
 - `middle_end/flambda2/tests/semantics/ocaml/` (units made from OCaml
   sources: the sources, the terms, the expected files, the script that
   makes a term and the dune rules)
+- `middle_end/flambda2/tests/semantics/stdlib/` (the files of the
+  standard library under the compiler's own run: the rules and the
+  program that writes them, the script of one unit, the lists and the
+  stored files)
 - `middle_end/flambda2/rocq/rewrites/lets/FlambdaBlockLoad*` (a normalisation for the
   validator, written for the corpus: the load of a field of a block
   that is known; V1's once it is staffed)
@@ -664,6 +740,10 @@ tool), delegated by the orchestrator, and:
   `int_shift*`, `string_length*`, `int_not`, `int_xor_minus_one`,
   `string_load*`, `block_load_mut*`, `int_bswap`,
   `reinterpret_int63_int64`), with their `.expected` files
+- `middle_end/flambda2/tests/semantics/c_calls/` (the units and the
+  controls of decision D50 as it is ruled: a call of a C function of
+  which the model says nothing is a call that is undefined; it runs V2's
+  `ocaml/from_ocaml.sh` and `ocaml/pairs/from_ocaml.sh`)
 
 ## V4: loops
 
@@ -712,6 +792,14 @@ units with loops (`while`, `for`, tail-recursive functions).
   down past the bindings under it)
 - `middle_end/flambda2/rocq/rewrites/params/FlambdaParamOrder*` (the parameters of a
   continuation put in the order in which its handler first names them)
+- `middle_end/flambda2/rocq/rewrites/unboxing/FlambdaUntagAtBinder*` (the untagging of
+  a parameter that states a tagged immediate, of a continuation that
+  a call returns to, is bound at the head of the handler, where
+  Simplify's wrapper untags what the call gives: an equivalence, of
+  the machine that tests what a handler states of its parameters
+  where the handler is entered, for both terms; its laws of renaming
+  and of scope, which are stated in `FlambdaUntagAtBinderNamesSpec.v`;
+  and controls of the pass, in `FlambdaUntagAtBinderExamplesSpec.v`)
 
 ## N1: nominal loose ends
 
@@ -744,12 +832,21 @@ Owner: N1.
 - `middle_end/flambda2/rocq/nominal/FlambdaObserversActions*` (the renamings
   and the permutations of locations on what may follow a unit; the
   files of what may follow a unit are not N1's)
+- `middle_end/flambda2/rocq/rewrites/common/FlambdaSpineWalk*` (a
+  rewrite applied at every node of the spine of a term; that it
+  commutes with renaming and keeps scope where the rewrite of one node
+  does)
+- `middle_end/flambda2/rocq/terms/FlambdaTermInduction*` (induction on
+  terms, proved once: lemmas only)
 - `middle_end/flambda2/rocq/types/join/FlambdaEnvRenameJoinTypesProofs.v`
   (N1's, though it is in the types library and its name matches the
   pattern of N3's files on the join under renaming: lemmas only, the
   traversal of types of the join on renamed arguments, which N3's
   proofs of the join of environments import)
 - `middle_end/flambda2/rocq/NAMES.md`
+- `middle_end/flambda2/rocq/SEMANTICS-DECISIONS.md` (the semantic
+  decisions of the model, in short; a change that adds a decision or
+  changes one asks N1 for its lines)
 - `middle_end/flambda2/tests/tools/nameorder/` and
   `middle_end/flambda2/tests/semantics/name_order/` (the test that what
   Simplify makes of a unit does not depend on the order in which the
@@ -775,6 +872,13 @@ Owner: N2.
   body of code from the states that have a predicate that a step
   keeps. Its lemmas are in C0's `FlambdaContextProofs.v`, which N2
   changed for it by C0's leave; that file stays C0's)
+- `middle_end/flambda2/rocq/semantics/FlambdaSubkindOrder*` (N2's,
+  though it is about C2's subkinds: the order on what two binders
+  state)
+- `middle_end/flambda2/rocq/nominal/FlambdaCompareOrder*` (N2's,
+  though it matches the pattern of V1's section: the comparison of
+  the validation that lets the term after state less, with its laws,
+  `FlambdaCompareOrderLaws*`)
 - `middle_end/flambda2/rocq/rewrites/common/FlambdaGuardScope*` (N2's, though it is
   run by the validation: a rewrite made to keep scope by a test)
 - `middle_end/flambda2/rocq/validation/names/FlambdaKeepsScope*` (N2's, though it is
@@ -790,7 +894,7 @@ Owner: N2.
 - `middle_end/flambda2/rocq/validation/names/FlambdaValidateScope*` (N2's, though it is
   about the rounds of `FlambdaValidateSpec.v`: each keeps scope)
 - `middle_end/flambda2/rocq/rewrites/continuations/FlambdaLiftConts*` (N2's, though it is a
-  normalisation written for the validation, which does not apply it:
+  normalisation written for the validation, which applies it:
   the continuations that a handler binds on its way to its `Switch`,
   bound outside the handler)
 - `middle_end/flambda2/rocq/requests/N2-fresh-quantifier.md`

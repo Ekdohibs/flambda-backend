@@ -47,11 +47,37 @@
    (FlambdaNormaliseSpec.inline_calls) and of the calls of the other
    code of a group (FlambdaInlineSiblingsSpec.inline_sibling_calls),
    whatever the code whose calls are left, and the round that follows
-   the inlining ([normalise_before_inlined]). Where a round gives every
-   binder a name of its own between the two
-   (FlambdaRenameApartSpec.rename_apart), that keeps scope by
-   FlambdaKeepsScopeSpec.rename_apart_keeps_scope_statement, and these
-   are every rewrite of the round.
+   the inlining ([normalise_before_inlined]). Between the two a round
+   applies the renaming of FlambdaRenameApartSpec.v ([rename_apart],
+   or [rename_apart_avoiding] where there are continuations to
+   avoid): its candidate gives every binder a name of its own, and it
+   keeps the candidate only where its comparison finds it the same as
+   the term up to bound names, and the term as it is otherwise. That
+   keeps scope by
+   FlambdaKeepsScopeSpec.rename_apart_keeps_scope_statement and
+   [rename_apart_avoiding_keeps_scope_statement]. Where all that
+   leaves the term as it was, up to bound names, the round tries the
+   twins of the parameters that hold a tagged immediate
+   (FlambdaValidateSpec.with_twins): the parameters that
+   FlambdaShadowParamsSpec.shadow_params finds untagged, or passed on
+   to where one is, are bound again to themselves at the head of
+   their handlers, [rename_apart_avoiding] is applied to the result,
+   and FlambdaTwinParamsSpec.twin_params makes the twins that its
+   tests allow. Where the comparison up to bound names
+   (FlambdaCompareSpec.expr_eqb) finds the result the same as it was
+   before [twin_params], the term is given back as it was; otherwise
+   [normalise_before_inlined] follows. The two rewrites of the twins
+   are applied in the term and in the bodies of its code: they keep
+   scope by
+   FlambdaStaticsScopeSpec.shadow_params_keeps_scope_statement and
+   [twin_params_keeps_scope_statement], and in the bodies of code by
+   FlambdaKeepsScopeSpec.rewrite_code_keeps_scope_statement. These
+   are every rewrite of the round. That the round as a whole keeps
+   scope is stated in FlambdaValidatorEquivarianceSpec.v of the round
+   with no continuation to avoid
+   ([normalise_before_round_keeps_scope_statement]); a round that is
+   given some has no statement of its own there, and is within
+   [normalise_lifted_keeps_scope_statement].
 
    The last section is about FlambdaGuardScopeSpec.guard_scope, which
    of a term whose code is closed gives what a rewrite gives only where
@@ -60,7 +86,7 @@
    rewrite; it is the rewrite where the rewrite keeps scope; and it
    commutes with renaming where the rewrite does. They are here and not
    beside the definition because [keeps_scope] and [rewrite_equivariant]
-   are defined after the validation, which is to run [guard_scope].
+   are defined after the validation, which runs [guard_scope].
 
    Closed code is all that is asked of a term, as [keeps_scope] asks
    it.
@@ -94,9 +120,13 @@ Definition normalise_params_round_keeps_scope_statement : Prop :=
 
 (* That round and the step that follows it in the first phase, in the
    term, the handlers of its recursive continuations and the bodies of
-   its code: the continuations of a handler bound outside it, the
-   applications made to go to the arms and then forwarded, and the
-   continuations left unused removed ([first_phase_round]). *)
+   its code: a parameter of a loop that every turn passes on as it is,
+   and that the loop is given one variable for, taken away, the
+   handler then beginning with a [Let] of it to that variable
+   (FlambdaUnaliasRecParamsSpec.v); the continuations of a handler
+   bound outside it; the applications made to go to the arms and then
+   forwarded; and the continuations left unused removed
+   ([first_phase_round]). *)
 Definition first_phase_round_keeps_scope_statement : Prop :=
   keeps_scope first_phase_round.
 

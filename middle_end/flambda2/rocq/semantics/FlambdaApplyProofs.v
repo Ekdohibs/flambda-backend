@@ -148,6 +148,8 @@ Lemma step_apply_direct (ap : apply_expr) (callee : value) (called : code_id)
               (unarize_per_parameter (code_params_arity c))
          && arity_eqb (ap_return_arity ap) (code_result_arity c))
     then Undefined
+    else if negb (values_of_subkinds statics vs (code_params_subkinds c))
+    then Undefined
     else
       match bind_params (code_params c) vs [(code_my_closure c, callee)] with
       | Some callee_vars =>
@@ -220,6 +222,8 @@ Proof.
   apply kinds_eqb_eq in Hkinds.
   apply kinds_per_parameter_eqb_eq, unarize_per_parameter_eq
     in Hper_parameter.
+  destruct (values_of_subkinds statics vs (code_params_subkinds c));
+    [ | exact (Hwrong Hstep) ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
     as [callee_vars | ] eqn:Hbind; [ | exact (Hwrong Hstep) ].
   apply equivalent_refines.
@@ -404,7 +408,9 @@ Qed.
    values of the kinds of the call's arity the two meet as in [inline];
    if they have values of other kinds the call is undefined and so is a
    [Let] of the inlined body; and if they have no values both go
-   wrong. *)
+   wrong. The values of the arguments, where they have values, must
+   be of what the code states of its parameters: the call tests what
+   it states, and a [Let] of the inlined body tests the kind only. *)
 Lemma inline_equivalent (ap : apply_expr) (called : code_id) (c : code)
     (r : renaming) (callee : value) (slots : list (value_slot * value))
     (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
@@ -418,13 +424,16 @@ Lemma inline_equivalent (ap : apply_expr) (called : code_id) (c : code)
   = unarize_per_parameter (code_params_arity c) ->
   ap_return_arity ap = code_result_arity c ->
   length (code_params c) = length (code_params_kinds c) ->
+  (∀ vs : list value,
+    eval_simples vars (ap_args ap) = Some vs ->
+    values_of_subkinds statics vs (code_params_subkinds c) = true) ->
   equivalent (State (Apply ap) vars conts statics hp rd)
     (State (inlined_body c r ap) vars conts statics hp rd).
 Proof.
   intros Hkind Hcallee Hclosure Hcode
     (Hclosed_vars & Hclosed_conts & Hvars & Hret & Hexn & Hextra
      & Hmy_closure & Hparams & Harity & Hfull & Hstatic & Htupled)
-    Hargs_arity Hreturn_arity Hparams_kinds.
+    Hargs_arity Hreturn_arity Hparams_kinds Hstated.
   destruct (eval_simples vars (ap_args ap)) as [vs | ] eqn:Hargs;
     [ destruct
         (list_eq_dec kind_eq_dec (map kind_of_value vs)
@@ -439,6 +448,8 @@ Proof.
       arity_eqb_refl in Hstep.
     rewrite (proj2 (kinds_per_parameter_eqb_eq _ _) eq_refl) in Hstep.
     cbn [andb negb] in Hstep.
+    rewrite (Hstated vs eq_refl) in Hstep.
+    cbn [negb] in Hstep.
     destruct (bind_params_some (code_params c) vs
                 [(code_my_closure c, callee)])
       as [callee_vars Hbind].

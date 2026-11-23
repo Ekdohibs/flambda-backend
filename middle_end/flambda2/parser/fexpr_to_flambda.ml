@@ -62,10 +62,21 @@ let rec subkind :
             match sk with
             | None ->
               Flambda_kind.With_subkind.Non_null_value_subkind.Undetermined
-            | Some sk ->
-              Flambda_kind.With_subkind.Non_null_value_subkind.Determined
-                ( Flambda_kind.Block_shape.Scannable Value_only,
-                  List.map value_kind_with_subkind sk ) ))
+            | Some sk -> (
+              (* The text writes the kinds of the fields and not the shape of
+                 the block: the shape is the one that the kinds give. *)
+              let fields = List.map value_kind_with_subkind sk in
+              match
+                Shape_of_kinds.scannable
+                  (List.map Flambda_kind.With_subkind.kind fields)
+              with
+              | Ok shape ->
+                Flambda_kind.With_subkind.Non_null_value_subkind.Determined
+                  (Flambda_kind.Block_shape.Scannable shape, fields)
+              | Error reason ->
+                Misc.fatal_errorf
+                  "The fields of the constructor %d of the kind of a value: %s"
+                  tag reason) ))
       |> Tag.Scannable.Map.of_list
     in
     Variant { consts; non_consts }
@@ -167,11 +178,32 @@ let rec rec_info env (ri : Fexpr.rec_info) : Rec_info_expr.t =
       ~unrolling:(US.unrolling ~remaining_depth:u)
   | Unroll (d, ri) -> Rec_info_expr.unroll_to d (rec_info env ri)
 
+(* A value equal to the one given that is another value in memory: one of its
+   parts goes through [Sys.opaque_identity], so that whatever compiles this file
+   cannot take the value built for the one given, or for a constant. *)
+let another_rec_info (ri : Rec_info_expr.t) : Rec_info_expr.t =
+  match ri with
+  | Const { depth; unrolling } ->
+    Rec_info_expr.const ~depth:(Sys.opaque_identity depth) ~unrolling
+  | Var dv -> Rec_info_expr.var (Sys.opaque_identity dv)
+  | Succ ri -> Rec_info_expr.succ (Sys.opaque_identity ri)
+  | Unroll_to (d, ri) -> Rec_info_expr.unroll_to d (Sys.opaque_identity ri)
+
+(* [Coercion.change_depth] gives the identity if its two depths are one value in
+   memory, and a change of depth otherwise, even between two equal depths; and
+   the two are different coercions for [Coercion.equal] and [Coercion.is_id]. A
+   term can have a change of depth between two equal depths (Simplify returns
+   such terms), and the printer of texts writes it [~ depth D -> D]: it writes
+   no coercion for the identity. So a change of depth in a text is never the
+   identity, and the second depth is made here as a value of its own, whatever
+   [rec_info] returned, so that [Coercion.change_depth] does not give the
+   identity for it. *)
 let coercion env (co : Fexpr.coercion) : Coercion.t =
   match co with
   | Id -> Coercion.id
   | Change_depth { from; to_ } ->
-    Coercion.change_depth ~from:(rec_info env from) ~to_:(rec_info env to_)
+    Coercion.change_depth ~from:(rec_info env from)
+      ~to_:(another_rec_info (rec_info env to_))
 
 let rec simple env (s : Fexpr.simple) : Simple.t =
   match s with
@@ -634,11 +666,34 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
       match b with
       | Data { symbol = _; defining_expr = def } -> (
         match def with
-        | Block { tag; mutability; elements = args } ->
+        | Block { tag; mutability; kinds; elements = args } ->
+          (* The text writes the kinds of the fields of a block that has unboxed
+             fields, and not its shape: the shape is the one that the kinds
+             give. *)
+          let shape : Flambda_kind.Scannable_block_shape.t =
+            match kinds with
+            | None -> Value_only
+            | Some kinds -> (
+              if List.compare_lengths kinds args <> 0
+              then
+                Misc.fatal_errorf
+                  "A static block with %d fields and the kinds of %d"
+                  (List.length args) (List.length kinds);
+              match
+                Shape_of_kinds.scannable
+                  (List.map
+                     (fun kind ->
+                       Flambda_kind.With_subkind.kind
+                         (value_kind_with_subkind kind))
+                     kinds)
+              with
+              | Ok shape -> shape
+              | Error reason ->
+                Misc.fatal_errorf "The fields of a static block: %s" reason)
+          in
           let tag = tag_scannable tag in
           static_const
-            (SC.block tag mutability Value_only
-               (List.map (field_of_block env) args))
+            (SC.block tag mutability shape (List.map (field_of_block env) args))
         | Boxed_float32 f ->
           static_const (SC.boxed_float32 (or_variable float32 env f))
         | Boxed_float f ->
@@ -901,6 +956,7 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         inlined;
         inlining_state;
         nontail;
+        probe;
         continuation;
         exn_continuation;
         args;
@@ -942,13 +998,13 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
           ( Call_kind.indirect_function_call_unknown_arity,
             params_arity,
             return_arity ))
-      | C_call { alloc = needs_caml_c_call } -> (
+      | C_call { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects }
+        -> (
         match arities with
         | Some { params_arity = Some params_arity; ret_arity } ->
           let params_arity = arity params_arity in
           let return_arity = arity ret_arity in
-          ( Call_kind.c_call ~needs_caml_c_call ~is_c_builtin:false
-              ~effects:Arbitrary_effects ~coeffects:Has_coeffects,
+          ( Call_kind.c_call ~needs_caml_c_call ~is_c_builtin ~effects ~coeffects,
             params_arity,
             return_arity )
         | None | Some { params_arity = None; ret_arity = _ } ->
@@ -958,14 +1014,38 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ( Call_kind.method_call kind ~obj:(simple env obj),
           params_arity,
           return_arity )
+      | Effect { operation; operands } ->
+        let params_arity, return_arity = arities_or_values arities args in
+        let module E = Call_kind.Effect in
+        let operation : E.t =
+          match operation, List.map (simple env) operands with
+          | Perform, [eff] -> E.perform ~eff
+          | Reperform, [eff; cont; last_fiber] ->
+            E.reperform ~eff ~cont ~last_fiber
+          | With_stack, [valuec; exnc; effc; f; arg] ->
+            E.with_stack ~valuec ~exnc ~effc ~f ~arg
+          | With_stack_preemptible, [valuec; exnc; effc; handle_tick; f; arg] ->
+            E.with_stack_preemptible ~valuec ~exnc ~effc ~handle_tick ~f ~arg
+          | Continue, [cont; value] -> E.continue ~cont ~value
+          | Discontinue, [cont; exn] -> E.discontinue ~cont ~exn
+          | Discontinue_with_backtrace, [cont; exn; bt] ->
+            E.discontinue_with_backtrace ~cont ~exn ~bt
+          | ( ( Perform | Reperform | With_stack | With_stack_preemptible
+              | Continue | Discontinue | Discontinue_with_backtrace ),
+              operands ) ->
+            Misc.fatal_errorf
+              "An operation of effects with %d operands, which it does not take"
+              (List.length operands)
+        in
+        Call_kind.effect_ operation, params_arity, return_arity
     in
     let inlined : Inlined_attribute.t =
       match inlined with
       | None | Some Default_inlined -> Default_inlined
       | Some Hint_inlined -> Hint_inlined
       | Some Forward_inlined -> Forward_inlined
-      | Some Always_inlined -> Always_inlined Expected_to_be_used
-      | Some (Unroll n) -> Unroll (n, Expected_to_be_used)
+      | Some (Always_inlined use_info) -> Always_inlined use_info
+      | Some (Unroll (n, use_info)) -> Unroll (n, use_info)
       | Some Never_inlined -> Never_inlined
     in
     let inlining_state =
@@ -990,7 +1070,13 @@ let rec expr env acc (e : Fexpr.expr) : _ * Flambda.Expr.t =
         ~continuation exn_continuation
         ~args:((List.map (simple env)) args)
         ~args_arity ~return_arity ~call_kind ~return_mode Debuginfo.none
-        ~inlined ~inlining_state ~probe:None
+        ~inlined ~inlining_state
+        ~probe:
+          (Probe.from_lambda
+             (Option.map
+                (fun ({ name; enabled_at_init } : Fexpr.probe) :
+                     Lambda.probe_desc -> { name; enabled_at_init })
+                probe))
         ~position:(if nontail then Nontail else Normal)
         ~relative_history:Inlining_history.Relative.empty
     in

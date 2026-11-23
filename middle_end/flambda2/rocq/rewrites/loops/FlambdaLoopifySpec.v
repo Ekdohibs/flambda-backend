@@ -263,11 +263,14 @@ with loop_safe_handler (my_closure : variable) (ret exn self : continuation)
 
 (* The body of the code as the handler of [self], with its self tail
    calls made jumps. Its parameters are those of the code, with their
-   kinds; it is not an exception handler, and the jumps have no trap
-   action. *)
+   kinds and what the code states of them; it is not an exception
+   handler, and the jumps have no trap action. *)
 Definition loop_handler (self : continuation) (c : code)
     : continuation_handler :=
-  Handler (code_params c) (make_handler_metadata (code_params_kinds c))
+  Handler (code_params c)
+    {| hm_params_kinds := code_params_kinds c;
+       hm_params_subkinds := code_params_subkinds c;
+       hm_is_exn_handler := false |}
     (loop_calls (code_my_closure c) (code_params_arity c)
        (code_return_continuation c) (code_exn_continuation c) self
        (code_body c)).

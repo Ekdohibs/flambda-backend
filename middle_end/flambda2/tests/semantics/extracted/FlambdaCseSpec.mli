@@ -8,6 +8,7 @@ open FlambdaNormaliseSpec
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open List
+open ListDef
 
 val shareable : prim -> bool
 

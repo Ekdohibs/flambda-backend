@@ -1,0 +1,14 @@
+(* A primitive that the conversion refuses, on two variables. The name of the
+   second, which is any string, has in it the print that the compiler has of
+   the first in the process of the tool that reads this text: x, a slash, the
+   stamp 13 and the mark UV. The line "not checked" shows each variable by its
+   name alone. A tool that takes the stamps out by replacing the print of each
+   variable wherever it is in the printed primitive changes the name of the
+   second, which is not what the expected file says. In
+   not_checked_variable_named_as_later_variable.fl the variable with the
+   longer name is bound first. *)
+let x = %opaque (1) in
+let `yx/13UV` = %untag_imm (x) in
+let r = %poke.[`imm`] (x, `yx/13UV`) in
+let $camlNot_checked_variable_named_as_variable = Block 0 (x) in
+cont done ($camlNot_checked_variable_named_as_variable)

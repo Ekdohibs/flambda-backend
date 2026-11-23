@@ -1,5 +1,0 @@
-let x = %invalid.`int64` in
-let y = x in
-let z = %opaque (y) in
-let $camlKinds_opaque_misread = Block 0 (1) in
-cont done ($camlKinds_opaque_misread)

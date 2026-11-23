@@ -1,0 +1,24 @@
+(* The term before of the controls handled_* (see dune). As guarded.fl, with
+   the call under an exception handler: the call raises to [handler], which
+   reads a field of what it is given and adds 100 to it. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> attempt)
+   where attempt =
+     (cont body push(handler)
+        where body =
+          (apply ccall &toplevel
+             ($`*extern*`.c_one : val? -> val?) (a) -> returned * handler
+             where returned (r) =
+               cont leave pop(handler) (r))
+        where handler exn (e : val) =
+          let payload = %block_load.[`0`] (e) in
+          let r = %int_barith.`add` (payload, 100) in
+          cont leave (r))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlHandled = Block 0 (v) in
+    cont done ($camlHandled)

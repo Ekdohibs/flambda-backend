@@ -312,7 +312,7 @@ Lemma copy_let_code_scoped (copy : let_copy) (e : expr) :
   scoped e (copy_let_code copy e).
 Proof.
   destruct copy as [[ids symbols] [lets in_code]]. unfold copy_let_code.
-  destruct (exits_plain_knowing [] [] e && expr_free_of_heap e
+  destruct (exits_plain_fine e && free_of_heap_fine e
             && copies_apart ids);
     [ | apply scoped_refl ].
   unfold copy_static_code. destruct (copy_ok ids e); [ | apply scoped_refl ].

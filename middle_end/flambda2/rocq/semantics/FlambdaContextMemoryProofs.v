@@ -1,3 +1,30 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
 (* The lemmas of FlambdaContextProofs.v that are named [_where], at a
    property of the static environment, the heap and the read record
    together.
@@ -161,10 +188,12 @@ Lemma related_states_refines_memory (e : expr) (vars : env)
     (conts conts' : cont_env) (statics statics' : static_env) (hp : heap)
       (rd : read_record) :
   ok statics hp rd -> ok statics' hp rd ->
-  cont_env_related (handler_refines_where_memory ok) conts conts' ->
+  cont_env_related (at_kinds (handler_refines_where_memory ok)) conts
+    conts' ->
   cont_env_related
-    (fun params kinds def_vars target source =>
-       handler_refines_where_memory ok params kinds def_vars source target)
+    (at_kinds
+       (fun params kinds def_vars target source =>
+          handler_refines_where_memory ok params kinds def_vars source target))
     conts' conts ->
   statics_related (expr_refines_where_memory ok) statics statics' ->
   statics_related
@@ -176,23 +205,27 @@ Proof.
   intros Hok Hok' Hrel Hrel' Hstatics Hstatics'.
   exact
     (related_states_refines_from memory_ok memory_ok_step
-       (handler_refines_where_memory ok)
-       (fun params kinds def_vars target source =>
-          handler_refines_where_memory ok params kinds def_vars source target)
+       (at_kinds (handler_refines_where_memory ok))
+       (at_kinds
+          (fun params kinds def_vars target source =>
+             handler_refines_where_memory ok params kinds def_vars source
+               target))
        (ignoring_binders (expr_refines_where_memory ok))
        (ignoring_binders
           (fun target source => expr_refines_where_memory ok source target))
-       handler_refines_where_memory_from
-       (fun params kinds def_vars target source =>
-          handler_refines_where_memory_from params kinds def_vars source target)
+       (at_kinds_forwards memory_ok _ handler_refines_where_memory_from)
+       (at_kinds_backwards memory_ok _
+          (fun params kinds def_vars target source =>
+             handler_refines_where_memory_from params kinds def_vars source
+               target))
        (fun id params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_memory_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        (fun id params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics'' hp'' rd'' slots Hrefines _ _ _
-          _ =>
+          _ _ =>
           expr_refines_where_memory_from source target callee_vars
             [(ret, return_to); (exn, exn_to)] statics'' hp'' rd'' Hrefines)
        e vars conts conts' statics statics' _ rd_ Hok Hok' Hrel Hrel' Hstatics
@@ -204,10 +237,12 @@ Lemma related_envs_refines_memory (e : expr) (vars : env)
     (conts conts' : cont_env)
     (statics : static_env) (hp : heap) (rd : read_record) :
   ok statics hp rd ->
-  cont_env_related (handler_refines_where_memory ok) conts conts' ->
+  cont_env_related (at_kinds (handler_refines_where_memory ok)) conts
+    conts' ->
   cont_env_related
-    (fun params kinds def_vars target source =>
-       handler_refines_where_memory ok params kinds def_vars source target)
+    (at_kinds
+       (fun params kinds def_vars target source =>
+          handler_refines_where_memory ok params kinds def_vars source target))
     conts' conts ->
   refines (State e vars conts statics hp rd)
     (State e vars conts' statics hp rd).
@@ -250,10 +285,12 @@ Lemma let_cont_recursive_handlers_refine_where_memory
       (hp : heap) (rd : read_record) :
   ok statics hp rd ->
   handlers_bind_statics handlers = handlers_bind_statics handlers' ->
-  handlers_related (handler_refines_where_memory ok) vars handlers handlers' ->
+  handlers_related (at_kinds (handler_refines_where_memory ok)) vars handlers
+    handlers' ->
   handlers_related
-    (fun params kinds def_vars target source =>
-       handler_refines_where_memory ok params kinds def_vars source target)
+    (at_kinds
+       (fun params kinds def_vars target source =>
+          handler_refines_where_memory ok params kinds def_vars source target))
     vars handlers' handlers ->
   refines (State (Let_cont_recursive handlers body) vars conts statics hp rd)
     (State (Let_cont_recursive handlers' body) vars conts statics hp rd).
@@ -298,26 +335,30 @@ Proof.
   intros Hok Hbinds Hcode.
   exact
     (let_static_code_refines_from memory_ok memory_ok_step
-       (handler_refines_where_memory ok)
-       (fun params kinds def_vars target source =>
-          handler_refines_where_memory ok params kinds def_vars source target)
+       (at_kinds (handler_refines_where_memory ok))
+       (at_kinds
+          (fun params kinds def_vars target source =>
+             handler_refines_where_memory ok params kinds def_vars source
+               target))
        (fun _ params my_closure _ _ metadata =>
           code_refines_where_memory ok params my_closure metadata)
        (fun _ params my_closure _ _ metadata target source =>
           code_refines_where_memory ok params my_closure metadata source target)
-       handler_refines_where_memory_from
-       (fun params kinds def_vars target source =>
-          handler_refines_where_memory_from params kinds def_vars source target)
+       (at_kinds_forwards memory_ok _ handler_refines_where_memory_from)
+       (at_kinds_backwards memory_ok _
+          (fun params kinds def_vars target source =>
+             handler_refines_where_memory_from params kinds def_vars source
+               target))
        (fun _ params my_closure ret exn metadata source target vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_memory_from params my_closure metadata source
             target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]
             statics' hp' rd' Hrefines Hbind Hkinds Hvalue)
        (fun _ params my_closure ret exn metadata target source vs callee
           callee_vars return_to exn_to statics' hp' rd' _ Hrefines Hbind Hkinds
-          Hvalue _ =>
+          Hvalue _ _ =>
           code_refines_where_memory_from params my_closure metadata source
             target
             vs callee callee_vars [(ret, return_to); (exn, exn_to)]

@@ -1,29 +1,100 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file is a partial adaptation of files of the compiler: it writes
+   again for the model, with the compiler's names, some of their types and
+   a few of their functions, renamed, cut down and restructured as the
+   comment below says. [expr], [named] and [static_binding] are after
+   [expr_descr], [named] and [static_const_or_code] of
+   middle_end/flambda2/terms/flambda.mli. [const] is after [Const_data.t]
+   of middle_end/flambda2/identifiers/int_ids.ml, and [kind_of_const] after
+   [kind] of middle_end/flambda2/identifiers/reg_width_const.ml.
+   [arity_component] is after the components of an arity of
+   middle_end/flambda2/kinds/flambda_arity.mli, and the functions on
+   arities whose comments name a function of [Flambda_arity] are after
+   those of middle_end/flambda2/kinds/flambda_arity.ml. [static_const] is
+   after a part of [t] of middle_end/flambda2/terms/static_const.mli;
+   [raise_kind] and [trap_action] are after [Raise_kind.t] and [t] of
+   middle_end/flambda2/terms/trap_action.mli; [apply_expr] and [apply_cont]
+   keep some of the fields of [t] of
+   middle_end/flambda2/terms/apply_expr.ml and of
+   middle_end/flambda2/terms/apply_cont_expr.ml; [call_kind] is after
+   [Function_call.t] of middle_end/flambda2/terms/call_kind.mli.
+   [kinds_agree_on_prefix] and [partial_or_over_application] are after
+   [arity_mismatch] and the conditions of [simplify_direct_function_call]
+   of middle_end/flambda2/simplify/simplify_apply_expr.ml. Of the rest,
+   [simple] has the three cases of the view that the compiler gives of its
+   type of simples, and [code_metadata] keeps four fields of the compiler's
+   record among its own; the other definitions are written for the model.
+
+   The header above is that of
+   middle_end/flambda2/terms/flambda.mli,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/identifiers/int_ids.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   - middle_end/flambda2/identifiers/reg_width_const.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   - middle_end/flambda2/kinds/flambda_arity.mli,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2023 OCamlPro SAS                                    *)
+(*   Copyright 2014--2023 Jane Street Group LLC                           *)
+   - middle_end/flambda2/terms/static_const.mli,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+   - middle_end/flambda2/terms/trap_action.mli,
+     whose header is the same;
+   - middle_end/flambda2/terms/apply_expr.ml,
+     whose header is the same;
+   - middle_end/flambda2/terms/apply_cont_expr.ml,
+     whose header is the same;
+   - middle_end/flambda2/terms/call_kind.mli,
+     whose header is the same;
+   - middle_end/flambda2/kinds/flambda_arity.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2023 OCamlPro SAS                                    *)
+(*   Copyright 2014--2023 Jane Street Group LLC                           *)
+   - middle_end/flambda2/simplify/simplify_apply_expr.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* The terms of Flambda 2 as the semantics sees them: a fragment.
 
@@ -62,8 +133,11 @@
    - the [is_cold] flag of continuation handlers, and the
      [is_applied_with_traps] of a non-recursive [Let_cont], which says
      of its body what can be read there;
-   - subkinds and nullability ([Flambda_kind.With_subkind]), debuginfo,
-     and every annotation that has no effect on execution.
+   - the subkinds and the nullability ([Flambda_kind.With_subkind]) of
+     the arities of an [Apply] and of the fields of a [Make_block]
+     (those of the parameters of handlers and of code, and of the
+     results of code, are kept: decision D25, at parameters),
+     debuginfo, and every annotation that has no effect on execution.
 
    Kinds. A variable has a kind, given where it is bound: the compiler's
    [Variable.kind]. A [Let] gives the kind of its variable; a
@@ -525,25 +599,48 @@ Definition no_exn_extra_args (ap : apply_expr) : bool :=
 (* What a continuation handler is annotated with: the kinds of its
    parameters (those of its [Bound_parameters.t]), one to a parameter,
    and whether it is an exception handler
-   ([Continuation_handler.is_exn_handler]). *)
+   ([Continuation_handler.is_exn_handler]).
+
+   [hm_params_subkinds] is what the parameters state beyond their
+   kinds, in the order of the parameters. The empty list states
+   nothing, and a list shorter than the parameters states nothing of
+   those that are left. Decision D25, at parameters. *)
 Record handler_metadata : Type := Handler_metadata {
   hm_params_kinds : list flambda_kind;
+  hm_params_subkinds : list param_subkind;
   hm_is_exn_handler : bool
 }.
 
-(* The metadata of a handler that is not an exception handler. *)
+(* The metadata of a handler that is not an exception handler, and
+   states nothing of its parameters beyond their kinds. *)
 Definition make_handler_metadata (params_kinds : list flambda_kind)
     : handler_metadata :=
-  {| hm_params_kinds := params_kinds; hm_is_exn_handler := false |}.
+  {| hm_params_kinds := params_kinds;
+     hm_params_subkinds := [];
+     hm_is_exn_handler := false |}.
 
-(* The metadata of an exception handler. *)
+(* The metadata of an exception handler, which states nothing of its
+   parameters beyond their kinds. *)
 Definition make_exn_handler_metadata (params_kinds : list flambda_kind)
     : handler_metadata :=
-  {| hm_params_kinds := params_kinds; hm_is_exn_handler := true |}.
+  {| hm_params_kinds := params_kinds;
+     hm_params_subkinds := [];
+     hm_is_exn_handler := true |}.
 
 Definition handler_metadata_eqb (m m' : handler_metadata) : bool :=
   kinds_eqb (hm_params_kinds m) (hm_params_kinds m')
+  && param_subkinds_eqb (hm_params_subkinds m) (hm_params_subkinds m')
   && Bool.eqb (hm_is_exn_handler m) (hm_is_exn_handler m').
+
+(* What is stated of parameters once [n] more, of which nothing is
+   stated, are put in front of them. Where nothing is stated of any
+   it is still the empty list. *)
+Definition subkinds_behind (n : nat) (sks : list param_subkind)
+    : list param_subkind :=
+  match sks with
+  | [] => []
+  | _ :: _ => repeat any_value n ++ sks
+  end.
 
 (* What code is annotated with, of [Code_metadata.t]: the arity of its
    parameters ([params_arity]; unarized, it gives the kinds of the
@@ -576,40 +673,59 @@ Definition handler_metadata_eqb (m m' : handler_metadata) : bool :=
    no value slot there, and
    FlambdaStubCallsSpec.demote_full_stub_calls makes calls of known
    arity of those of its direct calls that it knows to be full. Each
-   refines whatever the flag says. *)
+   refines whatever the flag says.
+
+   [cm_params_subkinds] and [cm_result_subkinds] are what the
+   parameters, unarized, and the results, unarized, state beyond their
+   kinds; the empty list states nothing, and a list shorter than the
+   kinds states nothing of those that are left. Decision D25, at
+   parameters. *)
 Record code_metadata : Type := Code_metadata {
   cm_params_arity : arity;
+  cm_params_subkinds : list param_subkind;
   cm_result_arity : arity;
+  cm_result_subkinds : list param_subkind;
   cm_is_tupled : bool;
   cm_is_stub : bool
 }.
 
-(* The metadata of code that is not tupled, and is not a stub. *)
+(* The metadata of code that is not tupled, and is not a stub; it
+   states nothing of the parameters and of the results beyond their
+   kinds. *)
 Definition make_code_metadata (params_arity result_arity : arity)
     : code_metadata :=
   {| cm_params_arity := params_arity;
+     cm_params_subkinds := [];
      cm_result_arity := result_arity;
+     cm_result_subkinds := [];
      cm_is_tupled := false;
      cm_is_stub := false |}.
 
-(* The metadata of tupled code, which is not a stub. *)
+(* The metadata of tupled code, which is not a stub; it states nothing
+   of the parameters and of the results beyond their kinds. *)
 Definition make_tupled_code_metadata (params_arity result_arity : arity)
     : code_metadata :=
   {| cm_params_arity := params_arity;
+     cm_params_subkinds := [];
      cm_result_arity := result_arity;
+     cm_result_subkinds := [];
      cm_is_tupled := true;
      cm_is_stub := false |}.
 
 (* The same metadata, of code that is a stub. *)
 Definition stub_code_metadata (m : code_metadata) : code_metadata :=
   {| cm_params_arity := cm_params_arity m;
+     cm_params_subkinds := cm_params_subkinds m;
      cm_result_arity := cm_result_arity m;
+     cm_result_subkinds := cm_result_subkinds m;
      cm_is_tupled := cm_is_tupled m;
      cm_is_stub := true |}.
 
 Definition code_metadata_eqb (m m' : code_metadata) : bool :=
   arity_eqb (cm_params_arity m) (cm_params_arity m')
+  && param_subkinds_eqb (cm_params_subkinds m) (cm_params_subkinds m')
   && arity_eqb (cm_result_arity m) (cm_result_arity m')
+  && param_subkinds_eqb (cm_result_subkinds m) (cm_result_subkinds m')
   && Bool.eqb (cm_is_tupled m) (cm_is_tupled m')
   && Bool.eqb (cm_is_stub m) (cm_is_stub m').
 
@@ -695,6 +811,18 @@ Definition code_params_kinds (c : code) : list flambda_kind :=
 
 Definition code_result_kinds (c : code) : list flambda_kind :=
   unarize (code_result_arity c).
+
+(* What the parameters of a handler state beyond their kinds; and what
+   the parameters of code, and its results, state. *)
+Definition handler_params_subkinds (h : continuation_handler)
+    : list param_subkind :=
+  match h with Handler _ metadata _ => hm_params_subkinds metadata end.
+
+Definition code_params_subkinds (c : code) : list param_subkind :=
+  match c with Code _ _ _ _ metadata _ => cm_params_subkinds metadata end.
+
+Definition code_result_subkinds (c : code) : list param_subkind :=
+  match c with Code _ _ _ _ metadata _ => cm_result_subkinds metadata end.
 
 Definition code_body (c : code) : expr :=
   match c with Code _ _ _ _ _ body => body end.

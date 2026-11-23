@@ -1,5 +1,35 @@
 # T5b, the type traversal of the n-way join: status
 
+Read this first (2026-11-18, at the landed tip of stage 131). The
+sections of this file are of their own time and are not kept
+current: what a section says in the present was so at its date. The
+sections under "Since then" are of 11 and 12 November 2026, when
+the series of the type traversal was merged, but for two things in
+the first of them: its item on the stage of the heap was added on
+15 November, and the folder that it names for the files was brought
+up to date on 16 November, in N2's commit of the folders. "Since
+then" is of 18 November.
+
+## Since then (2026-11-18)
+
+Tests that this stream added after the sections below were written.
+They are not part of the join.
+
+- Nineteen units from OCaml sources, fourteen in
+  `middle_end/flambda2/tests/semantics/ocaml/` and five in its
+  `pairs/`, added for five places where, at this date, a validation
+  stopped on a unit whose two runs are the same, each with a control
+  that was validated. The README of each of the two directories says
+  what each unit is and what the tool says of it. Four of the
+  sources are T4's and two are T3's.
+- Twenty-nine texts written by hand, controls of the scope of static
+  names in a handler (decision D60), in
+  `middle_end/flambda2/tests/semantics/guard/scope/`, with a README:
+  fifteen that the check of static names must refuse and fourteen
+  that it must pass.
+
+What is asked of this stream at this date is not in this file.
+
 ## A leaf among the rewrites of the validation (2026-11-12)
 
 Not part of the join. `FlambdaRecoverComparison*`, in
@@ -876,7 +906,7 @@ functions (`FlambdaJoinMeet.v`), by T5's statements and mine there.
   `n_way_join_head_of_kind_naked_immediate` that kept the tail of
   the set of numbers. Fixed before the first request.
 
-## What is left
+## What is left (2026-11-12)
 
 - Arrays, when the grammar has them (`Array`,
   `n_way_join_array_contents`, `join_array_element_kinds`).
@@ -905,10 +935,10 @@ functions (`FlambdaJoinMeet.v`), by T5's statements and mine there.
   T4's theorems are for the choices that have the three
   conditions.
 
-## Asked of me next
+## Asked of me next (2026-11-12)
 
 Nothing that is not under "What is left".
 
-## Open questions
+## Open questions (2026-11-11)
 
 None for the human.

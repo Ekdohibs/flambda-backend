@@ -108,52 +108,76 @@
    called is bound in sight, its body does not mention its return continuation,
    and the other checks of that rewrite pass.
 
-   What the text loses of a call. The text of a term does not give the arity of
-   a call of unknown arity, which is read with one value for each argument and
-   one value for its result, nor the arity of the arguments of a direct call,
-   which is read with one value for each (label C2-5); and it does not say that
-   a call is a probe. A unit with a call of unknown arity that returns to a
-   continuation whose parameters are not one value is not checked
+   What a text may lose of a call. The printer of texts writes the arities of a
+   direct call and of a call of unknown arity, beside the callee or in its place
+   where a direct call has none, unless they are one value for each argument and
+   one value for the result; the reader takes them, and reads a call that is
+   written with none at those (label C2-5). A text made before the printer wrote
+   them, or written by hand, may leave them out of a call that had others. An
+   indirect call that is written without the word [unknown_arity] and without
+   the arity of its arguments is read as a call of unknown arity with one value
+   for its result; a unit with such a call that returns to a continuation in
+   sight whose parameters are not one value is not checked
    ([result_arity_lost]): the term read is not the compiler's, and Simplify may
-   stop on it. The arity of the arguments is given back to a unit read from a
-   text ([with_lost_kinds], which says from what and where it cannot be): a
-   direct call has that of the parameters of the code that it names, and a call
-   of unknown arity one kind for each argument. A method call is read with one
-   value for its result too; the conversion refuses a method call, and the
-   reader does not read one as the compiler prints it. A call that is a probe is
-   refused by the conversion ([convert_apply]), as the program runs its handler
-   only while the probe is enabled. The term read from a text never has the
-   mark, whatever the source had: such a unit is read as one with a plain call,
-   and it is for whatever makes the text to refuse it (the scripts of
-   tests/semantics/ocaml do). A body taken from the .cmx of another unit may
-   have the mark, and is then left out of the prefix, so that a call of it is
-   undefined.
+   stop on it. A call written with the word is outside that test: the reader
+   takes the arity of the result that it writes. In a unit read from a text, a
+   direct call or a call of unknown arity whose arity as read is one value for
+   each argument may be given another ([with_lost_kinds], which says from what
+   and where it cannot be): a direct call that of the parameters of the code
+   that it names, where the unit binds that code and the call has as many
+   arguments, and a call of unknown arity one kind for each argument. A method
+   call that is written with no arity is read with one value for its result too;
+   the conversion refuses a method call. A call that is a probe is refused by
+   the conversion ([convert_apply]), as the program runs its handler only while
+   the probe is enabled. The printer writes the mark and the reader takes it, so
+   a unit read from such a text has it and is not checked; the scripts of
+   tests/semantics/ocaml make the text of such a unit as of any other. A text
+   made before the printer wrote the mark never has it, whatever the source had:
+   such a unit is read as one with a plain call, and nothing here finds that
+   out. A body taken from the .cmx of another unit may have the mark, and is
+   then left out of the prefix, so that a call of it is undefined.
 
-   What the text loses of a primitive. The text does not write the kind of an
-   [Opaque_identity], and its reader gives every one the kind of values. A unit
-   read from a text is normalised before anything else is done with it: each
-   [Opaque_identity] is given the kind of its argument ([with_lost_kinds], which
-   says what is done to the variables bound to one). The kind so given is the
-   one that the text lost where the kind obtained for the argument is its kind
-   in the compiler's term and the primitive there had that kind
-   ([with_lost_kinds] says where the first may fail). Those two conditions
-   suffice; where either fails no recovery of the compiler's kind is claimed,
-   the term read may not be the compiler's, and nothing here finds that out: the
-   step is not a check of the kinds of the compiler's terms. The text writes the
-   two forms of [Is_int] alike, and its reader gives the form that is for
-   variants; that is not put right here. The scripts of tests/semantics/ocaml
-   refuse a unit whose term had the other form; a text from elsewhere is checked
-   as it is read (label C2-26).
+   A call of a C function is converted as a direct call of code that the term
+   declares and does not bind, so that a run is undefined at the call. That is
+   decision D50 as it is ruled: see "Calls of C functions" below, by
+   [c_function_id], for what is kept of the call, what a verdict then says and
+   what it does not.
+
+   What a text may lose of a primitive. The printer writes the kind of an
+   [Opaque_identity] unless it is the kind of values, and whether it is for the
+   middle end only; the reader takes both, and gives one that is written with no
+   kind the kind of values. A text made before the printer wrote the kind has
+   none, whatever the kind was, and a text written by hand may leave it out. A
+   unit read from a text is normalised before anything else is done with it:
+   each [Opaque_identity] whose kind as read is the kind of values, which is
+   what the reader gives where the text writes none, and whose argument is of
+   another kind is given the kind of its argument ([with_lost_kinds], which says
+   what is done to the variables bound to one). A kind as read that is not the
+   kind of values was written by the text, and is kept whatever the kind of the
+   argument is: the primitive keeps the kind that the text wrote. Where the text
+   wrote none, the kind so given is the one that the text lost where the kind
+   obtained for the argument is its kind in the compiler's term and the
+   primitive there had that kind ([with_lost_kinds] says where the first may
+   fail). Those two conditions suffice; where either fails no recovery of the
+   compiler's kind is claimed, the term read may not be the compiler's, and
+   nothing here finds that out: the step is not a check of the kinds of the
+   compiler's terms. The printer writes the form of [Is_int] that works on any
+   value apart from the one that is for variants, and the reader takes it. A
+   text made before it did writes the two alike, and its reader gives the form
+   that is for variants; that is not put right here. The scripts of
+   tests/semantics/ocaml make the text of a unit whose term has the form that
+   works on any value as of any other; a text from elsewhere is checked as it is
+   read (label C2-26).
 
    Phantom bindings. A binding whose variables are phantom is refused by the
    conversion ([convert_let]): the program runs nothing for it, and the model
    runs every [Let]. With [-g] and phantom lets on, Simplify may keep an unused
    binding as phantom instead of deleting it; the term that the compiler gives
    to Simplify has none. The text of a term does not say the mode of a binding,
-   so the refusal cannot detect a phantom binding whose mode a text has lost, as
-   for probes. A body taken from the .cmx of another unit may have one, and is
-   then left out of the prefix; the term that Simplify makes of a unit may,
-   where the tool is given those flags, and the unit is then not checked.
+   so the refusal cannot detect a phantom binding whose mode a text has lost. A
+   body taken from the .cmx of another unit may have one, and is then left out
+   of the prefix; the term that Simplify makes of a unit may, where the tool is
+   given those flags, and the unit is then not checked.
 
    Imports. The external symbols that the two units of a check mention, those of
    another compilation unit, the predefined exceptions among them, are listed
@@ -188,6 +212,19 @@
    imports"; the comparison of the two runs shown is then a test and no more,
    and the unit before is run from the empty static environment as well, to say
    whether the validation with nothing imported is of a term that is undefined.
+
+   An acceptance of an undefined run. A term before that is undefined is refined
+   by anything, so where the validator accepts and the run of the term before
+   that the acceptance is of is undefined, the acceptance says nothing of the
+   unit. No line begins "validated" then: the leading line is "nothing to
+   validate, as the term before is undefined" (or, where the acceptance is of
+   the unit with nothing imported, "nothing to validate with nothing imported,
+   as the term before is then undefined"), as for a unit that the validator does
+   not accept and whose term before is undefined; the line under it begins "the
+   validation accepts the pair" and has the words that the verdict would have
+   had after "validated"; and the line that says that the term before is
+   undefined in the model, so that the validation says nothing of the unit,
+   follows as before.
 
    The .cmx of other units. The compiler's Simplify reads the .cmx of another
    unit when it meets a symbol of that unit, and uses what the file says: it
@@ -252,6 +289,38 @@
    second check, which is asked only where these attempts refuse the unit too,
    and of the two terms as converted.
 
+   The exception handlers of the term after. The validation makes ordinary
+   continuations of the exception handlers of the term before that no call can
+   raise to (FlambdaDemoteSpec.demote_handlers), as Simplify does, and it does
+   not do so to the term after. Given [-g], Simplify keeps such a handler where
+   a raise that reaches it is of a kind that it takes for a use that escapes;
+   this can make every attempt above refuse the unit. So where they all do, and
+   FlambdaValidateDemotedSpec.after_demoted, which is that rewrite, changes the
+   term after, the attempts are all made again, in the same order, of the term
+   before and of the term that after_demoted gives ([validate], where
+   [demoted]). Everything that an attempt guesses, asks or tests is made again
+   of those two terms, and nothing that the attempts above found is used. Where
+   the function asked was [validate_unit], [validate_unit_knowing] or one of the
+   two of the reading, the function asked now is the one of
+   FlambdaValidateDemotedSpec.v that asks it of that term (validate_unit_demoted
+   and the three beside it), given the term after as converted. For an attempt
+   with calls inlined first, or with copies of code, the function is the one
+   that it was, given the term that after_demoted gives; what it accepts of that
+   term is brought to the term after as converted by
+   demoted_program_refines_statement and demoted_unit_refines_statement of that
+   file. What is accepted so is reported as an acceptance of the attempts above
+   is, an undefined run included, with a line under it that begins "(asked of
+   the term after". Each of those statements concludes of the term after as it
+   was converted, with its handlers in place, on the machine that goes by names,
+   and says nothing of backtraces. The test of the verdict from the imports is
+   made of the term that after_demoted gives, with the term before or what the
+   reading, the inlining or the copies make of it, as those statements have that
+   test. Where these attempts refuse the unit too, they print nothing: what is
+   printed is what the attempts above print, and the second check is asked where
+   it was. The tests before the validation (that the term after is well-formed
+   and mentions static names where they are in scope, the two runs, the check of
+   kinds) and the second check are of the term after as converted.
+
    The second check. Where every attempt of the validation that the tool makes
    has refused a unit, and the run of the term before that is shown is not
    reported undefined, the tool asks
@@ -259,7 +328,7 @@
    the imports. The liftings are guessed again, each made without its test that
    the unit exits with symbols and constants only
    (FlambdaLiftObservedSpec.with_lifting_observed in the place of
-   FlambdaLiftSpec's lifting with [exits_plain_knowing]; the other tests of a
+   FlambdaLiftSpec's lifting with [exits_plain_fine]; the other tests of a
    lifting, of well-formedness, of fresh names and of closed code, and the
    comparisons, are those of the function), for the same lists of calls in the
    same order; the check is asked with no value slot to remove and, if it
@@ -318,8 +387,9 @@ module Lift_observed = Flambda2_rocq_semantics.FlambdaLiftObservedSpec
 module Validate_related = Flambda2_rocq_semantics.FlambdaValidateRelatedSpec
 module Validate_reading = Flambda2_rocq_semantics.FlambdaValidateReadingSpec
 module Validate_inlining = Flambda2_rocq_semantics.FlambdaValidateInliningSpec
+module Validate_demoted = Flambda2_rocq_semantics.FlambdaValidateDemotedSpec
 module My_closure = Flambda2_rocq_semantics.FlambdaMyClosureSpec
-module Closure_of_code = Flambda2_rocq_semantics.FlambdaClosureOfCodeSpec
+module Slots_through = Flambda2_rocq_semantics.FlambdaSlotsThroughSpec
 module Unused_slots = Flambda2_rocq_semantics.FlambdaUnusedSlotsSpec
 module Float_code = Flambda2_rocq_semantics.FlambdaFloatCodeSpec
 module Loopify = Flambda2_rocq_semantics.FlambdaLoopifySpec
@@ -330,7 +400,7 @@ module Lift_from_code = Flambda2_rocq_semantics.FlambdaLiftFromCodeSpec
 module Lift_from_arms = Flambda2_rocq_semantics.FlambdaLiftFromArmsSpec
 module Heap_free = Flambda2_rocq_semantics.FlambdaHeapFreeSpec
 module Statics_in_scope = Flambda2_rocq_semantics.FlambdaStaticsInScopeSpec
-module Numbers = Flambda2_rocq_semantics.BinNums
+module Numbers = Flambda2_rocq_library.BinNums
 module Value_approximation = Flambda2_classic_mode_types.Value_approximation
 module P = Flambda_primitive
 
@@ -347,11 +417,11 @@ let rec positive_of_int n : Numbers.positive =
   then Coq_xO (positive_of_int (n lsr 1))
   else Coq_xI (positive_of_int (n lsr 1))
 
-let rec nat_of_int n : Flambda2_rocq_semantics.Datatypes.nat =
+let rec nat_of_int n : Flambda2_rocq_library.Datatypes.nat =
   if n <= 0 then O else S (nat_of_int (n - 1))
 
-let int_of_nat (n : Flambda2_rocq_semantics.Datatypes.nat) =
-  let rec count acc (n : Flambda2_rocq_semantics.Datatypes.nat) =
+let int_of_nat (n : Flambda2_rocq_library.Datatypes.nat) =
+  let rec count acc (n : Flambda2_rocq_library.Datatypes.nat) =
     match n with O -> acc | S n -> count (acc + 1) n
   in
   count 0 n
@@ -731,22 +801,22 @@ let convert_binary_primitive (p : P.binary_primitive) :
    [Invalid] ([Simplify_variadic_primitive]). The model's [Make_block] has no
    such annotation: the model does not check a field against its subkind. So the
    check of the kinds of the fields of a [Make_block] at block kind [Values]
-   drops their subkinds, as those of parameters are dropped: it asks that there
-   be as many kinds as arguments and that each field be of kind [Value],
-   whatever its subkind and whether or not it may be null. A field of another
-   kind is refused. This is the check of the kinds only: the other conditions
-   under which a block is converted (how it is marked, and for a block with an
-   identity that it has an argument) are tested apart from it.
+   drops their subkinds, where those of parameters are kept ([convert_subkind]):
+   it asks that there be as many kinds as arguments and that each field be of
+   kind [Value], whatever its subkind and whether or not it may be null. A field
+   of another kind is refused. This is the check of the kinds only: the other
+   conditions under which a block is converted (how it is marked, and for a
+   block with an identity that it has an argument) are tested apart from it.
 
-   The model has no subkinds, so a verdict is of the two terms without them.
-   What is not proved is that the subkind of a field has no bearing on what the
-   program computes: Simplify reads it, and by a reading of the source the
-   translation to Cmm does not when it makes the block. Two things follow. The
-   conversion can give a defined construction in the model where Simplify makes
-   it [Invalid] for a field's subkind. And the subkinds of the two terms are not
-   compared: a field may have another in the term after. A term read from a text
-   that does not write these kinds has lost them before it comes here
-   (discrepancy V2-2).
+   The block kind of the model's [Make_block] has no subkinds, so a verdict is
+   of the two terms without those of their fields. What is not proved is that
+   the subkind of a field has no bearing on what the program computes: Simplify
+   reads it, and by a reading of the source the translation to Cmm does not when
+   it makes the block. Two things follow. The conversion can give a defined
+   construction in the model where Simplify makes it [Invalid] for a field's
+   subkind. And the subkinds of the fields of the two terms are not compared: a
+   field may have another in the term after. A term read from a text that does
+   not write these kinds has lost them before it comes here (discrepancy V2-2).
 
    A [Make_array] is converted here when it is [Immutable] and its elements are
    of kind [Value]: it is the model's [Make_immutable_array], which makes a
@@ -760,10 +830,11 @@ let convert_variadic_primitive (p : P.variadic_primitive) ~num_args :
   (* CR mshinwell: a block made in a region is converted as one made on the
      heap; see [region_variables]. *)
   (* CR mshinwell: the subkind of each field, and whether it may be null, are
-     dropped, as they are of a parameter: every field is read as any value. So
-     a wrong subkind of a field is not seen, as one of a parameter is not: the
-     model does not check a field against its subkind, and the subkinds of the
-     two terms are not compared. This is provisional. Decision D25. *)
+     dropped: every field is read as any value. So a wrong subkind of a field
+     is not seen: the model does not check a field against its subkind, as it
+     checks a parameter, and the subkinds of the fields of the two terms are
+     not compared. This is provisional. Decision D25, of the fields of a made
+     block, which is open. *)
     when List.compare_length_with kinds num_args = 0
          && List.for_all
               (fun kind ->
@@ -876,9 +947,11 @@ let convert_array_kind (kind : P.Array_kind.t) : Primitives.array_kind option =
    and on the collector that the model does not track: the model's store does
    for it what it does for an assignment. The compiler makes one into a block,
    through [Opaque_identity], for a recursion in the tail of a constructor
-   (lambda/tmc.ml). In the compiler's text of a term it has no set kind and is
-   read as an assignment: so in a term read from that text it is converted, and
-   a run that comes to it is undefined. *)
+   (lambda/tmc.ml). The printer of texts writes its set kind with the mark and
+   the reader takes it, so a unit read from such a text is not checked. In a
+   text made before the printer wrote it the write has no set kind and is read
+   as an assignment: in a term read from such a text it is converted, and a run
+   that comes to it is undefined. *)
 let convert_array_set_kind (kind : Primitives.array_kind)
     (set_kind : P.Array_set_kind.t) : Primitives.array_set_kind option =
   match kind, set_kind with
@@ -1171,6 +1244,286 @@ let directly_called_code : Code_id.t list ref = ref []
 
 let known_arity_call_met : bool ref = ref false
 
+(* ---- Calls of C functions ----------------------------------------------- *)
+
+(* What a call of a C function is in the model is decision D50
+   (rocq/DECISIONS.md), ruled on 18 November 2026: a run is undefined at a call
+   of a C function of which the model says nothing. The model says nothing of
+   any C function yet, so what is here is of every call. It is the reading
+   called (U) in rocq/requests/P1-c-calls.md. The same ruling asks that C
+   functions be given a meaning in the model by their names in the runtime; a
+   call of one that has a meaning will then be converted otherwise, and this
+   conversion will be of the others.
+
+   A call of a C function is converted as a direct call of code that the term
+   declares and does not bind. Each C function, as a call describes it, has one
+   code id ([c_function_id]). The description is the linkage name of the callee
+   and the four things that the compiler says of the function at the call:
+   whether it is called through [caml_c_call], whether the compiler may take it
+   for a builtin, its effects and its coeffects. The code ids are declared
+   deleted in front of the two terms ([with_c_function_declarations]) and
+   nothing binds them. The machine has no step for a direct call of code that is
+   not bound (FlambdaSemanticsSpec.shape_of_closure_call), so a run is undefined
+   at the call. No statement of the model is changed for this, and nothing of
+   the model that is about a C function is used.
+
+   What is kept of a call: the function and its four marks, in the code id (two
+   calls that differ in one of them are calls of different code); the arguments;
+   the two arities, of whatever kinds ([convert_arity]); the continuation that
+   the call returns to; the exception continuation and its extra arguments. The
+   comparison of two terms compares each of these (FlambdaCompareSpec.apply_eqb,
+   and call_kind_eqb for the code ids). What is not kept: the allocation mode of
+   the call and the region that it names; the subkinds of the arities (a call of
+   the model has kinds alone); the position, the inlining attribute and the
+   debugging information.
+
+   The callee, and the words after "validated". In a term that the compiler
+   makes, the callee of such a call is a symbol of the compilation unit of
+   external symbols: from_lambda/closure_conversion.ml makes the call with one,
+   and nothing else makes such a call but the reader of a text
+   (parser/fexpr_to_flambda.ml). It is then a symbol of another unit that
+   nothing binds, an import of the class of data ([imports]). So a unit that has
+   such a call in one of its two terms has an import, and its line, where it is
+   validated, is what the test of the imports gives for any unit that has one
+   ("Imports", at the head of this file): "validated with its imports" where the
+   verdict passes the test, "validated with nothing imported" and under it "not
+   validated with its imports" where it does not, or the two lines that say the
+   same given the [.cmx] files, where there is a prefix. None of them begins
+   "validated:".
+
+   The conversion asks the same of every term: [c_function_of] refuses a call of
+   a C function whose callee is another symbol, and the unit is not checked. No
+   compiler makes such a call. A text written by hand may have one, with a
+   callee that is no import: a symbol of the unit itself, bound or not, or a
+   symbol of another unit that the prefix binds. callee_bound_in_the_text, in
+   tests/semantics/c_calls, is such a text: its call is in an arm that the run
+   does not take, and names a symbol that the text itself binds as a block.
+   Before the refusal the C function of that name was declared in front, the
+   symbol was bound in the term, no import was counted, and the line of the text
+   given twice was "validated: the same up to bound names" (run on 18 November
+   2026). That was no wrong verdict under this reading, as the run would be
+   undefined at the call if it reached it; it was a term in which one name is
+   declared as a C function and bound as data, which nothing should take.
+
+   CR mshinwell: the allocation mode of a call of a C function is dropped, as
+   that of every call is. What the check of regions is to say of a C function
+   that allocates in a region of its caller belongs with the rule of regions,
+   which is not decided. As it is, that check says nothing of a run that is
+   undefined at such a call.
+
+   What a verdict then says. Anything refines an undefined run
+   (FlambdaSemanticsSpec.refines). So of a unit whose own run reaches a call of
+   a C function an acceptance by the validator says nothing, of what comes
+   before the call either: the run is undefined as a whole. That is of the run;
+   the tool's runs have a bound ([fuel]). Where a run shown is found undefined
+   at such a call, a line names it ([undefined_at]); where the run that an
+   acceptance is of is found undefined, no verdict is printed (the head of this
+   file). A call beyond the bound is not found: "validated" may then be printed.
+   Of a unit whose own run returns, a verdict is of that run, the initialisation
+   of the unit, and not of a later call of one of its functions by another unit.
+
+   What is compared where the code is not run. A function of the unit that calls
+   a C function is compared by the validation as a term. Where the comparison
+   reaches two calls that are left in the two terms after its rewrites,
+   FlambdaCompareSpec.apply_eqb asks of them the same callee, the same call kind
+   (for a C function, the same code id), the same arguments, the same
+   continuations with the same extra arguments and their kinds, and the same two
+   arities. Variables and continuations are compared under the pairing of names
+   that the comparison has made, and the handlers that are left are compared as
+   terms. That says nothing of the calls of the function as it was written, of
+   the code that followed them there, or of anything after a C function returns.
+   As the rewrites of the validation are written, none uses the fact that a call
+   of code that is not bound is undefined to remove or change what follows such
+   a call. NO THEOREM SAYS SO, and the model would allow such a rewrite, as it
+   has no run past the call. Two things are not true and are not claimed. One:
+   that each call of a C function of the term before has one call in the term
+   after, and conversely; substitution, normalisation, the removal of code that
+   is not reached and the inlining of an enclosing body can move, copy or remove
+   a call, and nothing is said of the order of the calls of C functions in a
+   run. Two: that a rewrite changes a direct call only where the term binds its
+   code; FlambdaForwardSpec.forward_apply changes the continuation that a call
+   returns to without looking the code up. The controls of
+   tests/semantics/c_calls are pairs of terms that differ in the C function, in
+   one of its marks, in an argument, only after the call returns, only in its
+   exception handler, or only in a later call of a C function: none may be
+   validated. They show a change of the tool that makes one of those comparisons
+   accepted. They do not show every rewrite of what follows a call: one that
+   touches another shape of term, a function body, another arity or another
+   handler leaves them as they are.
+
+   What changes in front of a unit that is given [.cmx] files. The prefix binds
+   the code of another unit whose body the file keeps and the model has got
+   ([make_prefix]). A body that calls a C function was refused by the
+   conversion, and its code was declared deleted. It is converted now, so it is
+   bound, where nothing else in it is refused. Three things follow.
+
+   One: a run that calls such a body is no longer undefined at that call for
+   that reason. It enters the body, and is undefined where it reaches a call of
+   a C function. It may be undefined for another reason, or not end.
+
+   Two: the declarations in front are of the C functions that are called, by one
+   of the two terms or by a body that is bound in front of them, and of no other
+   ([with_c_function_declarations]). A body of the prefix that is converted and
+   then not bound ([bind_code]) leaves its C functions in the table of the
+   conversion, and none in front.
+
+   Three, AND IT CAN TAKE A VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION,
+   IN A TERM THAT HAS A CALL OUTSIDE THE BODIES OF ITS CODE. Each of the four
+   liftings to symbols lifts nothing in a term that fails one of two tests
+   (FlambdaHeapFreeSpec.free_of_heap_fine; FlambdaLiftSpec.exits_plain_fine). A
+   term passes one of them if it passes the test as it was, which is of all the
+   code that the term binds, that of the prefix too
+   (FlambdaHeapFreeSpec.expr_free_of_heap; FlambdaLiftSpec.exits_plain_knowing),
+   or if it has no Apply outside the bodies of its code and what is outside
+   those bodies passes that test (decision D65: yes, provisionally, by the human
+   on 18 November 2026; to be come back to). Code that is declared deleted
+   passes the tests as they were, and the same code bound is tested with what it
+   has. So a lifting lifts nothing in the term that it is given where that term
+   has a call outside the bodies of its code and code that it binds, that of the
+   prefix too, has a primitive of the heap or gives its exception continuation a
+   block that it makes; and a unit that was validated through that lifting can
+   lose its verdict. It need not: the validation has other ways than that
+   lifting, and a rewrite before it may have removed the body, or the call if it
+   is a call of code that the term knows. A term with no call outside the bodies
+   of its code loses nothing so: the two tests then look outside those bodies
+   only.
+
+   tests/semantics/c_calls has a control of each: body_with_a_call and its two
+   second units (a run that enters a body, and reaches the call or does not),
+   and body_with_a_store and its two second units. body_with_a_store_and_a_call
+   calls no C function and has a call outside its code, in the term before and
+   in the term after, that is not a call of known code (the tool counts it still
+   once the calls of known code are inlined): it is not validated, and is
+   validated where the code of the body is declared deleted.
+   body_with_a_store_not_called calls nothing: it was not validated before
+   decision D65, and is validated since (by its expected file, before the finer
+   tests and with them); its output carries the mark of that decision (the
+   tool's line that begins "(decision D65:", under the verdict line).
+
+   A measure, made once and outside the build: no rule of the tree runs it. On
+   19 November 2026, before stage 134 had landed, two versions of this check
+   were run on the same inputs, one process at a time, each in the driver of the
+   compiler's own run (ownrun/flsemantics_ownrun.ml), not in this tool: the
+   check before this reading, in the integrator's build of a frozen tip of stage
+   134, and the check as the reading then had it, built from the commits of the
+   reading carried over that frozen tip. Each driver, built again over the tip
+   that landed (the first by the integrator), had the same bytes. The inputs:
+   the 79 files of stdlib/ of this repository that tests/semantics/stdlib names,
+   each compiled at two settings (the flags of the build, and -O3); and 395
+   units of one function each, cut from 13 of those files: 228 by the stream N1
+   (from list.ml, seq.ml and string.ml) and 167 by the stream X1 (from bool.ml,
+   char.ml, either.ml, fun.ml, int.ml, option.ml, pair.ml, queue.ml, result.ml
+   and stack.ml), for their own probes. As this is written, the files of those
+   395 units are not in this tree and no commit of its history adds a file of
+   their names; what they hold is text of the library, and the two streams keep
+   them outside the repository with the scripts that cut them. What the measure
+   found: no output of a unit that ran before changes class; ten outputs of the
+   files and two of the units change, in what is in front of the terms and in
+   the lines of the two runs (the count of imports).
+
+   What is left out. Simplify makes a primitive of seven comparisons
+   ([caml_compare], [caml_equal], [caml_notequal], [caml_lessequal],
+   [caml_lessthan], [caml_greaterequal], [caml_greaterthan]) where it knows both
+   arguments to be immediates or boxed numbers (simplify/simplify_extcall.ml).
+   Where the term before keeps the call and the term after has the primitive, no
+   rule of the validation relates the two: comparison_made_a_primitive, in
+   tests/semantics/c_calls, is such a unit and is not validated. A law for them
+   would be a new statement of the model and is no part of this reading.
+
+   What the round trip tests of it. The round trip of the conversion
+   (flroundtrip.ml) writes a call of a C function back as one: the printer of
+   the model is told which code ids stand for C functions, and what the compiler
+   says of each. The callee is written as a symbol of the unit of external
+   symbols named after its number, so the text read back names another function
+   than the term did; the round trip takes the C function read back to the one
+   of the term whose callee had that number and of which the compiler says the
+   same, and fails where there is none. So "round trip the same" of a unit that
+   has such a call says that the call is converted to a call of one C function
+   with the callee, the arguments, the arities, the continuations and what the
+   compiler says of the function that the text read back has. It does not say
+   that the function has the right name in the table of the conversion: the name
+   is not in the text printed. *)
+type c_function =
+  { c_name : string;
+    c_needs_caml_c_call : bool;
+    c_is_c_builtin : bool;
+    c_effects : Effects.t;
+    c_coeffects : Coeffects.t
+  }
+
+let c_function_ids : (c_function, Model.code_id) Hashtbl.t = Hashtbl.create 16
+
+let c_functions_by_id : (int, c_function) Hashtbl.t = Hashtbl.create 16
+
+let c_function_id (c_function : c_function) : Model.code_id =
+  match Hashtbl.find_opt c_function_ids c_function with
+  | Some id -> id
+  | None ->
+    let id = Code_ids.fresh () in
+    Hashtbl.replace c_function_ids c_function id;
+    Hashtbl.replace c_functions_by_id (int_of_positive id) c_function;
+    id
+
+(* In the order in which the conversion met them. *)
+let c_function_code_ids () : Model.code_id list =
+  List.sort
+    (fun id id' -> compare (int_of_positive id) (int_of_positive id'))
+    (Hashtbl.fold (fun _ id ids -> id :: ids) c_function_ids [])
+
+let c_function_of (apply : Apply_expr.t) ~needs_caml_c_call ~is_c_builtin
+    ~effects ~coeffects : c_function =
+  let c_name =
+    match Apply_expr.callee apply with
+    | Some callee -> (
+      match Simple.must_be_symbol callee with
+      | Some (symbol, _) ->
+        if
+          Compilation_unit.equal
+            (Symbol.compilation_unit symbol)
+            (Symbol.external_symbols_compilation_unit ())
+        then Linkage_name.to_string (Symbol.linkage_name symbol)
+        else
+          unsupported
+            "a call of a C function whose callee is not a symbol of the \
+             compilation unit of external symbols"
+      | None ->
+        unsupported "a call of a C function whose callee is not a symbol")
+    | None -> unsupported "a call of a C function with no callee"
+  in
+  { c_name;
+    c_needs_caml_c_call = needs_caml_c_call;
+    c_is_c_builtin = is_c_builtin;
+    c_effects = effects;
+    c_coeffects = coeffects
+  }
+
+(* The marks of a C function, in the words of the text of a term
+   (parser/print_fexpr.ml): none for a function that is called through
+   [caml_c_call], is no builtin and has effects and coeffects. *)
+let c_function_marks (c_function : c_function) : string list =
+  (if c_function.c_needs_caml_c_call then [] else ["noalloc"])
+  @ (if c_function.c_is_c_builtin then ["builtin"] else [])
+  @ (match c_function.c_effects with
+    | Effects.Arbitrary_effects -> []
+    | Effects.No_effects -> ["no_effects"]
+    | Effects.Only_generative_effects Mutability.Immutable ->
+      ["only_generative_effects"]
+    | Effects.Only_generative_effects Mutability.Mutable ->
+      ["only_generative_effects mutable"]
+    | Effects.Only_generative_effects Mutability.Immutable_unique ->
+      ["only_generative_effects immutable_unique"])
+  @
+  match c_function.c_coeffects with
+  | Coeffects.Has_coeffects -> []
+  | Coeffects.No_coeffects -> ["no_coeffects"]
+
+let shown_c_function (c_function : c_function) : string =
+  match c_function_marks c_function with
+  | [] -> Printf.sprintf "%s (a C function)" c_function.c_name
+  | _ :: _ as marks ->
+    Printf.sprintf "%s (a C function: %s)" c_function.c_name
+      (String.concat ", " marks)
+
 (* The code whose body is being converted, if any; and the direct calls
    converted so far that Simplify is told to unroll or always to inline: each
    with the code that it stands in, the call as it was converted, its code, and
@@ -1252,6 +1605,97 @@ let convert_params_kinds (params : Bound_parameters.t) =
       convert_kind (Flambda_kind.With_subkind.kind kind))
     (Bound_parameters.to_list params)
 
+(* The subkinds of parameters, which the model keeps beside their kinds: what
+   the machine tests of a value where a parameter binds it. The subkinds of
+   arrays and of a block of floats are not in the model: they are given as
+   saying nothing of a value but whether it may be null. A constructor whose
+   fields are not all values, or of whose fields nothing is stated, keeps its
+   tag, and nothing is said of its fields. A kind that is not a value kind has
+   no subkind. Decision D25, at parameters. *)
+let rec convert_subkind (kind : Flambda_kind.With_subkind.t) :
+    Kinds.param_subkind =
+  match Flambda_kind.With_subkind.kind kind with
+  | Naked_number _ | Region | Rec_info -> true, Kinds.Subkind_anything
+  | Value -> (
+    let nullable =
+      match Flambda_kind.With_subkind.nullable kind with
+      | Nullable -> true
+      | Non_nullable -> false
+    in
+    let boxed n = nullable, Kinds.Subkind_boxed_number n in
+    match Flambda_kind.With_subkind.non_null_value_subkind kind with
+    | Anything -> nullable, Subkind_anything
+    | Tagged_immediate -> nullable, Subkind_tagged_immediate
+    | Boxed_float32 -> boxed Boxable_naked_float32
+    | Boxed_float -> boxed Boxable_naked_float
+    | Boxed_int32 -> boxed Boxable_naked_int32
+    | Boxed_int64 -> boxed Boxable_naked_int64
+    | Boxed_nativeint -> boxed Boxable_naked_nativeint
+    | Boxed_vec128 -> boxed Boxable_naked_vec128
+    | Boxed_vec256 -> boxed Boxable_naked_vec256
+    | Boxed_vec512 -> boxed Boxable_naked_vec512
+    | Boxed_mask -> boxed Boxable_naked_mask
+    | Variant { consts; non_consts } ->
+      let consts =
+        List.map
+          (fun i -> z_of_int (Target_ocaml_int.to_int i))
+          (Target_ocaml_int.Set.elements consts)
+      in
+      let shapes =
+        List.fold_right
+          (fun ( tag,
+                 (shape :
+                   Flambda_kind.With_subkind.Non_null_value_subkind
+                   .constructor_shape) ) rest : Kinds.constructor_shapes ->
+            let tag = z_of_int (Tag.Scannable.to_int tag) in
+            match shape with
+            | Determined (Scannable Value_only, fields) ->
+              Shape_determined (tag, convert_field_subkinds fields, rest)
+            | Undetermined
+            | Determined ((Scannable (Mixed_record _) | Float_record), _) ->
+              Shape_undetermined (tag, rest))
+          (Tag.Scannable.Map.bindings non_consts)
+          Kinds.Shapes_nil
+      in
+      nullable, Subkind_variant (consts, shapes)
+    | Float_block _ | Float_array | Immediate_array | Value_array
+    | Generic_array | Unboxed_float32_array | Untagged_int_array
+    | Untagged_int8_array | Untagged_int16_array | Unboxed_int32_array
+    | Unboxed_int64_array | Unboxed_nativeint_array | Unboxed_vec128_array
+    | Unboxed_vec256_array | Unboxed_vec512_array | Unboxed_mask_array
+    | Unboxed_product_array ->
+      nullable, Subkind_anything)
+
+and convert_field_subkinds (fields : Flambda_kind.With_subkind.t list) :
+    Kinds.field_subkinds =
+  List.fold_right
+    (fun field rest : Kinds.field_subkinds ->
+      let nullable, subkind = convert_subkind field in
+      Fields_cons (nullable, subkind, rest))
+    fields Kinds.Fields_nil
+
+(* The subkinds of parameters, one to a parameter; or none where nothing is
+   stated of any of them, which is what FlambdaModel.make_handler_metadata gives
+   a handler, so that such a handler and a converted one compare equal. *)
+let convert_params_subkinds (params : Bound_parameters.t) =
+  let subkinds =
+    List.map
+      (fun param -> convert_subkind (Bound_parameter.kind param))
+      (Bound_parameters.to_list params)
+  in
+  if Kinds.subkinds_say_nothing subkinds then [] else subkinds
+
+(* What code states of its results, one to a result of its arity with the
+   unboxed products taken apart; or none where nothing is stated of any of them.
+   The machine tests no result against it. A comparison of the validation reads
+   it: of two pieces of code that it pairs, the one of the term made from the
+   term after may state of a result no more than the one of the term made from
+   the term before does
+   (FlambdaCompareOrderSpec.code_metadata_says_at_least). *)
+let convert_result_subkinds (arity : _ Flambda_arity.t) =
+  let subkinds = List.map convert_subkind (Flambda_arity.unarize arity) in
+  if Kinds.subkinds_say_nothing subkinds then [] else subkinds
+
 let convert_bound_var (bound_var : Bound_var.t) =
   let var = Bound_var.var bound_var in
   Variables.find var, convert_kind (Variable.kind var)
@@ -1296,6 +1740,16 @@ let superseded_code : Code_id.t list ref = ref []
    ([Loopify_attribute.should_loopify]), noted as a unit is converted. *)
 let loopify_marked : Code_id.t list ref = ref []
 
+(* The code that the compiler marks recursive ([Code0.recursive], which the text
+   of a term writes [rec]), noted as a unit is converted and as the code of
+   another unit is bound in the prefix ([make_prefix_refusing]). Code that the
+   prefix declares and does not bind is not noted. The prefix may be made more
+   than once ([make_prefix]), and what an earlier making noted stays here until
+   [reset_conversion]. Neither changes anything: the calls of a code id that
+   neither term nor the prefix binds with its code are left whatever the lists
+   say, as there is no code to inline. *)
+let recursive_marked : Code_id.t list ref = ref []
+
 (* Forgets everything that the conversion has noted so far, so that a unit is
    converted as if it were the first: the numbers given to names and what is
    kept beside the terms. Whoever gives the conversion more state adds it
@@ -1305,6 +1759,8 @@ let reset_conversion () =
   Continuations.reset ();
   Symbols.reset ();
   Code_ids.reset ();
+  Hashtbl.reset c_function_ids;
+  Hashtbl.reset c_functions_by_id;
   Value_slots.reset ();
   Function_slots.reset ();
   slot_kinds := [];
@@ -1315,6 +1771,7 @@ let reset_conversion () =
   lists_met := false;
   superseded_code := [];
   loopify_marked := [];
+  recursive_marked := [];
   region_variables := Variable.Set.empty;
   kept_regions := Variable.Set.empty;
   code_regions := Variable.Set.empty;
@@ -1353,6 +1810,123 @@ let local_allocation (var : Model.variable) (region : Variable.t) : Model.named
         Variable.print region
   in
   Prim (Region_primitive Local_allocation, Var var :: named)
+
+(* Whether [sub] occurs in [s] at the index [i]. *)
+let occurs_at ~(sub : string) (s : string) (i : int) : bool =
+  let n = String.length sub in
+  i + n <= String.length s && String.equal (String.sub s i n) sub
+
+(* Whether [sub] occurs in [s]. *)
+let occurs_in ~(sub : string) (s : string) : bool =
+  let rec from i =
+    i <= String.length s && (occurs_at ~sub s i || from (i + 1))
+  in
+  from 0
+
+(* [s] read once from left to right: where one of the strings [sub] of
+   [replacements] occurs, the first of the list that does, the [by] that goes
+   with it is put in its place and the reading goes on after the occurrence.
+   What is put is not read again. No [sub] is empty. *)
+let replace_in_one_pass (replacements : (string * string) list) (s : string) :
+    string =
+  let b = Buffer.create (String.length s) in
+  let rec from i =
+    if i < String.length s
+    then
+      match List.find_opt (fun (sub, _) -> occurs_at ~sub s i) replacements with
+      | Some (sub, by) ->
+        Buffer.add_string b by;
+        from (i + String.length sub)
+      | None ->
+        Buffer.add_char b s.[i];
+        from (i + 1)
+  in
+  from 0;
+  Buffer.contents b
+
+(* A primitive that the conversion refuses, as the line "not checked" shows it:
+   the compiler's print of the primitive, with the margin of the printer raised
+   to a million columns so that a print of an ordinary length is not wrapped (a
+   longer one can still be), and with each variable shown by its name alone. The
+   compiler shows a variable as its name, the stamp that the process gave it and
+   a mark that says whether it is user-visible ([x/31UV]), after the name of its
+   unit if that is another. The stamp depends on how many variables were made
+   before this one, by the reader of the text and by whatever else has run, and
+   the text does not write the mark: neither is of the unit, and the line is
+   there to say which primitive the model has not got (discrepancy X1-5). The
+   variables are those that the compiler counts as free in the primitive: its
+   arguments, the variables of the depths in the coercion of an argument, and
+   the regions that the mode of an allocation names. Two variables of one name
+   are shown alike.
+
+   The stamps are not taken out by looking for the print of each variable in the
+   printed text: the name of a variable and the name of a constant that is
+   poison are any strings, so the print of a variable can also be a part of one
+   of them. The primitive is printed twice. From its print as it is, a name is
+   chosen for a stand-in of each variable: [<variable n>], with quotes after the
+   number for as long as the name occurs in that print. The stand-ins are new
+   variables with those names, and the second print is of the primitive with
+   each variable renamed to its stand-in. The second print is read once from
+   left to right, and each print of a stand-in found in it is replaced, by the
+   name of its variable.
+
+   Checked as the line is made: the second print, with the print of the variable
+   put at each of those places and not its name, is the first print, byte for
+   byte. If it is not, the line is the first print, stamps and all. So the line
+   is the first print but for places where the print of a variable stood and its
+   name now stands. Trusted, of the compiler's printer and of its renaming: that
+   those are places where the printer showed a variable, as the name of a
+   stand-in, which is in no part of the first print, comes into the second only
+   where the printer shows the stand-in; and that the renaming reaches every
+   variable that the printer shows, one that it did not reach being shown with
+   its stamp. A symbol, a constant and the fields of the primitive are shown as
+   the compiler shows them, a name that has a newline in it with its newline.
+
+   The stand-ins are new variables of this process, so the stamps of the
+   variables made after a refusal move by their number; the conversion of the
+   unit stops at the refusal.
+
+   The other refusals that show a term (a binding, a static constant, a call, a
+   variable used as a value) show the compiler's print of it, with the stamps
+   that this process gave. *)
+let print_refused_primitive ppf (prim : P.t) =
+  let printed (prim : P.t) =
+    let buffer = Buffer.create 256 in
+    let no_break = Format.formatter_of_buffer buffer in
+    Format.pp_set_margin no_break 1_000_000;
+    Format.fprintf no_break "%a@?" P.print prim;
+    Buffer.contents buffer
+  in
+  let as_it_is = printed prim in
+  let rec stand_in_name n quotes =
+    let name = Printf.sprintf "<variable %d%s>" n quotes in
+    if occurs_in ~sub:name as_it_is
+    then stand_in_name n (quotes ^ "'")
+    else name
+  in
+  let renaming, stand_ins =
+    Flambda2_nominal.Name_occurrences.fold_variables (P.free_names prim)
+      ~init:(Flambda2_nominal.Renaming.empty, [])
+      ~f:(fun (renaming, stand_ins) var ->
+        let stand_in =
+          Variable.create
+            (stand_in_name (List.length stand_ins) "")
+            (Variable.kind var)
+        in
+        ( Flambda2_nominal.Renaming.add_variable renaming var stand_in,
+          (stand_in, var) :: stand_ins ))
+  in
+  let renamed = printed (P.apply_renaming prim renaming) in
+  let print_of var = Format.asprintf "%a" Variable.print var in
+  let with_each_stand_in_as (shown : Variable.t -> string) =
+    replace_in_one_pass
+      (List.map (fun (stand_in, var) -> print_of stand_in, shown var) stand_ins)
+      renamed
+  in
+  Format.pp_print_string ppf
+    (if String.equal (with_each_stand_in_as print_of) as_it_is
+     then with_each_stand_in_as Variable.name
+     else as_it_is)
 
 let rec convert_expr (e : Flambda.Expr.t) : Model.expr =
   match Flambda.Expr.descr e with
@@ -1438,9 +2012,10 @@ and convert_handler ~invariant_params (handler : Flambda.Continuation_handler.t)
       let kinds = convert_params_kinds params in
       Model.Handler
         ( convert_params params,
-          (if is_exn_handler
-           then Model.make_exn_handler_metadata kinds
-           else Model.make_handler_metadata kinds),
+          { hm_params_kinds = kinds;
+            hm_params_subkinds = convert_params_subkinds params;
+            hm_is_exn_handler = is_exn_handler
+          },
           convert_expr handler ))
 
 and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
@@ -1626,6 +2201,10 @@ and convert_let (pattern : Bound_pattern.t) (defining_expr : Flambda.Named.t)
             := Code_id.Map.add code_id (Code0.newer_version_of code) !code_older;
           if Loopify_attribute.should_loopify (Code0.loopify code)
           then loopify_marked := code_id :: !loopify_marked;
+          (match Code0.recursive code with
+          | Recursive.Recursive ->
+            recursive_marked := code_id :: !recursive_marked
+          | Recursive.Non_recursive -> ());
           let id = Code_ids.find code_id in
           let outer = !current_code in
           current_code := Some code_id;
@@ -1727,10 +2306,10 @@ and convert_prim (prim : P.t) : Model.named =
         [convert_simple block; convert_simple new_value] )
   | Ternary (Array_set (kind, set_kind), array, index, new_value) -> (
     match convert_array_kind kind with
-    | None -> unsupported "primitive %a" P.print prim
+    | None -> unsupported "primitive %a" print_refused_primitive prim
     | Some kind -> (
       match convert_array_set_kind kind set_kind with
-      | None -> unsupported "primitive %a" P.print prim
+      | None -> unsupported "primitive %a" print_refused_primitive prim
       | Some set_kind ->
         Prim
           ( Heap (Array_set (kind, set_kind)),
@@ -1746,7 +2325,7 @@ and convert_prim (prim : P.t) : Model.named =
   (* CR mshinwell: the subkind of each field, and whether it may be null, are
      dropped, as in [convert_variadic_primitive]: every field is read as any
      value, and a wrong subkind of a field is not seen. This is provisional.
-     Decision D25. *)
+     Decision D25, of the fields of a made block, which is open. *)
     when List.compare_lengths kinds args = 0
          && List.for_all
               (fun kind ->
@@ -1768,21 +2347,44 @@ and convert_prim (prim : P.t) : Model.named =
     -> (
     match convert_array_kind kind with
     | Some kind -> Prim (Heap (Make_mutable_array kind), convert_simples args)
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Unary (p, arg) -> (
     match convert_unary_primitive p with
     | Some p -> Prim (Unary p, [convert_simple arg])
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Binary (p, arg1, arg2) -> (
     match convert_binary_primitive p with
     | Some p -> Prim (Binary p, [convert_simple arg1; convert_simple arg2])
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
   | Variadic (p, args) -> (
     match convert_variadic_primitive p ~num_args:(List.length args) with
     | Some p -> Prim (Variadic p, convert_simples args)
-    | None -> unsupported "primitive %a" P.print prim)
+    | None -> unsupported "primitive %a" print_refused_primitive prim)
+  | Nullary Cpu_relax ->
+    (* CR mshinwell: a pause is converted as [Opaque_identity] of the unit
+       value, which is the value that [Cpu_relax] returns. The model has no
+       primitive for a pause and no event of one: it has no time and one thread,
+       and what a polling point may run (a finaliser, a signal handler) it has
+       for no allocation either. So the form binds the unit value, leaves the
+       heap as it is, costs the step of a [Let], and records no effect of
+       pausing. What is proved of a validation is of the converted terms: it
+       does not establish that Simplify kept a pause, nor where, nor how many
+       times. Whether the validator accepts a term in which a pause was removed,
+       moved or made twice is promised neither way: the [Let]s stay in the terms
+       that it compares, as none of its normalisations folds an
+       [Opaque_identity], removes its [Let] for being unused or shares two
+       (FlambdaNormaliseSpec.prim_may_fold, FlambdaCseSpec.shareable), which
+       Simplify does not do to a [Cpu_relax] either, whose effects are
+       arbitrary. Nothing is claimed of the two runs: a [Let] is a step, so
+       their numbers of steps may differ with the pauses, and [fuel] may end
+       one. With [keep_regions] unset this is the form that the end of the
+       region of a handler has ([convert_let]); there the model does not tell a
+       pause from one. Decision D64. *)
+    Prim
+      ( Unary (Opaque_identity (convert_kind Flambda_kind.value)),
+        [Const (Tagged_immediate (z_of_int 0))] )
   | Nullary _ | Ternary _ | Quaternary _ ->
-    unsupported "primitive %a" P.print prim
+    unsupported "primitive %a" print_refused_primitive prim
 
 and convert_or_variable : type a.
     (a -> Model.const) -> a Or_variable.t -> Model.simple =
@@ -1896,6 +2498,13 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
              then Model.make_tupled_code_metadata params_arity result_arity
              else Model.make_code_metadata params_arity result_arity
            in
+           let metadata =
+             { metadata with
+               cm_params_subkinds = convert_params_subkinds params;
+               cm_result_subkinds =
+                 convert_result_subkinds (Code0.result_arity code)
+             }
+           in
            if Code0.stub code
            then Model.stub_code_metadata metadata
            else metadata),
@@ -1904,9 +2513,11 @@ and convert_code (code : Flambda.Function_params_and_body.t Code0.t) :
 and convert_apply (apply : Apply_expr.t) : Model.expr =
   (* The program runs the handler of a probe only while the probe is enabled,
      and the model has nothing of that: a call that is a probe is refused. The
-     text of a term does not say that a call is a probe, so no unit read from
-     its text has one. A body taken from a .cmx may have one; it is then not
-     bound, as any body that the conversion refuses ([make_prefix]). *)
+     text of a term says that a call is a probe and the reader takes it, so a
+     unit read from its text may have one; a text made before the printer wrote
+     the mark has none, whatever the source had. A body taken from a .cmx may
+     have one; it is then not bound, as any body that the conversion refuses
+     ([make_prefix]). *)
   (match Apply_expr.probe apply with
   | None -> ()
   | Some _ -> unsupported "a call that is a probe");
@@ -1937,8 +2548,13 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
                (List.map Code_ids.find (Code_id.Set.elements code_ids))))
     | Function { function_call = Indirect_unknown_arity; _ } ->
       Indirect_unknown_arity
-    | Method _ | C_call _ | Effect _ ->
-      unsupported "the call %a" Apply_expr.print apply
+    | C_call { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
+      (* See "Calls of C functions", above. *)
+      Direct
+        (c_function_id
+           (c_function_of apply ~needs_caml_c_call ~is_c_builtin ~effects
+              ~coeffects))
+    | Method _ | Effect _ -> unsupported "the call %a" Apply_expr.print apply
   in
   let exn_continuation = Apply_expr.exn_continuation apply in
   (* See [region_params]. *)
@@ -1992,13 +2608,13 @@ and convert_apply (apply : Apply_expr.t) : Model.expr =
   | Return k -> Model.Apply (noted (returning_to (Continuations.find k)))
   | Never_returns ->
     (* CR mshinwell: a call that never returns, of whatever kind that is
-       converted (a method call, a C call and an effect are refused above), is
-       made a call that returns to a continuation bound around it and used
-       nowhere else, whose handler is [Invalid]: a return from the call is
-       undefined. The call keeps its return arity, and the parameters of the
-       continuation are of the kinds of that arity. The continuation has a
-       number that no continuation of the two units of the check has, and its
-       parameters have numbers that no variable of them has. See the header. *)
+       converted (a method call and an effect are refused above), is made a call
+       that returns to a continuation bound around it and used nowhere else,
+       whose handler is [Invalid]: a return from the call is undefined. The call
+       keeps its return arity, and the parameters of the continuation are of the
+       kinds of that arity. The continuation has a number that no continuation
+       of the two units of the check has, and its parameters have numbers that
+       no variable of them has. See the header. *)
     let k = Continuations.fresh () in
     let kinds = Model.unarize return_arity in
     let params = List.map (fun _ -> Variables.fresh ()) kinds in
@@ -2271,6 +2887,63 @@ let recursive_code (e : Model.expr) : Model.code_id list =
   in
   List.filter reaches_itself (List.map fst calls)
 
+(* The code that the compiler marks recursive and that [recursive_code] finds in
+   neither of two terms. The lists of the calls to leave have this code too
+   ([validate]).
+
+   Where such code is recursive, its recursion goes through a call that is not
+   direct. A function that gives another function of its unit a closure that
+   calls it back is such code: it calls the other function directly, that one
+   calls the closure indirectly, and the function only makes the closure, which
+   is no call. Without the mark the list of the recursive code alone did not
+   leave the calls of such a function. The tool comes to that list where the
+   first has failed, as it does where a primitive of the heap stops the
+   liftings; and where Simplify has not inlined the other function, the term
+   after has no chain of direct calls from the function to itself either. The
+   rounds then inlined the other function, made the call of the closure direct
+   and inlined the code of the closure, in which the function itself had been
+   inlined. That left a new direct call of the code of the closure for each call
+   of the function in the closure, at every round, and the term grew until the
+   tool had no stack or no time left.
+
+   The mark is the compiler's own ([Code0.recursive]). The front end gives it to
+   the functions of a recursive definition whose bodies mention themselves, at
+   once or through the others, called or not (from_lambda/lambda_to_flambda.ml,
+   [cps_function_bindings]). Simplify gives it to the code whose body still uses
+   its depth variable (simplify/simplify_set_of_closures.ml,
+   [simplify_function_body]). That is more than the recursive code: a function
+   of a recursive definition that calls another one of them, and never itself,
+   has its depth variable in the coercion of that call. Simplify's decision at
+   the definition of code that has the mark is not to inline it, unless the code
+   is a stub or an attribute or a flag says otherwise
+   (simplify_shared/function_decl_inlining_decision.ml, [make_decision0]). At a
+   call Simplify reads that decision
+   (simplify/inlining/call_site_inlining_decision.ml, [might_inline]) only where
+   no attribute of the call, no unrolling that has begun and no replayed
+   decision has settled the call before. A call of such code that none of those
+   settles is one that Simplify leaves, as it leaves a call of recursive code.
+
+   The mark is read here from the code of the two terms and from the code of
+   other units that the prefix binds. Code of the term before has the number of
+   its newer version where [convert_both] gives the two one number, so the mark
+   that Simplify gives the newer version is then on both. Nothing is believed of
+   the mark: a list of calls to leave is a guess, and the validator is asked as
+   it is with any list. Its statement is of every list, so no mark, right or
+   wrong, makes it accept a pair that it should refuse. What a mark changes is
+   the search. One that is wrong may lose a verdict, by leaving a call that had
+   to be inlined; a list with more code may also give a verdict that the list
+   without it does not give, or give it at an earlier asking; a mark that is
+   missing leaves the lists as [recursive_code] makes them.
+
+   [Code_ids.find] makes no new number here: a code id noted in a term is given
+   its number just after the note, and one noted in the prefix had it before. *)
+let recursive_by_mark_alone (before : Model.expr) (after : Model.expr) :
+    Model.code_id list =
+  let by_calls = recursive_code before @ recursive_code after in
+  List.filter
+    (fun id -> not (List.mem id by_calls))
+    (List.sort_uniq compare (List.map Code_ids.find !recursive_marked))
+
 (* The code that an expression calls directly, in the code it binds too. *)
 let called_directly (e : Model.expr) : Model.code_id list =
   direct_callees e
@@ -2487,10 +3160,13 @@ let shown_symbol sym =
   | Some _ | None -> Printf.sprintf "$%d" (int_of_positive sym)
 
 let shown_code_id id =
-  match Code_ids.name_of id with
-  | Some code_id when !names_shown ->
-    Linkage_name.to_string (Code_id.linkage_name code_id)
-  | Some _ | None -> Printf.sprintf "code%d" (int_of_positive id)
+  match Hashtbl.find_opt c_functions_by_id (int_of_positive id) with
+  | Some c_function -> shown_c_function c_function
+  | None -> (
+    match Code_ids.name_of id with
+    | Some code_id when !names_shown ->
+      Linkage_name.to_string (Code_id.linkage_name code_id)
+    | Some _ | None -> Printf.sprintf "code%d" (int_of_positive id))
 
 let shown_function_slot slot =
   match Function_slots.name_of slot with
@@ -2782,7 +3458,10 @@ and print_binding ppf (binding : Model.static_binding) =
       (if metadata.cm_is_stub then " stub" else "")
       (print_list print_var) params print_var my_closure print_cont ret
       print_cont exn print_expr body
-  | Bind_deleted_code id -> Format.fprintf ppf "%s deleted" (shown_code_id id)
+  | Bind_deleted_code id ->
+    if Hashtbl.mem c_functions_by_id (int_of_positive id)
+    then Format.fprintf ppf "%s, declared with no code" (shown_code_id id)
+    else Format.fprintf ppf "%s deleted" (shown_code_id id)
   | Bind_symbol (sym, Static_const_set_of_closures (code, slots)) ->
     Format.fprintf ppf "@[<hov 2>%s = closure %s@ {%a}@]" (shown_symbol sym)
       (shown_code_id code) print_value_slots slots
@@ -2903,6 +3582,66 @@ let static_names (e : Model.expr) :
   in
   in_expr None e;
   !references, !bound
+
+(* The blocks that an expression binds symbols to, and the variables that it
+   binds to a block or a closure that the [Let] makes, outside the bodies of its
+   code. And whether two such blocks cannot be the same block, by what is
+   certain alone: another tag or number of fields; a field that is a constant in
+   one and a symbol or another constant in the other; a field that is in the
+   first a variable of [made], so a block or a closure, and in the second a
+   constant. A variable against a symbol is not such a case: the variable may be
+   a block that has not its symbol yet. Both are for the second sign of a wrong
+   guess of the liftings ([validate], at [misplaced]). *)
+let static_blocks (e : Model.expr) =
+  let blocks = ref [] in
+  let made = ref [] in
+  let rec in_expr (e : Model.expr) =
+    match e with
+    | Let (x, _, d, body) ->
+      (match d with
+      | Prim (Variadic (Make_block (Block_kind_values _)), _)
+      | Set_of_closures _ | Closure_of_set _ ->
+        made := x :: !made
+      | Prim _ | Simple _ | Project_value_slot _ | Project_value_slot_from _
+      | Project_function_slot _ ->
+        ());
+      in_expr body
+    | Let_static (bindings, body) ->
+      List.iter
+        (fun (binding : Model.static_binding) ->
+          match binding with
+          | Bind_symbol (sym, Static_const_block (tag, fields)) ->
+            blocks := (sym, (tag, fields)) :: !blocks
+          | Bind_symbol _ | Bind_code _ | Bind_deleted_code _ -> ())
+        bindings;
+      in_expr body
+    | Let_cont_non_recursive (_, Handler (_, _, handler), body) ->
+      in_expr handler;
+      in_expr body
+    | Let_cont_recursive (handlers, body) ->
+      List.iter
+        (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
+        handlers;
+      in_expr body
+    | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
+  in
+  in_expr e;
+  !blocks, !made
+
+let cannot_be_the_same made (tag, fields) (tag', fields') =
+  tag <> tag'
+  || List.compare_lengths fields fields' <> 0
+  || List.exists2
+       (fun (field : Model.simple) (field' : Model.simple) ->
+         match field, field' with
+         | Const c, Const c' -> c <> c'
+         | Const _, Symbol _ | Symbol _, Const _ -> true
+         | Var x, Const _ -> List.mem x made
+         | Var _, (Var _ | Symbol _)
+         | Symbol _, (Var _ | Symbol _)
+         | Const _, Var _ ->
+           false)
+       fields fields'
 
 let unused_statics (e : Model.expr) : Unused_statics.dropped =
   let references, bound = static_names e in
@@ -3270,6 +4009,30 @@ let code_versions : (Model.code_id * Model.code_id) list ref = ref []
    function that makes it. *)
 let second_guess = ref false
 
+(* The most liftings in turn that a search for what Simplify lifted guesses. It
+   is a fuel and nothing rests on it. A sequence ends before it is spent where a
+   lifting after the first proposes nothing, where it gives the term back, or
+   where the rounds after it give back the term that it was given, the two
+   compared as terms, and no [Let] is banned at a later place of the sequence
+   (the comment in [liftings_from] says what that stop may miss). The liftings
+   guessed are given to the function asked, [validate_unit] or the second check,
+   and the statements of those are of every list of liftings
+   (FlambdaValidateSpec.validate_unit_sound_statement,
+   FlambdaValidateRelatedSpec.validate_unit_related_sound_statement): what the
+   function accepts, it accepts with the guarantee of its statement, whatever
+   the list. A sequence that is too short, too long or wrong can lose a verdict
+   that another sequence would get; it cannot get round a check of the function
+   asked. So the number has no proof obligation. The stop where the rounds give
+   a term back is what keeps a search from running to it: the guess proposes at
+   every turn that [my_closure] be bound to the symbol of a static closure, the
+   lifting gives a term rebuilt, and the rounds give back the term that there
+   was. What needs many liftings is a chain of closures in which each holds the
+   one before: one lifting for each link, as a lifting takes only a value whose
+   parts are symbols or constants already. Four functions in the body of a
+   functor, each calling the one before, need five
+   (tests/semantics/ocaml/chain_of_five_in_functor.ml). *)
+let liftings_fuel = 16
+
 let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     ~let_copies (before : Model.expr) (after : Model.expr) : Lift.lifting =
   (* The symbols bound outside code, in the order in which they are bound when
@@ -3424,11 +4187,13 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     sym
   in
   (* The function declarations of the closures that the term after makes by a
-     [Let], anywhere, and the tag and the number of fields of the blocks that it
-     makes by one. *)
-  let made_after, blocks_made_after =
+     [Let], anywhere, the tag and the number of fields of the blocks that it
+     makes by one, and the kind and the contents of the numbers that it boxes by
+     one. *)
+  let made_after, blocks_made_after, boxes_made_after =
     let made = ref [] in
     let blocks = ref [] in
+    let boxes = ref [] in
     let rec in_term (e : Model.expr) =
       match e with
       | Let (_, _, d, body) ->
@@ -3436,6 +4201,8 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
         | Closure_of_set (_, decls, _) -> made := decls :: !made
         | Prim (Variadic (Make_block (Block_kind_values tag)), fields) ->
           blocks := (tag, List.length fields) :: !blocks
+        | Prim (Unary (Box_number kind), [contents]) ->
+          boxes := (kind, contents) :: !boxes
         | _ -> ());
         in_term body
       | Let_static (bindings, body) ->
@@ -3458,7 +4225,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
       | Apply _ | Apply_cont _ | Switch _ | Invalid -> ()
     in
     in_term after;
-    !made, !blocks
+    !made, !blocks, !boxes
   in
   (* The variables that a closure of the term before, made by a [Let] or bound
      to a symbol, anywhere, holds in a value slot. *)
@@ -3577,8 +4344,12 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
   (* The [Let]s that mention no variable, in the body of code or in a handler
      that is not at toplevel. [given] has the symbols given in the same place,
      each with its constant: a [Let] that no symbol is left for takes one of
-     those, if it makes just that constant. The handlers of a group of recursive
-     continuations have the paths of FlambdaLiftSpec.rec_handlers_map. *)
+     those, if it makes just that constant. For the body of code the place is
+     the group of static bindings that binds the code: the model puts the
+     bindings lifted out of the bodies of one group once each
+     (FlambdaLiftFromCodeSpec.put_once_each). The handlers of a group of
+     recursive continuations have the paths of
+     FlambdaLiftSpec.rec_handlers_map. *)
   let plain (s : Model.simple) =
     match s with Symbol _ | Const _ -> true | Var _ -> false
   in
@@ -3602,7 +4373,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
          symbol, so the closure of the term after may have fewer;
          FlambdaValidateSpec.without_slots removes them from the term before
          after the lifting. Nothing is believed of this: the validation checks
-         the lifting, and a wrong guess is a unit that is not validated. *)
+         the lifting; whatever is guessed, the verdict is the validation's. *)
       (match d with
       | Set_of_closures (code, slots) when plain_slots slots -> (
         match
@@ -3900,7 +4671,7 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
         | None -> ())
-      | Prim (Unary (Box_number _), [contents]) -> (
+      | Prim (Unary (Box_number kind), [contents]) -> (
         match
           take path (fun (const : Model.static_const) ->
               match const with
@@ -3910,7 +4681,36 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
               | _ -> false)
         with
         | Some (sym, _) -> lift x path (Lift_to_symbol sym)
-        | None -> ())
+        | None -> (
+          (* A boxed number whose contents are a constant, or a variable that
+             stands for one, that a closure of the term before holds in a value
+             slot, for which the guess has no symbol left to take (as for the
+             block above), and of which the term after has no [Let]: none that
+             boxes, at that kind, contents written as that constant (a variable
+             of the term after is not looked through). The case aimed at is a
+             number that the unit computes once and that a function then reads
+             from its closure: Simplify puts the constant in the code of the
+             function, the closure has no such value slot any more, and no
+             symbol is bound to the boxed number. It is given a symbol that
+             neither of the two terms given here has, so that the value slot
+             holds a symbol: the read of the slot is then that symbol
+             (FlambdaKnownSlotsSpec.read_known_slots) and its unboxing the
+             constant (FlambdaKnownSymbolsSpec.fold_known_named). *)
+          let contents_known =
+            match contents with
+            | Var y -> (
+              match List.assoc_opt y !known_simples with
+              | Some known -> known
+              | None -> contents)
+            | Symbol _ | Const _ -> contents
+          in
+          match contents_known with
+          | Const _ ->
+            if
+              List.mem x held_in_slots
+              && not (List.mem (kind, contents_known) boxes_made_after)
+            then lift x path (Lift_to_symbol (fresh_symbol ()))
+          | Symbol _ | Var _ -> ()))
       | _ -> ());
       in_expr (Numbers.Coq_xO path) body
     | Let_static (_, body) -> in_expr (Numbers.Coq_xO path) body
@@ -3937,12 +4737,13 @@ let lifting_guess ~unit ~(banned : (Lift.path * Model.symbol) list) ~around
     match e with
     | Let (_, _, _, body) -> in_groups body
     | Let_static (bindings, body) ->
+      let given = ref [] in
       List.iter
         (fun (binding : Model.static_binding) ->
           match binding with
           | Bind_code (id, Code (_, _, _, _, _, code_body)) -> (
             let code_lets = ref [] in
-            in_code (code_lets, ref []) Lift.root code_body;
+            in_code (code_lets, given) Lift.root code_body;
             match !code_lets with
             | [] -> ()
             | _ :: _ -> out_of_code := (id, List.rev !code_lets) :: !out_of_code
@@ -4398,16 +5199,30 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
    the file says nothing is a symbol of its own, which no name of the compiler
    has: one for each such field of each block, made when the block is bound, and
    declared as an import of which nothing is known ([imports]). A block one of
-   whose such fields is loaded, by either term or by a body that the prefix
-   binds, from something that stands for the block (below) is not bound. Nor is
-   a block with any other field (an approximation given in place of a symbol, a
-   constant that the model has not got), or with a field that is a symbol which
-   its own file says is another symbol or a constant. So the prefix says less
-   than the file and never more: a block that is not bound stays an import, and
-   a field that is given a symbol is one of which the file says nothing. The
-   test of the loads decides only which blocks are bound, which is what a
-   validation can find, and is trusted for nothing: a load that it misses leaves
-   a block bound, with what the file says of it and no more.
+   whose such fields is loaded from something that stands for the block (below),
+   in the body of code of either term, in a body that the prefix binds, or in
+   the handler of a recursive continuation, is not bound. A load of such a field
+   anywhere else does not keep the block from being bound: the load then reads
+   the symbol of the field, which a run may pass on, store and return and may
+   not inspect. Nor is a block bound that has any other field (an approximation
+   given in place of a symbol, a constant that the model has not got), or a
+   field that is a symbol which its own file says is another symbol or a
+   constant. So the prefix says less than the file and never more: a block that
+   is not bound stays an import, and a field that is given a symbol is one of
+   which the file says nothing. The test of the loads decides only which blocks
+   are bound, which is what a validation can find, and is trusted for nothing: a
+   load that it misses leaves a block bound, with what the file says of it and
+   no more.
+
+   Why the test is of those places. The validation reads the term before with
+   what the unit binds its symbols to wherever the load is
+   (FlambdaKnownSymbolsSpec.fold_known_unit), and the term after only outside
+   the bodies of code and the handlers of recursive continuations
+   (FlambdaReadsAfterSpec.load_known_blocks_surely). So of a load in one of
+   those places from a block that is bound, the term before can have the symbol
+   of the field where the term after has the load, and a unit that is validated
+   with the block left an import may then not be. Outside them the term after is
+   read as the term before is, where the load is one that it reads.
 
    A symbol that is a closure, where it is asked for or is a field of a block
    that is bound: the closure, at its function slot, of a set that has this one
@@ -4420,7 +5235,10 @@ let unit_names (units : (Compilation_unit.t * Digest.t) list) =
    bound, and neither is code whose body the model has not got, tupled code (no
    direct call of tupled code is in the model, see [tupled_code]), or code with
    a call of known arity where one of the two units has tupled code. A call of
-   code that is not bound is undefined.
+   code that is not bound is undefined. A body that calls a C function is one
+   that the model has got, up to the call ("Calls of C functions", above): it is
+   bound where nothing else in it is refused, and a run that enters it is
+   undefined where it reaches the call.
 
    A code id of which the file of its own unit has the code or its metadata, and
    which is not bound: it is declared deleted ([Bind_deleted_code]), once, where
@@ -4527,14 +5345,52 @@ let no_prefix =
     prefix_hidden = []
   }
 
+(* What is in front of the two terms as they are run and validated: nothing;
+   declarations of C functions and nothing else, as for a unit that read no
+   [.cmx] ([with_c_function_declarations]); or a prefix made from [.cmx] files,
+   with such declarations in its first group where there are any. The
+   declarations are of the C functions that one of the two terms, or a body that
+   the prefix binds, calls. Which of the three it is is told from the bindings
+   that are in front. The lines of the tool say which. *)
+type what_in_front =
+  | Nothing_in_front
+  | C_functions_alone
+  | A_prefix
+
+let is_c_function_declaration (binding : Model.static_binding) : bool =
+  match binding with
+  | Bind_deleted_code id -> Hashtbl.mem c_functions_by_id (int_of_positive id)
+  | Bind_symbol _ | Bind_code _ -> false
+
+let what_is_in_front (prefix : prefix) : what_in_front =
+  match prefix.prefix_groups with
+  | [] -> Nothing_in_front
+  | _ :: _ as groups ->
+    if List.for_all (List.for_all is_c_function_declaration) groups
+    then C_functions_alone
+    else A_prefix
+
+let in_front_short (prefix : prefix) : string option =
+  match what_is_in_front prefix with
+  | Nothing_in_front -> None
+  | C_functions_alone -> Some "the declarations of the C functions"
+  | A_prefix -> Some "the prefix"
+
+let in_front_long (prefix : prefix) : string option =
+  match what_is_in_front prefix with
+  | Nothing_in_front -> None
+  | C_functions_alone -> Some "the declarations of the C functions"
+  | A_prefix -> Some "the prefix made from the .cmx files"
+
 (* What the [.cmx] file of its unit says of a symbol. *)
 type approximation = Code_or_metadata.t Value_approximation.t
 
 (* The prefix made with some blocks refused: [refused] are the blocks, by the
    numbers of their symbols, that are not to be bound with a symbol for a field
    of which the file says nothing. [found] is given the blocks not refused one
-   of whose such fields a term loads; if there is one, the prefix returned is
-   not to be used ([make_prefix]). *)
+   of whose such fields is loaded in the body of code or in the handler of a
+   recursive continuation; if there is one, the prefix returned is not to be
+   used ([make_prefix]). *)
 let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
     ~(units : (Compilation_unit.t * Digest.t) list)
     ~(loader : Flambda_cmx.loader Lazy.t) ~units_have_tupled_code
@@ -4669,6 +5525,10 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
           then (
             code_bindings := Model.Bind_code (id, converted) :: !code_bindings;
             bodies := body :: !bodies;
+            (match Code0.recursive code with
+            | Recursive.Recursive ->
+              recursive_marked := Code0.code_id code :: !recursive_marked
+            | Recursive.Non_recursive -> ());
             use unit)
           else not_bound ()))
   in
@@ -4718,11 +5578,20 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
   let blocks_to_bind = Queue.create () in
   let blocks_seen : (int, unit) Hashtbl.t = Hashtbl.create 16 in
   (* The symbols made for the fields of which the files say nothing, each with
-     the block that it is a field of, and the blocks one of whose such fields a
-     term loads. *)
+     the block that it is a field of, and the blocks one of whose such fields is
+     loaded where the term after is not read with what the unit binds its
+     symbols to: in the body of code, or in the handler of a recursive
+     continuation. [unread] says whether the walk is in such a place. *)
   let hidden = ref [] in
   let hidden_of : (int, int) Hashtbl.t = Hashtbl.create 16 in
   let read_hidden = ref [] in
+  let unread = ref false in
+  let in_unread f =
+    let outside = !unread in
+    unread := true;
+    f ();
+    unread := outside
+  in
   let bind_one_block unit sym tag (fields : approximation list) =
     let n = int_of_positive sym in
     (* Whether a field is given a symbol of its own. *)
@@ -4855,7 +5724,7 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
           | Some (Symbol sym) ->
             (match Hashtbl.find_opt hidden_of (int_of_positive sym) with
             | Some block ->
-              if not (List.mem block !read_hidden)
+              if !unread && not (List.mem block !read_hidden)
               then read_hidden := block :: !read_hidden
             | None -> ());
             ask_symbol sym;
@@ -4878,7 +5747,8 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
       List.iter
         (fun (binding : Model.static_binding) ->
           match binding with
-          | Bind_code (_, Code (_, _, _, _, _, body)) -> in_expr body
+          | Bind_code (_, Code (_, _, _, _, _, body)) ->
+            in_unread (fun () -> in_expr body)
           | Bind_deleted_code _ -> ()
           | Bind_symbol (_, Static_const_set_of_closures (code, slots)) ->
             ask_code code;
@@ -4902,9 +5772,10 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
       in_expr handler;
       in_expr body
     | Let_cont_recursive (handlers, body) ->
-      List.iter
-        (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
-        handlers;
+      in_unread (fun () ->
+          List.iter
+            (fun (_, Model.Handler (_, _, handler)) -> in_expr handler)
+            handlers);
       in_expr body
     | Apply ap -> (
       in_simple ap.ap_callee;
@@ -4925,11 +5796,19 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
      against are those bound so far. *)
   let rec settle () =
     changed := false;
+    let bodies_so_far = List.rev !bodies in
     List.iter
       (fun e ->
         Hashtbl.reset stands_for;
+        unread := false;
         in_expr e)
-      (terms @ List.rev !bodies);
+      terms;
+    List.iter
+      (fun body ->
+        Hashtbl.reset stands_for;
+        unread := true;
+        in_expr body)
+      bodies_so_far;
     if !changed then settle ()
   in
   match units with
@@ -5092,8 +5971,9 @@ let make_prefix_refusing ~(refused : int list) ~(found : int list ref)
    found added to those refused until none is found. Both terms are gone through
    each time, and one prefix goes in front of both, so a block is refused for
    both or for neither; a block once refused stays so; and in the prefix
-   returned no block that is bound has such a field that a term loads from
-   something that stands for the block. *)
+   returned no block that is bound has such a field that is loaded, in the body
+   of code or in the handler of a recursive continuation, from something that
+   stands for the block. *)
 let make_prefix ~units ~loader ~units_have_tupled_code terms =
   let rec again refused =
     let found = ref [] in
@@ -5122,7 +6002,17 @@ let with_prefix (prefix : prefix) (unit : converted) : converted =
    each unit are apart (FlambdaStaticsInScopeSpec.static_names_apart, of the
    unit with the prefix in front of it, where they are of the unit alone). Each
    of these fails only where [make_prefix] is wrong, as no source makes a unit
-   that binds, or declares deleted, a name of another unit. *)
+   that binds, or declares deleted, a name of another unit. The declarations of
+   the C functions are in the prefix that this is given
+   ([with_c_function_declarations]), and none of these can fail for them. They
+   bind no symbol. Their code ids are numbers that no name has
+   ([Code_ids.fresh]), one for each C function of the table, so none is declared
+   twice and none is a code id that the files or a unit bind or declare deleted.
+   And a declaration of deleted code leaves the static environment as it is
+   (FlambdaSemanticsSpec.eval_static_bindings). So this answers nothing where
+   the declarations are alone in front of the two terms, and the line of a
+   fault, which says "the prefix made from the .cmx files", is printed only
+   where something in front is made from such files. *)
 let prefix_fault (prefix : prefix)
     ~(imports : (Model.symbol * Values.import_class) list) (before : converted)
     (after : converted) : string option =
@@ -5183,16 +6073,37 @@ let print_prefix (prefix : prefix) =
   | _ :: _ ->
     let digests = Sys.getenv_opt "FLSEMANTICS_PRINT_DIGESTS" <> None in
     let every_binding = Sys.getenv_opt "FLSEMANTICS_PRINT_TERMS" <> None in
-    let bindings = List.length (List.concat prefix.prefix_groups) in
-    Format.printf "  given the .cmx of %s, a prefix of %d static binding%s:@."
-      (String.concat ", "
-         (List.map
-            (fun (unit, digest) ->
-              Compilation_unit.name_as_string unit
-              ^ if digests then " (" ^ Digest.to_hex digest ^ ")" else "")
-            prefix.prefix_units))
-      bindings
-      (if bindings = 1 then "" else "s");
+    (* The declarations of the C functions are counted apart from the bindings
+       made from the files. *)
+    let c_functions =
+      List.length
+        (List.filter is_c_function_declaration
+           (List.concat prefix.prefix_groups))
+    in
+    let bindings =
+      List.length (List.concat prefix.prefix_groups) - c_functions
+    in
+    let declarations =
+      if c_functions = 1
+      then "the declaration of 1 C function"
+      else Printf.sprintf "the declarations of %d C functions" c_functions
+    in
+    (* The declarations of the C functions are printed first, under a head line
+       of their own, which is the line of a unit that has nothing else in front
+       of it. Then the bindings made from the files, under the head line of a
+       prefix, which counts them and no declaration of a C function: that line
+       and the lines under it are what they are for a unit that calls no C
+       function, and scripts read them. *)
+    let c_declarations =
+      List.filter is_c_function_declaration (List.concat prefix.prefix_groups)
+    in
+    let groups =
+      List.filter
+        (fun group -> match group with [] -> false | _ :: _ -> true)
+        (List.map
+           (List.filter (fun binding -> not (is_c_function_declaration binding)))
+           prefix.prefix_groups)
+    in
     let unasked : (int, Model.symbol) Hashtbl.t = Hashtbl.create 64 in
     if not every_binding
     then
@@ -5207,6 +6118,28 @@ let print_prefix (prefix : prefix) =
     Fun.protect
       ~finally:(fun () -> names_shown := false)
       (fun () ->
+        (match c_declarations with
+        | [] -> ()
+        | _ :: _ ->
+          Format.printf "  in front of the two terms, %s:@." declarations;
+          List.iter
+            (fun binding ->
+              forget_shown_names ();
+              Format.printf "    @[<v>%a@]@." print_binding binding)
+            c_declarations);
+        (match groups with
+        | [] -> ()
+        | _ :: _ ->
+          Format.printf
+            "  given the .cmx of %s, a prefix of %d static binding%s:@."
+            (String.concat ", "
+               (List.map
+                  (fun (unit, digest) ->
+                    Compilation_unit.name_as_string unit
+                    ^ if digests then " (" ^ Digest.to_hex digest ^ ")" else "")
+                  prefix.prefix_units))
+            bindings
+            (if bindings = 1 then "" else "s"));
         List.iteri
           (fun i group ->
             if i > 0 then Format.printf "    and then@.";
@@ -5264,7 +6197,7 @@ let print_prefix (prefix : prefix) =
                      @ if !others > 0 then [number !others "block"] else []))
                   (shown_symbol block))
               (List.rev !blocks))
-          prefix.prefix_groups)
+          groups)
 
 (* The two units are converted with one numbering of names, the continuations of
    the second unit standing for those of the first, so that the verified
@@ -5569,6 +6502,90 @@ let undefined_by_an_open_list (state : Semantics.state) :
   | Apply _ | Apply_cont _ | Switch _ | Invalid ->
     None
 
+(* Whether the conversion of the term after met a function slot named
+   [partial_app_closure] where the conversion of the term before met no slot of
+   that name. That is the name that Simplify gives the function slot of the
+   wrapper that it makes of a partial application of code that it knows
+   (simplify/simplify_apply_expr.ml, [simplify_direct_partial_application]): new
+   code marked as a stub, which projects the arguments given from its own
+   closure and calls the function, and a closure of it. The wrapper that the
+   front end makes is named after the function
+   (from_lambda/closure_conversion.ml, [wrap_partial_application]). Where
+   Simplify makes one, the term before has a call with fewer arguments than the
+   code has parameters, and no rewrite of the validation makes the wrapper of
+   it.
+
+   THE TEST IS OF THE NAME AND OF NOTHING ELSE. The slots that a conversion
+   meets are those that it numbers ([Function_slots]): the slots of the sets of
+   closures and those that a projection names. The test does not look at the
+   code of a closure, nor at where the slot stands, nor at who made it: a
+   function of the source that is named so, in the term after and not in the
+   term before, would pass it. Read for a line under "not validated", which says
+   what the names are and whose name that is, and does not say that nothing else
+   stops the unit. *)
+let wrapper_made_after = ref false
+
+(* Whether a C function is called: by one of the two terms, or by a body that
+   the prefix binds. A call is a direct call of the code id of the C function,
+   in the term or in the body of code that it binds ([code_id_used]; such a code
+   id is neither bound nor made a closure of). *)
+let c_function_called (prefix : prefix) (terms : Model.expr list)
+    (id : Model.code_id) : bool =
+  let in_front =
+    List.fold_right
+      (fun group body -> Model.Let_static (group, body))
+      prefix.prefix_groups Model.Invalid
+  in
+  List.exists (code_id_used id) (in_front :: terms)
+
+(* The code ids of the C functions that are called ([c_function_called]):
+   declared deleted in the first group of the prefix, in the order in which the
+   conversion met them. The conversion meets more than are called: a body of the
+   prefix that is converted and then not bound ([bind_code]) has left its C
+   functions in the table ([c_function_id]), and they are not declared. A group
+   is made where the prefix has none. Nothing binds what is declared. *)
+let with_c_function_declarations (prefix : prefix) (terms : Model.expr list) :
+    prefix =
+  match
+    List.filter (c_function_called prefix terms) (c_function_code_ids ())
+  with
+  | [] -> prefix
+  | _ :: _ as ids -> (
+    let declarations = List.map (fun id -> Model.Bind_deleted_code id) ids in
+    match prefix.prefix_groups with
+    | [] -> { prefix with prefix_groups = [declarations] }
+    | first :: rest ->
+      { prefix with prefix_groups = (declarations @ first) :: rest })
+
+(* The C function at a call of which a run is undefined, where the state that
+   has no step is a call of one. *)
+let undefined_at_a_c_call (state : Semantics.state) : c_function option =
+  match state.state_expr with
+  | Apply { ap_call_kind = Direct id; _ } ->
+    Hashtbl.find_opt c_functions_by_id (int_of_positive id)
+  | Apply _ | Let _ | Let_static _ | Let_cont_non_recursive _
+  | Let_cont_recursive _ | Apply_cont _ | Switch _ | Invalid ->
+    None
+
+(* Where a run is undefined and why, read off the state that has no step: the
+   two parts of the line that is printed under the lines of the two runs, "the
+   run before Simplify is undefined at WHERE: WHY". It has one case, the call of
+   a C function, and says nothing of any other state. That case is to stay the
+   first where others are added: the code id of a C function is declared and not
+   bound, as code is of which a [.cmx] file has no body, and the callee of its
+   call is no closure, so a case for either of those would take this state too.
+   A state whose expression is such a call has no step whatever its operands
+   are. *)
+let undefined_at (state : Semantics.state) : (string * string) option =
+  match undefined_at_a_c_call state with
+  | Some c_function ->
+    Some
+      ( Printf.sprintf "a call of %s" (shown_c_function c_function),
+        "the model does not run a C function (decision D50), so of a run that \
+         reaches such a call nothing is said, of what comes before the call \
+         either" )
+  | None -> None
+
 let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
     (before : Flambda_unit.t) (after : Flambda_unit.t) =
   let loader =
@@ -5578,6 +6595,14 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
   lists_met := false;
   let has_tupled_code () = match !tupled_code with [] -> false | _ -> true in
   let before_converted = convert_unit before in
+  let named_as_a_wrapper slot =
+    String.equal (Function_slot.name slot) "partial_app_closure"
+  in
+  let wrapper_named_before =
+    List.exists
+      (fun (slot, _) -> named_as_a_wrapper slot)
+      (Function_slots.bindings ())
+  in
   before_marked
     := List.map
          (fun (place, ap, callee, times) ->
@@ -5608,9 +6633,20 @@ let convert_both ~(units : (Compilation_unit.t * Digest.t) list)
       ~finally:(fun () -> superseded_code := [])
       (fun () -> convert_unit after)
   in
+  (* Before the prefix is made: a slot of another unit is not of the term
+     after. *)
+  wrapper_made_after
+    := (not wrapper_named_before)
+       && List.exists
+            (fun (slot, _) -> named_as_a_wrapper slot)
+            (Function_slots.bindings ());
   let prefix =
     make_prefix ~units ~loader
       ~units_have_tupled_code:(before_has_tupled_code || has_tupled_code ())
+      [before_converted.body; after_converted.body]
+  in
+  let prefix =
+    with_c_function_declarations prefix
       [before_converted.body; after_converted.body]
   in
   let prefix, before_converted, after_converted =
@@ -5714,7 +6750,9 @@ let not_in_scope ~(symbols : Model.symbol list) ~(code_ids : Model.code_id list)
   then None
   else
     let all_symbols = symbols @ List.map snd (Symbols.bindings ()) in
-    let all_code_ids = code_ids @ List.map snd (Code_ids.bindings ()) in
+    let all_code_ids =
+      code_ids @ List.map snd (Code_ids.bindings ()) @ c_function_code_ids ()
+    in
     let symbols_pass =
       Statics_in_scope.expr_statics_in_scope symbols all_code_ids unit.body
     in
@@ -5743,7 +6781,7 @@ let not_in_scope_alone (unit : converted) : string option =
   let code_ids =
     List.filter
       (fun id -> not (Hashtbl.mem own (int_of_positive id)))
-      (List.map snd (Code_ids.bindings ()))
+      (List.map snd (Code_ids.bindings ()) @ c_function_code_ids ())
   in
   not_in_scope ~symbols ~code_ids unit
 
@@ -5781,12 +6819,14 @@ let static_names_in_scope ~(imports : Model.symbol list) (unit : converted) =
 (* The line: the two terms are given with the prefix in front of them where
    there is one, and the imports are those that the validation is given. *)
 let print_static_names ~(imports : (Model.symbol * Values.import_class) list)
-    ~(with_prefix : bool) (before : converted) (after : converted) =
+    ~(in_front : string option) (before : converted) (after : converted) =
   let imports = List.map fst imports in
   Format.printf "  the check of static names: %s before, %s after%s@."
     (static_names_in_scope ~imports before)
     (static_names_in_scope ~imports after)
-    (if with_prefix then ", each with the prefix in front of it" else "")
+    (match in_front with
+    | Some what -> ", each with " ^ what ^ " in front of it"
+    | None -> "")
 
 (* A condition of well-formedness that a unit which is not well-formed fails. *)
 let why_not_well_formed (unit : converted) =
@@ -5834,19 +6874,27 @@ let why_not_well_formed (unit : converted) =
 let interface (unit : converted) : Well_formed.unit_interface =
   { unit_return = unit.return_continuation; unit_exn = unit.exn_continuation }
 
-(* The text of a term does not give the arity of a call of unknown arity, and
-   such a call is read with one value for its result (the CRs of
-   parser/fexpr_to_flambda.ml; label C2-5). Where the result of the compiler's
-   call was something else, an unboxed pair or an unboxed number, the term read
-   is not the compiler's, and Simplify, which is entitled to, stops on it with a
-   fatal error. This says whether the text has such a call that can be told: a
-   call of unknown arity that returns to a continuation whose parameters are not
-   one value, where the continuation is bound in sight by a [Let_cont] or is the
-   return continuation of the code that the call is in. A call is of unknown
-   arity as the reader has it: one with no arity written, or with the arity of
-   its result written and not that of its arguments, which the reader drops. The
-   test goes by the identifiers of the text as it was parsed and makes no name
-   of the compiler. *)
+(* A text need not give the arity of a call of unknown arity, and a call that is
+   written with none is read with one value for its result (the CRs of
+   parser/fexpr_to_flambda.ml; label C2-5). The printer writes the arities of
+   such a call, after the word [unknown_arity], unless they are one value for
+   each argument and one for the result; a text made before it did, or written
+   by hand, may leave them out whatever they were. Where the result of the
+   compiler's call was something else, an unboxed pair or an unboxed number, the
+   term read from such a text is not the compiler's, and Simplify, which is
+   entitled to, stops on it with a fatal error. This says whether the text has
+   such a call that can be told: an indirect call written without the word
+   [unknown_arity] and without the arity of its arguments, that returns to a
+   continuation whose parameters are not one value, where the continuation is
+   bound in sight by a [Let_cont] or is the return continuation of the code that
+   the call is in. Such a call is one that the reader takes for a call of
+   unknown arity: it has no arity written, or the arity of its result written
+   and not that of its arguments, which the reader drops. An indirect call
+   written with the word [unknown_arity] is of unknown arity too, and this does
+   not look at it: the reader takes the arity of the result that it writes, and
+   gives it one value where it writes none
+   ([Fexpr_to_flambda.arities_or_values]). The test goes by the identifiers of
+   the text as it was parsed and makes no name of the compiler. *)
 let result_arity_lost (unit : Fexpr.flambda_unit) : bool =
   let one_value (kinds : Fexpr.kind_with_subkind option list) =
     match kinds with
@@ -6088,7 +7136,10 @@ let inlining_guess (before : Model.expr) (after : Model.expr) : inlining_guess =
             (List.sort_uniq compare callees))
       (places_of before)
   in
-  let recursive = recursive_code before @ recursive_code after in
+  let recursive =
+    recursive_code before @ recursive_code after
+    @ recursive_by_mark_alone before after
+  in
   let free =
     List.filter
       (fun id ->
@@ -6239,14 +7290,51 @@ let inlining_choices
   in
   choices_from 1 before []
 
-let validate ~(imports : (Model.symbol * Values.import_class) list)
-    ~(prefix_units : int) ~(outcome_before : outcome) (before : converted)
-    (after : converted) =
+(* Raised in [validate_or_leave] to end it with the verdict carried, where it is
+   not to print the lines of a verdict (see there). [validate] takes it, and it
+   goes no further. *)
+exception Left_with of Validate.validation
+
+(* The validation of the two terms, with the lines that it prints. [demoted] is
+   for the attempts of the term after with its exception handlers demoted (the
+   header of this file, "The exception handlers of the term after"), which
+   [validate_or_leave] asks for itself where the attempts of the two terms as
+   converted refuse them: a caller does not give it. *)
+let rec validate ?(demoted = false) ~imports ~prefix_units ~outcome_before
+    before after : Validate.validation =
+  try
+    validate_or_leave ~demoted ~imports ~prefix_units ~outcome_before before
+      after
+  with Left_with validation -> validation
+
+and validate_or_leave ~(demoted : bool)
+    ~(imports : (Model.symbol * Values.import_class) list) ~(prefix_units : int)
+    ~(outcome_before : outcome) (before : converted) (after : converted) =
+  (* Where [demoted], the term after from here on is the term that
+     FlambdaValidateDemotedSpec.after_demoted gives of the term after as
+     converted: every guess, every asking and every test below is of it.
+     [after_as_converted] is the term that this function was given, for the
+     functions of that file, which take it. *)
+  let after_as_converted = after in
+  let after =
+    if demoted
+    then { after with body = Validate_demoted.after_demoted after.body }
+    else after
+  in
   let recursive = recursive_code before.body @ recursive_code after.body in
-  let inlined = Normalise.inline_calls recursive [] before.body in
-  Format.printf
-    "  calls outside code once those of known code are inlined: %d@."
-    (calls_outside_code inlined);
+  (* The line is of the term before, and the attempts of the two terms as
+     converted have printed it. *)
+  if not demoted
+  then
+    Format.printf
+      "  calls outside code once those of known code are inlined: %d@."
+      (calls_outside_code (Normalise.inline_calls recursive [] before.body));
+  (* The count above is made with the list by direct calls, as it was, and not
+     with the lists that the askings are given: it is of one pass, which cannot
+     unroll. From here the recursive code is that of the list with the code that
+     has the compiler's mark alone ([recursive_by_mark_alone]). *)
+  let marked_alone = recursive_by_mark_alone before.body after.body in
+  let recursive = recursive @ marked_alone in
   let rounds = nat_of_int 50 in
   let nothing_lifted : Lift.lifting =
     { lifting_unit = interface before;
@@ -6268,6 +7356,12 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      term before: read for the line of a verdict that lifts. Each asking sets it
      to false first. *)
   let tables_were_bound = ref false in
+  (* Whether a search ended at [liftings_fuel] with another lifting to make: one
+     that the guess proposes, that changes the term, and after which the rounds
+     give another term than the one that it was given. It is read for a line
+     under "not validated" after the validation, set to false, and read again
+     after the second check. *)
+  let fuel_ran_out = ref false in
   (* Whether the term before has a [Let] of a closure at a function slot of a
      set, in its code too. Where it has none, no rewrite of the validation makes
      one, so the rounds that make direct the calls of the closures that a [Let]
@@ -6279,7 +7373,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      rounds which use what [my_closure] is known to be from its code
      (FlambdaValidateSpec.normalise_lifted_own) may do something to: a term that
      the search normalised after a lifting and that
-     FlambdaClosureOfCodeSpec.know_own_closures, which ends each of those
+     FlambdaSlotsThroughSpec.know_own_closures_through, which ends each of those
      rounds, changes. An asking whose liftings do not ask for those rounds sets
      it where it finds such a term, in a guess that it makes again from a search
      kept as in any other. An attempt notes what its own askings found
@@ -6507,9 +7601,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          for those to make aliases of symbols bound around them, which are
          guessed from the second lifting on. The tables to bind at the head of
          the unit are guessed for the first. A second is always tried; one after
-         it only if it lifts something; and there are four at most. After each,
-         as [validate_unit] does, the value slots of static closures are read
-         and what the unit binds its symbols to is used in every round of the
+         it only if it lifts something; a lifting that is not the first, and
+         that has no [Let] banned at a later place, is made only if the rounds
+         after it give another term than the one that it was given, the two
+         compared as terms; and there are [liftings_fuel] at most (the comment
+         there says why the number is no more than a fuel). After each, as
+         [validate_unit] does, the value slots of static closures are read and
+         what the unit binds its symbols to is used in every round of the
          normalisation. The rounds are told, as [validate_unit] tells them, not
          to make a name that is one of the two continuations of the unit: every
          lifting has the unit of the term before, and a name made is the one
@@ -6586,6 +7684,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | 0, _, _, _, _, _, _, _ | _, _ :: _, [], [], [], [], [], [] -> true
           | _, _, _, _, _, _, _, _ -> false
         in
+        (* Where the fuel is what ends the sequence: is there another lifting to
+           make? The test is the one that the sequence makes below of a lifting
+           that is not the first, with nothing kept of it: the lifting proposed
+           is applied, and unless it gives the term back as the sequence asks
+           that below, the rounds are gone through once more and their term
+           compared with the one that the lifting was given. *)
+        (match
+           ( remaining,
+             lifting.lifted_lets,
+             lifting.lifted_my_closures,
+             lifting.lifted_out_of_code,
+             lifting.lifted_to_head,
+             lifting.lifted_around,
+             copies )
+         with
+        | 0, [], [], [], [], [], [] -> ()
+        | 0, _, _, _, _, _, _ ->
+          let lifted' =
+            Copy_lets.with_let_copies copies (with_lifting lifting lifted)
+          in
+          if
+            not
+              (lifted' == lifted
+              || match copies with [] -> false | _ :: _ -> lifted' = lifted)
+          then
+            let next =
+              Validate.normalise_lifted_own calling own rounds avoid kept
+                lifted'
+            in
+            if next <> lifted then fuel_ran_out := true
+        | _, _, _, _, _, _, _ -> ());
         if stop
         then List.rev made, lifted
         else
@@ -6596,7 +7725,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
              two pointers is a shortcut of this search, which is bounded and not
              trusted. It says nothing of the checks of a lifting: a lifting
              whose checks pass may give the same term back, and then the search
-             stops; one that gives a term rebuilt but equal may continue. *)
+             stops; one that gives a term rebuilt but equal may continue. After
+             the first lifting, the sequence also ends where the rounds after a
+             lifting give back the term that the lifting was given and no [Let]
+             is banned at a later place. That comparison is of two terms, and
+             the lifting is then not one of the sequence. Where no [Let] is
+             banned at this place either, the turn after it would be this turn
+             again: a guess is made from the term and from the bans of its
+             place, and nothing else of it changes from the second turn on. The
+             lifting that binds [my_closure] to the symbol of a static closure
+             is proposed at every turn and is such a lifting from the second
+             time on. Where a [Let] is banned at this place and none at a later
+             one, the sequence ends all the same, and the turn after it, which
+             has not that ban, might have guessed otherwise: the search may miss
+             a lifting so, and with it a verdict. That is a limit of a search
+             that is a guess; it is not tested for. Where a [Let] is banned at a
+             later place, the lifting is one of the sequence and the turns go
+             on, as a turn at that place may guess otherwise. *)
           let lifted' =
             Copy_lets.with_let_copies copies (with_lifting lifting lifted)
           in
@@ -6617,13 +7762,19 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
               Validate.normalise_lifted_own calling own rounds avoid kept
                 lifted'
             in
-            if (not own) && not !own_closures_to_know
-            then
-              own_closures_to_know
-                := Closure_of_code.know_own_closures next <> next;
-            normalised := next :: !normalised;
-            liftings_from banned (stage + 1) (lifting :: made) next
-              (remaining - 1)
+            if
+              (match made with [] -> false | _ :: _ -> true)
+              && next = lifted
+              && not (List.exists (fun (stage', _, _) -> stage' > stage) banned)
+            then List.rev made, lifted
+            else (
+              if (not own) && not !own_closures_to_know
+              then
+                own_closures_to_know
+                  := Slots_through.know_own_closures_through next <> next;
+              normalised := next :: !normalised;
+              liftings_from banned (stage + 1) (lifting :: made) next
+                (remaining - 1))
       in
       (* The guess gives a symbol to the first [Let] that makes a block of its
          shape, and a field that is a variable agrees with anything. So the
@@ -6633,8 +7784,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          lifted: the sequence is guessed again with that [Let] banned for it, a
          few times at most. A symbol that the term after does not bind is one
          that the guess made for a constant that Simplify has no use for, and is
-         not such a symbol. *)
+         not such a symbol.
+
+         A second sign of a symbol that went to the wrong [Let]: in the term
+         that the liftings and the rounds give, the symbol is bound to a block
+         that cannot be the block that the term after binds it to
+         ([cannot_be_the_same]: the certain cases alone). The case aimed at: the
+         cell that ends a list, whose head is the result of a call when the
+         first lifting is guessed, agrees with a pair that ends in 0 and takes
+         its symbol; the rounds then inline the call, and the pair that they
+         bring has no symbol left to take
+         (tests/semantics/ocaml/list_of_pair_made_by_call.ml). The sequence is
+         guessed again with that [Let] banned for that symbol, in the same few
+         times. Both signs change which sequence of liftings is tried and
+         nothing else: whatever sequence is guessed is given to [validate_unit],
+         the extracted validation, which decides. *)
       let bound_after = snd (static_names normalised_after) in
+      let blocks_after = fst (static_blocks normalised_after) in
       (* The guesses made, the last first: what each was given and the terms
          that the rounds gave it. [made] is the sequence of a first guess that
          is made already (below). *)
@@ -6645,7 +7811,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | Some made -> made
           | None ->
             normalised := [];
-            liftings_from banned 0 [] looped 4
+            liftings_from banned 0 [] looped liftings_fuel
         in
         guesses := (banned, !normalised) :: !guesses;
         (* After the last lifting [validate_unit] reads the known value slots
@@ -6679,8 +7845,30 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
                    lifting.lifted_lets)
                liftings)
         in
-        match wrong with
-        | _ :: _ when again > 0 -> guessed None (wrong @ banned) (again - 1)
+        let blocks_lifted, made_lifted = static_blocks lifted in
+        let misplaced =
+          List.concat
+            (List.mapi
+               (fun stage (lifting : Lift.lifting) ->
+                 List.filter_map
+                   (fun (path, (target : Lift.lift_to)) ->
+                     match target with
+                     | Lift_to_symbol sym -> (
+                       match
+                         ( List.assoc_opt sym blocks_lifted,
+                           List.assoc_opt sym blocks_after )
+                       with
+                       | Some block, Some block'
+                         when cannot_be_the_same made_lifted block block' ->
+                         Some (stage, path, sym)
+                       | (Some _ | None), (Some _ | None) -> None)
+                     | Lift_to_closure_symbols _ -> None)
+                   lifting.lifted_lets)
+               liftings)
+        in
+        match wrong @ misplaced with
+        | _ :: _ as wrong when again > 0 ->
+          guessed None (wrong @ banned) (again - 1)
         | _ -> liftings, lifted, slots, unused
       in
       let asked_of guess =
@@ -6732,7 +7920,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         | [] -> None
         | (banned, terms) :: rest ->
           normalised := [];
-          let made = liftings_from banned 0 [] looped 4 in
+          let made = liftings_from banned 0 [] looped liftings_fuel in
           if !normalised = terms
           then (
             guesses := (banned, terms) :: !guesses;
@@ -6861,7 +8049,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
         | Some _, _ ->
           normalised := [];
           ignore
-            (liftings_from [] 0 [] looped 4 : Lift.lifting list * Model.expr);
+            (liftings_from [] 0 [] looped liftings_fuel
+              : Lift.lifting list * Model.expr);
           not_lifted
         | None, Some search -> (
           match made_again search.search_guesses 5 with
@@ -7082,12 +8271,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           | Some choices ->
             ( Validate_inlining.validate_unit_inlining choices,
               Validate_inlining.validate_unit_knowing_inlining choices )
-          | None ->
-            if reading
-            then
+          | None -> (
+            match demoted, reading with
+            | false, true ->
               ( Validate_reading.validate_unit_reading,
                 Validate_reading.validate_unit_knowing_reading )
-            else Validate.validate_unit, Validate_knowing.validate_unit_knowing)
+            | false, false ->
+              Validate.validate_unit, Validate_knowing.validate_unit_knowing
+            | true, _ ->
+              (* The functions of FlambdaValidateDemotedSpec.v: each asks the
+                 function of the case above of the term before and of
+                 after_demoted of the term after that it is given. So it is
+                 given the term after as converted, and not the term that the
+                 askings below give for the term after, which is after_demoted
+                 of that one. Where [copying] or [inlining], above, the function
+                 is the one that it is where not [demoted], and is given the
+                 term that the askings give. *)
+              let of_the_term_as_converted asked rounds unused slots loops
+                  liftings kept before (_ : Model.expr) =
+                asked rounds unused slots loops liftings kept before
+                  after_as_converted.body
+              in
+              if reading
+              then
+                ( of_the_term_as_converted
+                    Validate_demoted.validate_unit_reading_demoted,
+                  of_the_term_as_converted
+                    Validate_demoted.validate_unit_knowing_reading_demoted )
+              else
+                ( of_the_term_as_converted Validate_demoted.validate_unit_demoted,
+                  of_the_term_as_converted
+                    Validate_demoted.validate_unit_knowing_demoted )))
       in
       let first =
         ask ~calling ~own ~asked:(reading, false)
@@ -7248,15 +8462,26 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      that is the case that the guess is for. The third is tried only where some
      code of the first list is not in it. It is asked once: the second asking
      normalises the term before as it is given, before its loops are made, and
-     each of its rounds would inline such code into itself once more. *)
+     each of its rounds would inline such code into itself once more. The code
+     that has the compiler's mark alone ([recursive_by_mark_alone]) is in the
+     three lists. Were it in the first and not in the third, the third could be
+     tried for that code alone, and the rounds of its asking would unroll such
+     code, as those of the second did without the mark. A loop may be made of
+     such code all the same (FlambdaLoopifySpec.is_self_tail_call reads the
+     callee of a call and not its kind); the third list then leaves calls that
+     the guess is there to inline, and a verdict may be lost so. *)
   let called_after = called_directly after.body in
+  (* [first_guess], [once_looped_guess] and [another_guess] are read by the
+     second check alone, below, where it asks of each list in turn. The attempts
+     of the validation read those made after them, with the older versions of
+     the code that the term after calls, and [recursive] alone as it is. *)
   let first_guess = recursive @ called_after in
   let recursive_once_looped =
     recursive_code
       (Loopify.loopify_unit loops
          (Never_returns.cut_returns []
             (Stub_calls.demote_full_stub_calls before.body)))
-    @ recursive_code after.body
+    @ recursive_code after.body @ marked_alone
   in
   let once_looped_guess = recursive_once_looped @ called_after in
   let another_guess =
@@ -7264,11 +8489,23 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       (fun code_id -> not (List.mem code_id once_looped_guess))
       first_guess
   in
-  (* The same three lists with, beside the code that the term after calls, the
-     code that it is a newer version of ([code_versions]), and what that is a
-     newer version of, eight times at most: the term before may call the older
-     code where the term after calls the newer. They are for the attempts of the
-     fourth kind, below ([copied]). *)
+  (* The same with, beside the code that the term after calls, the code that it
+     is a newer version of ([code_versions]), and what that is a newer version
+     of, eight times at most: the term before may call the older code where the
+     term after calls the newer. Every kind of attempt of the validation reads
+     them ([attempts_of]) for its first and third lists; its second list is the
+     recursive code alone. Those above are of the second check alone.
+
+     The case. Simplify inlines a functor at its application and gives the
+     closures of the inlined body new code, by which the term after calls a
+     member that it does not inline. The term before has those closures with the
+     old code until a lifting copies the code under the new code ids
+     ([code_copied]), and the rounds that follow the lifting before that one
+     make the call of the member direct. With the new code id alone in the list
+     those rounds inline the call, which the term after keeps
+     (tests/semantics/ocaml/functor_member_kept_before_copy.ml). The lists are
+     guesses, as the three above are: the validator is asked as it is with any,
+     and nothing rests on them. *)
   let called_after_older =
     let rec older depth id =
       if depth = 0
@@ -7293,14 +8530,11 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      without or with what [my_closure] is known to be from its code used in
      those rounds ([own]). The rounds are
      FlambdaValidateSpec.normalise_lifted_own of the two, which the liftings of
-     every asking then ask for. The lists of calls to leave are the three above,
-     or, where [older], the three with the older versions of the code that the
-     term after calls. *)
-  let attempts_of ~older ~calling ~own ~inlining ~reading =
+     every asking then ask for. Of the lists of calls to leave, the first and
+     the third have the older versions of the code that the term after calls. *)
+  let attempts_of ~calling ~own ~inlining ~reading =
     let first_guess, once_looped_guess, another_guess =
-      if older
-      then first_guess_older, once_looped_guess_older, another_guess_older
-      else first_guess, once_looped_guess, another_guess
+      first_guess_older, once_looped_guess_older, another_guess_older
     in
     let attempt = attempt ~calling ~own ~inlining in
     let first = attempt ~reading first_guess in
@@ -7423,14 +8657,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     let in_turn ~inlining ~reading =
       let with_neither () =
         own_closures_to_know := false;
-        attempts_of ~older:false ~calling:false ~own:false ~inlining ~reading
+        attempts_of ~calling:false ~own:false ~inlining ~reading
       in
       let with_calls_made_direct =
         after with_neither
           ~asked:(fun () -> closures_to_call)
           ~accepted:(fun () -> closures_were_called := true)
-          (fun () ->
-            attempts_of ~older:false ~calling:true ~own:false ~inlining ~reading)
+          (fun () -> attempts_of ~calling:true ~own:false ~inlining ~reading)
       in
       let with_my_closure_known =
         after with_calls_made_direct
@@ -7439,8 +8672,7 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             closures_were_called := closures_to_call;
             own_closures_were_known := true)
           (fun () ->
-            attempts_of ~older:false ~calling:closures_to_call ~own:true
-              ~inlining ~reading)
+            attempts_of ~calling:closures_to_call ~own:true ~inlining ~reading)
       in
       with_my_closure_known ()
     in
@@ -7452,14 +8684,13 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
        [let_copies_asked]), with what [my_closure] is known to be from its code
        used in the rounds that follow each lifting, with the calls made direct
        in them where the term before has a closure for that
-       ([closures_to_call]), and with the calls of the older versions of the
-       code that the term after calls left too ([older]). They are asked once,
-       and not without those rounds first, as the attempts of the kinds before
-       them are. Where they validate, [lets_were_copied] says so for a line
-       under the verdict, with [closures_were_called] and
-       [own_closures_were_known]. Where they refuse the unit too, what the last
-       asking before them left is put back, the answer is the one that there
-       was, and their pairs of terms are shown after the others. *)
+       ([closures_to_call]). They are asked once, and not without those rounds
+       first, as the attempts of the kinds before them are. Where they validate,
+       [lets_were_copied] says so for a line under the verdict, with
+       [closures_were_called] and [own_closures_were_known]. Where they refuse
+       the unit too, what the last asking before them left is put back, the
+       answer is the one that there was, and their pairs of terms are shown
+       after the others. *)
     let copied (attempts, refused) =
       if not (Lazy.force let_copies_to_make)
       then attempts, refused
@@ -7472,8 +8703,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
             ~finally:(fun () -> let_copies_asked := false)
             (fun () ->
               own_closures_to_know := false;
-              attempts_of ~older:true ~calling:closures_to_call ~own:true
-                ~inlining:None ~reading:false)
+              attempts_of ~calling:closures_to_call ~own:true ~inlining:None
+                ~reading:false)
         in
         match answer with
         | Not_validated, _, _, _, _ ->
@@ -7556,6 +8787,37 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
           _ ) ) as accepted ->
       accepted
   in
+  (* The exception handlers of the term after (the header of this file). No line
+     of a verdict is printed yet. Where the attempts above are of the term that
+     after_demoted gives ([demoted]) and they refuse the unit, they are left
+     here with nothing printed. Where they are of the two terms as converted,
+     they refuse the unit, and after_demoted changes the term after, the
+     attempts are made again of the term that it gives. If those accept the
+     unit, they have printed their answer, as any acceptance is printed, and
+     nothing more is printed here. If they refuse it, they have printed nothing
+     and what follows is what it would be had they not been made, of the two
+     terms as converted: a refusal and the second check, or, of an undefined
+     run, the line that there is nothing to validate. *)
+  (match validation with
+  | Not_validated -> (
+    if demoted
+    then raise_notrace (Left_with Validate.Not_validated)
+    else if Validate_demoted.after_demoted after.body <> after.body
+    then
+      match
+        (validate ~demoted:true ~imports ~prefix_units ~outcome_before before
+           after
+          : Validate.validation)
+      with
+      | Not_validated -> ()
+      | ( Same_up_to_bound_names | Same_once_normalised
+        | Same_once_unused_statics_removed | Same_once_head_statics_removed
+        | Same_once_lifted ) as accepted ->
+        raise_notrace (Left_with accepted))
+  | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed
+  | Same_once_lifted ->
+    ());
   (* Whether the verdict is of the two runs that were shown. It is for a unit
      that imports nothing. For a unit that has imports it is where the model
      says that the verdict holds of the unit run from its imports
@@ -7579,21 +8841,17 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   let of_the_runs_shown =
     match imports with [] -> true | _ :: _ -> !last_asking_holds ()
   in
-  let validated =
+  let given =
     match prefix_units, imports with
-    | 0, [] -> "validated"
+    | 0, [] -> ""
     | 0, _ :: _ ->
       if of_the_runs_shown
-      then "validated with its imports"
-      else "validated with nothing imported"
+      then " with its imports"
+      else " with nothing imported"
     | n, _ ->
       if of_the_runs_shown
-      then
-        Printf.sprintf
-          "validated with its imports, given the .cmx of %d of them" n
-      else
-        Printf.sprintf
-          "validated with nothing else imported, given the .cmx of %d" n
+      then Printf.sprintf " with its imports, given the .cmx of %d of them" n
+      else Printf.sprintf " with nothing else imported, given the .cmx of %d" n
   in
   (* The run of the term before that the validation is of. *)
   let outcome_before =
@@ -7607,6 +8865,44 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       | Same_once_lifted ->
         fst (run ~statics:Values.empty_static_env before)
   in
+  (* A term before that is undefined is refined by anything. So where the
+     validation accepts and the run that it is of is undefined, the acceptance
+     says nothing of the unit, and the line that names it is no verdict: the
+     leading line is then that of a unit with nothing to validate, and the line
+     of the acceptance follows it and begins "the validation accepts the pair",
+     with the words that the verdict would have had. No line begins "validated"
+     for such a unit. The line further down that says that the term before is
+     undefined in the model is as it was. *)
+  let accepted_of_an_undefined_run =
+    match validation with
+    | Not_validated -> false
+    | Same_up_to_bound_names | Same_once_normalised
+    | Same_once_unused_statics_removed | Same_once_head_statics_removed
+    | Same_once_lifted ->
+      outcome_before = Undefined
+  in
+  if accepted_of_an_undefined_run
+  then
+    Format.printf "  %s@."
+      (if of_the_runs_shown
+       then "nothing to validate, as the term before is undefined"
+       else
+         "nothing to validate with nothing imported, as the term before is \
+          then undefined");
+  let validated =
+    (if accepted_of_an_undefined_run
+     then "the validation accepts the pair"
+     else "validated")
+    ^ given
+  in
+  (* "The same" in these lines is by the comparison at which the validation
+     accepted the pair (FlambdaCompareOrderSpec.expr_says_at_least; decision
+     D25, at parameters). That comparison is of a term made from the term before
+     with a term made from the term after, by the rewrites that come before it
+     in the validation; the two need not be the two terms that the tool
+     converted. The two terms compared at that step are the same up to bound
+     names but for what handlers and code state of their parameters, and code of
+     its results, of which the second states no more than the first. *)
   Format.printf "  %s@."
     (match validation with
     | Same_up_to_bound_names -> validated ^ ": the same up to bound names"
@@ -7635,38 +8931,47 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
       if outcome_before = Undefined
       then "nothing to validate, as the term before is undefined"
       else "not validated");
-  (* The guard of the liftings (FlambdaHeapFreeSpec.expr_free_of_heap): each of
+  (* The guard of the liftings (FlambdaHeapFreeSpec.free_of_heap_fine): each of
      the four liftings to symbols of the validation lifts nothing in a term that
-     has a primitive of the heap. Under the line "not validated", a line says
-     which of the two terms that the validation was given has one; there is none
-     where neither has. It does not say that the guard is why the unit is not
-     validated: the test is made of the term that a lifting is given, after the
-     rewrites before it, and the validation may refuse the unit for another
-     reason. A unit that has such a primitive is validated where no lifting is
-     needed. That may be at the verdict that names a lifting: the verdict is the
-     step of the validation that accepted, and that step has other rewrites than
-     its liftings. So the same line is printed under that verdict, and says
-     there that the verdict names the step. The liftings of the second check,
-     whose line may follow a line "not validated", are made without that test,
-     as without the test of the exits (FlambdaLiftObservedSpec.v): its line says
-     so where a term has such a primitive. *)
+     does not pass it, which is a term that has a primitive of the heap outside
+     the bodies of its code, or that has one in them and a call outside them
+     (decision D65). Under the line "not validated", a line says which of the
+     two terms that the validation was given does not pass; there is none where
+     both pass. It does not say that the guard is why the unit is not validated:
+     the test is made of the term that a lifting is given, after the rewrites
+     before it, and the validation may refuse the unit for another reason. A
+     pair with a term that does not pass is accepted where no lifting is needed.
+     That may be at the step that names a lifting: the line of the acceptance
+     names the step of the validation that accepted, and that step has other
+     rewrites than its liftings. So the same line is printed under the line of
+     an acceptance at that step, whether that line begins "validated" or "the
+     validation accepts the pair", and says there that the line above names the
+     step. The liftings of the second check, whose line may follow a line "not
+     validated", are made without that test, as without the test of the exits
+     (FlambdaLiftObservedSpec.v): its line says so where a term does not
+     pass. *)
   let line_of_the_guard ~at_the_lifting_step =
     match
-      ( Heap_free.expr_free_of_heap before.body,
-        Heap_free.expr_free_of_heap after.body )
+      ( Heap_free.free_of_heap_fine before.body,
+        Heap_free.free_of_heap_fine after.body )
     with
     | true, true -> ()
-    | before_free, after_free ->
+    | before_passes, after_passes ->
       Format.printf
         "  (%s: each of the four liftings to symbols of the validation lifts \
-         nothing in a term that has one%s)@."
-        (match before_free, after_free with
+         nothing in a term that does not pass it, which is one that has such a \
+         primitive outside the bodies of its code, or has one in them and a \
+         call outside them%s)@."
+        (match before_passes, after_passes with
         | false, false ->
-          "the term before and the term after have a primitive of the heap"
+          "the term before and the term after have a primitive of the heap and \
+           do not pass the liftings' test of the heap"
         | false, true ->
-          "the term before has a primitive of the heap, and the term after none"
+          "the term before has a primitive of the heap and does not pass the \
+           liftings' test of the heap, and the term after passes it"
         | true, false ->
-          "the term after has a primitive of the heap, and the term before none"
+          "the term after has a primitive of the heap and does not pass the \
+           liftings' test of the heap, and the term before passes it"
         | true, true -> assert false)
         (if at_the_lifting_step
          then "; the line above names the step at which the validation accepted"
@@ -7679,6 +8984,39 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
   | Not_validated | Same_up_to_bound_names | Same_once_normalised
   | Same_once_unused_statics_removed | Same_once_head_statics_removed ->
     ());
+  (* Two lines under "not validated", each a fact of the search or of the term
+     after, neither a statement that nothing else stops the unit. The first: a
+     search of the validation ended at [liftings_fuel] with another lifting to
+     make. The second: the term after has a function slot of the name that
+     Simplify gives the wrapper that it makes of a partial application, and the
+     term before has none of that name ([wrapper_made_after]: a test of the name
+     alone). *)
+  (match validation with
+  | Not_validated when outcome_before <> Undefined ->
+    if !fuel_ran_out
+    then
+      Format.printf
+        "  (more liftings in a chain than the tool tries: a search for what \
+         Simplify lifted stopped at %d liftings in turn with another to \
+         make)@."
+        liftings_fuel;
+    if !wrapper_made_after
+    then
+      Format.printf
+        "  (the term after has a function slot named partial_app_closure and \
+         the term before has none of that name: Simplify gives that name to \
+         the wrapper that it makes of a partial application, and no rewrite of \
+         the validation makes such a wrapper; the tool goes by the name \
+         alone)@."
+  | Not_validated | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed
+  | Same_once_lifted ->
+    ());
+  if demoted
+  then
+    Format.printf
+      "  (asked of the term after with the exception handlers that no call can \
+       raise to made ordinary continuations)@.";
   if !asked_again
   then
     Format.printf
@@ -7708,6 +9046,55 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
     Format.printf
       "  (with what my_closure is known to be from its code used in the rounds \
        after each lifting)@.";
+  (* Decision D65. A lifting asks two tests of the term that it is given. They
+     were FlambdaLiftSpec.exits_plain_knowing and
+     FlambdaHeapFreeSpec.expr_free_of_heap, which read the bodies of the code of
+     the unit; they are FlambdaLiftSpec.exits_plain_fine and
+     FlambdaHeapFreeSpec.free_of_heap_fine, which pass wherever those pass and,
+     of a unit that calls nothing outside the bodies of its code, wherever the
+     unit with those bodies taken out passes them. The validation lifts in the
+     term before alone. Where the validation accepts at the step that names a
+     lifting, a line says how the term before, as the validation was given it,
+     answers: there is no line where it passes the tests as they were; the line
+     says that it passes by the finer tests alone, or that it passes neither. It
+     is the last of the lines in brackets under the line of the acceptance,
+     which is the verdict line or, where the tool finds the run before that the
+     acceptance is of undefined within its bound of steps, the line that begins
+     "the validation accepts the pair". A unit whose output has the line carries
+     the mark of that decision. The mark is a sign: it is neither necessary nor
+     sufficient for the acceptance to rest on the finer tests. It is not
+     sufficient because it is of the term as given: the step may accept with
+     nothing lifted, and it has other rewrites than its liftings. The second
+     line is there because a lifting asks its tests of the term that it is
+     given, after the rewrites before it: a term that passes neither here may
+     pass the finer tests alone once the rounds have inlined its calls of known
+     code. It is not necessary for two reasons. There is no line where the term
+     as given passes the tests as they were, and that a rewrite of the
+     validation makes no term that fails them of one that passes them is
+     believed and is not a theorem of the model. And there is no line at another
+     step: where the validation is asked of the term before with copies of code
+     (FlambdaValidateCopyingSpec.before_copied), liftings and copies that ask
+     the finer tests are made before it is asked, and it may then accept at a
+     step that names no lifting. Which acceptances rest on the finer tests is to
+     be found by running the validation with the tests as they were and with the
+     finer ones on the same units; the mark does not say it. *)
+  (match validation with
+  | Same_once_lifted ->
+    let e = before.body in
+    if Lift.exits_plain_knowing [] [] e && Heap_free.expr_free_of_heap e
+    then ()
+    else if Lift.exits_plain_fine e && Heap_free.free_of_heap_fine e
+    then
+      Format.printf
+        "  (decision D65: the guards of the liftings pass by the finer tests \
+         alone)@."
+    else
+      Format.printf
+        "  (decision D65: the term before as given passes neither the \
+         liftings' tests as they were nor the finer ones)@."
+  | Not_validated | Same_up_to_bound_names | Same_once_normalised
+  | Same_once_unused_statics_removed | Same_once_head_statics_removed ->
+    ());
   (* The second check, FlambdaValidateRelatedSpec.validate_unit_related, of the
      two terms and the imports, for each list of calls that the attempts above
      of the first three kinds were made with, in their order. The liftings are
@@ -7782,8 +9169,17 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
      or none, and whether the two terms have a prefix in front of them. *)
   (match validation with
   | Not_validated when outcome_before <> Undefined -> (
+    fuel_ran_out := false;
     match related () with
-    | None -> ()
+    | None ->
+      (* The second check refuses the unit: the line of the fuel, where one of
+         its searches ended at [liftings_fuel] with another lifting to make. *)
+      if !fuel_ran_out
+      then
+        Format.printf
+          "  (more liftings in a chain than the tool tries: a search of the \
+           second check stopped at %d liftings in turn with another to make)@."
+          liftings_fuel
     | Some (with_slots, tables) ->
       let head =
         match prefix_units, imports with
@@ -7805,8 +9201,8 @@ let validate ~(imports : (Model.symbol * Values.import_class) list)
          liftings' symbols-and-constants-only exit test%s%s%s@."
         head
         (if
-           Heap_free.expr_free_of_heap before.body
-           && Heap_free.expr_free_of_heap after.body
+           Heap_free.free_of_heap_fine before.body
+           && Heap_free.free_of_heap_fine after.body
          then ""
          else " and without their test of the heap")
         (if tables
@@ -7982,8 +9378,7 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
       ~imports:
         (imports ~bound:prefix.prefix_symbols
            ~unmentioned:prefix.prefix_unmentioned ~hidden:prefix.prefix_hidden)
-      ~with_prefix:
-        (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
+      ~in_front:(in_front_short prefix)
       (with_prefix prefix before)
       (with_prefix prefix after);
     raise Check_failed
@@ -8007,18 +9402,23 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
     let has_prefix =
       match prefix.prefix_groups with [] -> false | _ :: _ -> true
     in
+    (* What is in front of the two terms, in words: the prefix, or the
+       declarations of the C functions alone ([what_is_in_front]). *)
+    let in_front_of_them =
+      match in_front_long prefix with Some what -> what | None -> ""
+    in
     if has_prefix && not (well_formed after)
     then (
       Format.printf
-        "%s: not checked: with the prefix made from the .cmx files in front of \
-         it the term after Simplify is not well-formed (%s)@."
-        filename
+        "%s: not checked: with %s in front of it the term after Simplify is \
+         not well-formed (%s)@."
+        filename in_front_of_them
         (why_not_well_formed after);
       raise Check_failed);
     (* The guard, of the two terms as they are run. *)
     let in_front =
       if has_prefix
-      then "with the prefix made from the .cmx files in front of it, "
+      then "with " ^ in_front_of_them ^ " in front of it, "
       else ""
     in
     let not_in_scope unit =
@@ -8071,9 +9471,9 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
           raise List_left_open
         | None -> ());
         let with_imports =
-          (match prefix.prefix_groups with
-            | [] -> ""
-            | _ :: _ -> ", after the prefix")
+          (match in_front_short prefix with
+            | None -> ""
+            | Some what -> ", after " ^ what)
           ^
           match imports with
           | [] -> ""
@@ -8096,14 +9496,24 @@ let check_or_raise ~filename ~(units : (Compilation_unit.t * Digest.t) list)
           steps_before print_outcome outcome_before;
         Format.printf "  after Simplify%s (%d steps): %a@." with_imports
           steps_after print_outcome outcome_after;
+        (* A run that is undefined where [undefined_at] says something of the
+           state that has no step: a line says where and why. Today that is a
+           call of a C function, which the line names ("Calls of C functions",
+           above). *)
+        List.iter
+          (fun (which, stopped) ->
+            match Option.bind stopped undefined_at with
+            | Some (where, why) ->
+              Format.printf "  the run %s Simplify is undefined at %s: %s@."
+                which where why
+            | None -> ())
+          ["before", stopped_before; "after", stopped_after];
         let passes ok = if ok then "passes" else "fails" in
         Format.printf "  the check of kinds: %s before, %s after@."
           (passes (well_kinded before))
           (passes (well_kinded after));
-        print_static_names ~imports
-          ~with_prefix:
-            (match prefix.prefix_groups with [] -> false | _ :: _ -> true)
-          before after;
+        print_static_names ~imports ~in_front:(in_front_short prefix) before
+          after;
         Format.printf "  calls outside code: %d before, %d after@."
           (calls_outside_code before.body)
           (calls_outside_code after.body);
@@ -8310,7 +9720,9 @@ let drop_ghost_regions (e : Model.expr) : Model.expr =
         Handler
           ( drop_at handler_params handler_params,
             { metadata with
-              hm_params_kinds = drop_at handler_params metadata.hm_params_kinds
+              hm_params_kinds = drop_at handler_params metadata.hm_params_kinds;
+              hm_params_subkinds =
+                drop_at handler_params metadata.hm_params_subkinds
             },
             rewrite body )
     in
@@ -8958,87 +10370,91 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
     (Flambda_unit.metadata unit)
     (with_unknown_param_modes_of_expr (Flambda_unit.body unit))
 
-(* The text of fexpr does not write the kind of an [Opaque_identity], and the
-   reader gives every one the kind of values ([Fexpr_prim]); the compiler makes
-   one of each component of an unboxed argument, at the kind of that component
-   ([Lambda_to_flambda_primitives]). The compiler takes the argument of the
-   primitive to have the kind that the primitive carries
+(* The text of fexpr writes the kind of an [Opaque_identity] unless it is the
+   kind of values, and the reader gives one that is written with no kind the
+   kind of values ([Fexpr_prim]). A text made before the printer wrote the kind
+   has none, whatever the kind was, and a text written by hand may leave it out;
+   the compiler makes one of each component of an unboxed argument, at the kind
+   of that component ([Lambda_to_flambda_primitives]). The compiler takes the
+   argument of the primitive to have the kind that the primitive carries
    ([Flambda_primitive.arg_kind_of_unary_primitive]), so in a unit read from a
-   text every [Opaque_identity] is given here the kind of its argument, as the
+   text every [Opaque_identity] whose kind as read is the kind of values, and is
+   not the kind of its argument, is given here the kind of its argument, as the
    reader has it: the kind of a constant, that of values for a symbol, and for a
    variable the kind that the reader made it with, which is the kind written at
    a parameter or the kind of the defining expression of a [Let]
-   ([Fexpr_to_flambda]: [Flambda.Named.kind]).
+   ([Fexpr_to_flambda]: [Flambda.Named.kind]). A kind as read that is not the
+   kind of values was written by the text ([opaque_kind_was_written]), and is
+   kept, whatever kind the reader has for the argument: the primitive keeps the
+   kind that the text wrote, and where it is not the kind of its argument the
+   term is one that the machine has no step for at that primitive. The kind of
+   values as read is given the same treatment whether the text wrote it out,
+   left it out because the printer writes none for it, or lost another kind: the
+   three are one term as read.
 
-   The primitive is not all that the reader got wrong for want of that kind: the
-   variable that the [Let] of such a primitive binds was made with the kind of
-   values, and so was each variable bound after it to that variable, or to an
-   [Opaque_identity] of it. So the unit is gone through from the top, and each
-   [Let] is put right after its defining expression: where the kind of the
-   defining expression is no longer the kind of the variable that the reader
-   bound to it, the [Let] binds a new variable of that kind, with the same name,
-   and the body is renamed to it before it is gone into, so that every later
-   use, and every later defining expression, sees a variable of the right kind.
-   For an [Opaque_identity] nothing else is changed: the kinds of parameters and
-   of value slots are those that the text wrote, and so are the arities but for
-   the arity of the arguments of a direct call and of a call of unknown arity,
-   which the same pass gives (below). The handlers of continuations and the
-   bodies of code are gone into. A unit that has no such primitive and no such
-   call to put right is not gone through at all, and is the unit as it was read
+   Where the text had no kind for it, the primitive is not all that the reader
+   got wrong for want of that kind: the variable that the [Let] of such a
+   primitive binds was made with the kind of values, and so was each variable
+   bound after it to that variable, or to an [Opaque_identity] of it. So the
+   unit is gone through from the top, and each [Let] is put right after its
+   defining expression: where the kind of the defining expression is no longer
+   the kind of the variable that the reader bound to it, the [Let] binds a new
+   variable of that kind, with the same name, and the body is renamed to it
+   before it is gone into, so that every later use, and every later defining
+   expression, sees a variable of the right kind. For an [Opaque_identity]
+   nothing else is changed: the kinds of parameters and of value slots are those
+   that the text wrote, and so are the arities but for the arity of the
+   arguments of a direct call and of a call of unknown arity, which the same
+   pass gives (below). The handlers of continuations and the bodies of code are
+   gone into. A unit that has no such primitive and no such call to put right is
+   not gone through at all, and is the unit as it was read
    ([kind_lost_in_expr]).
 
    This is a normalisation of a unit read from a text. The kind that it gives an
-   [Opaque_identity] is the kind that the compiler's term had there, and that
-   the text lost, where the kind obtained for the argument is the kind of that
-   argument in the compiler's term and the primitive there had that kind. The
-   first need not hold: the compiler's term may bind a variable at another kind
-   than that of its defining expression, where the reader takes the kind of the
-   expression (the conversion does not test that either: [convert_bound_var]),
-   and an [Opaque_identity] above may have had another kind than its argument's.
-   Where both hold all the way down, the kinds are the compiler's from the top
-   down. The two conditions suffice and are not necessary. Where either fails,
-   no recovery of the compiler's kind is claimed: the primitive there, the
-   variable bound to it and what is bound below to them may be given kinds that
-   the compiler's term had not, even where the kind of values that the reader
-   gave was the compiler's, and nothing here finds that out. It is not a check
-   of kinds and refuses no term for its kinds; of the compiler's own terms
-   nothing is compared. It is applied to a unit read from a text only: not to
-   what Simplify makes, nor to a body taken from the .cmx of another unit, which
-   have the kinds that the compiler gave them. The text loses whether the
-   primitive is for the middle end only as well; that is left as the reader
-   gives it, as neither the model nor Simplify reads it.
-
-   The reader has one more kind wrong that is known: its table of kinds for the
-   nullary primitives that carry one gives two of the kinds for two words each
-   ([Fexpr_prim.kind]), so that a text does not say which kind such a primitive
-   had. Where the kind of the argument of an [Opaque_identity] is one of those
-   two and comes from such a primitive, directly or by [Let]s that bind a
-   variable to a variable, the unit is not checked. (The conversion refuses
-   every nullary primitive today, so such a unit is not checked for that reason
-   either.)
+   [Opaque_identity] for which the text had none is the kind that the compiler's
+   term had there, and that the text lost, where the kind obtained for the
+   argument is the kind of that argument in the compiler's term and the
+   primitive there had that kind. The first need not hold: the compiler's term
+   may bind a variable at another kind than that of its defining expression,
+   where the reader takes the kind of the expression (the conversion does not
+   test that either: [convert_bound_var]), and an [Opaque_identity] above may
+   have had another kind than its argument's. Where both hold all the way down,
+   the kinds are the compiler's from the top down. The two conditions suffice
+   and are not necessary. Where either fails, no recovery of the compiler's kind
+   is claimed: the primitive there, the variable bound to it and what is bound
+   below to them may be given kinds that the compiler's term had not, even where
+   the kind of values that the reader gave was the compiler's, and nothing here
+   finds that out. It is not a check of kinds and refuses no term for its kinds;
+   of the compiler's own terms nothing is compared. It is applied to a unit read
+   from a text only: not to what Simplify makes, nor to a body taken from the
+   .cmx of another unit, which have the kinds that the compiler gave them.
+   Whether the primitive is for the middle end only is written by the printer
+   and taken by the reader; a text made before the printer wrote it has every
+   one as for all of the compiler. That is left as the reader gives it, as
+   neither the model nor Simplify reads it.
 
    The arity of the arguments of a call. A text need not write it for a direct
    call, nor for a call of unknown arity: where it writes none, the reader gives
    the call one value for each argument ([Fexpr_to_flambda.arities_or_values];
    label C2-5). The printer writes it beside the callee unless it is one value
-   for each argument, so the text that the printer makes of a call with a callee
-   loses nothing here. A direct call with no callee, which the step before
-   Simplify makes at -Oclassic, has no place in the text for its arity and loses
-   it; and a text made before the printer wrote the arity, or written by hand,
-   may leave it out of a call that has an argument which is not a value. The
-   machine has no step for a call whose arguments are not of the kinds of its
-   arity, or whose arity is not that of the code called, and Simplify makes such
-   a call [Invalid]: so a unit that gives a function an unboxed number is
-   undefined as read from such a text. In the same pass a direct call, or a call
-   of unknown arity, whose arity as read is one value for each argument is given
-   an arity ([arity_of_arguments]). An arity as read that is anything else must
-   have been written ([arity_of_arguments_was_written]), and the call is left
-   alone, whatever the code that it names: where a text states a call which does
-   not fit its code, this step does not mend the arity that it states. The
-   inference goes one way only: an arity that the text wrote and that is one
-   value for each argument reads as if the text had written none, and such a
-   call is given an arity as the others are. A call of known arity has its arity
-   in the text and is left alone too.
+   for each argument, and in the place of the callee of a direct call that has
+   none, which the step before Simplify makes at -Oclassic: so the text that the
+   printer makes of a call loses nothing here. A text made before the printer
+   wrote the arity, or written by hand, may leave it out of a call that has an
+   argument which is not a value. The machine has no step for a call whose
+   arguments are not of the kinds of its arity, or whose arity is not that of
+   the code called, and Simplify makes such a call [Invalid]: so a unit that
+   gives a function an unboxed number is undefined as read from such a text. In
+   the same pass a direct call, or a call of unknown arity, whose arity as read
+   is one value for each argument is given an arity ([arity_of_arguments]). An
+   arity as read that is anything else must have been written
+   ([arity_of_arguments_was_written]), and the call is left alone, whatever the
+   code that it names: where a text states a call which does not fit its code,
+   this step does not mend the arity that it states. The inference goes one way
+   only: an arity that the text wrote and that is one value for each argument
+   reads as if the text had written none, and such a call is given an arity as
+   the others are. A call of known arity has its arity in the text and is left
+   alone too.
 
    Such a direct call is given the arity of the parameters of the code that it
    names, each kind without a subkind, where the unit binds that code and the
@@ -9065,9 +10481,7 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    makes [Invalid] a call of which it is not so. And that arity had one
    singleton component for each argument, with no component that is an unboxed
    product. The three together suffice and are not necessary; where one fails no
-   recovery of the compiler's arity is claimed. Where the kind of an argument
-   comes from one of the two words that the reader may misread, the unit is not
-   checked.
+   recovery of the compiler's arity is claimed.
 
    The arity so given is flat, one component for each argument that the text
    writes, as the reader's was. The compiler's arity may group arguments: an
@@ -9079,66 +10493,43 @@ let with_unknown_param_modes (unit : Flambda_unit.t) : Flambda_unit.t =
    included, and writes the parameters of code that are the components of one
    product as a group; the reader takes both, and this pass leaves such a call
    as it was read, so its grouping is that of the text. In a text that the
-   printer made, a call that has a callee and no arity has one value for each
-   argument and no group, and nothing is lost. In a text that leaves the arity
-   out of a call which had a group, made before the printer wrote arities or
-   written by hand, the grouping of that call is not given back, and the third
-   condition is one that this pass cannot test: the call is read flat, and what
-   the pass gives it is flat. As far as the grouping goes, and that alone (the
-   kinds are as said above, and the text loses other things), such a call runs
-   in the term read as in the compiler's if neither the call nor the code that
-   it reaches has a group. If one of them has, it may not. Where the text writes
-   neither the group of the call nor a parameter of no kind, a partial
-   application that stops before that parameter is read as a full application,
-   and so is an over-application whose last argument has no kind (label C2-30).
-   And where the call and the code group the same kinds differently, which is
-   ill-kinded in the compiler's term, the term read may be defined where the
-   compiler's is not. All of that is so, without this step, of a call whose
-   arguments are all values, which the reader reads flat where the text writes
-   no arity; what the step adds is the same of a call with an argument that is
-   not a value, which is undefined as read.
+   printer made, a call that has no arity has one value for each argument and no
+   group, and nothing is lost. In a text that leaves the arity out of a call
+   which had a group, made before the printer wrote arities or written by hand,
+   the grouping of that call is not given back, and the third condition is one
+   that this pass cannot test: the call is read flat, and what the pass gives it
+   is flat. As far as the grouping goes, and that alone (the kinds are as said
+   above, and the text loses other things), such a call runs in the term read as
+   in the compiler's if neither the call nor the code that it reaches has a
+   group. If one of them has, it may not. Where the text writes neither the
+   group of the call nor a parameter of no kind, a partial application that
+   stops before that parameter is read as a full application, and so is an
+   over-application whose last argument has no kind (label C2-30). And where the
+   call and the code group the same kinds differently, which is ill-kinded in
+   the compiler's term, the term read may be defined where the compiler's is
+   not. All of that is so, without this step, of a call whose arguments are all
+   values, which the reader reads flat where the text writes no arity; what the
+   step adds is the same of a call with an argument that is not a value, which
+   is undefined as read.
 
    The texts of tests/semantics/ocaml are made by the printer, which writes the
-   arities and their groups beside the callee of a call: in them the grouping is
-   the compiler's wherever the call has a callee, and the scripts that make them
-   refuse no unit for a group. (Code of another unit is not read from a text: it
-   is taken from the .cmx of that unit, with the arity that the compiler gave
-   it.) This pass cannot tell that a text was made so: a text that is given to
-   the tool by hand is read as it is. A term in memory has the component of no
-   kind, and [convert_arity] keeps it.
+   arities and their groups of a call: in them the grouping is the compiler's,
+   and the scripts that make them refuse no unit for a group. (Code of another
+   unit is not read from a text: it is taken from the .cmx of that unit, with
+   the arity that the compiler gave it.) This pass cannot tell that a text was
+   made so: a text that is given to the tool by hand is read as it is. A term in
+   memory has the component of no kind, and [convert_arity] keeps it.
 
    Like the rest of the pass this is a normalisation of a unit read from a text
    and not a check of kinds: it refuses a unit only where it cannot tell what to
    give, and compares nothing of the compiler's own terms. *)
 exception Lost_kind_not_known of string
 
-let opaque_kind_not_known_message =
-  "the text does not say the kind of an Opaque_identity, and the kind of its \
-   argument is one that the reader may have misread: it comes from a nullary \
-   primitive whose kind the text writes with a word that the reader takes for \
-   two kinds"
-
-let arity_of_unknown_call_not_known_message =
-  "the text does not give the arity of the arguments of a call of unknown \
-   arity, and the kind of one of its arguments is one that the reader may have \
-   misread: it comes from a nullary primitive whose kind the text writes with \
-   a word that the reader takes for two kinds"
-
 let arity_of_direct_call_not_known_message =
   "the text does not give the arity of the arguments of a direct call, one of \
    which is not a value, and nothing else gives it: the unit does not bind the \
    code that the call names, or that code has not as many parameters as the \
    call has arguments"
-
-let kind_that_the_reader_may_misread (kind : Flambda_kind.t) =
-  Flambda_kind.equal kind Flambda_kind.naked_int8
-  || Flambda_kind.equal kind Flambda_kind.naked_int16
-
-let variable_of_misread_kind ~misread (simple : Simple.t) =
-  Simple.pattern_match' simple
-    ~var:(fun var ~coercion:_ -> Variable.Set.mem var misread)
-    ~symbol:(fun _ ~coercion:_ -> false)
-    ~const:(fun _ -> false)
 
 (* The kinds of the parameters, unarized, of each piece of code that a unit
    binds, wherever it binds it. The unit is looked at as for printing and
@@ -9231,9 +10622,8 @@ let arity_of_arguments_was_written (apply : Flambda.Apply.t) : bool =
              (Flambda.Apply.args apply))))
 
 (* [code_params] has the parameters of the code that the unit binds
-   ([params_of_code_in_expr]); [misread], the variables whose kind may be one
-   that the reader misread. *)
-let arity_of_arguments ~code_params ~misread (apply : Flambda.Apply.t) :
+   ([params_of_code_in_expr]). *)
+let arity_of_arguments ~code_params (apply : Flambda.Apply.t) :
     arity_of_arguments =
   let args = Flambda.Apply.args apply in
   let given (kinds : Flambda_kind.t list) =
@@ -9259,84 +10649,73 @@ let arity_of_arguments ~code_params ~misread (apply : Flambda.Apply.t) :
       if List.for_all (fun arg -> Flambda_kind.is_value (Simple.kind arg)) args
       then As_read
       else Not_known arity_of_direct_call_not_known_message)
-  | Function { function_call = Indirect_unknown_arity; _ } -> (
-    match given (List.map Simple.kind args) with
-    | Given _ when List.exists (variable_of_misread_kind ~misread) args ->
-      Not_known arity_of_unknown_call_not_known_message
-    | (As_read | Given _ | Not_known _) as arity -> arity)
+  | Function { function_call = Indirect_unknown_arity; _ } ->
+    given (List.map Simple.kind args)
   | Function { function_call = Indirect_known_arity _; _ }
   | Method _ | C_call _ | Effect _ ->
     As_read
 
-let rec with_lost_kinds_of_expr ~code_params ~misread (e : Flambda.Expr.t) :
+(* Whether the kind as read of an [Opaque_identity] shows that the text wrote
+   one: a kind that is not the kind of values does, as the reader gives the kind
+   of values where the text writes none. It is not a test of whether the text
+   wrote a kind: the kind of values written out is read as none written is. *)
+let opaque_kind_was_written (kind : Flambda_kind.t) : bool =
+  not (Flambda_kind.equal kind Flambda_kind.value)
+
+let rec with_lost_kinds_of_expr ~code_params (e : Flambda.Expr.t) :
     Flambda.Expr.t =
   match Flambda.Expr.descr e with
   | Let let_expr ->
     Flambda.Let_expr.pattern_match let_expr ~f:(fun pattern ~body ->
         let named =
-          with_lost_kinds_of_named ~code_params ~misread
+          with_lost_kinds_of_named ~code_params
             (Flambda.Let_expr.defining_expr let_expr)
         in
-        let pattern, body, misread =
+        let pattern, body =
           match (pattern : Bound_pattern.t) with
-          | Set_of_closures _ | Static _ -> pattern, body, misread
+          | Set_of_closures _ | Static _ -> pattern, body
           | Singleton bound_var ->
             let var = Bound_var.var bound_var in
             let kind = Flambda.Named.kind named in
-            let var, pattern, body =
-              if Flambda_kind.equal kind (Variable.kind var)
-              then var, pattern, body
-              else
-                let user_visible =
-                  if Variable.user_visible var then Some () else None
-                in
-                let new_var =
-                  Variable.create ?user_visible (Variable.name var) kind
-                in
-                ( new_var,
-                  Bound_pattern.singleton
-                    (Bound_var.create new_var
-                       (Bound_var.debug_uid bound_var)
-                       (Bound_var.name_mode bound_var)),
-                  Flambda.Expr.apply_renaming body
-                    (Flambda2_nominal.Renaming.add_variable
-                       Flambda2_nominal.Renaming.empty var new_var) )
-            in
-            let misread =
-              match named with
-              | Prim (Nullary (Invalid kind | Optimised_out kind), _)
-                when kind_that_the_reader_may_misread kind ->
-                Variable.Set.add var misread
-              | Simple simple when variable_of_misread_kind ~misread simple ->
-                Variable.Set.add var misread
-              | Simple _ | Prim _ | Set_of_closures _ | Static_consts _
-              | Rec_info _ ->
-                misread
-            in
-            pattern, body, misread
+            if Flambda_kind.equal kind (Variable.kind var)
+            then pattern, body
+            else
+              let user_visible =
+                if Variable.user_visible var then Some () else None
+              in
+              let new_var =
+                Variable.create ?user_visible (Variable.name var) kind
+              in
+              ( Bound_pattern.singleton
+                  (Bound_var.create new_var
+                     (Bound_var.debug_uid bound_var)
+                     (Bound_var.name_mode bound_var)),
+                Flambda.Expr.apply_renaming body
+                  (Flambda2_nominal.Renaming.add_variable
+                     Flambda2_nominal.Renaming.empty var new_var) )
         in
         Flambda.Expr.create_let
           (Flambda.Let_expr.create pattern named
-             ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+             ~body:(with_lost_kinds_of_expr ~code_params body)
              ~free_names_of_body:Unknown))
   | Let_cont (Non_recursive { handler; _ }) ->
     Flambda.Non_recursive_let_cont_handler.pattern_match handler
       ~f:(fun k ~body ->
         Flambda.Let_cont_expr.create_non_recursive k
-          (with_lost_kinds_of_handler ~code_params ~misread
+          (with_lost_kinds_of_handler ~code_params
              (Flambda.Non_recursive_let_cont_handler.handler handler))
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+          ~body:(with_lost_kinds_of_expr ~code_params body)
           ~free_names_of_body:Unknown)
   | Let_cont (Recursive handlers) ->
     Flambda.Recursive_let_cont_handlers.pattern_match handlers
       ~f:(fun ~invariant_params ~body handlers ->
         Flambda.Let_cont_expr.create_recursive ~invariant_params
           (Continuation.Lmap.map
-             (with_lost_kinds_of_handler ~code_params ~misread)
+             (with_lost_kinds_of_handler ~code_params)
              (Flambda.Continuation_handlers.to_map handlers))
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body))
+          ~body:(with_lost_kinds_of_expr ~code_params body))
   | Apply apply -> (
-    match arity_of_arguments ~code_params ~misread apply with
+    match arity_of_arguments ~code_params apply with
     | As_read -> e
     | Given args_arity ->
       Flambda.Expr.create_apply
@@ -9344,14 +10723,12 @@ let rec with_lost_kinds_of_expr ~code_params ~misread (e : Flambda.Expr.t) :
     | Not_known why -> raise (Lost_kind_not_known why))
   | Apply_cont _ | Switch _ | Invalid _ -> e
 
-and with_lost_kinds_of_named ~code_params ~misread (named : Flambda.Named.t) :
+and with_lost_kinds_of_named ~code_params (named : Flambda.Named.t) :
     Flambda.Named.t =
   match named with
   | Prim (Unary (Opaque_identity { middle_end_only; kind }, arg), dbg) ->
-    if variable_of_misread_kind ~misread arg
-    then raise (Lost_kind_not_known opaque_kind_not_known_message);
     let kind_of_arg = Simple.kind arg in
-    if Flambda_kind.equal kind kind_of_arg
+    if Flambda_kind.equal kind kind_of_arg || opaque_kind_was_written kind
     then named
     else
       Flambda.Named.create_prim
@@ -9363,21 +10740,21 @@ and with_lost_kinds_of_named ~code_params ~misread (named : Flambda.Named.t) :
            match Flambda.Static_const_or_code.to_code const with
            | Some code ->
              Flambda.Static_const_or_code.create_code
-               (with_lost_kinds_of_code ~code_params ~misread code)
+               (with_lost_kinds_of_code ~code_params code)
            | None -> const))
   | Simple _ | Prim _ | Set_of_closures _ | Rec_info _ -> named
 
-and with_lost_kinds_of_handler ~code_params ~misread
+and with_lost_kinds_of_handler ~code_params
     (handler : Flambda.Continuation_handler.t) : Flambda.Continuation_handler.t
     =
   let is_exn_handler = Flambda.Continuation_handler.is_exn_handler handler in
   let is_cold = Flambda.Continuation_handler.is_cold handler in
   Flambda.Continuation_handler.pattern_match handler ~f:(fun params ~handler ->
       Flambda.Continuation_handler.create params
-        ~handler:(with_lost_kinds_of_expr ~code_params ~misread handler)
+        ~handler:(with_lost_kinds_of_expr ~code_params handler)
         ~free_names_of_handler:Unknown ~is_exn_handler ~is_cold)
 
-and with_lost_kinds_of_code ~code_params ~misread (code : Code.t) : Code.t =
+and with_lost_kinds_of_code ~code_params (code : Code.t) : Code.t =
   let params_and_body =
     Flambda.Function_params_and_body.pattern_match (Code.params_and_body code)
       ~f:(fun
@@ -9393,28 +10770,28 @@ and with_lost_kinds_of_code ~code_params ~misread (code : Code.t) : Code.t =
         ->
         Flambda.Function_params_and_body.create ~return_continuation
           ~exn_continuation params
-          ~body:(with_lost_kinds_of_expr ~code_params ~misread body)
+          ~body:(with_lost_kinds_of_expr ~code_params body)
           ~free_names_of_body ~my_closure ~my_alloc_mode ~my_depth)
   in
   Code.create_with_metadata ~params_and_body
     ~free_names_of_params_and_body:(Code.free_names_of_params_and_body code)
     ~code_metadata:(Code.code_metadata code)
 
-(* Whether a unit has an [Opaque_identity] whose kind is not the kind of its
-   argument, or a call that is not to keep the arity of its arguments, as the
-   reader has them: whether the pass above has anything to do. The first such
-   primitive or call from the top is one that this finds, as nothing above it is
-   changed. The unit is looked at as a term is for printing
-   ([pattern_match_for_printing]) and nothing is built, so a unit that has
-   neither is left as it was read. Opened so, the bound names of a term are not
-   made fresh, unless the tool is given the flag that makes them fresh where a
-   term is printed ([Flambda_features.freshen_when_printing]), which the tests
-   do not give. So with the flags of the tests looking at a unit uses up no
-   name, and the names which the tool prints of a unit that has neither are
-   those that it printed before this step was there. The tests that this look
-   makes, whether an [Opaque_identity] and its argument have different kinds and
-   what [arity_of_arguments] says of a call, are the same with either setting of
-   the flag. *)
+(* Whether a unit has an [Opaque_identity] whose kind as read is the kind of
+   values and is not the kind of its argument, or a call that is not to keep the
+   arity of its arguments, as the reader has them: whether the pass above has
+   anything to do. The first such primitive or call from the top is one that
+   this finds, as nothing above it is changed. The unit is looked at as a term
+   is for printing ([pattern_match_for_printing]) and nothing is built, so a
+   unit that has neither is left as it was read. Opened so, the bound names of a
+   term are not made fresh, unless the tool is given the flag that makes them
+   fresh where a term is printed ([Flambda_features.freshen_when_printing]),
+   which the tests do not give. So with the flags of the tests looking at a unit
+   uses up no name, and the names which the tool prints of a unit that has
+   neither are those that it printed before this step was there. The tests that
+   this look makes, whether an [Opaque_identity] at the kind of values has an
+   argument of another kind and what [arity_of_arguments] says of a call, are
+   the same with either setting of the flag. *)
 let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
   match Flambda.Expr.descr e with
   | Let let_expr ->
@@ -9435,7 +10812,7 @@ let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
              (Continuation.Lmap.data
                 (Flambda.Continuation_handlers.to_map handlers)))
   | Apply apply -> (
-    match arity_of_arguments ~code_params ~misread:Variable.Set.empty apply with
+    match arity_of_arguments ~code_params apply with
     | As_read -> false
     | Given _ | Not_known _ -> true)
   | Apply_cont _ | Switch _ | Invalid _ -> false
@@ -9443,7 +10820,8 @@ let rec kind_lost_in_expr ~code_params (e : Flambda.Expr.t) : bool =
 and kind_lost_in_named ~code_params (named : Flambda.Named.t) : bool =
   match named with
   | Prim (Unary (Opaque_identity { middle_end_only = _; kind }, arg), _) ->
-    not (Flambda_kind.equal kind (Simple.kind arg))
+    (not (opaque_kind_was_written kind))
+    && not (Flambda_kind.equal kind (Simple.kind arg))
   | Static_consts group ->
     List.exists
       (fun const ->
@@ -9477,9 +10855,7 @@ let with_lost_kinds (unit : Flambda_unit.t) : (Flambda_unit.t, string) result =
   if not (kind_lost_in_expr ~code_params body)
   then Ok unit
   else
-    match
-      with_lost_kinds_of_expr ~code_params ~misread:Variable.Set.empty body
-    with
+    match with_lost_kinds_of_expr ~code_params body with
     | exception Lost_kind_not_known why -> Error why
     | body ->
       Ok
@@ -9602,6 +10978,20 @@ let conversion_for_round_trip : Flroundtrip.conversion =
     reset = reset_conversion;
     value_slot_kind =
       (fun slot -> Option.map convert_kind (List.assoc_opt slot !slot_kinds));
+    c_functions =
+      (fun () ->
+        Hashtbl.fold
+          (fun (c_function : c_function) id c_functions ->
+            ( id,
+              c_function.c_name,
+              { Flmodel_to_fexpr.needs_caml_c_call =
+                  c_function.c_needs_caml_c_call;
+                is_c_builtin = c_function.c_is_c_builtin;
+                effects = c_function.c_effects;
+                coeffects = c_function.c_coeffects
+              } )
+            :: c_functions)
+          c_function_ids []);
     symbols =
       (fun () ->
         names Symbols.bindings (fun symbol ->
@@ -9654,6 +11044,19 @@ let simplify_for_round_trip ~filename (text : Fexpr.flambda_unit)
    the text of a term after, and one [.fl] file. It exits 1 where the check has
    failed ([checked]). *)
 let main () =
+  (* No colours in what the tool prints. The compiler colours the names and
+     kinds that it prints unless that was decided otherwise before the first is
+     printed, and it is decided once: [Misc.Style.setup] acts at its first call
+     only. The tool runs Simplify through [Flambda2.flambda_to_flambda], which
+     makes that call, and decides against colours where the error output is not
+     a terminal. Before that run nothing had decided, and with [-after] there is
+     no run: a name in a line of the tool, and a kind in a fatal error raised as
+     the tool read a text, came out between escape sequences. So it is decided
+     here. The compiler's options are still read below, [-color] and the
+     variable OCAML_COLOR among them: after this call they change nothing of
+     what the tool prints. A program that links this file with its own main does
+     not come here. *)
+  Misc.Style.setup (Some Misc.Color.Never);
   let module Options =
     Oxcaml_args.Make_optcomp_options (Oxcaml_args.Default.Optmain)
   in

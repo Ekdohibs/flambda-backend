@@ -1,3 +1,30 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
 (* Proofs of the statements of FlambdaRegionsCallsSpec.v. Nothing here
    needs review.
 
@@ -419,6 +446,8 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (negb (values_of_subkinds _ vs _));
+    [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
   exact
@@ -467,6 +496,8 @@ Proof.
     intros vs Hc Hvs.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
@@ -1366,6 +1397,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
+  destruct (values_of_subkinds _ _ _); [ | exact I ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | exact I ].
   assert (Hvs : Forall (fun v => variable_no_mark (rs_frames rs) v = true) vs).
@@ -2173,6 +2205,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
+  destruct (values_of_subkinds _ _ _); [ | exact I ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | exact I ].
   apply
@@ -2785,7 +2818,8 @@ Lemma erased_if_usable (rs : region_state) (vs vs' : list value) :
   Forall2 (value_erased_if_usable rs) vs vs' ->
   Forall2 (value_erased rs) vs vs'.
 Proof.
-  intros Hu H. induction H as [ | v v' vs vs' [_ Hv] _ IH]; [ constructor | ].
+  intros Hu H.
+  induction H as [ | v v' vs vs' (_ & _ & Hv) _ IH]; [ constructor | ].
   simpl in Hu. apply andb_true_iff in Hu as [Hu Hus].
   constructor; [ exact (Hv (or_introl Hu)) | exact (IH Hus) ].
 Qed.

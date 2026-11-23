@@ -98,7 +98,13 @@ and strip_traps_handler k = function
 
 let clear_exn_handler = function
   | Handler (params, metadata, handler) ->
-    Handler (params, make_handler_metadata metadata.hm_params_kinds, handler)
+    Handler
+      ( params,
+        { hm_params_kinds = metadata.hm_params_kinds;
+          hm_params_subkinds = metadata.hm_params_subkinds;
+          hm_is_exn_handler = false
+        },
+        handler )
 
 (** val demote_handlers : continuation list -> expr -> expr **)
 

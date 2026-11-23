@@ -192,6 +192,8 @@ Definition the_closure' : cont_value :=
   Closure
     (Handler (drop_nth i params)
        {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+          hm_params_subkinds :=
+            drop_nth i (hm_params_subkinds metadata);
           hm_is_exn_handler := false |}
        handler)
     vars0 conts0 [].
@@ -435,6 +437,7 @@ Qed.
 Lemma handler_entered (vs : list value) (bound0 : env)
     (statics : static_env) (hp : heap) (rd : read_record) :
   kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
   bind_params params vs vars0 = Some bound0 ->
   ∃ bound1 : env,
     apply_cont_value the_closure' (drop_nth i vs) statics hp rd
@@ -442,10 +445,11 @@ Lemma handler_entered (vs : list value) (bound0 : env)
     ∧ state_matches (State handler bound0 conts0 statics hp rd)
         (State handler bound1 conts0 statics hp rd).
 Proof.
-  intros Hkinds Hbound0. unfold the_closure'. cbn [apply_cont_value].
+  intros Hkinds Hstated Hbound0. unfold the_closure'.
+  cbn [apply_cont_value].
   apply kinds_eqb_eq in Hkinds.
-  rewrite map_drop_nth, Hkinds. cbn [hm_params_kinds].
-  rewrite kinds_eqb_refl.
+  rewrite map_drop_nth, Hkinds. cbn [hm_params_kinds hm_params_subkinds].
+  rewrite kinds_eqb_refl, (values_of_subkinds_drop_nth statics i _ vs Hstated).
   pose proof (bind_params_length params vs vars0 bound0 Hbound0) as Hlength.
   destruct (nth_error vs i) as [v | ] eqn:Hv.
   2: { apply nth_error_None in Hv. rewrite Hlength in Hv.
@@ -481,6 +485,8 @@ Proof.
   cbn [apply_cont_value].
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
     eqn:Hkinds; [ | exact I ].
+  destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+    eqn:Hstated; [ | exact I ].
   destruct (bind_params params vs vars0) as [bound0 | ] eqn:Hbound0;
     [ | exact I ].
   destruct (bind_params_defined params vs vars0 dv bound0 Hbound0)
@@ -492,7 +498,7 @@ Proof.
     (eval_simples_drop_nth i (map Var params) boundw vs
        (eval_params_bound params vs dv boundw Hdistinct Hboundw)).
   unfold apply_continuation. rewrite Hk.
-  destruct (handler_entered vs bound0 statics hp rd Hkinds Hbound0)
+  destruct (handler_entered vs bound0 statics hp rd Hkinds Hstated Hbound0)
     as (bound1 & Hstep & Hmatch).
   exists (State handler bound1 conts0 statics hp rd).
   split; [ exact Hstep | apply Rel_state_matched, Hmatch ].
@@ -520,10 +526,14 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     apply lagged_step, Rel_state_plain, rec_conts_plain. exact Hdc.
   - cbn [wrap_uses_in_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
       [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     apply lagged_step, Rel_state_inside; [ exact Hok | ].
@@ -582,6 +592,8 @@ Proof.
       [ rewrite Hundefined | rewrite Hcall ]; discriminate.
   - destruct hh as [ps m he]. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value [partial]) (hm_params_kinds m));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ [partial] (hm_params_subkinds m));
       [ | discriminate ].
     destruct (bind_params ps [partial] dv); discriminate.
   - discriminate.
@@ -746,10 +758,13 @@ Proof.
         destruct
           (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
           eqn:Hkinds; [ | exact I ].
+        destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+          eqn:Hstated; [ | exact I ].
         destruct (bind_params params vs vars0) as [bound0 | ] eqn:Hbound0;
           [ | exact I ].
         cbn [rec_closures map app].
-        destruct (handler_entered vs bound0 statics hp rd Hkinds Hbound0)
+        destruct
+          (handler_entered vs bound0 statics hp rd Hkinds Hstated Hbound0)
           as (bound1 & Hstep & Hmatch).
         rewrite Hstep. apply lagged_step, Rel_state_matched, Hmatch.
       * rewrite !step_apply_cont.

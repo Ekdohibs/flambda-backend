@@ -1,0 +1,46 @@
+let $camlBool_kept_across_call__first_const_0 = Block 0 () in
+(let code rec size(42)
+       count_0
+         (p/41 : val, l/42 : [ 0 | 0 of val? * [ 0 | 0 of val? * val ] ])
+         my_closure/43 &my_alloc_region/44 my_depth/45
+         -> k/22 * k/23
+         : imm tagged =
+   let next_depth/46 = rec_info (succ my_depth/45) in
+   (let prim/53 = %is_int (l/42) in
+    let Pisint/54 = %tag_imm (prim/53) in
+    (let untagged/55 = %untag_imm (Pisint/54) in
+     switch untagged/55
+       | 0 -> k/29
+       | 1 -> k/22 (0))
+      where k/29 =
+        cont k/24)
+     where k/24 =
+       ((let Pfield/52 = %block_load.[`0`] (l/42) in
+         apply unknown_arity &my_alloc_region/44
+           (p/41 : _ -> imm tagged) (Pfield/52) -> k/25 * k/23)
+          where k/25 (b/47 : imm tagged) =
+            ((let Pfield/51 = %block_load.[`1`] (l/42) in
+              apply direct(count_0 &my_alloc_region/44)
+                (my_closure/43 ~ depth my_depth/45 -> next_depth/46
+                 : val * val? -> imm tagged)
+                  (p/41, Pfield/51)
+                  -> k/26 * k/23)
+               where k/26 (n/48 : imm tagged) =
+                 ((let untagged/50 = %untag_imm (b/47) in
+                   switch untagged/50
+                     | 0 -> k/22 (n/48)
+                     | 1 -> k/28)
+                    where k/28 =
+                      cont k/27
+                    where k/27 =
+                      let int_add/49 = %int_barith.add (n/48, 1) in
+                      cont k/22 (int_add/49))))
+ in
+ let count/56 = closure count_0 @count &toplevel in
+ let Pmakeblock/57 = %block.[`0`].`toplevel` (count/56) in
+ cont k/21 (Pmakeblock/57))
+  where k/21 define_root_symbol (module_block/39) =
+    let field_0/40 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/39)
+    in
+    let $camlBool_kept_across_call = Block 0 (field_0/40) in
+    cont done ($camlBool_kept_across_call)

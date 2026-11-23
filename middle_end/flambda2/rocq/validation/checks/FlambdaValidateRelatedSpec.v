@@ -43,18 +43,21 @@
    FlambdaValidateSpec.validate_unit applies in turn
    (FlambdaValidateSpec.with_lifting), gives a term lifted only where
    the term that it is given passes two tests: that of the exits
-   (FlambdaLiftSpec.exits_plain_knowing) and that it has no primitive
-   of the heap (FlambdaHeapFreeSpec.expr_free_of_heap). Where a test
-   fails that lifting is not made and the term is kept as it was; the
-   verdict [Same_once_lifted] may still be reached without it. A
-   lifting gives a symbol where the unit before gave the value that
-   it lifts (FlambdaLiftSpec.lift_named), and
-   FlambdaSemanticsSpec.refines asks of two exits the same values and
-   the same heap. So the first test refuses the lifting of a term
-   whose exits are not symbols and constants only, which could exit
-   with something lifted, and the second the lifting of a term that
-   has a primitive of the heap, which could store something lifted in
-   a cell.
+   (FlambdaLiftSpec.exits_plain_fine) and that of the heap
+   (FlambdaHeapFreeSpec.free_of_heap_fine: it has no primitive of the
+   heap, or none outside the bodies of its code where it calls
+   nothing outside them). Where a test fails that lifting is not made
+   and the term is kept as it was; the verdict [Same_once_lifted] may
+   still be reached without it. A lifting gives a symbol where the
+   unit before gave the value that it lifts
+   (FlambdaLiftSpec.lift_named), and FlambdaSemanticsSpec.refines asks
+   of two exits the same values and the same heap. So the first test
+   refuses the lifting of a term whose exits are not symbols and
+   constants only, which could exit with something lifted, and the
+   second the lifting of a term that has a primitive of the heap,
+   which could store something lifted in a cell. Neither test counts
+   what is in the bodies of the code of a term that calls nothing
+   outside them: the run of such a term enters no code.
 
    The check here follows the two comparisons of lifted terms of
    [validate_unit], with the liftings made without those two tests
@@ -105,9 +108,12 @@
    it; each lifting given is applied without the two tests of the unit
    and followed by FlambdaValidateSpec.normalise_lifted_own (the
    rounds of [normalise_lifted], with the calls of the closures that
-   a [Let] makes made direct in them where the lifting says so, and
-   with what [my_closure] is known to be from its code used in them
-   where the lifting says so), and
+   a [Let] makes made direct in them where the lifting says so, and,
+   where the lifting says so, with what [my_closure] is known to be
+   from its code used in them and then with a value slot that a body
+   reads through a closure held by a closure of known code read from
+   that closure itself:
+   FlambdaSlotsThroughSpec.know_own_closures_through), and
    after the last the known value slots are read and what is known is
    used after the demotion, as there ([lifted_in_turn_observed]); the
    calls are taken on and the term tidied as there; the value slots
@@ -119,7 +125,20 @@
    of the unit after bound first, up to the order of the static
    bindings and the place of the code; and, if that fails, with the
    static bindings of both that need nothing from around them bound
-   first (FlambdaValidateSpec.with_statics_first).
+   first (FlambdaValidateSpec.with_statics_first). Each of the two
+   comparisons is the one that [validate_unit] asks
+   (FlambdaCompareOrderSpec.expr_says_at_least), with the term made
+   from the unit before first. The two are to be the same up to
+   bound names but for what their binders state: where two handlers,
+   or two pieces of code, are paired, that term is to state at least
+   as much of its parameters as the term made from the unit after,
+   and need not state the same; what two paired pieces of code state
+   of their results is compared the same way round, which only makes
+   the comparison refuse more. What it gives is that the second term
+   refines the first, and the check needs no more: the term compared
+   first is reached from the unit before, and the unit after refines
+   the term compared second. It does not say that the values that
+   code returns are of what the code states of its results.
 
    The unit is run from the static environment of its imports
    (FlambdaImportsSpec.imports_statics). The check computes what the
@@ -143,7 +162,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaBindersSpec FlambdaCompareSpec FlambdaNormaliseSpec
+  FlambdaBindersSpec FlambdaCompareSpec FlambdaCompareOrderSpec
+  FlambdaNormaliseSpec
   FlambdaStaticsOrderSpec FlambdaUnusedStaticsSpec
   FlambdaUnusedHeadStaticsSpec FlambdaUnusedSlotsSpec FlambdaLoopifySpec
   FlambdaLiftSpec FlambdaKnownSlotsSpec
@@ -158,7 +178,7 @@ Import ListNotations.
 (* ======================================================================== *)
 
 (* FlambdaValidateSpec.lifted_in_turn with each lifting made without
-   the two tests of the unit (its exits; no primitive of the heap).
+   the two tests of the unit (that of its exits and that of the heap).
    What ends it is what ends that one. *)
 Fixpoint lifted_in_turn_observed (rounds : nat) (avoid : list continuation)
     (Ls : list lifting) (kept : list code_id) (e : expr) : expr :=
@@ -240,13 +260,13 @@ Definition validate_unit_related (imports : list (symbol * import_class))
     && head_removal_free_in statics unused tidied
     && lifted_observed_free_in statics rounds (unit_continuations Ls) Ls kept
          source
-    && (expr_eqb [] []
+    && (expr_says_at_least [] []
           (order_statics_as (float_code (with_code_first target))
              (float_code lifted))
           (float_code (with_code_first target))
         || statics_first_free_in statics Ls target
            && statics_first_free_in statics Ls lifted
-           && expr_eqb [] []
+           && expr_says_at_least [] []
                 (order_statics_as (with_statics_first Ls target)
                    (with_statics_first Ls lifted))
                 (with_statics_first Ls target))

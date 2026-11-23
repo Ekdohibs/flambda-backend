@@ -1,29 +1,50 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* The header above is that of
+   middle_end/flambda2/types/meet_and_n_way_join.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/flambda2_types.ml,
+     whose header is the same;
+   - middle_end/flambda2/types/grammar/type_grammar.ml,
+     whose header is the same;
+   - middle_end/flambda2/kinds/tag.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
+   - middle_end/flambda2/types/env/typing_env_level.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/types/grammar/more_type_creators.ml,
+     whose header is the same;
+   - middle_end/flambda2/types/meet.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Vincent Laviron, OCamlPro                        *)
+(*                       Basile Clément, OCamlPro                         *)
+(*   Copyright 2024 OCamlPro SAS                                          *)
+   *)
 
 
 
@@ -33,8 +54,13 @@
    middle_end/flambda2/types/meet_and_n_way_join.ml (from
    [map_return_value] to [meet_function_type], and [meet] with
    [meet_expanded_head] as it exposes them), types/meet.ml, and the
-   functions that types/flambda2_types.ml adds to [Typing_env]. It
-   holds definitions only and it extracts. What the functions
+   functions that types/flambda2_types.ml adds to [Typing_env]. Nine
+   small definitions are after functions of four other files of the
+   compiler, each named where it stands by its module:
+   types/grammar/type_grammar.ml (five), kinds/tag.ml (two),
+   types/env/typing_env_level.ml (one) and
+   types/grammar/more_type_creators.ml (one). The file holds
+   definitions only and it extracts. What the functions
    guarantee is FlambdaMeetSpec.v; the environment of a meet is
    FlambdaMeetEnv.v; expanded types are FlambdaExpandHead.v.
 
@@ -105,7 +131,7 @@
    discrepancy T4-10). What is to be proved sound is
    [Meet.meet join repaired_choices fuel].
 
-   What the model has, in the order of the file, and how each differs
+   What the model has, and how each differs
    from the compiler's:
    - [map_return_value], [combine_meet_return_values], [set_meet],
      [meet_mapping], [Map_meet.meet] ([map_meet]), [meet_alloc_mode],

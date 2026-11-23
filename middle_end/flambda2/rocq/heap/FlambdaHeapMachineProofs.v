@@ -37,6 +37,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec FlambdaMapProofs
 From OxCamlFlambda2 Require FlambdaNameAbstractionSpec.
 From OxCamlFlambda2 Require FlambdaPrimitiveProofs.
 From OxCamlFlambda2 Require FlambdaSemanticsProofs.
+From OxCamlFlambda2 Require Import FlambdaSubkindProofs.
 Import ListNotations.
 
 (* FlambdaPrimitiveProofs.v makes [eval_prim] opaque for the files that
@@ -287,6 +288,8 @@ Proof.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs vars); [ | discriminate ].
     intros [= <-]. reflexivity.
   - discriminate.
@@ -372,6 +375,8 @@ Proof.
     intros vs; simpl.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs vars); simpl; auto.
   - auto.
@@ -2394,6 +2399,24 @@ Proof.
   - exact Hboxed.
 Qed.
 
+(* Related values are of the same subkinds. *)
+Lemma related_values_of_subkinds (vs vs' : list value)
+    (sks : list param_subkind) :
+  Forall2 related vs vs' ->
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics' vs' sks = true.
+Proof.
+  intros Hvs.
+  apply (values_of_subkinds_related_aux related statics statics');
+    [ | | | | | exact Hvs ].
+  - intros c v' Hrelated. left. exact (related_const_left c v' Hrelated).
+  - intros v c Hrelated. left. apply related_const_of in Hrelated.
+    destruct v; try discriminate. injection Hrelated as <-. reflexivity.
+  - intros v v' c. apply related_boxed_number_of.
+  - intros v v' tag fields. apply related_block_of.
+  - intros v v'. apply related_kind.
+Qed.
+
 Lemma related_string_of (v v' : value) (bytes : list Z) :
   related v v' ->
   string_of statics v = Some bytes ->
@@ -4311,6 +4334,11 @@ Proof.
   destruct (binds_statics (code_body c)); [ exact I | ].
   rewrite (related_kinds D r st st' h h' _ _ Hmemories Hvs).
   destruct (negb _); [ exact I | ].
+  destruct (values_of_subkinds st vs (code_params_subkinds c)) eqn:Hsubkinds;
+    [ | exact I ].
+  rewrite (related_values_of_subkinds D r st st' h h' Hmemories vs vs' _ Hvs
+    Hsubkinds).
+  cbn [negb].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [env1 | ] eqn:Hbind; [ | exact I ].
   assert (Henv0 :
@@ -4521,6 +4549,10 @@ Proof.
     rewrite Hkinds.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds st vs (hm_params_subkinds metadata))
+      eqn:Hsubkinds; [ | exact I ].
+    rewrite (related_values_of_subkinds D r st st' h h' Hmemories vs vs' _
+      Hvs Hsubkinds).
     destruct (bind_params params vs def_vars) as [env1 | ] eqn:Hbind;
       [ | exact I ].
     assert (Henv0 :
@@ -5767,6 +5799,7 @@ Proof.
   intros Hmemory Hclosure Hvs Hret Hexn. unfold heap_call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [env1 | ] eqn:Hbind; [ | discriminate ].
   intros [= <-].
@@ -5837,6 +5870,8 @@ Proof.
   - destruct handler as [params metadata handler]. simpl.
     apply cont_value_closed_closure in Hc as [Hdef_vars Hdef_conts].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs def_vars) as [env1 | ] eqn:Hbind;
       [ | discriminate ].
@@ -6176,6 +6211,7 @@ Proof.
   intros Hcode Hc Hret Hexn. unfold heap_call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
+  destruct (negb _); [ discriminate | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ]; [ | discriminate ].
   intros [= <-].
@@ -6247,6 +6283,8 @@ Proof.
   all: simpl.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | discriminate ].

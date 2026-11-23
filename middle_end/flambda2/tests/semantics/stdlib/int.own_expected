@@ -1,0 +1,18 @@
+stdlib__Int.fl:
+  in front of the two terms, the declarations of 2 C functions:
+    caml_format_int (a C function), declared with no code
+    caml_hash_exn (a C function: noalloc), declared with no code
+  before Simplify, after the declarations of the C functions, with its 2 imports (38 steps): 
+returns
+  [0: 0; 1; -1; <fun>; 4611686018427387903; -4611686018427387904; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
+  after Simplify, after the declarations of the C functions, with its 2 imports (28 steps): 
+returns
+  [0: 0; 1; -1; <fun>; 4611686018427387903; -4611686018427387904; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the declarations of the C functions in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports: the same once closures and blocks are lifted to symbols and the terms normalised

@@ -53,8 +53,9 @@ Import ListNotations.
    the arguments. The handler runs under the continuations of the
    [Let_cont], in which [k] is not bound, as it is not in scope there. The
    premises say when the application has a step: the arguments have
-   values, of the kinds that the handler gives its parameters, and as
-   many as there are parameters. *)
+   values, of the kinds that the handler gives its parameters and of
+   what it states of them beyond their kinds, and as many as there are
+   parameters. *)
 Definition let_cont_apply_cont_statement : Prop :=
   ∀ (k : continuation) (params : list variable) (metadata : handler_metadata)
     (handler : expr) (args : list simple) (vars handler_vars : env)
@@ -62,6 +63,7 @@ Definition let_cont_apply_cont_statement : Prop :=
       (vs : list value),
     eval_simples vars args = Some vs ->
     map kind_of_value vs = hm_params_kinds metadata ->
+    values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
     bind_params params vs vars = Some handler_vars ->
     equivalent
       (State
@@ -72,11 +74,14 @@ Definition let_cont_apply_cont_statement : Prop :=
 
 (* The same with one parameter, as a rewrite of terms: the parameter becomes
    a [Let], at the kind that the handler gives it. The application and the
-   [Let] then test the same of the value of the argument. *)
+   [Let] then test the same of the value of the argument, provided that
+   the handler states nothing of its parameter beyond its kind: a [Let]
+   tests the kind only. *)
 Definition let_cont_apply_cont_one_param_statement : Prop :=
   ∀ (k : continuation) (x : variable) (metadata : handler_metadata)
     (kind : flambda_kind) (handler : expr) (arg : simple),
     hm_params_kinds metadata = [kind] ->
+    subkinds_say_nothing (hm_params_subkinds metadata) = true ->
     expr_equivalent
       (Let_cont_non_recursive k (Handler [x] metadata handler)
          (Apply_cont (Apply_cont_expr k [arg] None)))
@@ -93,6 +98,7 @@ Definition let_cont_recursive_apply_cont_statement : Prop :=
     lookup k handlers = Some (Handler params metadata handler) ->
     eval_simples vars args = Some vs ->
     map kind_of_value vs = hm_params_kinds metadata ->
+    values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
     bind_params params vs vars = Some handler_vars ->
     equivalent
       (State

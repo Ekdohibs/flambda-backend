@@ -1,0 +1,148 @@
+let $camlLifted_closure_in_two_bodies__first_const_0 = Block 0 () in
+(let code inline(never) size(9)
+       node_0
+         (l/88 :
+            [ 0
+            | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                [ 0 | 0 of val * imm tagged * val ] ],
+          v/89 : imm tagged,
+          r/90 :
+            [ 0
+            | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                [ 0 | 0 of val * imm tagged * val ] ])
+         my_closure/91 &my_alloc_region/92 my_depth/93
+         -> k/32 * k/33
+         : [ 0
+           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+               [ 0 | 0 of val * imm tagged * val ] ] =
+   let next_depth/94 = rec_info (succ my_depth/93) in
+   let Pmakeblock/95 =
+     %block.[`0`].my_alloc_region/92
+       (l/88 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ],
+        v/89 : imm tagged,
+        r/90 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ])
+   in
+   cont k/32 (Pmakeblock/95)
+ in
+ let code rec size(27)
+       down_2 (n/96 : imm tagged)
+         my_closure/97 &my_alloc_region/98 my_depth/99
+         -> k/34 * k/35
+         : [ 0
+           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+               [ 0 | 0 of val * imm tagged * val ] ] =
+   let next_depth/100 = rec_info (succ my_depth/99) in
+   let node/101 = %project_value_slot.[down].[node] (my_closure/97) in
+   (let prim/104 = %phys_eq (n/96, 0) in
+    let eq/105 = %tag_imm (prim/104) in
+    (let untagged/106 = %untag_imm (eq/105) in
+     switch untagged/106
+       | 0 -> k/38
+       | 1 -> k/34 (0))
+      where k/38 =
+        cont k/36)
+     where k/36 =
+       ((let int_sub/103 = %int_barith.sub (n/96, 1) in
+         apply direct(down_2 &my_alloc_region/98)
+           (my_closure/97 ~ depth my_depth/99 -> next_depth/100
+            : imm tagged ->
+              [ 0
+              | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                  [ 0 | 0 of val * imm tagged * val ] ]
+            )
+             (int_sub/103)
+             -> k/37 * k/35)
+          where k/37
+                  (apply_result/102 :
+                     [ 0
+                     | 0 of [ 0 | 0 of val * imm tagged * val ] *
+                         imm tagged * [ 0 | 0 of val * imm tagged * val ] ]) =
+            apply direct(node_0 &my_alloc_region/98)
+              (node/101
+               : [ 0
+                 | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                     [ 0 | 0 of val * imm tagged * val ] ] *
+                 imm tagged *
+                 imm tagged ->
+                 [ 0
+                 | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                     [ 0 | 0 of val * imm tagged * val ] ]
+               )
+                (apply_result/102, n/96, 0)
+                -> k/34 * k/35)
+ in
+ let code inline(always) size(40)
+       of_count_1 (n/107 : imm tagged)
+         my_closure/108 &my_alloc_region/109 my_depth/110
+         -> k/39 * k/40
+         : [ 0
+           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+               [ 0 | 0 of val * imm tagged * val ] ] =
+   let next_depth/111 = rec_info (succ my_depth/110) in
+   let node/112 = %project_value_slot.[of_count].[node_1] (my_closure/108) in
+   let down/113 = closure down_2 @down &my_alloc_region/109
+   with { node = node/112 }
+   in
+   apply direct(down_2 &my_alloc_region/109)
+     (down/113
+      : imm tagged ->
+        [ 0
+        | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+            [ 0 | 0 of val * imm tagged * val ] ]
+      )
+       (n/107)
+       -> k/39 * k/40
+ in
+ let code size(21)
+       of_any_3 (n/114 : imm tagged)
+         my_closure/115 &my_alloc_region/116 my_depth/117
+         -> k/41 * k/42
+         : [ 0
+           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+               [ 0 | 0 of val * imm tagged * val ] ] =
+   let next_depth/118 = rec_info (succ my_depth/117) in
+   let of_count/119 =
+     %project_value_slot.[of_any].[of_count] (my_closure/115)
+   in
+   (let prim/120 = %int_comp.lt (n/114, 0) in
+    let int_lessthan/121 = %tag_imm (prim/120) in
+    (let untagged/122 = %untag_imm (int_lessthan/121) in
+     switch untagged/122
+       | 0 -> k/44
+       | 1 -> k/41 (0))
+      where k/44 =
+        cont k/43)
+     where k/43 =
+       apply direct(of_count_1 &my_alloc_region/116)
+         (of_count/119
+          : imm tagged ->
+            [ 0
+            | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                [ 0 | 0 of val * imm tagged * val ] ]
+          )
+           (n/114)
+           -> k/41 * k/42
+ in
+ let node/123 = closure node_0 @node &toplevel in
+ let of_count/124 = closure of_count_1 @of_count &toplevel
+ with { node_1 = node/123 }
+ in
+ let of_any/125 = closure of_any_3 @of_any &toplevel
+ with { of_count = of_count/124 }
+ in
+ let Pmakeblock/126 = %block.[`0`].`toplevel` (of_count/124, of_any/125) in
+ cont k/31 (Pmakeblock/126))
+  where k/31 define_root_symbol (module_block/85) =
+    let field_0/86 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/85)
+    in
+    let field_1/87 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/85)
+    in
+    let $camlLifted_closure_in_two_bodies = Block 0 (field_0/86, field_1/87)
+    in
+    cont done ($camlLifted_closure_in_two_bodies)

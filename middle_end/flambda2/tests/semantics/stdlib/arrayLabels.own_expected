@@ -1,0 +1,488 @@
+stdlib__ArrayLabels.fl:
+  in front of the two terms, the declarations of 6 C functions:
+    caml_array_blit (a C function), declared with no code
+    caml_array_fill (a C function), declared with no code
+    caml_array_sub (a C function), declared with no code
+    caml_array_concat (a C function), declared with no code
+    caml_array_append (a C function), declared with no code
+    caml_array_make (a C function), declared with no code
+  given the .cmx of Stdlib__Array, a prefix of 94 static bindings:
+    camlStdlib__Array__of_seq_71_140_code deleted
+    camlStdlib__Array__shuffle_60_133_code deleted
+    camlStdlib__Array__stable_sort_54_127_code deleted
+    camlStdlib__Array__sort_49_122_code deleted
+    camlStdlib__Array__combine_48_121_code deleted
+    camlStdlib__Array__split_47_120_code deleted
+    camlStdlib__Array__find_mapi_45_118_code deleted
+    camlStdlib__Array__find_map_43_116_code deleted
+    camlStdlib__Array__find_index_41_114_code deleted
+    camlStdlib__Array__find_opt_39_112_code deleted
+    camlStdlib__Array__memq_37_110_code deleted
+    camlStdlib__Array__mem_35_108_code deleted
+    camlStdlib__Array__exists2_33_106_code deleted
+    camlStdlib__Array__for_all2_31_104_code deleted
+    camlStdlib__Array__exists_27_100_code deleted
+    camlStdlib__Array__for_all_29_102_code deleted
+    camlStdlib__Array__map2_13_87_code deleted
+    camlStdlib__Array__iter2_9_83_code deleted
+    camlStdlib__Array__fold_right_26_99_code deleted
+    camlStdlib__Array__fold_left_map_25_98_code deleted
+    camlStdlib__Array__fold_left_24_97_code deleted
+    camlStdlib__Array__mapi_inplace_12_86_code deleted
+    camlStdlib__Array__mapi_15_89_code deleted
+    camlStdlib__Array__map_inplace_11_85_code deleted
+    camlStdlib__Array__map_10_84_code deleted
+    camlStdlib__Array__iteri_14_88_code deleted
+    camlStdlib__Array__iter_8_82_code deleted
+    camlStdlib__Array__compare_23_96_code deleted
+    camlStdlib__Array__equal_21_95_code deleted
+    camlStdlib__Array__of_list_19_93_code deleted
+    camlStdlib__Array__to_list_16_90_code deleted
+    camlStdlib__Array__init_matrix_2_76_code deleted
+    camlStdlib__Array__init_0_74_code deleted
+    camlStdlib__Array__aux_66_137_code deleted
+    camlStdlib__Array__aux_62_135_code deleted
+    camlStdlib__Array__to_seqi_65_136_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Array.aux_66 of
+          {Stdlib__Array.aux_66 = camlStdlib__Array__aux_66_137_code}
+          {Stdlib__Array.a_67 = v1} in
+      let v4 =
+        closure Stdlib__Array.partial_aux_68 of
+          {Stdlib__Array.partial_aux_68 = camlStdlib__Array__partial_aux_68_68_code}
+          {Stdlib__Array.aux_70 = v3} in
+      cont k1 (v4)
+    camlStdlib__Array__to_seq_61_134_code (v1) v2 -> k1 * k2 =
+      let v3 =
+        closure Stdlib__Array.aux_62 of
+          {Stdlib__Array.aux_62 = camlStdlib__Array__aux_62_135_code}
+          {Stdlib__Array.a_63 = v1} in
+      let v4 =
+        closure Stdlib__Array.partial_aux_64 of
+          {Stdlib__Array.partial_aux_64 = camlStdlib__Array__partial_aux_64_64_code}
+          {Stdlib__Array.aux_66 = v3} in
+      cont k1 (v4)
+    camlStdlib__Array__blit_7_81_code (v1,
+      v2,
+      v3,
+      v4,
+      v5) v6 -> k1 * k2 =
+      let v7 = Int_comp tagged_imm lt (v5, 0) in
+      let_cont k3 () =
+        let v8 = Int_comp tagged_imm lt (v2, 0) in
+        let_cont k4 () =
+          let v9 = Array_length (v1) in
+          let v10 = Int_arith tagged_imm sub (v9, v5) in
+          let v11 = Int_comp tagged_imm gt (v2, v10) in
+          let_cont k5 () =
+            let v12 = Int_comp tagged_imm lt (v4, 0) in
+            let_cont k6 () =
+              let v13 = Array_length (v3) in
+              let v14 = Int_arith tagged_imm sub (v13, v5) in
+              let v15 = Int_comp tagged_imm gt (v4, v14) in
+              let_cont k7 () =
+                apply direct(caml_array_blit (a C function)) caml_array_blit
+                  (v1, v2, v3, v4, v5) -> k1 * k2
+              in
+              switch v15
+                | 0 -> cont k7 ()
+                | 1 -> cont k2 pop(reraise k2)
+                         (camlStdlib__Array__Pmakeblock2754_37)
+            in
+            switch v12
+              | 0 -> cont k6 ()
+              | 1 -> cont k2 pop(reraise k2)
+                       (camlStdlib__Array__Pmakeblock2754_37)
+          in
+          switch v11
+            | 0 -> cont k5 ()
+            | 1 -> cont k2 pop(reraise k2)
+                     (camlStdlib__Array__Pmakeblock2754_37)
+        in
+        switch v8
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__Array__Pmakeblock2754_37)
+      in
+      switch v7
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2) (camlStdlib__Array__Pmakeblock2754_37)
+    camlStdlib__Array__fill_6_80_code (v1,
+      v2,
+      v3,
+      v4) v5 -> k1 * k2 =
+      let v6 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v7 = Int_comp tagged_imm lt (v3, 0) in
+        let_cont k4 () =
+          let v8 = Array_length (v1) in
+          let v9 = Int_arith tagged_imm sub (v8, v3) in
+          let v10 = Int_comp tagged_imm gt (v2, v9) in
+          let_cont k5 () =
+            apply direct(caml_array_fill (a C function)) caml_array_fill (v1,
+              v2, v3, v4) -> k1 * k2
+          in
+          switch v10
+            | 0 -> cont k5 ()
+            | 1 -> cont k2 pop(reraise k2)
+                     (camlStdlib__Array__Pmakeblock2712_35)
+        in
+        switch v7
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__Array__Pmakeblock2712_35)
+      in
+      switch v6
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2) (camlStdlib__Array__Pmakeblock2712_35)
+    camlStdlib__Array__copy_3_77_code (v1) v2 -> k1 * k2 =
+      let v3 = Array_length (v1) in
+      let v4 = Phys_equal eq (v3, 0) in
+      let_cont k3 () =
+        apply direct(caml_array_sub (a C function)) caml_array_sub (v1, 0,
+          v3) -> k1 * k2
+      in
+      switch v4
+        | 0 -> cont k3 ()
+        | 1 -> cont k1 (camlStdlib__Array__empty_array_2)
+    camlStdlib__Array__sub_5_79_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let v5 = Int_comp tagged_imm lt (v2, 0) in
+      let_cont k3 () =
+        let v6 = Int_comp tagged_imm lt (v3, 0) in
+        let_cont k4 () =
+          let v7 = Array_length (v1) in
+          let v8 = Int_arith tagged_imm sub (v7, v3) in
+          let v9 = Int_comp tagged_imm gt (v2, v8) in
+          let_cont k5 () =
+            apply direct(caml_array_sub (a C function)) caml_array_sub (v1,
+              v2, v3) -> k1 * k2
+          in
+          switch v9
+            | 0 -> cont k5 ()
+            | 1 -> cont k2 pop(reraise k2)
+                     (camlStdlib__Array__Pmakeblock2679_33)
+        in
+        switch v6
+          | 0 -> cont k4 ()
+          | 1 -> cont k2 pop(reraise k2)
+                   (camlStdlib__Array__Pmakeblock2679_33)
+      in
+      switch v5
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2) (camlStdlib__Array__Pmakeblock2679_33)
+    camlStdlib__Array__fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73_73_code stub (v1) v2 -> k1 * k2 =
+      apply direct(caml_array_concat (a C function)) caml_array_concat (v1)
+        -> k1 * k2
+    camlStdlib__Array__append_4_78_code (v1,
+      v2) v3 -> k1 * k2 =
+      let v4 = Array_length (v1) in
+      let v5 = Phys_equal eq (v4, 0) in
+      let_cont k3 () =
+        let v6 = Array_length (v2) in
+        let v7 = Phys_equal eq (v6, 0) in
+        let_cont k4 () =
+          apply direct(caml_array_append (a C function)) caml_array_append
+            (v1, v2) -> k1 * k2
+        in
+        let_cont k5 () =
+          apply direct(caml_array_sub (a C function)) caml_array_sub (v1, 0,
+            v4) -> k1 * k2
+        in
+        switch v7
+          | 0 -> cont k4 ()
+          | 1 -> cont k5 ()
+      in
+      let_cont k6 () =
+        let v8 = Array_length (v2) in
+        let v9 = Phys_equal eq (v8, 0) in
+        let_cont k7 () =
+          apply direct(caml_array_sub (a C function)) caml_array_sub (v2, 0,
+            v8) -> k1 * k2
+        in
+        switch v9
+          | 0 -> cont k7 ()
+          | 1 -> cont k1 (camlStdlib__Array__empty_array_2)
+      in
+      switch v5
+        | 0 -> cont k3 ()
+        | 1 -> cont k6 ()
+    camlStdlib__Array__make_matrix_1_75_code (v1,
+      v2,
+      v3) v4 -> k1 * k2 =
+      let_cont k3 () =
+        let_cont k4 (v5) =
+          let v6 = Int_comp tagged_imm gt (v2, 0) in
+          let_cont k5 () =
+            let v7 = Int_arith tagged_imm sub (v1, 1) in
+            let v8 = Int_comp tagged_imm le (0, v7) in
+            let_cont k6 () =
+              let v9 = Untag_immediate (v7) in
+              let v10 = Num_conv imm int64 (v9) in
+              let_cont rec
+                k7 (v11) =
+                let v12 = Num_conv int64 imm (v11) in
+                let v13 = Tag_immediate (v12) in
+                let_cont k8 (v14) =
+                  let v15 = Array_set values values (v5, v13, v14) in
+                  let v16 = Int_arith int64 add (v11, <const>) in
+                  let v17 = Int_comp int64 le (v16, v10) in
+                  switch v17
+                    | 0 -> cont k1 (v5)
+                    | 1 -> cont k7 (v16)
+                in
+                apply direct(caml_array_make (a C function)) caml_array_make
+                  (v2, v3) -> k8 * k2
+              in
+              cont k7 (<const>)
+            in
+            switch v8
+              | 0 -> cont k1 (v5)
+              | 1 -> cont k6 ()
+          in
+          switch v6
+            | 0 -> cont k1 (v5)
+            | 1 -> cont k5 ()
+        in
+        apply direct(caml_array_make (a C function)) caml_array_make (v1,
+          camlStdlib__Array__empty_array_2) -> k4 * k2
+      in
+      let v18 = Int_comp tagged_imm lt (v2, 0) in
+      switch v18
+        | 0 -> cont k3 ()
+        | 1 -> cont k2 pop(reraise k2) (camlStdlib__Array__Pmakeblock2503_27)
+    camlStdlib__Array__partial_aux_68_68_code stub (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Stdlib__Array.partial_aux_68).Stdlib__Array.aux_70 in
+      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__Array__partial_aux_64_64_code stub (v1) v2 -> k1 * k2 =
+      let v3 = v2.(Stdlib__Array.partial_aux_64).Stdlib__Array.aux_66 in
+      apply known_arity v3 (0, v1) -> k1 * k2
+    camlStdlib__Array__init_0_24 = closure Stdlib__Array.init_0 of
+      {Stdlib__Array.init_0 = camlStdlib__Array__init_0_74_code}
+      at {Stdlib__Array.init_0 = camlStdlib__Array__init_0_24} {}
+    camlStdlib__Array__make_matrix_1_26 = closure Stdlib__Array.make_matrix_1 of
+      {Stdlib__Array.make_matrix_1 = camlStdlib__Array__make_matrix_1_75_code}
+      at {Stdlib__Array.make_matrix_1 = camlStdlib__Array__make_matrix_1_26}
+      {}
+    camlStdlib__Array__init_matrix_2_28 = closure Stdlib__Array.init_matrix_2 of
+      {Stdlib__Array.init_matrix_2 = camlStdlib__Array__init_matrix_2_76_code}
+      at {Stdlib__Array.init_matrix_2 = camlStdlib__Array__init_matrix_2_28}
+      {}
+    camlStdlib__Array__append_4_31 = closure Stdlib__Array.append_4 of
+      {Stdlib__Array.append_4 = camlStdlib__Array__append_4_78_code}
+      at {Stdlib__Array.append_4 = camlStdlib__Array__append_4_31} {}
+    camlStdlib__Array__fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73_83 = closure Stdlib__Array.fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73 of
+      {Stdlib__Array.fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73 = camlStdlib__Array__fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73_73_code}
+      at {Stdlib__Array.fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73 = camlStdlib__Array__fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73_83}
+      {}
+    camlStdlib__Array__sub_5_32 = closure Stdlib__Array.sub_5 of
+      {Stdlib__Array.sub_5 = camlStdlib__Array__sub_5_79_code}
+      at {Stdlib__Array.sub_5 = camlStdlib__Array__sub_5_32} {}
+    camlStdlib__Array__copy_3_30 = closure Stdlib__Array.copy_3 of
+      {Stdlib__Array.copy_3 = camlStdlib__Array__copy_3_77_code}
+      at {Stdlib__Array.copy_3 = camlStdlib__Array__copy_3_30} {}
+    camlStdlib__Array__fill_6_34 = closure Stdlib__Array.fill_6 of
+      {Stdlib__Array.fill_6 = camlStdlib__Array__fill_6_80_code}
+      at {Stdlib__Array.fill_6 = camlStdlib__Array__fill_6_34} {}
+    camlStdlib__Array__blit_7_36 = closure Stdlib__Array.blit_7 of
+      {Stdlib__Array.blit_7 = camlStdlib__Array__blit_7_81_code}
+      at {Stdlib__Array.blit_7 = camlStdlib__Array__blit_7_36} {}
+    camlStdlib__Array__to_list_16_48 = closure Stdlib__Array.to_list_16 of
+      {Stdlib__Array.to_list_16 = camlStdlib__Array__to_list_16_90_code}
+      at {Stdlib__Array.to_list_16 = camlStdlib__Array__to_list_16_48} {}
+    camlStdlib__Array__of_list_19_50 = closure Stdlib__Array.of_list_19 of
+      {Stdlib__Array.of_list_19 = camlStdlib__Array__of_list_19_93_code}
+      at {Stdlib__Array.of_list_19 = camlStdlib__Array__of_list_19_50} {}
+    camlStdlib__Array__equal_21_51 = closure Stdlib__Array.equal_21 of
+      {Stdlib__Array.equal_21 = camlStdlib__Array__equal_21_95_code}
+      at {Stdlib__Array.equal_21 = camlStdlib__Array__equal_21_51} {}
+    camlStdlib__Array__compare_23_53 = closure Stdlib__Array.compare_23 of
+      {Stdlib__Array.compare_23 = camlStdlib__Array__compare_23_96_code}
+      at {Stdlib__Array.compare_23 = camlStdlib__Array__compare_23_53} {}
+    camlStdlib__Array__iter_8_38 = closure Stdlib__Array.iter_8 of
+      {Stdlib__Array.iter_8 = camlStdlib__Array__iter_8_82_code}
+      at {Stdlib__Array.iter_8 = camlStdlib__Array__iter_8_38} {}
+    camlStdlib__Array__iteri_14_46 = closure Stdlib__Array.iteri_14 of
+      {Stdlib__Array.iteri_14 = camlStdlib__Array__iteri_14_88_code}
+      at {Stdlib__Array.iteri_14 = camlStdlib__Array__iteri_14_46} {}
+    camlStdlib__Array__map_10_41 = closure Stdlib__Array.map_10 of
+      {Stdlib__Array.map_10 = camlStdlib__Array__map_10_84_code}
+      at {Stdlib__Array.map_10 = camlStdlib__Array__map_10_41} {}
+    camlStdlib__Array__map_inplace_11_42 = closure Stdlib__Array.map_inplace_11 of
+      {Stdlib__Array.map_inplace_11 = camlStdlib__Array__map_inplace_11_85_code}
+      at {Stdlib__Array.map_inplace_11 = camlStdlib__Array__map_inplace_11_42}
+      {}
+    camlStdlib__Array__mapi_15_47 = closure Stdlib__Array.mapi_15 of
+      {Stdlib__Array.mapi_15 = camlStdlib__Array__mapi_15_89_code}
+      at {Stdlib__Array.mapi_15 = camlStdlib__Array__mapi_15_47} {}
+    camlStdlib__Array__mapi_inplace_12_43 = closure Stdlib__Array.mapi_inplace_12 of
+      {Stdlib__Array.mapi_inplace_12 = camlStdlib__Array__mapi_inplace_12_86_code}
+      at {Stdlib__Array.mapi_inplace_12 = camlStdlib__Array__mapi_inplace_12_43}
+      {}
+    camlStdlib__Array__fold_left_24_54 = closure Stdlib__Array.fold_left_24 of
+      {Stdlib__Array.fold_left_24 = camlStdlib__Array__fold_left_24_97_code}
+      at {Stdlib__Array.fold_left_24 = camlStdlib__Array__fold_left_24_54} {}
+    camlStdlib__Array__fold_left_map_25_55 = closure Stdlib__Array.fold_left_map_25 of
+      {Stdlib__Array.fold_left_map_25 = camlStdlib__Array__fold_left_map_25_98_code}
+      at {Stdlib__Array.fold_left_map_25 = camlStdlib__Array__fold_left_map_25_55}
+      {}
+    camlStdlib__Array__fold_right_26_56 = closure Stdlib__Array.fold_right_26 of
+      {Stdlib__Array.fold_right_26 = camlStdlib__Array__fold_right_26_99_code}
+      at {Stdlib__Array.fold_right_26 = camlStdlib__Array__fold_right_26_56}
+      {}
+    camlStdlib__Array__iter2_9_39 = closure Stdlib__Array.iter2_9 of
+      {Stdlib__Array.iter2_9 = camlStdlib__Array__iter2_9_83_code}
+      at {Stdlib__Array.iter2_9 = camlStdlib__Array__iter2_9_39} {}
+    camlStdlib__Array__map2_13_44 = closure Stdlib__Array.map2_13 of
+      {Stdlib__Array.map2_13 = camlStdlib__Array__map2_13_87_code}
+      at {Stdlib__Array.map2_13 = camlStdlib__Array__map2_13_44} {}
+    camlStdlib__Array__for_all_29_58 = closure Stdlib__Array.for_all_29 of
+      {Stdlib__Array.for_all_29 = camlStdlib__Array__for_all_29_102_code}
+      at {Stdlib__Array.for_all_29 = camlStdlib__Array__for_all_29_58} {}
+    camlStdlib__Array__exists_27_57 = closure Stdlib__Array.exists_27 of
+      {Stdlib__Array.exists_27 = camlStdlib__Array__exists_27_100_code}
+      at {Stdlib__Array.exists_27 = camlStdlib__Array__exists_27_57} {}
+    camlStdlib__Array__for_all2_31_60 = closure Stdlib__Array.for_all2_31 of
+      {Stdlib__Array.for_all2_31 = camlStdlib__Array__for_all2_31_104_code}
+      at {Stdlib__Array.for_all2_31 = camlStdlib__Array__for_all2_31_60} {}
+    camlStdlib__Array__exists2_33_62 = closure Stdlib__Array.exists2_33 of
+      {Stdlib__Array.exists2_33 = camlStdlib__Array__exists2_33_106_code}
+      at {Stdlib__Array.exists2_33 = camlStdlib__Array__exists2_33_62} {}
+    camlStdlib__Array__mem_35_64 = closure Stdlib__Array.mem_35 of
+      {Stdlib__Array.mem_35 = camlStdlib__Array__mem_35_108_code}
+      at {Stdlib__Array.mem_35 = camlStdlib__Array__mem_35_64} {}
+    camlStdlib__Array__memq_37_65 = closure Stdlib__Array.memq_37 of
+      {Stdlib__Array.memq_37 = camlStdlib__Array__memq_37_110_code}
+      at {Stdlib__Array.memq_37 = camlStdlib__Array__memq_37_65} {}
+    camlStdlib__Array__find_opt_39_66 = closure Stdlib__Array.find_opt_39 of
+      {Stdlib__Array.find_opt_39 = camlStdlib__Array__find_opt_39_112_code}
+      at {Stdlib__Array.find_opt_39 = camlStdlib__Array__find_opt_39_66} {}
+    camlStdlib__Array__find_index_41_67 = closure Stdlib__Array.find_index_41 of
+      {Stdlib__Array.find_index_41 = camlStdlib__Array__find_index_41_114_code}
+      at {Stdlib__Array.find_index_41 = camlStdlib__Array__find_index_41_67}
+      {}
+    camlStdlib__Array__find_map_43_68 = closure Stdlib__Array.find_map_43 of
+      {Stdlib__Array.find_map_43 = camlStdlib__Array__find_map_43_116_code}
+      at {Stdlib__Array.find_map_43 = camlStdlib__Array__find_map_43_68} {}
+    camlStdlib__Array__find_mapi_45_69 = closure Stdlib__Array.find_mapi_45 of
+      {Stdlib__Array.find_mapi_45 = camlStdlib__Array__find_mapi_45_118_code}
+      at {Stdlib__Array.find_mapi_45 = camlStdlib__Array__find_mapi_45_69} {}
+    camlStdlib__Array__split_47_70 = closure Stdlib__Array.split_47 of
+      {Stdlib__Array.split_47 = camlStdlib__Array__split_47_120_code}
+      at {Stdlib__Array.split_47 = camlStdlib__Array__split_47_70} {}
+    camlStdlib__Array__combine_48_71 = closure Stdlib__Array.combine_48 of
+      {Stdlib__Array.combine_48 = camlStdlib__Array__combine_48_121_code}
+      at {Stdlib__Array.combine_48 = camlStdlib__Array__combine_48_71} {}
+    camlStdlib__Array__sort_49_74 = closure Stdlib__Array.sort_49 of
+      {Stdlib__Array.sort_49 = camlStdlib__Array__sort_49_122_code}
+      at {Stdlib__Array.sort_49 = camlStdlib__Array__sort_49_74} {}
+    camlStdlib__Array__stable_sort_54_75 = closure Stdlib__Array.stable_sort_54 of
+      {Stdlib__Array.stable_sort_54 = camlStdlib__Array__stable_sort_54_127_code}
+      at {Stdlib__Array.stable_sort_54 = camlStdlib__Array__stable_sort_54_75}
+      {}
+    camlStdlib__Array__shuffle_60_77 = closure Stdlib__Array.shuffle_60 of
+      {Stdlib__Array.shuffle_60 = camlStdlib__Array__shuffle_60_133_code}
+      at {Stdlib__Array.shuffle_60 = camlStdlib__Array__shuffle_60_77} {}
+    camlStdlib__Array__to_seq_61_78 = closure Stdlib__Array.to_seq_61 of
+      {Stdlib__Array.to_seq_61 = camlStdlib__Array__to_seq_61_134_code}
+      at {Stdlib__Array.to_seq_61 = camlStdlib__Array__to_seq_61_78} {}
+    camlStdlib__Array__to_seqi_65_79 = closure Stdlib__Array.to_seqi_65 of
+      {Stdlib__Array.to_seqi_65 = camlStdlib__Array__to_seqi_65_136_code}
+      at {Stdlib__Array.to_seqi_65 = camlStdlib__Array__to_seqi_65_79} {}
+    camlStdlib__Array__of_seq_71_81 = closure Stdlib__Array.of_seq_71 of
+      {Stdlib__Array.of_seq_71 = camlStdlib__Array__of_seq_71_140_code}
+      at {Stdlib__Array.of_seq_71 = camlStdlib__Array__of_seq_71_81} {}
+    camlStdlib__Array__empty_block_0 = Block 0 ()
+    camlStdlib__Array = Block 0 (camlStdlib__Array__init_0_24,
+      camlStdlib__Array__make_matrix_1_26,
+      camlStdlib__Array__init_matrix_2_28, camlStdlib__Array__append_4_31,
+      camlStdlib__Array__fn[/workspace_root/stdlib/build/array.ml:49,0--115]_73_83,
+      camlStdlib__Array__sub_5_32, camlStdlib__Array__copy_3_30,
+      camlStdlib__Array__fill_6_34, camlStdlib__Array__blit_7_36,
+      camlStdlib__Array__to_list_16_48, camlStdlib__Array__of_list_19_50,
+      camlStdlib__Array__equal_21_51, camlStdlib__Array__compare_23_53,
+      camlStdlib__Array__iter_8_38, camlStdlib__Array__iteri_14_46,
+      camlStdlib__Array__map_10_41, camlStdlib__Array__map_inplace_11_42,
+      camlStdlib__Array__mapi_15_47, camlStdlib__Array__mapi_inplace_12_43,
+      camlStdlib__Array__fold_left_24_54,
+      camlStdlib__Array__fold_left_map_25_55,
+      camlStdlib__Array__fold_right_26_56, camlStdlib__Array__iter2_9_39,
+      camlStdlib__Array__map2_13_44, camlStdlib__Array__for_all_29_58,
+      camlStdlib__Array__exists_27_57, camlStdlib__Array__for_all2_31_60,
+      camlStdlib__Array__exists2_33_62, camlStdlib__Array__mem_35_64,
+      camlStdlib__Array__memq_37_65, camlStdlib__Array__find_opt_39_66,
+      camlStdlib__Array__find_index_41_67, camlStdlib__Array__find_map_43_68,
+      camlStdlib__Array__find_mapi_45_69, camlStdlib__Array__split_47_70,
+      camlStdlib__Array__combine_48_71, camlStdlib__Array__sort_49_74,
+      camlStdlib__Array__stable_sort_54_75,
+      camlStdlib__Array__stable_sort_54_75, camlStdlib__Array__shuffle_60_77,
+      camlStdlib__Array__to_seq_61_78, camlStdlib__Array__to_seqi_65_79,
+      camlStdlib__Array__of_seq_71_81, camlStdlib__Array__empty_block_0)
+    camlStdlib__Array__Pmakeblock2754_37 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__Array__immstring_7)
+    camlStdlib__Array__Pmakeblock2712_35 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__Array__immstring_6)
+    camlStdlib__Array__Pmakeblock2679_33 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__Array__immstring_5)
+    camlStdlib__Array__Pmakeblock2503_27 = Block 0
+      (caml_exn_Invalid_argument, camlStdlib__Array__immstring_3)
+  before Simplify, after the prefix, with its 12 imports (96 steps): 
+returns
+  [0: <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>; <fun>;
+   <fun>; <fun>; <fun>; [0: ]]
+  after Simplify, after the prefix, with its 12 imports (2 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    [0: ]]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too

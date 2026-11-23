@@ -1,0 +1,12 @@
+let $camlSeveral_loaded__first_const_0 = Block 0 () in
+(let `*match*/18` = %block_load.[`2`] ($Several.camlSeveral) in
+ let Pmixedfield/19 = %block_load.[`0`] (`*match*/18`) in
+ cont k/8 (Pmixedfield/19))
+  where k/8 (one/16 : imm tagged) =
+    let Pmakeblock/17 = %block.[`0`].`toplevel` (one/16) in
+    cont k/7 (Pmakeblock/17)
+  where k/7 define_root_symbol (module_block/14) =
+    let field_0/15 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/14)
+    in
+    let $camlSeveral_loaded = Block 0 (field_0/15) in
+    cont done ($camlSeveral_loaded)

@@ -1,0 +1,20 @@
+(* MUST PASS the check of static names, by the rule for a handler that the
+   body has no way to: it is given all that the body binds. k_dead is never
+   applied; its handler allocates a closure of n_0, which one arm of the body
+   binds. The body is live: it goes on to k_end on both arms. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+(((switch v
+     | 0 -> k_end (0)
+     | 1 -> k_b)
+    where k_b =
+      let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+        cont k (x)
+      in
+      cont k_end (1))
+   where k_dead (z) =
+     let f = closure n_0 @n &toplevel in
+     cont k_end (f))
+  where k_end (r) =
+    let $camlCode_handler_never_entered = Block 0 (r) in
+    cont done ($camlCode_handler_never_entered)

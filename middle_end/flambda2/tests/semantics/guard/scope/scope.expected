@@ -1,0 +1,616 @@
+== code_bound_after_call.fl (must be refused)
+-- alone
+code_bound_after_call.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_bound_after_call.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_bound_after_call.fl: the term after is read from after.fl; Simplify is not run
+code_bound_after_call.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_bound_after_call.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_bound_before_call.fl (must pass)
+-- alone
+code_bound_before_call.fl:
+  before Simplify (15 steps): returns [0: <fun>]
+  after Simplify (15 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+code_bound_before_call.fl: the term after is read from after.fl; Simplify is not run
+code_bound_before_call.fl:
+  before Simplify (15 steps): returns [0: <fun>]
+  after Simplify (15 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_handler_never_entered.fl (must pass)
+-- alone
+code_handler_never_entered.fl:
+  before Simplify (10 steps): returns [0: 1]
+  after Simplify (4 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+code_handler_never_entered.fl: the term after is read from after.fl; Simplify is not run
+code_handler_never_entered.fl:
+  before Simplify (10 steps): returns [0: 1]
+  after Simplify (10 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_in_code_one_entry_binds.fl (must be refused)
+-- alone
+code_in_code_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_in_code_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_in_code_one_entry_binds.fl: the term after is read from after.fl; Simplify is not run
+code_in_code_one_entry_binds.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_in_code_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_join_bound_at_head_of_body.fl (must pass)
+-- alone
+code_join_bound_at_head_of_body.fl:
+  before Simplify (13 steps): returns [0: <fun>]
+  after Simplify (7 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+the standard error: nothing
+exit status: 0
+-- both
+code_join_bound_at_head_of_body.fl: the term after is read from after.fl; Simplify is not run
+code_join_bound_at_head_of_body.fl:
+  before Simplify (13 steps): returns [0: <fun>]
+  after Simplify (13 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_join_bound_at_head_of_body_called_directly.fl (must pass)
+-- alone
+code_join_bound_at_head_of_body_called_directly.fl:
+  before Simplify (14 steps): returns [0: 5]
+  after Simplify (11 steps): returns [0: 5]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+code_join_bound_at_head_of_body_called_directly.fl: the term after is read from after.fl; Simplify is not run
+code_join_bound_at_head_of_body_called_directly.fl:
+  before Simplify (14 steps): returns [0: 5]
+  after Simplify (14 steps): returns [0: 5]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 1 before, 1 after
+  the same
+  calls outside code once those of known code are inlined: 1
+  not validated
+the standard error: nothing
+exit status: 0
+== code_join_one_entry_binds.fl (must be refused)
+-- alone
+code_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_join_one_entry_binds.fl: the term after is read from after.fl; Simplify is not run
+code_join_one_entry_binds.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_join_one_entry_binds_called_directly.fl (must be refused)
+-- alone
+code_join_one_entry_binds_called_directly.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_join_one_entry_binds_called_directly.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_join_one_entry_binds_called_directly.fl: the term after is read from after.fl; Simplify is not run
+code_join_one_entry_binds_called_directly.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_join_one_entry_binds_called_directly.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_join_other_name_on_one_way.fl (must be refused)
+-- alone
+code_join_other_name_on_one_way.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_join_other_name_on_one_way.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_join_other_name_on_one_way.fl: the term after is read from after.fl; Simplify is not run
+code_join_other_name_on_one_way.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_join_other_name_on_one_way.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_join_other_name_on_one_way_not_mentioned.fl (must pass)
+-- alone
+code_join_other_name_on_one_way_not_mentioned.fl:
+  before Simplify (14 steps): returns [0: <fun>]
+  after Simplify (7 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+code_join_other_name_on_one_way_not_mentioned.fl: the term after is read from after.fl; Simplify is not run
+code_join_other_name_on_one_way_not_mentioned.fl:
+  before Simplify (14 steps): returns [0: <fun>]
+  after Simplify (14 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_loop_bound_at_head_of_body.fl (must pass)
+-- alone
+code_loop_bound_at_head_of_body.fl:
+  before Simplify (23 steps): returns [0: <fun>]
+  after Simplify (18 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+code_loop_bound_at_head_of_body.fl: the term after is read from after.fl; Simplify is not run
+code_loop_bound_at_head_of_body.fl:
+  before Simplify (23 steps): returns [0: <fun>]
+  after Simplify (23 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_loop_one_entry_binds.fl (must be refused)
+-- alone
+code_loop_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_loop_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_loop_one_entry_binds.fl: the term after is read from after.fl; Simplify is not run
+code_loop_one_entry_binds.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_loop_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== code_through_inner_join_handler_binds.fl (must pass)
+-- alone
+code_through_inner_join_handler_binds.fl:
+  before Simplify (15 steps): returns [0: <fun>]
+  after Simplify (5 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised
+the standard error: nothing
+exit status: 0
+-- both
+code_through_inner_join_handler_binds.fl: the term after is read from after.fl; Simplify is not run
+code_through_inner_join_handler_binds.fl:
+  before Simplify (15 steps): returns [0: <fun>]
+  after Simplify (15 steps): returns [0: <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+== code_through_inner_join_one_entry_binds.fl (must be refused)
+-- alone
+code_through_inner_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+code_through_inner_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+code_through_inner_join_one_entry_binds.fl: the term after is read from after.fl; Simplify is not run
+code_through_inner_join_one_entry_binds.fl: the term after Simplify mentions a code id that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+code_through_inner_join_one_entry_binds.fl: not checked: the term mentions a code id where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_bound_before_loop_used_after_loop.fl (must pass)
+-- alone
+symbol_bound_before_loop_used_after_loop.fl:
+  before Simplify (20 steps): returns [0: 2]
+  after Simplify (17 steps): returns [0: 2]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+symbol_bound_before_loop_used_after_loop.fl: the term after is read from after.fl; Simplify is not run
+symbol_bound_before_loop_used_after_loop.fl:
+  before Simplify (20 steps): returns [0: 2]
+  after Simplify (20 steps): returns [0: 2]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_handler_never_entered.fl (must pass)
+-- alone
+the standard error, its first line: >> Fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
+exit status: 2
+-- both
+symbol_handler_never_entered.fl: the term after is read from after.fl; Simplify is not run
+symbol_handler_never_entered.fl:
+  before Simplify (10 steps): returns [0: 1]
+  after Simplify (10 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_join_bound_at_head_of_body.fl (must pass)
+-- alone
+symbol_join_bound_at_head_of_body.fl:
+  before Simplify (13 steps): returns [0: 1]
+  after Simplify (2 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed
+the standard error: nothing
+exit status: 0
+-- both
+symbol_join_bound_at_head_of_body.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_bound_at_head_of_body.fl:
+  before Simplify (13 steps): returns [0: 1]
+  after Simplify (13 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_join_one_entry_binds_as_argument.fl (must be refused)
+-- alone
+symbol_join_one_entry_binds_as_argument.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_join_one_entry_binds_as_argument.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_join_one_entry_binds_as_argument.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_one_entry_binds_as_argument.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_join_one_entry_binds_as_argument.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_join_one_entry_binds_in_static_field.fl (must be refused)
+-- alone
+symbol_join_one_entry_binds_in_static_field.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_join_one_entry_binds_in_static_field.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_join_one_entry_binds_in_static_field.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_one_entry_binds_in_static_field.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_join_one_entry_binds_in_static_field.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_join_one_entry_binds_run_binds.fl (must be refused)
+-- alone
+symbol_join_one_entry_binds_run_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_join_one_entry_binds_run_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_join_one_entry_binds_run_binds.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_one_entry_binds_run_binds.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_join_one_entry_binds_run_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_join_other_name_on_one_way.fl (must be refused)
+-- alone
+symbol_join_other_name_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_join_other_name_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_join_other_name_on_one_way.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_other_name_on_one_way.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_join_other_name_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_join_other_name_on_one_way_not_mentioned.fl (must pass)
+-- alone
+the standard error, its first line: >> Fatal error: [Let] binding symbols is only allowed at the toplevel of compilation units (not even at the toplevel of function bodies):
+exit status: 2
+-- both
+symbol_join_other_name_on_one_way_not_mentioned.fl: the term after is read from after.fl; Simplify is not run
+symbol_join_other_name_on_one_way_not_mentioned.fl:
+  before Simplify (14 steps): returns [0: 1]
+  after Simplify (14 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_loop_bound_at_head_of_body.fl (must pass)
+-- alone
+symbol_loop_bound_at_head_of_body.fl:
+  before Simplify (25 steps): returns [0: 2]
+  after Simplify (18 steps): returns [0: 2]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  not validated
+the standard error: nothing
+exit status: 0
+-- both
+symbol_loop_bound_at_head_of_body.fl: the term after is read from after.fl; Simplify is not run
+symbol_loop_bound_at_head_of_body.fl:
+  before Simplify (25 steps): returns [0: 2]
+  after Simplify (25 steps): returns [0: 2]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_loop_one_entry_binds_used_after_loop.fl (must be refused)
+-- alone
+symbol_loop_one_entry_binds_used_after_loop.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_loop_one_entry_binds_used_after_loop.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_loop_one_entry_binds_used_after_loop.fl: the term after is read from after.fl; Simplify is not run
+symbol_loop_one_entry_binds_used_after_loop.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_loop_one_entry_binds_used_after_loop.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_pushed_handler_never_applied.fl (must pass)
+-- alone
+symbol_pushed_handler_never_applied.fl:
+  before Simplify (8 steps): returns [0: 0]
+  after Simplify (2 steps): returns [0: 0]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed
+the standard error: nothing
+exit status: 0
+-- both
+symbol_pushed_handler_never_applied.fl: the term after is read from after.fl; Simplify is not run
+symbol_pushed_handler_never_applied.fl:
+  before Simplify (8 steps): returns [0: 0]
+  after Simplify (8 steps): returns [0: 0]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_raise_before_binding_on_one_way.fl (must be refused)
+-- alone
+symbol_raise_before_binding_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_raise_before_binding_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_raise_before_binding_on_one_way.fl: the term after is read from after.fl; Simplify is not run
+symbol_raise_before_binding_on_one_way.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_raise_before_binding_on_one_way.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_switch_arm_never_taken.fl (must be refused)
+-- alone
+symbol_switch_arm_never_taken.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_switch_arm_never_taken.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_switch_arm_never_taken.fl: the term after is read from after.fl; Simplify is not run
+symbol_switch_arm_never_taken.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_switch_arm_never_taken.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+== symbol_through_inner_join_handler_binds.fl (must pass)
+-- alone
+symbol_through_inner_join_handler_binds.fl:
+  before Simplify (15 steps): returns [0: 1]
+  after Simplify (2 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once normalised and unused static bindings removed
+the standard error: nothing
+exit status: 0
+-- both
+symbol_through_inner_join_handler_binds.fl: the term after is read from after.fl; Simplify is not run
+symbol_through_inner_join_handler_binds.fl:
+  before Simplify (15 steps): returns [0: 1]
+  after Simplify (15 steps): returns [0: 1]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same up to bound names
+the standard error: nothing
+exit status: 0
+== symbol_through_inner_join_one_entry_binds.fl (must be refused)
+-- alone
+symbol_through_inner_join_one_entry_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- both
+symbol_through_inner_join_one_entry_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0
+-- as the term after
+symbol_through_inner_join_one_entry_binds.fl: the term after is read from after.fl; Simplify is not run
+symbol_through_inner_join_one_entry_binds.fl: the term after Simplify mentions a symbol that is NOT IN SCOPE
+the standard error: nothing
+exit status: 1
+-- as the term before
+symbol_through_inner_join_one_entry_binds.fl: not checked: the term mentions a symbol where it is not in scope
+the standard error: nothing
+exit status: 0

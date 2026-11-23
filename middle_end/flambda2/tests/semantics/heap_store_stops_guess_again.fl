@@ -1,11 +1,13 @@
 (* heap_no_store_guess_again.fl with a store: three lines more, which make a
    block that can change at the toplevel of the unit, pass it through
-   [%opaque] and store into it. Both terms then have a primitive of the heap,
-   and each of the four liftings to symbols of the validation lifts nothing in
-   a term that it is given, where that term has one, whatever liftings the tool
-   guesses. The guess made again, which validates the unit without the store,
-   gives the same functions another guess: the unit is not validated, and the
-   line under the verdict says that the two terms have a primitive of the heap.
+   [%opaque] and store into it. Both terms then have a primitive of the heap
+   outside the bodies of their code, and each of the four liftings to symbols
+   of the validation lifts nothing in a term that it is given, where that
+   term has one there (decision D65), whatever liftings the tool guesses. The
+   guess made again, which validates the unit without the store, gives the
+   same functions another guess: the unit is not validated, and the line
+   under the verdict says that the two terms have a primitive of the heap and
+   do not pass the liftings' test of the heap.
 
    The second check, whose line begins "related once lifted", makes its
    liftings without the test of the heap. It comes to a guess made again too,
@@ -13,11 +15,13 @@
 
    What this does not show: that a guess made again can never lead the
    validation to accept a unit whose terms have a primitive of the heap. The
-   validation may accept such a unit where no lifting is needed. And the test
-   of a lifting is of the term that the lifting is given, not of the unit as
-   it was read: a rewrite before the lifting may have removed the primitive.
-   What a lifting does not do is lift in a term that has one when it is given
-   that term. *)
+   validation may accept such a unit where no lifting is needed, and a term
+   that has such primitives in the bodies of its code alone, and no call
+   outside them, passes the liftings' test of the heap. And the test of a
+   lifting is of the term that the lifting is given, not of the unit as it
+   was read: a rewrite before the lifting may have removed the primitive.
+   What a lifting does not do is lift in a term that does not pass the test
+   when it is given that term. *)
 let $camlHeap_store_stops_guess_again__first_const_0 = Block 0 () in
 (let code inline(never) size(21)
        by_match_0 (d/51 : imm tagged)

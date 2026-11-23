@@ -438,11 +438,14 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     simpl. exists 0. apply Rel_state_plain, rec_conts_plain. exact Hdc.
   - cbn [shadow_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m))
       eqn:Hkinds; [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m)); [ | exact I ].
     pose proof (bind_params_agree ps vs dv dv' Hagree) as Hbind.
     destruct (bind_params ps vs dv) as [bound | ],
       (bind_params ps vs dv') as [bound' | ] eqn:Hbound';

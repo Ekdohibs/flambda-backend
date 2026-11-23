@@ -1,0 +1,25 @@
+let $camlBody_with_a_call__first_const_0 = Block 0 () in
+(let code inline(always) size(22)
+       apply_if_0 (flag/27 : imm tagged, x/28 : imm tagged)
+         my_closure/29 &my_alloc_region/30 my_depth/31
+         -> k/14 * k/15
+         : imm tagged =
+   let next_depth/32 = rec_info (succ my_depth/31) in
+   (let untagged/33 = %untag_imm (flag/27) in
+    switch untagged/33
+      | 0 -> k/14 (x/28)
+      | 1 -> k/17)
+     where k/17 =
+       cont k/16
+     where k/16 =
+       apply ccall &my_alloc_region/30
+         ($`*extern*`.c_work : val? -> val?) (x/28) -> k/14 * k/15
+ in
+ let apply_if/34 = closure apply_if_0 @apply_if &toplevel in
+ let Pmakeblock/35 = %block.[`0`].`toplevel` (apply_if/34) in
+ cont k/13 (Pmakeblock/35))
+  where k/13 define_root_symbol (module_block/25) =
+    let field_0/26 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/25)
+    in
+    let $camlBody_with_a_call = Block 0 (field_0/26) in
+    cont done ($camlBody_with_a_call)

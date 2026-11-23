@@ -1,2 +1,11 @@
 partial_application_of_unboxed_float.ml
 unboxed_pair_parameter.ml
+vector_read_of_an_array_of_integers.ml
+vector_write_into_an_array_of_integers.ml
+unboxed_field_of_a_record.ml
+kind_of_a_record_with_an_unboxed_field.ml
+constant_record_with_an_unboxed_field.ml
+parameters_of_small_unboxed_integers.ml
+large_unboxed_integer.ml
+arrays_of_unboxed_products.ml
+write_into_a_local_array.ml

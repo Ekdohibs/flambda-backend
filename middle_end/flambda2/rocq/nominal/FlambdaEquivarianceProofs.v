@@ -573,6 +573,9 @@ Proof.
   rewrite rename_binds_statics.
   destruct (binds_statics body); [ reflexivity | ].
   destruct (negb _); [ reflexivity | ].
+  rewrite (values_of_subkinds_same_values (rename_static_env r statics)
+    statics vs _ eq_refl).
+  destruct (negb _); [ reflexivity | ].
   change [(rename_variable r my_closure, closure)]
     with (rename_env r [(my_closure, closure)]).
   rewrite bind_params_equivariant.
@@ -707,6 +710,10 @@ Proof.
     intros vs statics hp rd.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    rewrite (values_of_subkinds_same_values (rename_static_env r statics)
+      statics vs _ eq_refl).
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | reflexivity ].
     rewrite bind_params_equivariant.
     destruct (bind_params params vs def_vars) as [handler_vars | ]; simpl;

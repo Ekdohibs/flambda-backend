@@ -899,6 +899,38 @@ Qed.
 (* One [Let] of a handler made a parameter                                  *)
 (* ======================================================================== *)
 
+(* What [with_one_more] states: the entries of the handler before, but
+   no more of them than it has kinds. Values that are as many as
+   those kinds and of what the handler before states are of that
+   with one more value behind them. *)
+Lemma values_of_subkinds_firstn_app (statics : static_env)
+    (vs ws : list value) (sks : list param_subkind) :
+  values_of_subkinds statics vs sks = true ->
+  values_of_subkinds statics (vs ++ ws) (firstn (length vs) sks) = true.
+Proof.
+  revert sks. induction vs as [ | v vs IH]; intros sks H.
+  - reflexivity.
+  - destruct sks as [ | ps sks]; [ reflexivity | ].
+    cbn [length firstn app values_of_subkinds] in H |- *.
+    apply andb_true_iff in H. destruct H as [Hv Hrest].
+    rewrite Hv, (IH sks Hrest). reflexivity.
+Qed.
+
+Lemma with_one_more_subkinds (metadata : handler_metadata)
+    (kind : flambda_kind) (statics : static_env) (vs : list value)
+    (u : value) :
+  kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+  values_of_subkinds statics (vs ++ [u])
+    (hm_params_subkinds (with_one_more metadata kind))
+  = true.
+Proof.
+  intros Hkinds Hsubkinds. apply kinds_eqb_eq in Hkinds.
+  unfold with_one_more. cbn [hm_params_subkinds].
+  rewrite <- Hkinds, length_map.
+  exact (values_of_subkinds_firstn_app statics vs [u] _ Hsubkinds).
+Qed.
+
 Section One_parameter.
 
 (* The continuation, the position of the parameter that is read, the
@@ -921,6 +953,16 @@ Hypothesis params_distinct : distinct params = true.
 Hypothesis x_at_i : nth_error params i = Some x.
 Hypothesis kinds_one_more :
   hm_params_kinds metadata' = hm_params_kinds metadata ++ [kind].
+(* What the handler after states is no more than what the handler
+   before stated, and nothing of the new parameter: values that are as
+   many as the parameters before, and of what those state, are still of
+   what is stated with one value more behind them. *)
+Hypothesis subkinds_one_more :
+  ∀ (statics : static_env) (vs : list value) (u : value),
+    kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+    values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+    values_of_subkinds statics (vs ++ [u]) (hm_params_subkinds metadata')
+    = true.
 
 (* The new argument of an application has a value of the kind of the
    new parameter, which is as asked; or the handler before, entered
@@ -1372,6 +1414,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata0));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata0));
+      [ | exact I ].
     destruct (bind_params params0 vs vars) as [bound | ] eqn:Hbind;
       [ | exact I ].
     simpl.
@@ -1678,10 +1722,16 @@ Proof.
       [ | left; exists 1; simpl; rewrite step_apply_cont, Hvs;
           unfold apply_continuation; rewrite Hk, <- Hboxed; simpl;
           rewrite Hkinds; reflexivity ]);
+    (destruct
+       (values_of_subkinds statics vs (hm_params_subkinds metadata))
+       eqn:Hsubkinds;
+      [ | left; exists 1; simpl; rewrite step_apply_cont, Hvs;
+          unfold apply_continuation; rewrite Hk, <- Hboxed; simpl;
+          rewrite Hkinds, Hsubkinds; reflexivity ]);
     (destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
       [ | left; exists 1; simpl; rewrite step_apply_cont, Hvs;
           unfold apply_continuation; rewrite Hk, <- Hboxed; simpl;
-          rewrite Hkinds, Hbind; reflexivity ]);
+          rewrite Hkinds, Hsubkinds, Hbind; reflexivity ]);
     destruct (bind_params_value params vs def_vars bound i x Hbind x_at_i)
       as [v Hv];
     pose proof (bind_params_nth params vs def_vars bound i x v
@@ -1694,7 +1744,8 @@ Proof.
       step (State (Apply_cont ac) vars conts statics hp rd)
       = Step (State boxed bound def_conts statics hp rd)).
     { rewrite step_apply_cont, Hvs. unfold apply_continuation.
-      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hbind. reflexivity. }
+      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hsubkinds, Hbind.
+      reflexivity. }
     right. right. right.
     eapply refines_step;
       [ exact Hfirst
@@ -1704,13 +1755,15 @@ Proof.
     unfold apply_continuation. rewrite Hk, <- Hunboxed. simpl.
     rewrite kinds_one_more,
       (kinds_snoc vs u _ kind Hkinds (proj2 (kind_eqb_eq _ _) Hkind)),
+      (subkinds_one_more statics vs u Hkinds Hsubkinds),
       (bind_params_snoc params f u vs def_vars bound Hbind).
     reflexivity.
   - assert (Hfirst :
       step (State (Apply_cont ac) vars conts statics hp rd)
       = Step (State boxed bound def_conts statics hp rd)).
     { rewrite step_apply_cont, Hvs. unfold apply_continuation.
-      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hbind. reflexivity. }
+      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hsubkinds, Hbind.
+      reflexivity. }
     left. destruct (Hwrong bound def_conts Hx) as [n Hn]. exists (S n).
     rewrite run_succ, Hfirst. exact Hn.
   - (* recursive *)
@@ -1723,7 +1776,8 @@ Proof.
              (rec_closures [loop] def_vars def_conts ++ def_conts) statics
              hp rd)).
     { rewrite step_apply_cont, Hvs. unfold apply_continuation.
-      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hbind. reflexivity. }
+      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hsubkinds, Hbind.
+      reflexivity. }
     destruct
       (Henters def_vars bound
          (rec_closures [loop] def_vars def_conts ++ def_conts) statics hp rd vs
@@ -1745,6 +1799,7 @@ Proof.
         unfold apply_continuation. rewrite Hk, <- Hunboxed. simpl.
         rewrite kinds_one_more,
           (kinds_snoc vs u _ kind Hkinds (proj2 (kind_eqb_eq _ _) Hkind)),
+          (subkinds_one_more statics vs u Hkinds Hsubkinds),
           (bind_params_snoc params f u vs def_vars bound Hbind).
         reflexivity.
       * apply (State_rel true inside); [ exact Hrest | exact Hinside | ].
@@ -1761,7 +1816,8 @@ Proof.
              (rec_closures [loop] def_vars def_conts ++ def_conts) statics
              hp rd)).
     { rewrite step_apply_cont, Hvs. unfold apply_continuation.
-      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hbind. reflexivity. }
+      rewrite Hk, <- Hboxed. simpl. rewrite Hkinds, Hsubkinds, Hbind.
+      reflexivity. }
     left.
     destruct
       (Hwrong bound (rec_closures [loop] def_vars def_conts ++ def_conts) Hx)
@@ -1771,7 +1827,8 @@ Qed.
 
 Lemma state_rel_answers (s s' : state) :
   state_rel s s' -> answers state_rel s s'.
-Proof using extend_gives kinds_one_more params_distinct x_at_i.
+Proof using extend_gives kinds_one_more subkinds_one_more params_distinct
+  x_at_i.
   intros
     [inside known e e' vars conts conts' statics hp rd He Hfacts Hconts].
   destruct inside; unfold expr_rel in He;
@@ -2319,6 +2376,7 @@ Proof.
     (Let f kind (Prim (Unary p) [Var x]) rest) rest
     (fun known => extend_args known i p) (read_fits i p) Hdistinct
     (position_nth x params i Hposition) eq_refl
+    (with_one_more_subkinds metadata kind)
     (extend_args_gives i p f x kind rest)
     (fun def_vars bound conts0 statics0 _ rd_u vs u Hbind Hfits =>
        read_fits_refines f kind p x i params _ rest def_vars bound conts0

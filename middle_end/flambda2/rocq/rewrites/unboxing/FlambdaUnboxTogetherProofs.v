@@ -598,6 +598,23 @@ Proof.
   rewrite Hmoved. apply kinds_eqb_refl.
 Qed.
 
+(* And they are of what that metadata states. *)
+Lemma subkinds_unboxed (statics : static_env) (us : list nat)
+    (vs ws : list value) (metadata : handler_metadata) :
+  kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata) = true ->
+  values_of_subkinds statics vs (hm_params_subkinds metadata) = true ->
+  values_of_subkinds statics (kept_from us 0 vs ++ rev ws)
+    (hm_params_subkinds (together_metadata boxed us metadata))
+  = true.
+Proof.
+  intros Hkinds Hstated.
+  destruct (Untag.values_of_stated statics vs metadata Hkinds Hstated)
+    as [Hlength Hfirst].
+  unfold together_metadata. cbn [hm_params_subkinds].
+  apply Untag.values_of_subkinds_kept;
+    [ apply any_values_say_nothing | exact Hlength | exact Hfirst ].
+Qed.
+
 (* ======================================================================== *)
 (* What the rewrite keeps of the syntax                                     *)
 (* ======================================================================== *)
@@ -985,17 +1002,22 @@ Proof.
   - rewrite (plain_values vs ws Hrel). simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     apply Rel_state_plain, rec_conts_plain. exact Hdc.
   - cbn [together_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m))
       eqn:Hkinds; [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m)) eqn:Hstated;
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound; [ | exact I ].
     cbn [together_handler_ok] in Hok.
     apply andb_true_iff in Hok as [Hfits Hok].
     unfold handler_fits in Hfits.
     apply andb_true_iff in Hfits as [Hdistinct _].
-    rewrite (kinds_unboxed statics us vs ws m Hrel Hkinds).
+    rewrite (kinds_unboxed statics us vs ws m Hrel Hkinds),
+      (subkinds_unboxed statics us vs ws m Hkinds Hstated).
     destruct
       (bind_params_rel statics unboxed us ps vs ws dv dv' bound Hdistinct
          Hvars Hrel Hbound)

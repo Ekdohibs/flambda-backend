@@ -24,8 +24,8 @@ with the directory of the standard library as the last argument. The
 script then compiles the unit with that directory in the place of the
 compiler's own standard library (`-nostdlib -I <directory>`, and not
 `-nopervasives`), as far as the middle end, and with `X.mli` if it is
-beside `X.ml`. It refuses what it refuses of a unit of the directory
-above, and one thing more: a unit whose term names a symbol of
+beside `X.ml`. It refuses one thing, which it does not refuse of a
+unit of the directory above: a unit whose term names a symbol of
 another unit, which the text writes with the name of that unit before
 it. The script looks for that in the text of the term and does not
 parse it: it may refuse a unit for a string constant that reads as
@@ -33,8 +33,10 @@ such a symbol, and lets through no unit that has one. A predefined
 exception is not of another unit, and a unit that names one is kept:
 the tool runs it from its imports, as it does in the directory
 above. A function of the runtime, which the text writes as a symbol
-of a unit of its own, is refused with the others: the tool reads no
-term that calls one. `../script/library_function.ml` is a unit that
+of a unit of its own, is refused with the others: the tool converts
+a call of one, and a run that reaches the call is undefined there
+(`../../c_calls/` has such units), but the units kept here need
+nothing but themselves. `../script/library_function.ml` is a unit that
 the script refuses so, and `../script/library_function_not.ml` the
 same unit with a function of its own in the place of the library's.
 
@@ -118,14 +120,16 @@ conversion make of both.
 
 The text of the term after Simplify of four of the six on the
 fixed-width integers (`int64_identities`, `int64_laws_more`,
-`nativeint_identities`, `nativeint_laws_more`) is not read by the
-reader of the text of terms, which stops on a naked integer outside
-63 bits (discrepancy C1-11). The verdicts above are not touched: the
-check of a unit, as the rules of this directory run it, reads no
-text of its term after. The round trip of
-the conversion does, and says of the term after of those four that
-it is not read back; its rules run on this directory and keep the
-four answers (`../../roundtrip/README.md`).
+`nativeint_identities`, `nativeint_laws_more`) was not read by the
+reader of the text of terms, which stopped on a naked integer outside
+63 bits (discrepancy C1-11); the reader now reads the digits of such
+a constant as its suffix says. The verdicts above were not touched
+and are not: the check of a unit, as the rules of this directory run
+it, reads no text of its term after. The round trip of the
+conversion does, and said of the term after of those four that it
+was not read back; its rules run on this directory, and its four
+expected files with that answer are gone
+(`../../roundtrip/README.md`).
 
 The sources with the syntax of immutable arrays are not formatted
 (`../.ocamlformat-ignore`).

@@ -1,0 +1,30 @@
+(* MUST PASS the check of static names. The partner of
+   code_loop_one_entry_binds.fl (asked for by R3). The one binding of the code
+   n_0 stands at the head of the body of the recursive Let_cont, before the
+   test, and inside that Let_cont; both arms enter k_loop, whose handler
+   allocates a closure of n_0 as it does there. The binding is not in the
+   handler of the loop. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+    cont k (x)
+  in
+  ((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       cont k_loop (0)
+     where k_a =
+       cont k_loop (0)))
+   where rec k_loop (i) =
+     let f = closure n_0 @n &toplevel in
+     let more = %int_comp.`lt` (i, 1) in
+     (switch more
+        | 0 -> k_end (f)
+        | 1 -> k_next
+        where k_next =
+          let i2 = %int_barith.`add` (i, 1) in
+          cont k_loop (i2)))
+  where k_end (r) =
+    let $camlCode_loop_bound_at_head_of_body = Block 0 (r) in
+    cont done ($camlCode_loop_bound_at_head_of_body)

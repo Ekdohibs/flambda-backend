@@ -105,7 +105,7 @@
      block that is scanned, as the compiler's are; the machine makes a
      block of any tag. (Simplify also meets each argument that is a
      variable with the subkind that the primitive gives the field;
-     the model has no subkinds.)
+     the model's primitive gives none.)
    - An example with both: the first field of a pair that was just
      made is the first argument ([example_first_of_pair_statement]).
 

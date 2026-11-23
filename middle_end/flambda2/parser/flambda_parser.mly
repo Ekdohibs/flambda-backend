@@ -84,14 +84,15 @@ let make_tag ~loc:_ = function
   | _, Some _ ->
     Misc.fatal_errorf "No modifier allowed for tags"
 
+(* The digits are read as the suffix says: only those of an 8-bit and of a
+   16-bit integer are read as an OCaml integer. *)
 let make_const_int (i, m) : const =
-  let i' = int_of_string i in
   match m with
   | None -> Tagged_immediate i
   | Some 'i' -> Naked_immediate i
   | Some 'n' -> Naked_nativeint (Int64.of_string i)
-  | Some 's' -> Naked_int8 (Numeric_types.Int8.of_int i')
-  | Some 'S' -> Naked_int16 (Numeric_types.Int16.of_int i')
+  | Some 's' -> Naked_int8 (Numeric_types.Int8.of_int (int_of_string i))
+  | Some 'S' -> Naked_int16 (Numeric_types.Int16.of_int (int_of_string i))
   | Some 'l' -> Naked_int32 (Int32.of_string i)
   | Some 'L' -> Naked_int64 (Int64.of_string i)
   | Some c -> Misc.fatal_errorf "Unknown int modifier: %c" c
@@ -146,6 +147,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_ARRAY [@symbol "array"]
 %token KWD_AVAILABLE [@symbol "available"]
 %token KWD_BOXED [@symbol "boxed"]
+%token KWD_BUILTIN [@symbol "builtin"]
 %token KWD_CCALL  [@symbol "ccall"]
 %token KWD_MCALL  [@symbol "mcall"]
 %token KWD_SELF  [@symbol "self"]
@@ -160,6 +162,7 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_DELETED [@symbol "deleted"]
 %token KWD_DEPTH [@symbol "depth"]
 %token KWD_DIRECT [@symbol "direct"]
+%token KWD_EFFECT [@symbol "effect"]
 %token KWD_UNKNOWN_ARITY [@symbol "unknown_arity"]
 %token KWD_DO_NOT_INLINE [@symbol "do_not_inline"]
 %token KWD_DONE  [@symbol "done"]
@@ -192,13 +195,17 @@ let make_boxed_const_int (i, m) : static_data =
 %token KWD_NATIVEINT [@symbol "nativeint"]
 %token KWD_NEVER  [@symbol "never"]
 %token KWD_NEWER_VERSION_OF [@symbol "newer_version_of"]
+%token KWD_NO_COEFFECTS [@symbol "no_coeffects"]
+%token KWD_NO_EFFECTS [@symbol "no_effects"]
 %token KWD_NOALLOC [@symbol "noalloc"]
 %token KWD_NONTAIL [@symbol "nontail"]
 %token KWD_NOTRACE [@symbol "notrace"]
 %token KWD_NULL [@symbol "null"]
 %token KWD_OF     [@symbol "of"]
+%token KWD_ONLY_GENERATIVE_EFFECTS [@symbol "only_generative_effects"]
 %token KWD_POISON [@symbol "poison"]
 %token KWD_POP    [@symbol "pop"]
+%token KWD_PROBE  [@symbol "probe"]
 %token KWD_PRODUCT   [@symbol "product"]
 %token KWD_PUSH   [@symbol "push"]
 %token KWD_REC    [@symbol "rec"]
@@ -472,12 +479,15 @@ naked_number_kind:
   | KWD_IMM { Naked_immediate }
   | KWD_FLOAT { Naked_float }
   | KWD_FLOAT32 { Naked_float32 }
+  | KWD_INT8 { Naked_int8 }
+  | KWD_INT16 { Naked_int16 }
   | KWD_INT32 { Naked_int32 }
   | KWD_INT64 { Naked_int64 }
   | KWD_NATIVEINT { Naked_nativeint }
   | KWD_VEC128 { Naked_vec128 }
   | KWD_VEC256 { Naked_vec256 }
   | KWD_VEC512 { Naked_vec512 }
+  | KWD_MASK { Naked_mask }
 ;
 (*
 kind:
@@ -507,6 +517,10 @@ subkind:
   | KWD_INT32 KWD_BOXED { Boxed_int32 }
   | KWD_INT64 KWD_BOXED { Boxed_int64 }
   | KWD_NATIVEINT KWD_BOXED { Boxed_nativeint }
+  | KWD_VEC128 KWD_BOXED { Boxed_vec128 }
+  | KWD_VEC256 KWD_BOXED { Boxed_vec256 }
+  | KWD_VEC512 KWD_BOXED { Boxed_vec512 }
+  | KWD_MASK KWD_BOXED { Boxed_mask }
   | KWD_IMM KWD_TAGGED { Tagged_immediate }
   | KWD_FLOAT; CARET; num_fields = plain_int { Float_block { num_fields } }
   | LBRACK; ctors = ctors; RBRACK
@@ -671,6 +685,7 @@ apply_expr:
     inlined = option(inlined);
     inlining_state = option(inlining_state);
     nontail = boption(KWD_NONTAIL);
+    probe = option(probe);
     func = func_name_with_optional_arities;
     args = simple_args;
     MINUSGREATER
@@ -686,8 +701,22 @@ apply_expr:
           inlined;
           inlining_state;
           nontail;
+          probe;
           arities;
      } }
+;
+
+(* [enabled_at_init] is no keyword: it is the name of a parameter of
+   [%probe_is_enabled] too. *)
+probe:
+  | KWD_PROBE; LPAREN; name = STRING; word = option(IDENT); RPAREN
+    { let enabled_at_init =
+        match word with
+        | None -> false
+        | Some "enabled_at_init" -> true
+        | Some word -> Misc.fatal_errorf "Unknown word '%s' in a probe" word
+      in
+      ({ name; enabled_at_init } : probe) }
 ;
 
 method_kind:
@@ -706,11 +735,43 @@ call_kind:
     RPAREN
     { (Function (Direct { code_id; function_slot; }), alloc) }
   | KWD_CCALL; noalloc = boption(KWD_NOALLOC);
+      is_c_builtin = boption(KWD_BUILTIN);
+      effects = c_call_effects;
+      coeffects = c_call_coeffects;
       alloc = alloc_mode_for_applications
-    { (C_call { alloc = not noalloc }, alloc) }
+    { (C_call { alloc = not noalloc; is_c_builtin; effects; coeffects },
+       alloc) }
   | KWD_MCALL LPAREN; kind = method_kind; obj = simple; RPAREN;
       alloc = alloc_mode_for_applications
     { (Method { kind; obj }, alloc) }
+  | KWD_EFFECT LPAREN; name = IDENT;
+      operands = separated_nonempty_list(COMMA, simple); RPAREN;
+      alloc = alloc_mode_for_applications
+    { (* The names of the operations are no keywords. *)
+      let operation : effect_operation =
+        match name with
+        | "perform" -> Perform
+        | "reperform" -> Reperform
+        | "with_stack" -> With_stack
+        | "with_stack_preemptible" -> With_stack_preemptible
+        | "continue" -> Continue
+        | "discontinue" -> Discontinue
+        | "discontinue_with_backtrace" -> Discontinue_with_backtrace
+        | _ -> Misc.fatal_errorf "Unknown operation of effects '%s'" name
+      in
+      (Effect { operation; operands }, alloc) }
+;
+
+c_call_effects:
+  | { Effects.Arbitrary_effects }
+  | KWD_NO_EFFECTS { Effects.No_effects }
+  | KWD_ONLY_GENERATIVE_EFFECTS; m = mutability
+    { Effects.Only_generative_effects m }
+;
+
+c_call_coeffects:
+  | { Coeffects.Has_coeffects }
+  | KWD_NO_COEFFECTS { Coeffects.No_coeffects }
 ;
 
 inline:
@@ -721,11 +782,30 @@ inline:
   | KWD_INLINE LPAREN KWD_DEFAULT RPAREN { Default_inline }
 
 inlined:
-  | KWD_INLINED LPAREN KWD_ALWAYS RPAREN { Always_inlined }
+  | KWD_INLINED LPAREN KWD_ALWAYS; u = use_info; RPAREN { Always_inlined u }
   | KWD_INLINED LPAREN KWD_HINT RPAREN { Hint_inlined }
+  | KWD_INLINED LPAREN; i = IDENT; RPAREN
+    { (* "forward" is no keyword. *)
+      match i with
+      | "forward" -> Forward_inlined
+      | _ -> Misc.fatal_errorf "Unknown inlining attribute '%s'" i }
   | KWD_INLINED LPAREN KWD_NEVER RPAREN { Never_inlined }
-  | KWD_UNROLL LPAREN; i = plain_int; RPAREN { Unroll i }
+  | KWD_UNROLL LPAREN; i = plain_int; u = use_info; RPAREN { Unroll (i, u) }
   | KWD_INLINED LPAREN KWD_DEFAULT RPAREN { Default_inlined }
+
+(* Whether an attribute that asks for inlining is expected to be used, which it
+   is where nothing is written, and why not if it is not. *)
+use_info:
+  | { Inlined_attribute.Use_info.Expected_to_be_used }
+  | COMMA; u = IDENT
+    { match u with
+      | "unused_because_of_call_site_decision" ->
+        Inlined_attribute.Use_info.Unused_because_of_call_site_decision
+      | "unused_because_function_unknown" ->
+        Inlined_attribute.Use_info.Unused_because_function_unknown
+      | "jsir_inlining_disabled" ->
+        Inlined_attribute.Use_info.Jsir_inlining_disabled
+      | _ -> Misc.fatal_errorf "Unknown use of an inlining attribute '%s'" u }
 
 inlining_state:
   | KWD_INLINING_STATE LPAREN; depth = inlining_state_depth; RPAREN
@@ -860,9 +940,10 @@ vec512:
  }}
 ;
 static_data:
-  | STATIC_CONST_BLOCK; m = mutability; tag = tag; LPAREN;
+  | STATIC_CONST_BLOCK; m = mutability; tag = tag;
+    kinds = option(preceded(KWD_OF, kinds_with_subkinds_nonempty)); LPAREN;
     elements = separated_list(COMMA, field_of_block); RPAREN
-    { (Block { tag; mutability = m; elements } : static_data) }
+    { (Block { tag; mutability = m; kinds; elements } : static_data) }
   | f = FLOAT {
     match snd f with
     | None -> Boxed_float (Const (fst f))
@@ -994,6 +1075,11 @@ const:
       MINUSGREATER; ret_arity = kinds_with_subkinds;
     RPAREN
     { Some s, Some ({ params_arity; ret_arity } : function_arities) }
+  | LPAREN;
+      BLANK; COLON; params_arity = blank_or(kinds_with_subkinds);
+      MINUSGREATER; ret_arity = kinds_with_subkinds;
+    RPAREN
+    { None, Some ({ params_arity; ret_arity } : function_arities) }
 ;
 
 blank_or(a):

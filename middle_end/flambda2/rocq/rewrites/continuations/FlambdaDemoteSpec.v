@@ -235,12 +235,17 @@ with strip_traps_handler (k : continuation) (h : continuation_handler)
     Handler params metadata (strip_traps k handler)
   end.
 
-(* A handler that does not say it is an exception handler. *)
+(* A handler that does not say it is an exception handler. What it
+   states of its parameters is kept. *)
 Definition clear_exn_handler (h : continuation_handler)
     : continuation_handler :=
   match h with
   | Handler params metadata handler =>
-    Handler params (make_handler_metadata (hm_params_kinds metadata)) handler
+    Handler params
+      {| hm_params_kinds := hm_params_kinds metadata;
+         hm_params_subkinds := hm_params_subkinds metadata;
+         hm_is_exn_handler := false |}
+      handler
   end.
 
 (* The expression with every handler demoted that may be, in its

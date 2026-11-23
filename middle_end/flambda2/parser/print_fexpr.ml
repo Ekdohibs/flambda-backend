@@ -290,8 +290,9 @@ let const ppf (c : Fexpr.const) =
   | Naked_mask v -> mask ppf v
   | Null -> Format.fprintf ppf "null"
   | Poison (kind, name) ->
-    Format.fprintf ppf "%tpoison.%a.%s%t" Flambda_colours.invalid_keyword
-      kind_with_subkind kind name Flambda_colours.pop
+    (* The name is written as a string, which is what the reader takes. *)
+    Format.fprintf ppf "%tpoison.%a.\"%s\"%t" Flambda_colours.invalid_keyword
+      kind_with_subkind kind (String.escaped name) Flambda_colours.pop
 
 let arity ppf (a : arity) =
   match a with
@@ -409,9 +410,15 @@ let or_variable const ppf : _ or_variable -> unit = function
   | Var v -> variable ppf v
 
 let static_data ppf : static_data -> unit = function
-  | Block { tag; mutability = mut; elements = elts } ->
-    Format.fprintf ppf "Block %a%i (@[<hv>%a@])" (mutability ~space:After) mut
-      tag
+  | Block { tag; mutability = mut; kinds; elements = elts } ->
+    let pp_kinds ppf () =
+      match kinds with
+      | None -> ()
+      | Some kinds ->
+        Format.fprintf ppf " of @[%a@]" (pp_star_list kind_with_subkind) kinds
+    in
+    Format.fprintf ppf "Block %a%i%a (@[<hv>%a@])" (mutability ~space:After) mut
+      tag pp_kinds ()
       (pp_comma_list field_of_block)
       elts
   | Boxed_float32 (Const f) -> float32 ppf f
@@ -651,17 +658,45 @@ let call_kind_and_alloc_mode ~space ppf (ck, alloc_mode) =
       cl
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
-  | C_call { alloc } ->
-    let noalloc_kwd = if alloc then None else Some "noalloc" in
-    pp_spaced ~space ppf "@[ccall%a%a@]"
-      (pp_option ~space:Before Format.pp_print_string)
-      noalloc_kwd
+  | C_call { alloc; is_c_builtin; effects; coeffects } ->
+    let word ppf w = Format.fprintf ppf "@ %s" w in
+    let words ppf () =
+      if not alloc then word ppf "noalloc";
+      if is_c_builtin then word ppf "builtin";
+      (match (effects : Effects.t) with
+      | Arbitrary_effects -> ()
+      | No_effects -> word ppf "no_effects"
+      | Only_generative_effects Immutable -> word ppf "only_generative_effects"
+      | Only_generative_effects Mutable ->
+        word ppf "only_generative_effects mutable"
+      | Only_generative_effects Immutable_unique ->
+        word ppf "only_generative_effects immutable_unique");
+      match (coeffects : Coeffects.t) with
+      | Has_coeffects -> ()
+      | No_coeffects -> word ppf "no_coeffects"
+    in
+    pp_spaced ~space ppf "@[ccall%a%a@]" words ()
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
   | Method { kind; obj } ->
     pp_spaced ~space ppf "@[mcall(%a%a)%a@]" method_kind kind
       (fun ppf -> pp_spaced ~space:Before ppf "%a" simple)
       obj
+      (alloc_mode_for_applications region ~space:Before)
+      alloc_mode
+  | Effect { operation; operands } ->
+    let name =
+      match operation with
+      | Perform -> "perform"
+      | Reperform -> "reperform"
+      | With_stack -> "with_stack"
+      | With_stack_preemptible -> "with_stack_preemptible"
+      | Continue -> "continue"
+      | Discontinue -> "discontinue"
+      | Discontinue_with_backtrace -> "discontinue_with_backtrace"
+    in
+    pp_spaced ~space ppf "@[effect(%s@ @[%a@])%a@]" name (pp_comma_list simple)
+      operands
       (alloc_mode_for_applications region ~space:Before)
       alloc_mode
 
@@ -680,13 +715,21 @@ let inline_attribute_opt ~space ppf i =
   pp_option ~space (inline_attribute ~space:Neither) ppf i
 
 let inlined_attribute ~space ppf (i : Fexpr.inlined_attribute) =
+  let use_info (u : Inlined_attribute.Use_info.t) =
+    match u with
+    | Expected_to_be_used -> ""
+    | Unused_because_of_call_site_decision ->
+      ", unused_because_of_call_site_decision"
+    | Unused_because_function_unknown -> ", unused_because_function_unknown"
+    | Jsir_inlining_disabled -> ", jsir_inlining_disabled"
+  in
   let str =
     match i with
-    | Always_inlined -> Some "inlined(always)"
+    | Always_inlined u -> Some (Format.sprintf "inlined(always%s)" (use_info u))
     | Hint_inlined -> Some "inlined(hint)"
     | Forward_inlined -> Some "inlined(forward)"
     | Never_inlined -> Some "inlined(never)"
-    | Unroll i -> Some (Format.sprintf "unroll(%d)" i)
+    | Unroll (i, u) -> Some (Format.sprintf "unroll(%d%s)" i (use_info u))
     | Default_inlined -> None
   in
   pp_option ~space Format.pp_print_string ppf str
@@ -714,15 +757,15 @@ let code_size ppf code_size = Format.fprintf ppf "%d" code_size
 let or_blank f ppf ob =
   match ob with None -> Format.pp_print_string ppf "_" | Some a -> f ppf a
 
+(* A call that has no callee and has arities is written with a blank in the
+   place of the callee. *)
 let func_name_with_optional_arities ppf (n, arities) =
-  match n with
-  | None -> ()
-  | Some n -> (
-    match arities with
-    | None -> simple ppf n
-    | Some { params_arity; ret_arity } ->
-      Format.fprintf ppf "@[<1>(%a@ : @[%a ->@ %a@]@,)@]" simple n
-        (or_blank arity) params_arity arity ret_arity)
+  match n, arities with
+  | None, None -> ()
+  | Some n, None -> simple ppf n
+  | _, Some { params_arity; ret_arity } ->
+    Format.fprintf ppf "@[<1>(%a@ : @[%a ->@ %a@]@,)@]" (or_blank simple) n
+      (or_blank arity) params_arity arity ret_arity
 
 type scope =
   | Outer
@@ -783,6 +826,7 @@ let rec expr scope ppf = function
         inlined;
         inlining_state = is;
         nontail;
+        probe;
         continuation = ret;
         exn_continuation = ek;
         args;
@@ -795,14 +839,21 @@ let rec expr scope ppf = function
         ppf is
     in
     let pp_nontail ppf () = if nontail then Format.fprintf ppf "@ nontail" in
+    let pp_probe ppf () =
+      match (probe : probe option) with
+      | None -> ()
+      | Some { name; enabled_at_init } ->
+        Format.fprintf ppf "@ probe(\"%s\"%s)" (String.escaped name)
+          (if enabled_at_init then " enabled_at_init" else "")
+    in
     Format.fprintf ppf
-      "@[<hv 2>%tapply%t@[<2>%t%a%a%a%a%t@]@ @[<hv 2>%a%a@ @[<hov>-> %a@ \
+      "@[<hv 2>%tapply%t@[<2>%t%a%a%a%a%a%t@]@ @[<hv 2>%a%a@ @[<hov>-> %a@ \
        %a@]@]@]"
       Flambda_colours.expr_keyword Flambda_colours.pop Flambda_colours.elide
       (call_kind_and_alloc_mode ~space:Before)
       (kind, alloc_mode)
       (inlined_attribute_opt ~space:Before)
-      inlined pp_inlining_state () pp_nontail () Flambda_colours.pop
+      inlined pp_inlining_state () pp_nontail () pp_probe () Flambda_colours.pop
       func_name_with_optional_arities (func, arities)
       (simple_args ~space:Before ~omit_if_empty:true)
       args result_continuation ret exn_continuation ek

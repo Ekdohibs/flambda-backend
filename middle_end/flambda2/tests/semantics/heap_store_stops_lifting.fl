@@ -1,12 +1,15 @@
 (* heap_no_store_lifting.fl with a store: the function also writes a field
-   of a block that can change. The term has a primitive of the heap, and each
-   of the four liftings to symbols of the validation lifts nothing in such a
-   term: where what is lifted is stored in a cell, the heaps of the two exits
-   differ, and the validation compares two exits with their heaps (decision
-   D40). The store here puts a number in the cell, and nothing is lifted all
-   the same: the test is of the text of the term. The unit is not validated,
-   and the line under that one says that the two terms have a primitive of
-   the heap.
+   of a block that can change. The term has a primitive of the heap in the
+   body of its function, and a call of that function outside the bodies of
+   its code. Each of the four liftings to symbols of the validation lifts
+   nothing in such a term, as in one that has a primitive of the heap outside
+   the bodies of its code (decision D65): where what is lifted is stored in a
+   cell, the heaps of the two exits differ, and the validation compares two
+   exits with their heaps (decision D40). The store here puts a number in the
+   cell, and nothing is lifted all the same: the test is of the text of the
+   term. The unit is not validated, and the line under that one says that the
+   two terms have a primitive of the heap and do not pass the liftings' test
+   of the heap, and what a term that does not pass it has.
 
    The second check, whose line begins "related once lifted", is another
    comparison (decision D43): its liftings are made without the test of the

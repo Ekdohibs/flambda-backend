@@ -1,0 +1,12 @@
+;; The modules of Rocq's own library that the machine of the Flambda 2
+;; semantics uses (../extracted/dune), as Rocq's extraction writes them.
+;; rocq/Makefile generates them with the machine and moves them here.
+;; They are Rocq's: LICENSE is the licence of Rocq's library, and README.md
+;; says what the files are generated from. Nothing here is written by hand
+;; but this file and README.md. For tests only: no part of the compiler
+;; depends on it.
+
+(library
+ (name flambda2_rocq_library)
+ (flags
+  (:standard -w -a)))

@@ -7,4 +7,4 @@ heap_cell_removed.fl:
   the same
   calls outside code once those of known code are inlined: 0
   not validated
-  (the term before has a primitive of the heap, and the term after none: each of the four liftings to symbols of the validation lifts nothing in a term that has one)
+  (the term before has a primitive of the heap and does not pass the liftings' test of the heap, and the term after passes it: each of the four liftings to symbols of the validation lifts nothing in a term that does not pass it, which is one that has such a primitive outside the bodies of its code, or has one in them and a call outside them)

@@ -1,0 +1,5 @@
+let x = %opaque (1) in
+let pause = %cpu_relax () in
+let y = %int_barith.`add` (x, 2) in
+let $camlCpu_relax = Block 0 (y) in
+cont done ($camlCpu_relax)

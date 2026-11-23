@@ -156,9 +156,6 @@ Definition relation_eqb (relation relation' : Relation.t) : bool :=
 Definition naked_number_kind_eqb (k k' : naked_number_kind) : bool :=
   kind_eqb (Naked_number k) (Naked_number k').
 
-Definition boxable_number_eqb (k k' : boxable_number) : bool :=
-  kind_eqb (unboxed_kind k) (unboxed_kind k').
-
 Definition is_null_eqb (is_null is_null' : is_null) : bool :=
   match is_null, is_null' with
   | Not_null, Not_null => true

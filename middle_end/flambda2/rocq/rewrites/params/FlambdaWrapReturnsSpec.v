@@ -259,6 +259,8 @@ Definition wrap_return (i : nat) (k : continuation)
         Some
           (Handler (drop_nth i params)
              {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+                hm_params_subkinds :=
+                  drop_nth i (hm_params_subkinds metadata);
                 hm_is_exn_handler := false |}
              handler,
            wrap_uses k i (wrapper k i params metadata) body)

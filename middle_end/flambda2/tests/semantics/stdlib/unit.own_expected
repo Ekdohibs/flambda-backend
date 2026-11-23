@@ -1,0 +1,9 @@
+stdlib__Unit.fl:
+  before Simplify (14 steps): returns [0: <fun>; <fun>; <fun>]
+  after Simplify (11 steps): returns [0: <fun>; <fun>; <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated: the same once closures and blocks are lifted to symbols and the terms normalised

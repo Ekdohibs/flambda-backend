@@ -12,5 +12,6 @@ never_called.fl:
   calls outside code: 1 before, 1 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 1
-  validated with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
   the term before is undefined in the model, so the validation says nothing of this unit

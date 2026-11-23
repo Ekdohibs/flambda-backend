@@ -974,6 +974,23 @@ let unary_prim_ops env (prim_op1 : Flambda_primitive.unary_primitive)
 
 let primitives env prim1 prim2 : Flambda_primitive.t Comparison.t =
   match (prim1 : Flambda_primitive.t), (prim2 : Flambda_primitive.t) with
+  | ( Nullary
+        (Enter_inlined_apply { dbg = dbg1; inlined_attribute = attribute1 }),
+      Nullary
+        (Enter_inlined_apply { dbg = dbg2; inlined_attribute = attribute2 }) )
+    ->
+    (* The debugging information of the mark of an inlined body is a stack. What
+       it holds is not compared, as the debugging information of a call and of a
+       primitive is not. Whether it is empty is compared: after a mark whose
+       stack is not empty the translation to Cmm takes itself to be in an
+       inlined body ([To_cmm_env.currently_in_inlined_body]). *)
+    if
+      Inlined_attribute.equal attribute1 attribute2
+      && Bool.equal
+           (Inlined_debuginfo.is_none dbg1)
+           (Inlined_debuginfo.is_none dbg2)
+    then Equivalent
+    else Different { approximant = prim1 }
   | Nullary prim_op1, Nullary prim_op2 ->
     if Flambda_primitive.equal_nullary_primitive prim_op1 prim_op2
     then Equivalent
@@ -1842,6 +1859,17 @@ and static_consts env (const1 : Static_const_or_code.t)
        the same if their fields are. *)
     Env.note_difference env "a static constant";
     Different { approximant = subst_static_const env const1 }
+  | ( Static_const (Immutable_value_array fields1),
+      Static_const (Immutable_value_array fields2) ) ->
+    (* [Static_const.compare] compares the fields with their debugging
+       information, and their names as they are. They are compared here as the
+       fields of a static block are. *)
+    noting "a static constant"
+      (lists ~f:fields ~subst:subst_field ~subst_snd:true)
+      env fields1 fields2
+    |> Comparison.map ~f:(fun fields1' : Static_const_or_code.t ->
+        Static_const_or_code.create_static_const
+          (Static_const.immutable_value_array fields1'))
   | _, _ ->
     if check env "a static constant" (Static_const_or_code.equal const1 const2)
     then Equivalent

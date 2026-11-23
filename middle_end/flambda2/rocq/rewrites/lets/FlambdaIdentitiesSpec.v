@@ -1,29 +1,22 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* The header above is that of
+   middle_end/flambda2/simplify/simplify_binary_primitive.ml,
+   the file of the compiler that this file transcribes. *)
 
 
 
@@ -38,12 +31,12 @@
    Simplify computes an arithmetic operation or a shift of two integers
    that it knows. Where it knows one of the two only, it applies an
    identity of the operation, if the integer it knows has one
-   ([Simplify_binary_primitive]: [Int_ops_for_binary_arith], with
-   [symmetric_op_one_side_unknown], [op_lhs_unknown] and
-   [op_rhs_unknown], and [Int_ops_for_binary_shift]). The result is the
-   other argument, a constant, the opposite of the other argument,
-   written [0 - x], or its complement. With [x] for the argument that
-   is not known:
+   (middle_end/flambda2/simplify/simplify_binary_primitive.ml:
+   [Int_ops_for_binary_arith], with [symmetric_op_one_side_unknown],
+   [op_lhs_unknown] and [op_rhs_unknown], and
+   [Int_ops_for_binary_shift]). The result is the other argument, a
+   constant, the opposite of the other argument, written [0 - x], or
+   its complement. With [x] for the argument that is not known:
 
    - [x + 0], [0 + x], [x - 0], [x * 1], [1 * x], [x / 1], [x land -1],
      [-1 land x], [x lor 0], [0 lor x], [x lxor 0], [0 lxor x] and a
@@ -57,21 +50,32 @@
    - [x lxor -1] and [-1 lxor x] are the complement of [x], the unary
      [Int_arith] with [Not].
 
-   The functions below are Simplify's, with its names, on integers. Its
-   divisions and remainders by 0, which it makes [Invalid], are not
-   here: they are left as they are. Simplify has no identity for an
-   operation on a variable and itself ([x - x], [x lxor x], [x lor x]),
-   and there is none here.
+   Five functions below are written again in Rocq, on integers, after
+   functions of that file, case by case in its order and with its
+   names: [symmetric_op_one_side_unknown], [op_lhs_unknown] and
+   [op_rhs_unknown] after the three of its [Int_ops_for_binary_arith],
+   and [shift_lhs_unknown] and [shift_rhs_unknown] after the
+   [op_lhs_unknown] and the [op_rhs_unknown] of its
+   [Int_ops_for_binary_shift]. The type [outcome] has five of the seven
+   constructors of its [binary_arith_outcome_for_one_side_only], with
+   their names, and [is_signed] is its test of a signedness, made a
+   function. The notice at the head of this file is that file's, as it
+   has it. Its divisions and remainders by 0, which it makes [Invalid],
+   are not here: they are left as they are. Simplify has no identity
+   for an operation on a variable and itself ([x - x], [x lxor x],
+   [x lor x]), and there is none here.
 
    Simplify also computes [Phys_equal] of two arguments that it proves
-   to be the same value or different ones
-   ([Simplify_binary_primitive.simplify_phys_equal], with
-   [Provers.prove_physical_equality]). One of its proofs needs nothing
-   but the term: two arguments that are the same variable are the same
-   value, so [Phys_eq] of them is 1 and [Phys_neq] is 0. That one is
-   here. (It says the same of a symbol and itself, and that two symbols
-   are different; neither is here, as [Phys_equal] has no value on two
-   allocated values, FlambdaPrimitiveSpec.eval_phys_equal.)
+   to be the same value or different ones ([simplify_phys_equal] of the
+   same file, with [prove_physical_equality] of
+   middle_end/flambda2/types/provers.ml). One of its proofs needs
+   nothing but the term: two arguments that are the same variable are
+   the same value, so [Phys_eq] of them is 1 and [Phys_neq] is 0. That
+   one is here, in code of this file's own: no line of those two
+   functions is written again. (It says the same of a symbol and
+   itself, and that two symbols are different; neither is here, as
+   [Phys_equal] has no value on two allocated values,
+   FlambdaPrimitiveSpec.eval_phys_equal.)
 
    This normalisation uses no types: it does the same where the integer
    that is known is a constant of the term, of the kind of the

@@ -42,17 +42,24 @@
    (FlambdaHeapSpec.array_length_known_statement).
 
    [fold_made_lengths] is that rule alone. It is the traversal of
-   FlambdaCseSpec.share_primitives_knowing with only the arrays that
-   [Let]s in scope have made kept as known, and only a [Let] of the
-   length of one rewritten. No primitive is shared and no allocation
-   is touched. What is known of a variable, and what mentions it in
-   an argument, is forgotten under a binder of it
-   (FlambdaCseSpec.forget_computed); a handler of a non-recursive
-   continuation is gone into, with what is known where it is defined;
-   the handlers of recursive ones and the bodies of code are left as
-   they are. So nothing is known of an array that no [Let] in scope
-   makes: of a parameter, of what a call returns, of what is read
-   from a block or from a closure.
+   FlambdaCseSpec.share_primitives_knowing, but for the one case said
+   below, with only the arrays that [Let]s in scope have made kept as
+   known, and only a [Let] of the length of one rewritten. No
+   primitive is shared and no allocation is touched. What is known of
+   a variable, and what mentions it in an argument, is forgotten
+   under a binder of it (FlambdaCseSpec.forget_computed); a handler
+   of a non-recursive continuation is gone into, with what is known
+   where it is defined; the handlers of recursive ones and the bodies
+   of code are left as they are. So nothing is known of an array that
+   no [Let] in scope makes: of a parameter, of what a call returns,
+   of what is read from a block or from a closure.
+
+   The one case is the handlers of recursive continuations. The
+   sharing of primitives goes into each of them with what is known
+   where the [Let_cont] is, less what mentions the parameters of the
+   handler; this rule leaves them. So it does not make a constant of
+   the length that a loop takes of an array which a [Let] made before
+   the loop.
 
    It is for the rounds of the term after Simplify
    (FlambdaValidateSpec.normalise_expr_after), which do not share

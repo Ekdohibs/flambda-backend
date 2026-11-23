@@ -220,11 +220,16 @@ Proof.
   simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
     [ | reflexivity ].
-  destruct (bind_params params vs []) as [bound | ] eqn:Hbind;
-    [ | reflexivity ].
-  pose proof Hinv as (_ & _ & Hterms & Hbound & _).
+  pose proof Hinv as (_ & _ & Hterms & Hbound & Hknown).
   pose proof (values_step deleted last Hterms Hbound) as Hvs.
   rewrite Hexit in Hvs.
+  rewrite
+    (values_of_subkinds_hoist deleted src_code src_values (state_statics last)
+       vs _ (proj2 (proj2 Hknown)) (proj1 (proj2 (proj2 Hbound))) Hvs).
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+    [ | reflexivity ].
+  destruct (bind_params params vs []) as [bound | ] eqn:Hbind;
+    [ | reflexivity ].
   assert (Hvars :
     env_values_all (value_statics_bound deleted (state_statics last)) bound).
   { exact (bind_params_values_all _ params vs [] bound Hvs (Forall_nil _)

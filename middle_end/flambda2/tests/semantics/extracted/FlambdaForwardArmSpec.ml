@@ -9,6 +9,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaNormaliseSpec
 open FlambdaSemanticsSpec
+open FlambdaStatedScopeSpec
 open List
 open ListDef
 open PeanoNat
@@ -48,7 +49,7 @@ let arm_entry_of kinded params metadata handler body =
   | _ -> None
 
 (** val arm_of_apply_cont : arm_forwards -> apply_cont -> ((variable list *
-    flambda_kind list) * apply_cont) option **)
+    (flambda_kind list * param_subkind list)) * apply_cont) option **)
 
 let arm_of_apply_cont f ac =
   match lookup ac.ac_continuation f with
@@ -73,7 +74,10 @@ let arm_of_apply_cont f ac =
               with
               | Some p2 ->
                 let params0, target0 = p2 in
-                Some ((params0, metadata.hm_params_kinds), target0)
+                Some
+                  ( ( params0,
+                      (metadata.hm_params_kinds, metadata.hm_params_subkinds) ),
+                    target0 )
               | None -> None)
             | None -> None)
           | _ -> None)
@@ -82,42 +86,51 @@ let arm_of_apply_cont f ac =
     | None -> None)
   | None -> None
 
-(** val forward_to_arm_apply_cont : bool -> kinds_in_scope -> arm_forwards ->
-    apply_cont -> apply_cont **)
+(** val forward_to_arm_apply_cont : bool -> kinds_in_scope -> stated_in_scope ->
+    arm_forwards -> apply_cont -> apply_cont **)
 
-let forward_to_arm_apply_cont kinded g f ac =
+let forward_to_arm_apply_cont kinded g s f ac =
   match arm_of_apply_cont f ac with
   | Some p ->
     let p0, target = p in
-    let params, kinds = p0 in
+    let params, p1 = p0 in
+    let kinds, sks = p1 in
     if
       ((Nat.eqb (length ac.ac_args) (length params) && no_trap_action ac)
       && no_trap_action target)
-      && (negb kinded || have_kinds g ac.ac_args kinds)
+      && (negb kinded
+         || (have_kinds g ac.ac_args kinds && are_stated s ac.ac_args sks))
     then forwarded params ac.ac_args target
     else ac
   | None -> ac
 
-(** val forward_to_arms_under : bool -> kinds_in_scope -> arm_forwards -> expr
-    -> expr **)
+(** val forward_to_arms_under : bool -> kinds_in_scope -> stated_in_scope ->
+    arm_forwards -> expr -> expr **)
 
-let rec forward_to_arms_under kinded g f e =
+let rec forward_to_arms_under kinded g s f e =
   match e with
   | Let (x, kind, d, body) ->
-    Let (x, kind, d, forward_to_arms_under kinded ((x, kind) :: g) f body)
+    Let
+      ( x,
+        kind,
+        d,
+        forward_to_arms_under kinded ((x, kind) :: g)
+          ((x, stated_of_named s d) :: s)
+          f body )
   | Let_static (bindings, body) ->
-    Let_static (bindings, forward_to_arms_under kinded g f body)
+    Let_static (bindings, forward_to_arms_under kinded g s f body)
   | Let_cont_non_recursive (k, handler0, body) ->
     let (Handler (params, metadata, handler)) = handler0 in
     let handler1 =
       forward_to_arms_under kinded
         (params_in_scope params metadata.hm_params_kinds g)
+        (params_stated params metadata.hm_params_subkinds s)
         f handler
     in
     Let_cont_non_recursive
       ( k,
         Handler (params, metadata, handler1),
-        forward_to_arms_under kinded g
+        forward_to_arms_under kinded g s
           ((k, arm_entry_of kinded params metadata handler1 body) :: f)
           body )
   | Let_cont_recursive (handlers, body) ->
@@ -134,37 +147,38 @@ let rec forward_to_arms_under kinded g f e =
       ( map
           (fun pat ->
             let k, h = pat in
-            k, forward_to_arms_in_handler kinded g f0 h)
+            k, forward_to_arms_in_handler kinded g s f0 h)
           handlers,
-        forward_to_arms_under kinded g f0 body )
-  | Apply_cont ac -> Apply_cont (forward_to_arm_apply_cont kinded g f ac)
+        forward_to_arms_under kinded g s f0 body )
+  | Apply_cont ac -> Apply_cont (forward_to_arm_apply_cont kinded g s f ac)
   | Switch (scrutinee, arms) ->
     Switch
       ( scrutinee,
         map
-          (fun arm -> fst arm, forward_to_arm_apply_cont kinded g f (snd arm))
+          (fun arm -> fst arm, forward_to_arm_apply_cont kinded g s f (snd arm))
           arms )
   | _ -> e
 
-(** val forward_to_arms_in_handler : bool -> kinds_in_scope -> arm_forwards ->
-    continuation_handler -> continuation_handler **)
+(** val forward_to_arms_in_handler : bool -> kinds_in_scope -> stated_in_scope
+    -> arm_forwards -> continuation_handler -> continuation_handler **)
 
-and forward_to_arms_in_handler kinded g f = function
+and forward_to_arms_in_handler kinded g s f = function
   | Handler (params, metadata, handler) ->
     Handler
       ( params,
         metadata,
         forward_to_arms_under kinded
           (params_in_scope params metadata.hm_params_kinds g)
+          (params_stated params metadata.hm_params_subkinds s)
           f handler )
 
 (** val forward_to_arms : expr -> expr **)
 
-let forward_to_arms e = forward_to_arms_under false [] [] e
+let forward_to_arms e = forward_to_arms_under false [] [] [] e
 
 (** val forward_to_arms_kinded : expr -> expr **)
 
-let forward_to_arms_kinded e = forward_to_arms_under true [] [] e
+let forward_to_arms_kinded e = forward_to_arms_under true [] [] [] e
 
 (** val forward_to_arms_in_binding : static_binding -> static_binding **)
 
@@ -182,6 +196,7 @@ let forward_to_arms_in_binding binding =
             metadata,
             forward_to_arms_under true
               (code_in_scope params my_closure metadata)
+              (code_stated params my_closure metadata)
               [] body ) )
   | _ -> binding
 

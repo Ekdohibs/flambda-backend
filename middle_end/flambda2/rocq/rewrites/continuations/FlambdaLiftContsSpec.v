@@ -65,7 +65,9 @@
    The pass binds [k'] outside the [Let_cont] of [k]. There the
    parameters of [k] are not in scope, so [k'] takes, in front of its
    own parameters, those of [k] that its handler reads, and each of
-   its applications gives it those:
+   its applications gives it those. Of its own parameters it states
+   what it stated, and of those of [k] nothing
+   (FlambdaModel.subkinds_behind):
 
      let_cont k' (q, x) = H in
      let_cont k (p, q) =
@@ -344,6 +346,8 @@ Fixpoint lift_spine (body : expr) (params : list variable)
           ((j,
             Handler (ps ++ q)
               {| hm_params_kinds := map snd read ++ hm_params_kinds metadata;
+                 hm_params_subkinds :=
+                   subkinds_behind (length read) (hm_params_subkinds metadata);
                  hm_is_exn_handler := false |}
               h)
            :: others,

@@ -120,13 +120,27 @@
    [Let_static] passed has bound to a closure of the code called, so that
    the call cannot be undefined for being of something else; and only
    where the arities of the call are those of the code as
-   FlambdaSemanticsSpec.call_function asks ([call_agrees_b]), so that it
-   cannot be undefined for that either. The kinds of the values of the
-   arguments are not asked for: the call tests them, and so does the
-   inlined body, where each parameter is bound by a [Let] at its kind.
-   For the two to test the same, the code must give as many kinds as it
-   has parameters. It goes where [inline_calls] goes, and leaves the
-   same calls alone.
+   FlambdaSemanticsSpec.call_function asks ([call_agrees_stated]), so
+   that it cannot be undefined for that either. The kinds of the values
+   of the arguments are not asked for: the call tests them, and so does
+   the inlined body, where each parameter is bound by a [Let] at its
+   kind. For the two to test the same, the code must give as many
+   kinds as it has parameters, and the arguments must be known to be
+   of what the code states of its parameters: the call tests what the
+   code states of a parameter, and a [Let] tests a kind only (decision
+   D25, at parameters). What is known of an argument
+   (FlambdaStatedScopeSpec.are_stated) is read from the binders passed
+   on the way to the call: a [Let] makes its variable known as what
+   its defining expression makes, a handler makes its parameters known
+   as what it states of them, and the body of code starts with its
+   parameters known as what the code states of them and its closure
+   as no null (FlambdaStatedScopeSpec.code_stated). An argument that
+   is a symbol is known as what the [Let_static]s passed on the way
+   have bound it to (FlambdaStatedSymbolsSpec.statics_stated; in the
+   body of code, those passed on the way to the code). Code that
+   states nothing of its parameters passes. It goes where
+   [inline_calls] goes, and it too inlines no call of code whose id
+   is among those given ([kept]).
 
    [merge_statics], for either term, makes one group of [Let_static]s that
    follow one another, and puts the code of a group before its symbols.
@@ -158,7 +172,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaNominalSpec FlambdaApplySpec FlambdaCompareSpec
-  FlambdaTupledSpec.
+  FlambdaTupledSpec FlambdaStatedScopeSpec FlambdaStatedSymbolsSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -913,23 +927,42 @@ Fixpoint symbols_of (bindings : list static_binding)
    FlambdaSemanticsSpec.call_function asks of the terms alone: its
    arities are those of the code. What it asks of the values of the
    arguments, that they be of the kinds of the arity, the inlined body
-   asks too, provided the code gives one kind for each parameter. *)
+   asks too, provided the code gives one kind for each parameter. What
+   it asks of them beyond their kinds, that they be of what the code
+   states of its parameters, the inlined body does not ask, as a [Let]
+   states nothing: so the code must state nothing. *)
 Definition call_agrees_b (ap : apply_expr) (c : code) : bool :=
   kinds_per_parameter_eqb (unarize_per_parameter (ap_args_arity ap))
     (unarize_per_parameter (code_params_arity c))
   && arity_eqb (ap_return_arity ap) (code_result_arity c)
-  && Nat.eqb (length (code_params c)) (length (code_params_kinds c)).
+  && Nat.eqb (length (code_params c)) (length (code_params_kinds c))
+  && subkinds_say_nothing (code_params_subkinds c).
 
-Definition inline_known_apply (kept : list code_id)
+(* The same where the code states something of its parameters: the
+   arguments are known to be of it, by what is known of the variables
+   bound around the call (FlambdaStatedScopeSpec.v) and of the symbols
+   bound before it (FlambdaStatedSymbolsSpec.v). This is the test of
+   [inline_known_apply]; [call_agrees_b] is the case of code that
+   states nothing, which passes whatever is known. *)
+Definition call_agrees_stated (Y : symbols_stated) (S : stated_in_scope)
+    (ap : apply_expr) (c : code) : bool :=
+  kinds_per_parameter_eqb (unarize_per_parameter (ap_args_arity ap))
+    (unarize_per_parameter (code_params_arity c))
+  && arity_eqb (ap_return_arity ap) (code_result_arity c)
+  && Nat.eqb (length (code_params c)) (length (code_params_kinds c))
+  && are_stated_knowing Y S (ap_args ap) (code_params_subkinds c).
+
+Definition inline_known_apply (S : stated_in_scope) (kept : list code_id)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (ap : apply_expr)
-    : expr :=
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (ap : apply_expr) : expr :=
   match ap_callee ap, ap_call_kind ap with
   | Symbol s, Direct called =>
     match lookup s known_symbols, lookup called known_code with
     | Some (Some code), Some c =>
       if negb (among called kept)
-         && (Pos.eqb code called && inlinable_b ap c && call_agrees_b ap c)
+         && (Pos.eqb code called && inlinable_b ap c
+             && call_agrees_stated Y S ap c)
       then
         inlined_body c
           (inline_renaming (code_return_continuation c)
@@ -942,59 +975,103 @@ Definition inline_known_apply (kept : list code_id)
   | _, _ => Apply ap
   end.
 
-Fixpoint inline_known_calls (kept : list code_id)
-    (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (e : expr) : expr :=
+(* [S]: what is known of the variables bound around the point. A
+   [Let] adds what its defining expression makes; a handler adds what
+   it states of its parameters; the body of code starts from what the
+   code states of its parameters, and its closure
+   (FlambdaStatedScopeSpec.code_stated): the variables bound around
+   the [Let_static] are not in scope there. [Y]: what is known of the
+   symbols bound before the point. A [Let_static] adds what its
+   bindings make (FlambdaStatedSymbolsSpec.statics_stated), for its
+   body; the body of code that it binds has what was known before
+   the [Let_static]. *)
+Fixpoint inline_known_calls_under (S : stated_in_scope)
+    (kept : list code_id) (known_code : list (code_id * code))
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (e : expr) : expr :=
   match e with
   | Let x kind d body =>
-    Let x kind d (inline_known_calls kept known_code known_symbols body)
+    Let x kind d
+      (inline_known_calls_under ((x, stated_of_named S d) :: S) kept
+         known_code known_symbols Y body)
   | Let_static bindings body =>
     let bindings :=
-      map (inline_known_calls_in_binding kept known_code known_symbols) bindings
+      map
+        (inline_known_calls_in_binding_knowing kept known_code known_symbols
+           Y)
+        bindings
     in
     Let_static bindings
-      (inline_known_calls kept (codes_of bindings known_code)
-         (symbols_of bindings known_symbols) body)
+      (inline_known_calls_under S kept (codes_of bindings known_code)
+         (symbols_of bindings known_symbols) (statics_stated bindings Y) body)
   | Let_cont_non_recursive k h body =>
     Let_cont_non_recursive k
-      (inline_known_calls_in_handler kept known_code known_symbols h)
-      (inline_known_calls kept known_code known_symbols body)
+      (inline_known_calls_in_handler_under S kept known_code known_symbols Y h)
+      (inline_known_calls_under S kept known_code known_symbols Y body)
   | Let_cont_recursive handlers body =>
     Let_cont_recursive
       (map
          (fun '(k, h) =>
-            (k, inline_known_calls_in_handler kept known_code known_symbols h))
+            (k,
+             inline_known_calls_in_handler_under S kept known_code
+               known_symbols Y h))
          handlers)
-      (inline_known_calls kept known_code known_symbols body)
-  | Apply ap => inline_known_apply kept known_code known_symbols ap
+      (inline_known_calls_under S kept known_code known_symbols Y body)
+  | Apply ap => inline_known_apply S kept known_code known_symbols Y ap
   | Apply_cont _ | Switch _ _ | Invalid => e
   end
-with inline_known_calls_in_handler (kept : list code_id)
-    (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id))
+with inline_known_calls_in_handler_under (S : stated_in_scope)
+    (kept : list code_id) (known_code : list (code_id * code))
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
     (h : continuation_handler) : continuation_handler :=
   match h with
   | Handler params metadata handler =>
     Handler params metadata
-      (inline_known_calls kept known_code known_symbols handler)
+      (inline_known_calls_under
+         (params_stated params (hm_params_subkinds metadata) S) kept
+         known_code known_symbols Y handler)
   end
-with inline_known_calls_in_binding (kept : list code_id)
+with inline_known_calls_in_binding_knowing (kept : list code_id)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id))
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
     (binding : static_binding) : static_binding :=
   match binding with
   | Bind_code id c =>
-    Bind_code id (inline_known_calls_in_code kept known_code known_symbols c)
+    Bind_code id
+      (inline_known_calls_in_code_knowing kept known_code known_symbols Y c)
   | Bind_deleted_code _ | Bind_symbol _ _ => binding
   end
-with inline_known_calls_in_code (kept : list code_id)
+with inline_known_calls_in_code_knowing (kept : list code_id)
     (known_code : list (code_id * code))
-    (known_symbols : list (symbol * option code_id)) (c : code) : code :=
+    (known_symbols : list (symbol * option code_id)) (Y : symbols_stated)
+    (c : code) : code :=
   match c with
   | Code params my_closure ret exn metadata body =>
     Code params my_closure ret exn metadata
-      (inline_known_calls kept known_code known_symbols body)
+      (inline_known_calls_under (code_stated params my_closure metadata) kept
+         known_code known_symbols Y body)
   end.
+
+(* The pass with nothing known of the variables nor of the symbols:
+   at the top of a term, and in one binding of a group
+   (FlambdaKnownSiblingsSpec.v). *)
+Definition inline_known_calls_in_binding (kept : list code_id)
+    (known_code : list (code_id * code))
+    (known_symbols : list (symbol * option code_id))
+    (binding : static_binding) : static_binding :=
+  inline_known_calls_in_binding_knowing kept known_code known_symbols []
+    binding.
+
+Definition inline_known_calls (kept : list code_id)
+    (known_code : list (code_id * code))
+    (known_symbols : list (symbol * option code_id)) (e : expr) : expr :=
+  inline_known_calls_under [] kept known_code known_symbols [] e.
+
+Definition inline_known_calls_in_handler (kept : list code_id)
+    (known_code : list (code_id * code))
+    (known_symbols : list (symbol * option code_id))
+    (h : continuation_handler) : continuation_handler :=
+  inline_known_calls_in_handler_under [] kept known_code known_symbols [] h.
 
 Definition inline_known_calls_equivalent_statement : Prop :=
   ∀ (kept : list code_id) (e : expr),

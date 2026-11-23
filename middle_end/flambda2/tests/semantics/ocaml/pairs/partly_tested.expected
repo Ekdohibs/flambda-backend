@@ -2,12 +2,13 @@ partly_tested.fl:
   given the .cmx of Partly, a prefix of 2 static bindings:
     camlPartly__r8_1 = Block 0 (5, $6)
     camlPartly = Block 0 (camlPartly__r8_1)
-  before Simplify, after the prefix, with its import (11 steps): undefined
-  after Simplify, after the prefix, with its import (7 steps): undefined
+  before Simplify, after the prefix, with its import (9 steps): undefined
+  after Simplify, after the prefix, with its import (5 steps): undefined
   the check of kinds: passes before, passes after
   the check of static names: passes before, passes after, each with the prefix in front of it
   calls outside code: 1 before, 1 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 0
-  validated with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
   the term before is undefined in the model, so the validation says nothing of this unit

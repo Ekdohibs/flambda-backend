@@ -1,0 +1,56 @@
+;; A control of the guess of liftings of the test tool (lifting_guess in
+;; ../../tools/flsemantics.ml), on a pair of texts written by hand: the term
+;; after is read from a text (the option -after), and Simplify is not run.
+;; `dune promote` updates the expected file.
+;;
+;; box_in_slot_kept_by_let: the third test that the guess makes of a boxed
+;; number that a closure holds in a value slot, "of which the term after has no
+;; Let". No unit made from OCaml is known whose term after has one. Where the
+;; Simplify of this tree simplifies a Let that boxes a number whose contents
+;; are a known constant, and the variable of the Let has the normal name mode,
+;; it puts in the place of the boxed number a symbol that is bound to it
+;; (simplify_named.ml; reify, in middle_end/flambda2/types/reify.ml, asks for
+;; the lifting whatever the allocation mode). The Lets that Simplify makes
+;; itself have not been gone through. Here the term before boxes the constant
+;; 1000 once; a closure that nothing uses holds the boxed number in a value
+;; slot; and the fields of the module are the boxed number and a block of two
+;; constants. The term after binds a symbol to the block, keeps the boxed
+;; number by a Let, and has no closure. The guess gives the block that symbol
+;; and, as the term after boxes the same constant by a Let, gives the boxed
+;; number none: the pair is validated at the first asking, and the tool prints
+;; of it what it printed before the guess had this case.
+;;
+;; With the third test taken out (measured with a build that is not in the
+;; tree), the output has one line more, "(at the second asking, ...)": the
+;; first asking refuses the pair and the second validates it. The reading of
+;; that, from the source of the tool and not printed by it: the guess gives
+;; the boxed number a symbol that neither term has, so that at the first
+;; asking a field of the module is that symbol in one term and the variable
+;; of the Let in the other; the guess of the second asking is made from the
+;; term before normalised, where the closure is gone and nothing holds the
+;; boxed number in a value slot. So the test decides at which asking this
+;; pair is validated.
+;;
+;; No pair is known that is validated with the test and not validated without
+;; it. What was tried, with -after, for this control: two pairs whose term
+;; after keeps the closure (one with its value slot; one as the compiler's
+;; Simplify leaves the closure of ../ocaml/boxed_number_in_slot, with none)
+;; were not validated, with the test or without it (a closure of the term
+;; after is the same as none of the term before: ../guard/dune,
+;; after_same_text); and two pairs whose closure nothing uses, and of which
+;; nothing else needs a lifting, were validated with nothing lifted, with the
+;; test and without it. That is of those trials and of no others.
+
+(rule
+ (with-stdout-to
+  box_in_slot_kept_by_let.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:box_in_slot_kept_by_let_after.fl}
+   %{dep:box_in_slot_kept_by_let.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff box_in_slot_kept_by_let.expected box_in_slot_kept_by_let.output)))

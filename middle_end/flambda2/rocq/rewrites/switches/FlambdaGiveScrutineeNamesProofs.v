@@ -48,6 +48,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs FlambdaBindersSpec
   FlambdaValidatorEquivarianceSpec FlambdaValidatorEquivarianceBaseProofs
   FlambdaScopedProofs FlambdaUnusedContsSpec
+  FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasParamsNamesProofs FlambdaEquivarianceTactic
   FlambdaGiveScrutineeSpec.
@@ -135,8 +136,32 @@ Proof. exact (first_scrutinee_equivariant r k i [] e). Qed.
 
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
-Lemma give_scrutinees_renamed : rewrite_equivariant give_scrutinees.
+(* The pass goes down the term with what is known of the variables in
+   scope, which is renamed by
+   FlambdaStatedScopeNamesProofs.rename_stated_in_scope; the laws of
+   that file are given to the tactic, and the pass is the case of
+   nothing known, which a renaming leaves as it is. *)
+#[local] Instance stated_in_scope_renaming : Renaming_of stated_in_scope :=
+  rename_stated_in_scope.
+
+#[local] Hint Rewrite stated_of_named_equivariant params_stated_equivariant
+  : equivariance.
+
+Section Under.
+
+#[local] Arguments rename_stated_in_scope : simpl never.
+#[local] Hint Rewrite stated_in_scope_cons_renamed : equivariance.
+
+Lemma give_scrutinees_under_equivariant (r : renaming) (e : expr) :
+  ∀ S : stated_in_scope,
+    give_scrutinees_under (rename_stated_in_scope r S) (rename_expr r e)
+    = rename_expr r (give_scrutinees_under S e).
 Proof. equivariance. Qed.
+
+End Under.
+
+Lemma give_scrutinees_renamed : rewrite_equivariant give_scrutinees.
+Proof. intros r e. exact (give_scrutinees_under_equivariant r e []). Qed.
 
 (* ======================================================================== *)
 (* The pass keeps scope                                                     *)
@@ -365,51 +390,59 @@ Proof.
   - rewrite give_scrutinee_free_continuations. apply incl_refl.
 Qed.
 
-Lemma give_at_scoped (i : nat) (k : continuation) (h : continuation_handler)
-    (body : expr) :
+Lemma give_at_scoped (S : stated_in_scope) (i : nat) (k : continuation)
+    (h : continuation_handler) (body : expr) :
   scoped (Let_cont_non_recursive k h body)
-    (Let_cont_non_recursive k h (give_at i k h body)).
+    (Let_cont_non_recursive k h (give_at S i k h body)).
 Proof.
   unfold give_at.
   destruct (first_scrutinee k i [] body) as [xs | ]; [ | apply scoped_refl ].
   induction xs as [ | x xs IH]; cbn [give_first]; [ apply scoped_refl | ].
-  destruct (unalias_param i k h (give_scrutinee x k i None body));
+  destruct (unalias_param S i k h (give_scrutinee x k i None body));
     [ | exact IH ].
   apply scoped_let_cont;
     [ apply scoped_handler_refl | apply give_scrutinee_scoped ].
 Qed.
 
-Lemma give_from_scoped (i : nat) :
+Lemma give_from_scoped (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
     scoped (Let_cont_non_recursive k h body)
-      (Let_cont_non_recursive k h (give_from i k h body)).
+      (Let_cont_non_recursive k h (give_from S i k h body)).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [give_from];
     [ apply scoped_refl | ].
-  exact (scoped_trans _ _ _ (give_at_scoped i k h body)
-    (IH k h (give_at i k h body))).
+  exact (scoped_trans _ _ _ (give_at_scoped S i k h body)
+    (IH k h (give_at S i k h body))).
 Qed.
 
-Fixpoint give_scrutinees_scoped (e : expr) : scoped e (give_scrutinees e).
+Fixpoint give_scrutinees_under_scoped (e : expr) :
+  ∀ S : stated_in_scope, scoped e (give_scrutinees_under S e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    cbn [give_scrutinees]; try apply scoped_refl.
-  - apply scoped_let; [ apply incl_refl | apply give_scrutinees_scoped ].
+    intros S; cbn [give_scrutinees_under]; try apply scoped_refl.
+  - apply scoped_let;
+      [ apply incl_refl | apply give_scrutinees_under_scoped ].
   - apply scoped_let_static;
-      [ apply scoped_bindings_refl | apply give_scrutinees_scoped ].
+      [ apply scoped_bindings_refl | apply give_scrutinees_under_scoped ].
   - refine (scoped_trans _ _ _ _
-      (give_from_scoped (length params) k
-         (Handler params metadata (give_scrutinees handler))
-         (give_scrutinees body))).
+      (give_from_scoped S (length params) k
+         (Handler params metadata
+            (give_scrutinees_under
+               (params_stated params (hm_params_subkinds metadata) S)
+               handler))
+         (give_scrutinees_under S body))).
     apply scoped_let_cont;
-      [ apply scoped_handler_intro, give_scrutinees_scoped
-      | apply give_scrutinees_scoped ].
+      [ apply scoped_handler_intro, give_scrutinees_under_scoped
+      | apply give_scrutinees_under_scoped ].
   - apply scoped_let_cont_recursive;
       [ reflexivity | apply scoped_handlers_refl
-      | apply give_scrutinees_scoped ].
+      | apply give_scrutinees_under_scoped ].
 Qed.
+
+Lemma give_scrutinees_scoped (e : expr) : scoped e (give_scrutinees e).
+Proof. exact (give_scrutinees_under_scoped e []). Qed.
 
 Lemma give_scrutinees_scope : keeps_scope give_scrutinees.
 Proof. apply keeps_scope_intro, give_scrutinees_scoped. Qed.

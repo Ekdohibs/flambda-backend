@@ -33,6 +33,7 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaCompareSpec FlambdaCompareProofs
+  FlambdaCompareOrderSpec FlambdaCompareOrderProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaBlockLoadSpec
   FlambdaBlockLoadProofs FlambdaCodeLetsSpec FlambdaCodeLetsProofs
   FlambdaCseSpec FlambdaCseProofs
@@ -96,8 +97,7 @@ From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec FlambdaCopyCodeProofs.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec
   FlambdaClosureCallsProofs.
-From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
-From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2 Require FlambdaDemoteProofs.
 From OxCamlFlambda2 Require Import FlambdaKnownSiblingsSpec
   FlambdaKnownSiblingsProofs.
@@ -113,6 +113,11 @@ From OxCamlFlambda2Types Require Import FlambdaAliasesSpec
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 From OxCamlFlambda2 Require FlambdaUnboxTogetherProofs.
+From OxCamlFlambda2 Require FlambdaUntagAtBinderProofs.
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
+  FlambdaStatedContextProofs FlambdaRecHandlersStatedSpec
+  FlambdaRecHandlersStatedProofs FlambdaCodeStatedSpec
+  FlambdaCodeStatedProofs.
 Import ListNotations.
 
 Lemma expr_equivalent_refl (e : expr) : expr_equivalent e e.
@@ -154,7 +159,8 @@ Ltac equivalence_step :=
     | apply give_scrutinees_equivalent
     | apply numbers_in_arms_equivalent
     | apply merge_alias_lets_equivalent
-    | apply share_known_primitives_equivalent ].
+    | apply share_known_primitives_equivalent
+    | apply FlambdaUntagAtBinderProofs.bind_untaggings_equivalent ].
 
 Ltac refinement_step :=
   first
@@ -348,27 +354,45 @@ Qed.
    that every turn passes on taken away, the continuations of a
    handler bound outside it, and the applications made to go to the
    arms. *)
+Lemma arms_expr_before_stated_refines (S : stated_in_scope) (e : expr) :
+  expr_refines_stated S e (arms_expr_before_stated S e).
+Proof.
+  unfold arms_expr_before_stated.
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, expr_equivalent_refines,
+          remove_unused_conts_equivalent ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, forward_applications_refines ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, forward_to_arms_refines ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_refines_stated_of, expr_equivalent_refines,
+          lift_handler_conts_equivalent ].
+  apply expr_equivalent_stated_refines,
+    FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent.
+Qed.
+
 Lemma arms_expr_before_refines (e : expr) :
   expr_refines e (arms_expr_before e).
 Proof.
-  unfold arms_expr_before.
-  eapply expr_refines_trans;
-    [ | apply expr_equivalent_refines, remove_unused_conts_equivalent ].
-  eapply expr_refines_trans; [ | apply forward_applications_refines ].
-  eapply expr_refines_trans; [ | apply forward_to_arms_refines ].
-  eapply expr_refines_trans;
-    [ | apply expr_equivalent_refines, lift_handler_conts_equivalent ].
-  apply expr_equivalent_refines,
-    FlambdaUnaliasRecParamsProofs.unalias_rec_params_equivalent.
+  exact (expr_refines_of_stated _ _ (arms_expr_before_stated_refines [] e)).
+Qed.
+
+Lemma arms_code_before_stated_refines (S : stated_in_scope) (body : expr) :
+  expr_refines_stated S body (arms_code_before_stated S body).
+Proof.
+  unfold arms_code_before_stated.
+  exact (expr_refines_stated_trans S _ _ _
+    (rewrite_rec_handlers_stated_refines_aux arms_expr_before_stated
+       arms_expr_before_stated_refines body S)
+    (arms_expr_before_stated_refines S _)).
 Qed.
 
 Lemma arms_code_before_refines (body : expr) :
   expr_refines body (arms_code_before body).
 Proof.
-  unfold arms_code_before.
-  exact (expr_refines_trans _ _ _
-    (rewrite_rec_handlers_refines _ arms_expr_before_refines body)
-    (arms_expr_before_refines _)).
+  exact
+    (expr_refines_of_stated _ _ (arms_code_before_stated_refines [] body)).
 Qed.
 
 Lemma first_phase_round_refines (e : expr) :
@@ -376,7 +400,9 @@ Lemma first_phase_round_refines (e : expr) :
 Proof.
   unfold first_phase_round.
   eapply expr_refines_trans;
-    [ | apply rewrite_code_refines, arms_code_before_refines ].
+    [ | apply
+          (rewrite_code_stated_refines_aux arms_code_before_stated
+             arms_code_before_stated_refines) ].
   eapply expr_refines_trans;
     [ apply normalise_params_round_refines | apply arms_code_before_refines ].
 Qed.
@@ -487,20 +513,45 @@ Qed.
 
 (* The tidying of the term before, once its continuations are placed,
    refines. *)
+Lemma tidy_expr_before_stated_refines (S : stated_in_scope) (e : expr) :
+  expr_refines_stated S e (tidy_expr_before_stated S e).
+Proof.
+  unfold tidy_expr_before_stated.
+  repeat
+    (eapply expr_refines_stated_trans;
+     [ | solve [ apply expr_refines_stated_of; refinement_step ] ]).
+  eapply expr_refines_stated_trans;
+    [ | apply expr_equivalent_stated_refines,
+          FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent
+    ].
+  eapply expr_refines_stated_trans;
+    [ | apply expr_equivalent_stated_refines,
+          unalias_params_under_equivalent ].
+  apply expr_refines_stated_of, expr_equivalent_refines,
+    give_scrutinees_under_equivalent.
+Qed.
+
 Lemma tidy_expr_before_refines (e : expr) :
   expr_refines e (tidy_expr_before e).
 Proof.
-  unfold tidy_expr_before.
-  repeat (eapply expr_refines_trans; [ | solve [ refinement_step ] ]).
-  apply expr_refines_refl.
+  exact (expr_refines_of_stated _ _ (tidy_expr_before_stated_refines [] e)).
+Qed.
+
+Lemma tidy_code_before_stated_refines (S : stated_in_scope) (body : expr) :
+  expr_refines_stated S body (tidy_code_before_stated S body).
+Proof.
+  unfold tidy_code_before_stated.
+  exact (expr_refines_stated_trans S _ _ _
+    (tidy_expr_before_stated_refines S body)
+    (rewrite_rec_handlers_stated_refines_aux tidy_expr_before_stated
+       tidy_expr_before_stated_refines _ S)).
 Qed.
 
 Lemma tidy_code_before_refines (body : expr) :
   expr_refines body (tidy_code_before body).
 Proof.
-  unfold tidy_code_before.
-  exact (expr_refines_trans _ _ _ (tidy_expr_before_refines body)
-    (rewrite_rec_handlers_refines _ tidy_expr_before_refines _)).
+  exact
+    (expr_refines_of_stated _ _ (tidy_code_before_stated_refines [] body)).
 Qed.
 
 Lemma tidy_before_round_refines (e : expr) :
@@ -508,7 +559,8 @@ Lemma tidy_before_round_refines (e : expr) :
 Proof.
   unfold tidy_before_round.
   exact (expr_refines_trans _ _ _ (tidy_code_before_refines e)
-    (rewrite_code_refines _ tidy_code_before_refines _)).
+    (rewrite_code_stated_refines_aux tidy_code_before_stated
+       tidy_code_before_stated_refines _)).
 Qed.
 
 Lemma tidied_before_refines (rounds : nat) (e : expr) :
@@ -522,21 +574,50 @@ Proof.
     (expr_equivalent_refines _ _ (groups_up_equivalent _))).
 Qed.
 
-(* That of the term after is an equivalence. *)
+(* That of the term after is an equivalence under the environments in
+   which what it is given holds: the two rewrites that take away a
+   parameter by what is known, by their own proofs under it; the
+   others are equivalences under all environments, the one that gives
+   a scrutinee whatever it is given. *)
+Lemma tidy_expr_after_stated_equivalent (S : stated_in_scope) (e : expr) :
+  expr_equivalent_stated S e (tidy_expr_after_stated S e).
+Proof.
+  unfold tidy_expr_after_stated.
+  repeat
+    (eapply expr_equivalent_stated_trans;
+     [ | solve [ apply expr_equivalent_stated_of; equivalence_step ] ]).
+  eapply expr_equivalent_stated_trans;
+    [ | apply FlambdaUnaliasRecParamsProofs.unalias_rec_params_under_equivalent
+    ].
+  eapply expr_equivalent_stated_trans;
+    [ | apply unalias_params_under_equivalent ].
+  apply expr_equivalent_stated_of, give_scrutinees_under_equivalent.
+Qed.
+
 Lemma tidy_expr_after_equivalent (e : expr) :
   expr_equivalent e (tidy_expr_after e).
 Proof.
-  unfold tidy_expr_after.
-  repeat (eapply expr_equivalent_trans; [ | solve [ equivalence_step ] ]).
-  apply expr_equivalent_refl.
+  exact
+    (expr_equivalent_of_stated _ _ (tidy_expr_after_stated_equivalent [] e)).
+Qed.
+
+Lemma tidy_code_after_stated_equivalent (S : stated_in_scope)
+    (body : expr) :
+  expr_equivalent_stated S body (tidy_code_after_stated S body).
+Proof.
+  unfold tidy_code_after_stated.
+  exact (expr_equivalent_stated_trans S _ _ _
+    (tidy_expr_after_stated_equivalent S body)
+    (rewrite_rec_handlers_stated_equivalent_aux tidy_expr_after_stated
+       tidy_expr_after_stated_equivalent _ S)).
 Qed.
 
 Lemma tidy_code_after_equivalent (body : expr) :
   expr_equivalent body (tidy_code_after body).
 Proof.
-  unfold tidy_code_after.
-  exact (expr_equivalent_trans _ _ _ (tidy_expr_after_equivalent body)
-    (rewrite_rec_handlers_equivalent _ tidy_expr_after_equivalent _)).
+  exact
+    (expr_equivalent_of_stated _ _
+       (tidy_code_after_stated_equivalent [] body)).
 Qed.
 
 Lemma tidy_after_round_equivalent (e : expr) :
@@ -546,7 +627,8 @@ Proof.
   eapply expr_equivalent_trans;
     [ | apply remove_unused_defined_lets_in_code_equivalent ].
   exact (expr_equivalent_trans _ _ _ (tidy_code_after_equivalent e)
-    (rewrite_code_equivalent _ tidy_code_after_equivalent _)).
+    (rewrite_code_stated_equivalent tidy_code_after_stated
+       tidy_code_after_stated_equivalent _)).
 Qed.
 
 Lemma tidied_after_equivalent (rounds : nat) :
@@ -576,24 +658,26 @@ Proof.
     (tidied_after_equivalent rounds _)).
 Qed.
 
-(* A term that is, once its static bindings are in the order of the
-   term after normalised, the same as that term up to bound names: it
-   is equivalent to the term after. *)
-Lemma ordered_same_equivalent (rounds : nat) (kept : list code_id)
+(* A term that the comparison accepts, once its static bindings are in
+   the order of the term after normalised, before that term: the term
+   after refines it. *)
+Lemma ordered_same_refines (rounds : nat) (kept : list code_id)
     (e after : expr) :
-  expr_eqb [] []
+  expr_says_at_least [] []
     (order_statics_as (tidied_after rounds (normalise_after rounds kept after))
        e)
     (tidied_after rounds (normalise_after rounds kept after))
   = true ->
-  expr_equivalent e after.
+  expr_refines e after.
 Proof.
   intros Heq.
-  apply (expr_equivalent_trans _ _ _
-    (order_statics_as_equivalent
-       (tidied_after rounds (normalise_after rounds kept after)) e)).
-  apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Heq)).
-  apply expr_equivalent_sym, tidied_after_normalised_equivalent.
+  apply (expr_refines_trans _ _ _
+    (expr_equivalent_refines _ _
+       (order_statics_as_equivalent
+          (tidied_after rounds (normalise_after rounds kept after)) e))).
+  apply (expr_refines_trans _ _ _ (expr_says_at_least_sound _ _ Heq)).
+  apply expr_equivalent_refines, expr_equivalent_sym,
+    tidied_after_normalised_equivalent.
 Qed.
 
 (* The calls of the term before taken on, or not: it is refined. *)
@@ -621,12 +705,12 @@ Proof.
   destruct taken; [ apply returns_taken_on_refines | apply expr_refines_refl ].
 Qed.
 
-(* The two normalised terms being the same up to bound names, once the
-   static bindings of the first are in the order of the second, the term
+(* The comparison accepting the two normalised terms, once the static
+   bindings of the first are in the order of the second, the term
    after refines the term before. *)
 Lemma normalised_refines (rounds : nat) (kept : list code_id) (taken : bool)
     (before after : expr) :
-  expr_eqb [] []
+  expr_says_at_least [] []
     (order_statics_as (tidied_after rounds (normalise_after rounds kept after))
        (tidied_before rounds
           (with_returns taken (normalise_before rounds kept before))))
@@ -639,8 +723,7 @@ Proof.
     (normalise_before_refines rounds kept before)).
   apply (expr_refines_trans _ _ _ (with_returns_refines taken _)).
   apply (expr_refines_trans _ _ _ (tidied_before_refines rounds _)).
-  apply expr_equivalent_refines.
-  exact (ordered_same_equivalent rounds kept _ after Heq).
+  exact (ordered_same_refines rounds kept _ after Heq).
 Qed.
 
 Lemma expr_refines_program (source target : expr) :
@@ -930,7 +1013,8 @@ Proof.
     apply (refines_trans _ _ _
       (normalise_lifted_round_calling_program_refines calling avoid kept e)).
     destruct own; [ | apply refines_refl ].
-    exact (FlambdaClosureOfCodeProofs.know_own_closures_program_refines _). }
+    exact
+      (FlambdaSlotsThroughProofs.know_own_closures_through_program_refines _). }
   induction rounds as [ | rounds IH]; intros e; cbn [iterate];
     [ apply refines_refl | ].
   cbv zeta.
@@ -1060,8 +1144,8 @@ Theorem validate_unit_sound_everywhere :
   validate_unit_sound_everywhere_statement.
 Proof.
   intros rounds unused slots G Ls kept before after. unfold validate_unit.
-  destruct (expr_eqb [] [] before after) eqn:Hsame.
-  - intros _. apply expr_equivalent_refines, expr_eqb_sound, Hsame.
+  destruct (expr_says_at_least [] [] before after) eqn:Hsame.
+  - intros _. apply expr_says_at_least_sound, Hsame.
   - cbv zeta. intros Hvalidated.
     apply (expr_refines_trans _ _ _ (demote_full_stub_calls_refines before)).
     apply (expr_refines_trans _ _ _
@@ -1075,7 +1159,7 @@ Proof.
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
-    destruct (expr_eqb [] []
+    destruct (expr_says_at_least [] []
                 (order_statics_as a
                    (tidied_before rounds
                       (with_returns taken
@@ -1084,7 +1168,7 @@ Proof.
       eqn:Hnormalised.
     + intros _.
       exact (normalised_refines rounds kept taken before after Hnormalised).
-    + destruct (expr_eqb [] []
+    + destruct (expr_says_at_least [] []
                   (order_statics_as a
                      (without_statics unused
                         (tidied_before rounds
@@ -1093,7 +1177,7 @@ Proof.
                   a);
         [ intros [H | H]; discriminate H | ].
       set (c := without_head_statics unused a).
-      destruct (expr_eqb [] []
+      destruct (expr_says_at_least [] []
                   (order_statics_as c
                      (without_statics unused
                         (tidied_before rounds
@@ -1102,7 +1186,7 @@ Proof.
                   c);
         [ intros [H | H]; discriminate H | ].
       destruct
-        (expr_eqb [] []
+        (expr_says_at_least [] []
            (order_statics_as (float_code (with_code_first c))
               (float_code
                  (without_statics unused
@@ -1114,7 +1198,7 @@ Proof.
            (float_code (with_code_first c)));
         [ intros [H | H]; discriminate H | ].
       destruct
-        (expr_eqb [] []
+        (expr_says_at_least [] []
            (order_statics_as (with_statics_first Ls c)
               (with_statics_first Ls
                  (without_statics unused
@@ -1130,10 +1214,9 @@ Qed.
 Theorem validate_unit_sound : validate_unit_sound_statement.
 Proof.
   intros rounds unused slots G Ls kept before after. unfold validate_unit.
-  destruct (expr_eqb [] [] before after) eqn:Hsame.
+  destruct (expr_says_at_least [] [] before after) eqn:Hsame.
   - intros _.
-    apply expr_refines_program, expr_equivalent_refines, expr_eqb_sound,
-      Hsame.
+    apply expr_refines_program, expr_says_at_least_sound, Hsame.
   - cbv zeta. intros Hvalidated.
     apply (refines_trans _ _ _
       (expr_refines_program _ _ (demote_full_stub_calls_refines before))).
@@ -1150,7 +1233,7 @@ Proof.
     clear before. intros before.
     set (a := tidied_after rounds (normalise_after rounds kept after)).
     set (taken := negb (keeps_a_return a)).
-    destruct (expr_eqb [] []
+    destruct (expr_says_at_least [] []
                 (order_statics_as a
                    (tidied_before rounds
                       (with_returns taken
@@ -1168,7 +1251,7 @@ Proof.
           (normalise_before_refines rounds kept before)).
         apply (expr_refines_trans _ _ _ (with_returns_refines taken _)).
         apply tidied_before_refines. }
-      destruct (expr_eqb [] []
+      destruct (expr_says_at_least [] []
                   (order_statics_as a
                      (without_statics unused
                         (tidied_before rounds
@@ -1178,8 +1261,8 @@ Proof.
       * intros _. apply (refines_trans _ _ _ Hbefore).
         apply (refines_trans _ _ _
           (without_statics_program_refines unused _)).
-        apply expr_refines_program, expr_equivalent_refines.
-        exact (ordered_same_equivalent rounds kept _ after Hremoved).
+        apply expr_refines_program.
+        exact (ordered_same_refines rounds kept _ after Hremoved).
       * assert (Hafter :
           equivalent (State after [] [] empty_static_env empty_heap no_reads)
             (State a [] [] empty_static_env empty_heap no_reads))
@@ -1190,7 +1273,7 @@ Proof.
         { apply (refines_trans _ _ _
             (without_head_statics_program_refines unused a)).
           apply equivalent_refines, equivalent_sym, Hafter. }
-        destruct (expr_eqb [] []
+        destruct (expr_says_at_least [] []
                     (order_statics_as c
                        (without_statics unused
                           (tidied_before rounds
@@ -1203,10 +1286,11 @@ Proof.
             apply (refines_trans _
               (State c [] [] empty_static_env empty_heap no_reads));
               [ | exact Hcleaned ];
-            apply expr_refines_program, expr_equivalent_refines;
-            apply (expr_equivalent_trans _ _ _
-              (order_statics_as_equivalent c _));
-            exact (expr_eqb_sound _ _ Hremoved_head)
+            apply expr_refines_program;
+            apply (expr_refines_trans _ _ _
+              (expr_equivalent_refines _ _
+                 (order_statics_as_equivalent c _)));
+            exact (expr_says_at_least_sound _ _ Hremoved_head)
           | ].
         set (lifted :=
           without_statics unused
@@ -1226,7 +1310,7 @@ Proof.
           apply (refines_trans _ _ _ (without_slots_program_refines slots _)).
           apply without_statics_program_refines. }
         destruct
-          (expr_eqb [] []
+          (expr_says_at_least [] []
              (order_statics_as (float_code (with_code_first c))
                 (float_code lifted))
              (float_code (with_code_first c))) eqn:Hlifted.
@@ -1234,20 +1318,24 @@ Proof.
            apply (refines_trans _
              (State (with_code_first c) [] [] empty_static_env empty_heap
                 no_reads)).
-           { apply expr_refines_program, expr_equivalent_refines.
-             apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
-             apply (expr_equivalent_trans _ _ _
-               (order_statics_as_equivalent
-                  (float_code (with_code_first c)) _)).
-             apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hlifted)).
-             apply expr_equivalent_sym, float_code_equivalent. }
+           { apply expr_refines_program.
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _ (float_code_equivalent _))).
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _
+                  (order_statics_as_equivalent
+                     (float_code (with_code_first c)) _))).
+             apply (expr_refines_trans _ _ _
+               (expr_says_at_least_sound _ _ Hlifted)).
+             apply expr_equivalent_refines, expr_equivalent_sym,
+               float_code_equivalent. }
            apply (refines_trans _
              (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].
            apply equivalent_refines, equivalent_sym.
            apply with_code_first_program_equivalent.
         -- destruct
-             (expr_eqb [] []
+             (expr_says_at_least [] []
                 (order_statics_as (with_statics_first Ls c)
                    (with_statics_first Ls lifted))
                 (with_statics_first Ls c)) eqn:Hfirst;
@@ -1259,10 +1347,12 @@ Proof.
            apply (refines_trans _
              (State (with_statics_first Ls c) [] [] empty_static_env
                 empty_heap no_reads)).
-           { apply expr_refines_program, expr_equivalent_refines.
-             apply (expr_equivalent_trans _ _ _
-               (order_statics_as_equivalent (with_statics_first Ls c) _)).
-             exact (expr_eqb_sound _ _ Hfirst). }
+           { apply expr_refines_program.
+             apply (expr_refines_trans _ _ _
+               (expr_equivalent_refines _ _
+                  (order_statics_as_equivalent (with_statics_first Ls c)
+                     _))).
+             exact (expr_says_at_least_sound _ _ Hfirst). }
            apply (refines_trans _
              (State c [] [] empty_static_env empty_heap no_reads));
              [ | exact Hcleaned ].

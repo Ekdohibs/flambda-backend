@@ -274,6 +274,10 @@ Definition twin_metadata (ts : list nat) (metadata : handler_metadata)
   {| hm_params_kinds :=
        hm_params_kinds metadata
        ++ moved_from ts 0 (hm_params_kinds metadata);
+     hm_params_subkinds :=
+       stated_of_params metadata
+       ++ map (fun _ => any_value)
+            (moved_from ts 0 (stated_of_params metadata));
      hm_is_exn_handler := hm_is_exn_handler metadata |}.
 
 (* [pending] is the parameters whose [Let]s at the head of the handler

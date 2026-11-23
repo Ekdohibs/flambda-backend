@@ -348,6 +348,8 @@ Proof.
     (kinds_eqb (map (region_kind_of_value (count_uses rs)) vs)
        (hm_params_kinds metadata));
     [ | apply View_undefined ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+    [ | apply View_undefined ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | apply View_undefined ].
   eapply

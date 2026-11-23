@@ -102,7 +102,26 @@ and variant_subkind consts non_consts : Fexpr.subkind =
                 .constructor_shape)
           with
           | Undetermined -> None
-          | Determined (_shape, sk) -> Some (List.map kind_with_subkind sk) ))
+          | Determined (shape, sk) ->
+            (* The text writes the kinds of the fields and not the shape, and
+               its reader gives the shape that the kinds give: a constructor of
+               another shape cannot be written. *)
+            (match
+               ( shape,
+                 Shape_of_kinds.scannable
+                   (List.map Flambda_kind.With_subkind.kind sk) )
+             with
+            | Scannable shape, Ok shape_of_kinds
+              when Flambda_kind.Scannable_block_shape.equal shape shape_of_kinds
+              ->
+              ()
+            | (Scannable _ | Float_record), (Ok _ | Error _) ->
+              Misc.fatal_errorf
+                "The text of a term cannot say the shape %a of the constructor \
+                 %a of the kind of a value: it is not the shape that the kinds \
+                 of its fields give"
+                Flambda_kind.Block_shape.print shape Tag.Scannable.print tag);
+            Some (List.map kind_with_subkind sk) ))
   in
   Variant { consts; non_consts }
 
@@ -333,10 +352,42 @@ let or_variable f env (ov : _ Or_variable.t) : _ Fexpr.or_variable =
 
 let static_const env (sc : Static_const.t) : Fexpr.static_data =
   match sc with
-  | Block (tag, mutability, _shape, fields) ->
+  | Block (tag, mutability, shape, fields) ->
     let tag = tag |> Tag.Scannable.to_int in
     let elements = List.map (field_of_block env) fields in
-    Block { tag; mutability; elements }
+    (* The kinds of the fields are written for a block that has unboxed fields:
+       a value for each field of the value prefix, and the kind of each field of
+       the flat suffix. The reader makes the shape from them, so a shape that
+       the kinds of its fields do not give cannot be written: that of a mixed
+       block with no field in its flat suffix, which the kinds give as a block
+       of values. *)
+    let kinds : Fexpr.kind_with_subkind list option =
+      match shape with
+      | Value_only -> None
+      | Mixed_record mixed ->
+        let field_kinds =
+          Array.to_list (Flambda_kind.Mixed_block_shape.field_kinds mixed)
+        in
+        (match Shape_of_kinds.scannable field_kinds with
+        | Ok shape_of_kinds
+          when Flambda_kind.Scannable_block_shape.equal shape shape_of_kinds ->
+          ()
+        | Ok _ | Error _ ->
+          Misc.fatal_errorf
+            "The text of a term cannot say the shape %a of a static block: it \
+             is not the shape that the kinds of its fields give"
+            Flambda_kind.Scannable_block_shape.print shape);
+        Some
+          (List.map
+             (fun (kind : Flambda_kind.t) : Fexpr.kind_with_subkind ->
+               match kind with
+               | Value -> Value Anything
+               | Naked_number kind -> Naked_number kind
+               | Region | Rec_info ->
+                 Misc.fatal_error "A field of a block of the kind of no field")
+             field_kinds)
+    in
+    Block { tag; mutability; kinds; elements }
   | Set_of_closures _ -> assert false
   | Boxed_float32 f -> Boxed_float32 (or_variable float32 env f)
   | Boxed_float f -> Boxed_float (or_variable float env f)
@@ -725,9 +776,25 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
         && is_default_arity (Apply_expr.return_arity app)
       then Function Indirect
       else Function Indirect_unknown_arity
-    | C_call { needs_caml_c_call; _ } -> C_call { alloc = needs_caml_c_call }
+    | C_call { needs_caml_c_call; is_c_builtin; effects; coeffects } ->
+      C_call { alloc = needs_caml_c_call; is_c_builtin; effects; coeffects }
     | Method { kind; obj } -> Method { kind; obj = simple env obj }
-    | Effect _ -> Misc.fatal_error "TODO: Effect call kind"
+    | Effect operation ->
+      let operation, operands =
+        match operation with
+        | Perform { eff } -> Fexpr.Perform, [eff]
+        | Reperform { eff; cont; last_fiber } ->
+          Fexpr.Reperform, [eff; cont; last_fiber]
+        | With_stack { valuec; exnc; effc; f; arg } ->
+          Fexpr.With_stack, [valuec; exnc; effc; f; arg]
+        | With_stack_preemptible { valuec; exnc; effc; handle_tick; f; arg } ->
+          Fexpr.With_stack_preemptible, [valuec; exnc; effc; handle_tick; f; arg]
+        | Continue { cont; value } -> Fexpr.Continue, [cont; value]
+        | Discontinue { cont; exn } -> Fexpr.Discontinue, [cont; exn]
+        | Discontinue_with_backtrace { cont; exn; bt } ->
+          Fexpr.Discontinue_with_backtrace, [cont; exn; bt]
+      in
+      Effect { operation; operands = List.map (simple env) operands }
   in
   let param_arity = Apply_expr.args_arity app in
   let return_arity = Apply_expr.return_arity app in
@@ -737,8 +804,8 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Function { function_call = Direct _ | Indirect_unknown_arity } | Method _
-      ->
+    | Function { function_call = Direct _ | Indirect_unknown_arity }
+    | Method _ | Effect _ ->
       (* The arity of the arguments is written unless it is one value for each
          argument, which is what is read where none is written; and no arity at
          all is written if the arity of the result is one value too. *)
@@ -754,7 +821,6 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       let params_arity = Some (complex_arity param_arity) in
       let ret_arity = arity return_arity in
       Some { params_arity; ret_arity }
-    | Effect _ -> assert false
   in
   let inlined : Fexpr.inlined_attribute option =
     if Flambda2_terms.Inlined_attribute.is_default (Apply_expr.inlined app)
@@ -764,13 +830,19 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       | Default_inlined -> Some Default_inlined
       | Hint_inlined -> Some Hint_inlined
       | Forward_inlined -> Some Forward_inlined
-      | Always_inlined _ -> Some Always_inlined
-      | Unroll (n, _) -> Some (Unroll n)
+      | Always_inlined use_info -> Some (Always_inlined use_info)
+      | Unroll (n, use_info) -> Some (Unroll (n, use_info))
       | Never_inlined -> Some Never_inlined
   in
   let inlining_state = inlining_state (Apply_expr.inlining_state app) in
   let nontail =
     match Apply_expr.position app with Normal -> false | Nontail -> true
+  in
+  let probe =
+    Option.map
+      (fun ({ name; enabled_at_init } : Probe.desc) : Fexpr.probe ->
+        { name; enabled_at_init })
+      (Apply_expr.probe app)
   in
   Apply
     { func;
@@ -782,6 +854,7 @@ and apply_expr env (app : Apply_expr.t) : Fexpr.expr =
       inlined;
       inlining_state;
       nontail;
+      probe;
       arities
     }
 

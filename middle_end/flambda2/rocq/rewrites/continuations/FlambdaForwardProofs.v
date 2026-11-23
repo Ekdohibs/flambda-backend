@@ -78,18 +78,34 @@
    refinement. With it, an application that goes on has arguments
    that are known, by the binders around it, to have the kinds that
    the handler of its continuation gives its parameters, as many as
-   the handler has parameters; the first run then takes its step there
-   too, the second run is undefined where the first is, and a round is
-   read the other way too ([fwd_round_back]).
-   FlambdaForwardJumpsProofs.v and FlambdaForwardKindedProofs.v make
-   equivalences of that. For it the relation carries the kinds of the
-   variables bound around a point and those that the handlers of the
-   continuations bound around it give their parameters
-   (FlambdaNormaliseSpec.kinds_in_scope, [kinds_of_conts]), and the
-   two states have variables of those kinds
-   (FlambdaNormaliseProofs.kinds_hold). *)
+   the handler has parameters, and to be of what the handler states
+   of them; the first run then takes its step there too, the second
+   run is undefined where the first is, and a round is read the other
+   way too ([fwd_round_back]). FlambdaForwardJumpsProofs.v and
+   FlambdaForwardKindedProofs.v make equivalences of that. For it the
+   relation carries the kinds of the variables bound around a point
+   and what is known of them (FlambdaNormaliseSpec.kinds_in_scope;
+   FlambdaStatedScopeSpec.stated_in_scope, named [T] here), and the
+   kinds that the handlers of the continuations bound around it give
+   their parameters with what they state of them ([kinds_of_conts]);
+   and the two states have variables of those kinds
+   (FlambdaNormaliseProofs.kinds_hold) that are of what is known of
+   them under the static environment of the state
+   (FlambdaStatedScopeSpec.stated_hold). That last fact reads the
+   static environment, which grows between the step that makes a
+   closure and the step that applies it: the relation between
+   continuations is taken under a static environment, and is kept
+   when that environment grows ([cont_fwd_extend]). The relation
+   carries also what is known of the symbols that the [Let_static]s
+   around a point have bound (FlambdaStatedSymbolsSpec.symbols_stated,
+   named [Y] here), which holds in the static environment of the two
+   states (FlambdaStatedSymbolsSpec.symbols_hold): the step of a
+   [Let_static] adds to it what its bindings make known, and the
+   growth of the static environment keeps it. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
+From OxCamlFlambda2 Require Import FlambdaStatedSymbolsSpec
+  FlambdaStatedSymbolsProofs.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
@@ -98,6 +114,9 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSinkContsProofs FlambdaUnusedParamsSpec FlambdaUnusedParamsProofs
   FlambdaParamAliasesSpec FlambdaParamAliasesProofs FlambdaForwardSpec.
 From OxCamlFlambda2 Require Import FlambdaValueSpec FlambdaPrimitiveProofs.
+From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaSubkindSpec
+  FlambdaWellFormedSpec FlambdaWellFormedProofs FlambdaStatedScopeSpec
+  FlambdaStatedScopeProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -269,8 +288,9 @@ Proof.
 Qed.
 
 (* The kinds that the handlers of the continuations bound around a
-   point give their parameters. *)
-Definition kinds_of_conts : Type := list (continuation * list flambda_kind).
+   point give their parameters, and what they state of them. *)
+Definition kinds_of_conts : Type :=
+  list (continuation * (list flambda_kind * list param_subkind)).
 
 (* The arguments have values of these kinds, one each, wherever the
    variables in scope have values of theirs. *)
@@ -280,6 +300,17 @@ Definition args_have_kinds (G : kinds_in_scope) (args : list simple)
     kinds_hold G vars ->
     ∃ vs : list value,
       eval_simples vars args = Some vs ∧ map kind_of_value vs = kinds.
+
+(* The values of the arguments are of what is stated, one for one,
+   wherever the variables in scope are of what is known of them
+   (FlambdaStatedScopeSpec.stated_hold). *)
+Definition args_are_stated (Y : symbols_stated) (T : stated_in_scope)
+    (args : list simple) (sks : list param_subkind) : Prop :=
+  ∀ (statics : static_env) (vars : env) (vs : list value),
+    symbols_hold statics Y ->
+    stated_hold statics T vars ->
+    eval_simples vars args = Some vs ->
+    values_of_subkinds statics vs sks = true.
 
 (* ======================================================================== *)
 (* An expression with applications that go on                               *)
@@ -301,32 +332,49 @@ Variable strict : bool.
    trap action of the handler or with that of the first. Where
    [strict], the arguments of the first are known, by the binders
    around it, to have the kinds that the handler of its continuation
-   gives its parameters. *)
-Inductive goes (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+   gives its parameters, and to be of what it states of them. *)
+Inductive goes (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
     : apply_cont -> apply_cont -> Prop :=
-  | Goes_same (ac : apply_cont) : goes G K F ac ac
+  | Goes_same (ac : apply_cont) : goes Y G T K F ac ac
   | Goes_on (ac : apply_cont) (params : list variable) (target : apply_cont) :
     forward_of F (ac_continuation ac) = Some (params, target) ->
     length (ac_args ac) = length params ->
     (strict = true ->
-     ∃ kinds : list flambda_kind,
-       lookup (ac_continuation ac) K = Some kinds
-       ∧ args_have_kinds G (ac_args ac) kinds) ->
-    goes G K F ac (forwarded params (ac_args ac) target)
+     ∃ (kinds : list flambda_kind) (sks : list param_subkind),
+       lookup (ac_continuation ac) K = Some (kinds, sks)
+       ∧ args_have_kinds G (ac_args ac) kinds
+       ∧ args_are_stated Y T (ac_args ac) sks) ->
+    goes Y G T K F ac (forwarded params (ac_args ac) target)
   | Goes_keeping (ac : apply_cont) (params : list variable)
       (target : apply_cont) :
     forward_of F (ac_continuation ac) = Some (params, target) ->
     length (ac_args ac) = length params ->
     (strict = true ->
-     ∃ kinds : list flambda_kind,
-       lookup (ac_continuation ac) K = Some kinds
-       ∧ args_have_kinds G (ac_args ac) kinds) ->
-    goes G K F ac
+     ∃ (kinds : list flambda_kind) (sks : list param_subkind),
+       lookup (ac_continuation ac) K = Some (kinds, sks)
+       ∧ args_have_kinds G (ac_args ac) kinds
+       ∧ args_are_stated Y T (ac_args ac) sks) ->
+    goes Y G T K F ac
       (forwarded_keeping (ac_trap_action ac) params (ac_args ac) target).
 
 (* What [strict] asks of an entry: a handler that gives as many kinds
-   as it has parameters, so that it runs on values of those kinds. *)
+   as it has parameters, and that as many values, whatever they are,
+   are of what it states of its parameters, so that it runs on values
+   of those kinds. *)
 Definition strict_entry (params : list variable)
+    (metadata' : handler_metadata) : Prop :=
+  strict = true ->
+  length params = length (hm_params_kinds metadata')
+  ∧ ∀ (statics : static_env) (vs : list value),
+      length vs = length params ->
+      values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
+
+(* The first half of that, which is what the relation below asks of an
+   entry where [strict]: a handler that gives as many kinds as it has
+   parameters. That the values are of what the handler states of its
+   parameters is asked of each application that goes on ([goes]). *)
+Definition strict_length (params : list variable)
     (metadata' : handler_metadata) : Prop :=
   strict = true -> length params = length (hm_params_kinds metadata').
 
@@ -341,7 +389,7 @@ Definition entry_fits (k : continuation) (params : list variable)
     ∧ handler' = Apply_cont target
     ∧ NoDup params
     ∧ ac_continuation target <> k
-    ∧ strict_entry params metadata'
+    ∧ strict_length params metadata'
   end.
 
 (* The second call is the first, or returns to the continuation that
@@ -365,32 +413,38 @@ Inductive returns (F : forwards) : apply_expr -> apply_expr -> Prop :=
    schemes, which nothing uses.) *)
 #[local] Set Warnings "-register-all".
 Inductive fwd
-    : kinds_in_scope -> kinds_of_conts -> forwards -> expr -> expr -> Prop :=
-  | Fwd_let (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+    : symbols_stated -> kinds_in_scope -> stated_in_scope ->
+      kinds_of_conts -> forwards -> expr -> expr -> Prop :=
+  | Fwd_let (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
       (x : variable)
       (kind : flambda_kind) (d : named) (body body' : expr) :
     var_unfrozen F x ->
-    fwd ((x, kind) :: G) K F body body' ->
-    fwd G K F (Let x kind d body) (Let x kind d body')
-  | Fwd_let_static (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+    fwd Y ((x, kind) :: G) ((x, stated_of_named T d) :: T) K F body body' ->
+    fwd Y G T K F (Let x kind d body) (Let x kind d body')
+  | Fwd_let_static (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards)
       (bindings : list static_binding) (body body' : expr) :
-    fwd G K F body body' ->
-    fwd G K F (Let_static bindings body) (Let_static bindings body')
-  | Fwd_let_cont (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+    fwd (statics_stated bindings Y) G T K F body body' ->
+    fwd Y G T K F (Let_static bindings body) (Let_static bindings body')
+  | Fwd_let_cont (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
       (k : continuation) (params : list variable)
       (metadata metadata' : handler_metadata) (handler handler' : expr)
       (e : entry) (body body' : expr) :
-    fwd (params_in_scope params (hm_params_kinds metadata) G) K F handler
+    fwd Y (params_in_scope params (hm_params_kinds metadata) G)
+      (params_stated params (hm_params_subkinds metadata) T) K F handler
       handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> var_unfrozen F p) ->
     cont_unfrozen F k ->
     entry_fits k params metadata' handler' e ->
-    fwd G ((k, hm_params_kinds metadata') :: K) ((k, e) :: F) body body' ->
-    fwd G K F
+    fwd Y G T ((k, stated metadata') :: K) ((k, e) :: F) body body' ->
+    fwd Y G T K F
       (Let_cont_non_recursive k (Handler params metadata handler) body)
       (Let_cont_non_recursive k (Handler params metadata' handler') body')
-  | Fwd_let_cont_recursive (G : kinds_in_scope) (K : kinds_of_conts)
+  | Fwd_let_cont_recursive (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
       (F : forwards)
       (handlers handlers' : list (continuation * continuation_handler))
       (body body' : expr) :
@@ -398,61 +452,73 @@ Inductive fwd
       (fun kh kh' =>
          fst kh = fst kh'
          ∧ handler_params (snd kh) = handler_params (snd kh')
-         ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
-         ∧ fwd
+         ∧ handler_stated (snd kh') = handler_stated (snd kh)
+         ∧ fwd Y
              (params_in_scope (handler_params (snd kh))
                 (handler_kinds (snd kh)) G)
+             (params_stated (handler_params (snd kh))
+                (handler_params_subkinds (snd kh)) T)
              K (plain_forwards handlers ++ F) (handler_expr (snd kh))
              (handler_expr (snd kh'))
          ∧ (∀ p : variable, p ∈ handler_params (snd kh) -> var_unfrozen F p)
          ∧ cont_unfrozen F (fst kh))
       handlers handlers' ->
     handlers_bind_statics handlers' = handlers_bind_statics handlers ->
-    fwd G K (plain_forwards handlers ++ F) body body' ->
-    fwd G K F (Let_cont_recursive handlers body)
+    fwd Y G T K (plain_forwards handlers ++ F) body body' ->
+    fwd Y G T K F (Let_cont_recursive handlers body)
       (Let_cont_recursive handlers' body')
-  | Fwd_apply (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+  | Fwd_apply (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
       (ap ap' : apply_expr) :
-    returns F ap ap' -> fwd G K F (Apply ap) (Apply ap')
-  | Fwd_apply_cont (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+    returns F ap ap' -> fwd Y G T K F (Apply ap) (Apply ap')
+  | Fwd_apply_cont (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards)
       (ac ac' : apply_cont) :
-    goes G K F ac ac' -> fwd G K F (Apply_cont ac) (Apply_cont ac')
-  | Fwd_switch (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+    goes Y G T K F ac ac' -> fwd Y G T K F (Apply_cont ac) (Apply_cont ac')
+  | Fwd_switch (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
       (scrutinee : simple) (arms arms' : list (Z * apply_cont)) :
     Forall2
-      (fun arm arm' => fst arm = fst arm' ∧ goes G K F (snd arm) (snd arm'))
+      (fun arm arm' =>
+         fst arm = fst arm' ∧ goes Y G T K F (snd arm) (snd arm'))
       arms arms' ->
-    fwd G K F (Switch scrutinee arms) (Switch scrutinee arms')
-  | Fwd_invalid (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards) :
-    fwd G K F Invalid Invalid.
+    fwd Y G T K F (Switch scrutinee arms) (Switch scrutinee arms')
+  | Fwd_invalid (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards) :
+    fwd Y G T K F Invalid Invalid.
 
 (* The handlers of a recursive [Let_cont], one with one. *)
-Definition handlers_fwd (G : kinds_in_scope) (K : kinds_of_conts)
+Definition handlers_fwd (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
     (inside F : forwards)
     (handlers handlers' : list (continuation * continuation_handler)) : Prop :=
   Forall2
     (fun kh kh' =>
        fst kh = fst kh'
        ∧ handler_params (snd kh) = handler_params (snd kh')
-       ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
-       ∧ fwd
+       ∧ handler_stated (snd kh') = handler_stated (snd kh)
+       ∧ fwd Y
            (params_in_scope (handler_params (snd kh))
               (handler_kinds (snd kh)) G)
+           (params_stated (handler_params (snd kh))
+              (handler_params_subkinds (snd kh)) T)
            K inside (handler_expr (snd kh)) (handler_expr (snd kh'))
        ∧ (∀ p : variable, p ∈ handler_params (snd kh) -> var_unfrozen F p)
        ∧ cont_unfrozen F (fst kh))
     handlers handlers'.
 
-Lemma handlers_fwd_lookup (G : kinds_in_scope) (K : kinds_of_conts)
+Lemma handlers_fwd_lookup (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
     (inside F : forwards) (k : continuation)
     (handlers handlers' : list (continuation * continuation_handler)) :
-  handlers_fwd G K inside F handlers handlers' ->
+  handlers_fwd Y G T K inside F handlers handlers' ->
   match lookup k handlers, lookup k handlers' with
   | Some h, Some h' =>
     handler_params h = handler_params h'
-    ∧ handler_kinds h' = handler_kinds h
-    ∧ fwd (params_in_scope (handler_params h) (handler_kinds h) G) K inside
-        (handler_expr h) (handler_expr h')
+    ∧ handler_stated h' = handler_stated h
+    ∧ fwd Y (params_in_scope (handler_params h) (handler_kinds h) G)
+        (params_stated (handler_params h) (handler_params_subkinds h) T) K
+        inside (handler_expr h) (handler_expr h')
     ∧ (∀ p : variable, p ∈ handler_params h -> var_unfrozen F p)
   | None, None => True
   | _, _ => False
@@ -467,10 +533,11 @@ Qed.
 
 (* The names of related handlers are not names that an entry depends
    on, and are the same. *)
-Lemma handlers_fwd_names (G : kinds_in_scope) (K : kinds_of_conts)
+Lemma handlers_fwd_names (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
     (inside F : forwards) (k : continuation)
     (handlers handlers' : list (continuation * continuation_handler)) :
-  handlers_fwd G K inside F handlers handlers' ->
+  handlers_fwd Y G T K inside F handlers handlers' ->
   lookup k handlers <> None ->
   cont_unfrozen F k.
 Proof.
@@ -480,13 +547,14 @@ Proof.
   simpl in Hh. apply Hh.
 Qed.
 
-Lemma find_arm_goes (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+Lemma find_arm_goes (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards)
     (i : Z) (arms arms' : list (Z * apply_cont)) :
   Forall2
-    (fun arm arm' => fst arm = fst arm' ∧ goes G K F (snd arm) (snd arm'))
+    (fun arm arm' => fst arm = fst arm' ∧ goes Y G T K F (snd arm) (snd arm'))
     arms arms' ->
   match find_arm i arms, find_arm i arms' with
-  | Some ac, Some ac' => goes G K F ac ac'
+  | Some ac, Some ac' => goes Y G T K F ac ac'
   | None, None => True
   | _, _ => False
   end.
@@ -499,16 +567,17 @@ Qed.
 
 (* Every expression is related to itself, where no entry says anything. *)
 Fixpoint fwd_refl (e : expr) :
-  ∀ (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards),
-    (∀ k : continuation, forward_of F k = None) -> fwd G K F e e.
+  ∀ (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards),
+    (∀ k : continuation, forward_of F k = None) -> fwd Y G T K F e e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros G K F Hnone.
+    intros Y G T K F Hnone.
   - apply Fwd_let; [ apply var_unfrozen_none, Hnone | apply fwd_refl, Hnone ].
   - apply Fwd_let_static, fwd_refl, Hnone.
-  - apply (Fwd_let_cont G K F k params metadata metadata handler handler
+  - apply (Fwd_let_cont Y G T K F k params metadata metadata handler handler
       None);
       [ apply fwd_refl, Hnone | reflexivity
       | intros p _; apply var_unfrozen_none, Hnone
@@ -563,8 +632,8 @@ Definition held (K : kinds_of_conts) (F : forwards) (vars : env)
             lookup x vars = lookup x def_vars)
         ∧ resolve (ac_continuation target) conts'
           = resolve (ac_continuation target) def_conts'
-        ∧ strict_entry params metadata'
-        ∧ (strict = true -> lookup k K = Some (hm_params_kinds metadata')).
+        ∧ strict_length params metadata'
+        ∧ (strict = true -> lookup k K = Some (stated metadata')).
 
 (* Whether a name has no entry. *)
 Definition no_entry (F : forwards) (k : continuation) : bool :=
@@ -582,7 +651,9 @@ Proof. intros Hentry. unfold no_entry. rewrite Hentry. reflexivity. Qed.
    or closures whose handlers are related under the entries of where
    they were defined, under the same variables, and continuations that
    are in turn so related and for which those entries hold, the second
-   handler giving the kinds of the first; or two that are related, with
+   handler giving the kinds of the first, where the variables are of
+   what is known of them under the static environment given; or two
+   that are related, with
    the same extra arguments; or what is left of the same
    over-application, to return and to raise to two that are related.
 
@@ -593,37 +664,43 @@ Proof. intros Hentry. unfold no_entry. rewrite Hentry. reflexivity. Qed.
    on gives its callee to return to. A name that has an entry stands
    for a pair at [false]: the round of an application that goes on
    needs the closure of the entry itself. *)
-Inductive cont_fwd : bool -> cont_value -> cont_value -> Prop :=
-  | Same_fwd (b : bool) (c : cont_value) : cont_fwd b c c
-  | Closure_fwd (b : bool) (G : kinds_in_scope) (K : kinds_of_conts)
+Inductive cont_fwd (statics : static_env)
+    : bool -> cont_value -> cont_value -> Prop :=
+  | Same_fwd (b : bool) (c : cont_value) : cont_fwd statics b c c
+  | Closure_fwd (b : bool) (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
       (F : forwards)
       (params : list variable) (metadata metadata' : handler_metadata)
       (handler handler' : expr) (def_vars : env)
       (def_conts def_conts' : cont_env)
       (recursive recursive' : list (continuation * continuation_handler)) :
-    handlers_fwd G K (plain_forwards recursive ++ F) F recursive
+    handlers_fwd Y G T K (plain_forwards recursive ++ F) F recursive
       recursive' ->
-    fwd (params_in_scope params (hm_params_kinds metadata) G) K
+    fwd Y (params_in_scope params (hm_params_kinds metadata) G)
+      (params_stated params (hm_params_subkinds metadata) T) K
       (plain_forwards recursive ++ F) handler handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> var_unfrozen F p) ->
     (∀ k : continuation,
-      cont_fwd (no_entry F k) (resolve k def_conts) (resolve k def_conts')) ->
+      cont_fwd statics (no_entry F k) (resolve k def_conts)
+        (resolve k def_conts')) ->
     held K F def_vars def_conts' ->
     kinds_hold G def_vars ->
-    cont_fwd b
+    stated_hold statics T def_vars ->
+    symbols_hold statics Y ->
+    cont_fwd statics b
       (Closure (Handler params metadata handler) def_vars def_conts recursive)
       (Closure (Handler params metadata' handler') def_vars def_conts'
          recursive')
   | Extra_args_fwd (b : bool) (c c' : cont_value) (extra : list value) :
-    cont_fwd true c c' ->
-    cont_fwd b (Extra_args c extra) (Extra_args c' extra)
+    cont_fwd statics true c c' ->
+    cont_fwd statics b (Extra_args c extra) (Extra_args c' extra)
   | Over_fwd (b : bool) (remaining : list value)
       (remaining_arity return_arity : arity)
       (return_to return_to' exn_to exn_to' : cont_value) :
-    cont_fwd true return_to return_to' ->
-    cont_fwd true exn_to exn_to' ->
-    cont_fwd b
+    cont_fwd statics true return_to return_to' ->
+    cont_fwd statics true exn_to exn_to' ->
+    cont_fwd statics b
       (Over_application remaining remaining_arity return_arity return_to
          exn_to)
       (Over_application remaining remaining_arity return_arity return_to'
@@ -632,43 +709,77 @@ Inductive cont_fwd : bool -> cont_value -> cont_value -> Prop :=
       (metadata' : handler_metadata) (target : apply_cont) (def_vars : env)
       (def_conts' : cont_env) :
     strict = false ->
-    cont_fwd false c
+    cont_fwd statics false c
       (Closure (Handler params metadata' (Apply_cont target)) def_vars
          def_conts' []) ->
     NoDup params ->
     ac_args target = map Var params ->
-    cont_fwd true c (resolve (ac_continuation target) def_conts').
+    cont_fwd statics true c (resolve (ac_continuation target) def_conts').
 
 (* A pair at [false] is one at [true]. *)
-Lemma cont_fwd_any (b : bool) (c c' : cont_value) :
-  cont_fwd false c c' -> cont_fwd b c c'.
+Lemma cont_fwd_any (statics : static_env) (b : bool) (c c' : cont_value) :
+  cont_fwd statics false c c' -> cont_fwd statics b c c'.
 Proof.
   intros Hrel. inversion Hrel; subst.
   - apply Same_fwd.
-  - apply (Closure_fwd b G K F); assumption.
+  - apply (Closure_fwd statics b Y G T K F); assumption.
   - apply Extra_args_fwd. assumption.
   - apply Over_fwd; assumption.
 Qed.
 
-Lemma conts_any (F : forwards) (conts conts' : cont_env) :
+Lemma conts_any (statics : static_env) (F : forwards)
+    (conts conts' : cont_env) :
   (∀ k : continuation,
-    cont_fwd (no_entry F k) (resolve k conts) (resolve k conts')) ->
-  ∀ k : continuation, cont_fwd true (resolve k conts) (resolve k conts').
+    cont_fwd statics (no_entry F k) (resolve k conts) (resolve k conts')) ->
+  ∀ k : continuation,
+    cont_fwd statics true (resolve k conts) (resolve k conts').
 Proof.
   intros Hconts k. specialize (Hconts k).
   destruct (no_entry F k); [ exact Hconts | apply cont_fwd_any, Hconts ].
 Qed.
 
+(* Continuations related under a static environment are related under
+   one that extends it: what is known of the variables of a closure
+   stays true (FlambdaStatedScopeSpec.stated_hold_extend_statement). *)
+Lemma cont_fwd_extend (statics statics' : static_env) (b : bool)
+    (c c' : cont_value) :
+  statics_extend statics statics' ->
+  cont_fwd statics b c c' -> cont_fwd statics' b c c'.
+Proof.
+  intros Hextend Hrel.
+  induction Hrel
+    as [ b c
+       | b Y G T K F params metadata metadata' handler handler' def_vars
+           def_conts def_conts' recursive recursive' Hrecursive Hhandler Hmeta
+           Hparams Hdef_conts IHdef_conts Hheld Htyped Hstated Hsymbols
+       | b c c' extra Hc IHc
+       | b remaining remaining_arity return_arity return_to return_to'
+           exn_to exn_to' Hreturn IHreturn Hraise IHraise
+       | c params metadata' target def_vars def_conts' Hstrict Hc IHc Hnodup
+           Hpasses ].
+  - apply Same_fwd.
+  - apply (Closure_fwd statics' b Y G T K F); try assumption.
+    + exact (stated_hold_extend statics statics' T def_vars Hextend Hstated).
+    + exact (symbols_hold_extend statics statics' Y Hextend Hsymbols).
+  - apply Extra_args_fwd, IHc.
+  - apply Over_fwd; assumption.
+  - apply (Alias_fwd statics' c params metadata' target def_vars def_conts'
+      Hstrict); assumption.
+Qed.
+
 Inductive state_fwd : state -> state -> Prop :=
-  | State_fwd (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+  | State_fwd (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
       (e e' : expr)
       (vars : env) (conts conts' : cont_env) (statics : static_env)
         (hp : heap) (rd : read_record) :
-    fwd G K F e e' ->
+    fwd Y G T K F e e' ->
     (∀ k : continuation,
-      cont_fwd (no_entry F k) (resolve k conts) (resolve k conts')) ->
+      cont_fwd statics (no_entry F k) (resolve k conts) (resolve k conts')) ->
     held K F vars conts' ->
     kinds_hold G vars ->
+    stated_hold statics T vars ->
+    symbols_hold statics Y ->
     state_fwd (State e vars conts statics hp rd)
       (State e' vars conts' statics hp rd).
 
@@ -679,9 +790,9 @@ Proof. intros k params target Hsome. discriminate Hsome. Qed.
 Lemma state_fwd_refl (s : state) : state_fwd s s.
 Proof.
   destruct s as [e vars conts statics].
-  apply (State_fwd [] [] []);
+  apply (State_fwd [] [] [] [] []);
     [ apply fwd_refl; reflexivity | intros k; apply Same_fwd | apply held_nil
-    | apply kinds_hold_nil ].
+    | apply kinds_hold_nil | apply stated_hold_nil | apply symbols_hold_nil ].
 Qed.
 
 (* Binding a variable that no entry depends on. *)
@@ -724,17 +835,18 @@ Qed.
 
 (* The closures of the handlers of a recursive [Let_cont], whose names no
    entry depends on. *)
-Lemma held_rec (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+Lemma held_rec (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
     (handlers handlers' : list (continuation * continuation_handler))
     (vars def_vars : env) (def_conts' : cont_env) :
-  handlers_fwd G K (plain_forwards handlers ++ F) F handlers handlers' ->
+  handlers_fwd Y G T K (plain_forwards handlers ++ F) F handlers handlers' ->
   held K F vars def_conts' ->
   held K (plain_forwards handlers ++ F) vars
     (rec_closures handlers' def_vars def_conts' ++ def_conts').
 Proof.
   intros Hhandlers Hheld k params target Hsome.
   rewrite forward_of_plain in Hsome.
-  pose proof (handlers_fwd_lookup _ _ _ _ k _ _ Hhandlers) as Hlookup.
+  pose proof (handlers_fwd_lookup _ _ _ _ _ _ k _ _ Hhandlers) as Hlookup.
   destruct (lookup k handlers) eqn:Hk; [ discriminate Hsome | ].
   destruct (lookup k handlers') eqn:Hk'; [ contradiction | ].
   destruct (Hheld k params target Hsome)
@@ -745,40 +857,46 @@ Proof.
   split; [ exact Hvars | ]. split; [ | exact Hse ].
   rewrite resolve_rec_closures.
   pose proof
-    (handlers_fwd_lookup _ _ _ _ (ac_continuation target) _ _ Hhandlers)
+    (handlers_fwd_lookup _ _ _ _ _ _ (ac_continuation target) _ _ Hhandlers)
     as Htarget.
   destruct (lookup (ac_continuation target) handlers') eqn:Ht';
     [ | exact Hcont ].
   destruct (lookup (ac_continuation target) handlers) eqn:Ht;
     [ | contradiction ].
   exfalso.
-  apply (handlers_fwd_names _ _ _ _ (ac_continuation target) _ _ Hhandlers
+  apply (handlers_fwd_names _ _ _ _ _ _ (ac_continuation target) _ _ Hhandlers
     ltac:(rewrite Ht; discriminate) k).
   exists params, target. auto.
 Qed.
 
-Lemma rec_conts_fwd (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+Lemma rec_conts_fwd (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards)
     (handlers handlers' : list (continuation * continuation_handler))
-    (def_vars : env) (def_conts def_conts' : cont_env) :
-  handlers_fwd G K (plain_forwards handlers ++ F) F handlers handlers' ->
+    (def_vars : env) (def_conts def_conts' : cont_env)
+    (statics : static_env) :
+  handlers_fwd Y G T K (plain_forwards handlers ++ F) F handlers handlers' ->
   (∀ k : continuation,
-    cont_fwd (no_entry F k) (resolve k def_conts) (resolve k def_conts')) ->
+    cont_fwd statics (no_entry F k) (resolve k def_conts)
+      (resolve k def_conts')) ->
   held K F def_vars def_conts' ->
   kinds_hold G def_vars ->
+  stated_hold statics T def_vars ->
+  symbols_hold statics Y ->
   ∀ k : continuation,
-    cont_fwd (no_entry (plain_forwards handlers ++ F) k)
+    cont_fwd statics (no_entry (plain_forwards handlers ++ F) k)
       (resolve k (rec_closures handlers def_vars def_conts ++ def_conts))
       (resolve k (rec_closures handlers' def_vars def_conts' ++ def_conts')).
 Proof.
-  intros Hhandlers Hconts Hheld Htyped k. rewrite !resolve_rec_closures.
-  pose proof (handlers_fwd_lookup _ _ _ _ k _ _ Hhandlers) as Hlookup.
+  intros Hhandlers Hconts Hheld Htyped Hstated Hsymbols k.
+  rewrite !resolve_rec_closures.
+  pose proof (handlers_fwd_lookup _ _ _ _ _ _ k _ _ Hhandlers) as Hlookup.
   unfold no_entry. rewrite forward_of_plain.
   destruct (lookup k handlers) as [[params metadata handler] | ],
     (lookup k handlers') as [[params' metadata' handler'] | ];
     try contradiction; [ | exact (Hconts k) ].
   destruct Hlookup as (Hparams & Hmeta & Hhandler & Hunfrozen).
   simpl in Hparams, Hmeta, Hhandler, Hunfrozen. subst params'.
-  apply (Closure_fwd true G K F); assumption.
+  apply (Closure_fwd statics true Y G T K F); assumption.
 Qed.
 
 (* ======================================================================== *)
@@ -807,29 +925,41 @@ Proof. intros _. reflexivity. Qed.
 
 (* Where [strict], the arguments of an application that goes on have
    values, of the kinds that the handler of its entry gives its
-   parameters and as many as it has parameters: the closure of the
+   parameters, as many as it has parameters, and of what it states of
+   them under the static environment of the state: the closure of the
    entry runs on them. *)
-Lemma strict_runs (G : kinds_in_scope) (K : kinds_of_conts) (k : continuation)
+Lemma strict_runs (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (k : continuation)
     (args : list simple) (params : list variable)
-    (metadata' : handler_metadata) (vars : env) :
+    (metadata' : handler_metadata) (vars : env) (statics : static_env) :
   kinds_hold G vars ->
-  strict_entry params metadata'
-  ∧ (strict = true -> lookup k K = Some (hm_params_kinds metadata')) ->
+  stated_hold statics T vars ->
+  symbols_hold statics Y ->
+  strict_length params metadata'
+  ∧ (strict = true -> lookup k K = Some (stated metadata')) ->
   (strict = true ->
-   ∃ kinds : list flambda_kind,
-     lookup k K = Some kinds ∧ args_have_kinds G args kinds) ->
+   ∃ (kinds : list flambda_kind) (sks : list param_subkind),
+     lookup k K = Some (kinds, sks)
+     ∧ args_have_kinds G args kinds
+     ∧ args_are_stated Y T args sks) ->
   strict = true ->
   ∃ vs : list value,
     eval_simples vars args = Some vs
     ∧ map kind_of_value vs = hm_params_kinds metadata'
-    ∧ length params = length vs.
+    ∧ length params = length vs
+    ∧ values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 Proof.
-  intros Htyped [Hse Hkinds] Hhave Hstrict.
-  destruct (Hhave Hstrict) as (kinds & Hlookup & Hargs).
-  rewrite (Hkinds Hstrict) in Hlookup. injection Hlookup as <-.
+  intros Htyped Hstated Hsymbols [Hse Hkinds] Hhave Hstrict.
+  destruct (Hhave Hstrict) as (kinds & sks & Hlookup & Hargs & Hargs_stated).
+  rewrite (Hkinds Hstrict) in Hlookup. unfold stated in Hlookup.
+  injection Hlookup as <- <-.
   destruct (Hargs vars Htyped) as (vs & Hvs & Hk).
+  pose proof (Hse Hstrict) as Hlength.
+  assert (Hvs_length : length params = length vs)
+    by (rewrite Hlength, <- Hk; apply length_map).
   exists vs. split; [ exact Hvs | ]. split; [ exact Hk | ].
-  rewrite (Hse Hstrict), <- Hk. apply length_map.
+  split; [ exact Hvs_length | ].
+  exact (Hargs_stated statics vars vs Hsymbols Hstated Hvs).
 Qed.
 
 (* What is asked of the values that the closure of an entry is applied
@@ -838,7 +968,18 @@ Definition runs_on_values (params : list variable)
     (metadata' : handler_metadata) (vs : list value) : Prop :=
   strict = true ->
   map kind_of_value vs = hm_params_kinds metadata'
-  ∧ length params = length vs.
+  ∧ length params = length vs
+  ∧ ∀ statics : static_env,
+      values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
+
+(* The same under one static environment, which is what the relation
+   below asks. *)
+Definition runs_on_stated (statics : static_env) (params : list variable)
+    (metadata' : handler_metadata) (vs : list value) : Prop :=
+  strict = true ->
+  map kind_of_value vs = hm_params_kinds metadata'
+  ∧ length params = length vs
+  ∧ values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 
 (* What a result comes to after some more steps. *)
 Definition run_on (n : nat) (result : step_result) : step_result :=
@@ -896,24 +1037,27 @@ Proof. reflexivity. Qed.
 
 (* What the relation says of a handler that has become one [Apply_cont],
    and of the two applications. *)
-Lemma fwd_apply_cont_inv (G : kinds_in_scope) (K : kinds_of_conts)
+Lemma fwd_apply_cont_inv (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts)
     (F : forwards) (e : expr) (target : apply_cont) :
-  fwd G K F e (Apply_cont target) ->
-  ∃ b : apply_cont, e = Apply_cont b ∧ goes G K F b target.
+  fwd Y G T K F e (Apply_cont target) ->
+  ∃ b : apply_cont, e = Apply_cont b ∧ goes Y G T K F b target.
 Proof. intros Hfwd. inversion Hfwd; subst. eauto. Qed.
 
-Lemma goes_inv (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+Lemma goes_inv (Y : symbols_stated) (G : kinds_in_scope) (T : stated_in_scope)
+    (K : kinds_of_conts) (F : forwards)
     (b target : apply_cont) :
-  goes G K F b target ->
+  goes Y G T K F b target ->
   target = b
   ∨ ∃ (params_b : list variable) (target_b : apply_cont)
       (action : option trap_action),
       forward_of F (ac_continuation b) = Some (params_b, target_b)
       ∧ length (ac_args b) = length params_b
       ∧ (strict = true ->
-         ∃ kinds : list flambda_kind,
-           lookup (ac_continuation b) K = Some kinds
-           ∧ args_have_kinds G (ac_args b) kinds)
+         ∃ (kinds : list flambda_kind) (sks : list param_subkind),
+           lookup (ac_continuation b) K = Some (kinds, sks)
+           ∧ args_have_kinds G (ac_args b) kinds
+           ∧ args_are_stated Y T (ac_args b) sks)
       ∧ target = forwarded_keeping action params_b (ac_args b) target_b.
 Proof.
   intros [ ac
@@ -970,8 +1114,8 @@ Lemma call_code_fwd (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) :
-  cont_fwd true return_to return_to' ->
-  cont_fwd true exn_to exn_to' ->
+  cont_fwd statics true return_to return_to' ->
+  cont_fwd statics true exn_to exn_to' ->
   answer
     (call_code closure c vs args_arity return_arity return_to exn_to statics hp
        rd)
@@ -983,8 +1127,9 @@ Proof.
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. apply answer_undefined.
   - rewrite !Hcall. cbn [answer]. eexists. split; [ reflexivity | ].
-    apply (State_fwd [] [] []);
-      [ apply fwd_refl; reflexivity | | apply held_nil | apply kinds_hold_nil ].
+    apply (State_fwd [] [] [] [] []);
+      [ apply fwd_refl; reflexivity | | apply held_nil | apply kinds_hold_nil
+      | apply stated_hold_nil | apply symbols_hold_nil ].
     intros k'. change (no_entry [] k') with true. unfold resolve. simpl.
     destruct (Pos.eqb k' (code_return_continuation c)); [ exact Hreturn | ].
     destruct (Pos.eqb k' (code_exn_continuation c));
@@ -997,8 +1142,8 @@ Qed.
 Lemma run_call_fwd (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) :
-  cont_fwd true return_to return_to' ->
-  cont_fwd true exn_to exn_to' ->
+  cont_fwd statics true return_to return_to' ->
+  cont_fwd statics true exn_to exn_to' ->
   (∀ partial : value,
     ∃ n : nat,
       answer (run_on n (apply_cont_value return_to [partial] statics hp rd))
@@ -1025,16 +1170,18 @@ Proof.
   - exists 0. rewrite run_on_zero. apply answer_undefined.
 Qed.
 
-(* Related continuations applied to the same values: what the first
-   comes to, after some steps, is answered by what the second comes
-   to. And where the two are related at [false] and the second is the
+(* Related continuations applied to the same values, under the static
+   environment that they are related under: what the first comes to,
+   after some steps, is answered by what the second comes to. And
+   where the two are related at [false] and the second is the
    closure of an entry, the first applied to the values of some
    arguments comes, after some steps, to what answers one step of the
    [Apply_cont] of the entry with those arguments put for the
    parameters. *)
-Lemma cont_fwd_rounds (plain : bool) (c c' : cont_value) :
-  cont_fwd plain c c' ->
-  (∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
+Lemma cont_fwd_rounds (statics : static_env) (plain : bool)
+    (c c' : cont_value) :
+  cont_fwd statics plain c c' ->
+  (∀ (vs : list value) (hp : heap) (rd : read_record),
     ∃ n : nat,
       answer (run_on n (apply_cont_value c vs statics hp rd))
         (apply_cont_value c' vs statics hp rd))
@@ -1042,13 +1189,12 @@ Lemma cont_fwd_rounds (plain : bool) (c c' : cont_value) :
      ∀ (params : list variable) (target : apply_cont)
        (metadata' : handler_metadata) (def_vars0 : env)
        (def_conts0 : cont_env) (args : list simple) (vs : list value)
-       (vars : env) (conts' : cont_env) (statics : static_env) (hp : heap)
-         (rd : read_record),
+       (vars : env) (conts' : cont_env) (hp : heap) (rd : read_record),
        c'
        = Closure (Handler params metadata' (Apply_cont target)) def_vars0
            def_conts0 [] ->
        NoDup params ->
-       runs_on_values params metadata' vs ->
+       runs_on_stated statics params metadata' vs ->
        length args = length params ->
        eval_simples vars args = Some vs ->
        (∀ x : variable,
@@ -1065,9 +1211,10 @@ Lemma cont_fwd_rounds (plain : bool) (c c' : cont_value) :
 Proof.
   induction 1
     as [ plain c
-       | plain G K F params metadata metadata' handler handler' def_vars
+       | plain Y G T K F params metadata metadata' handler handler' def_vars
            def_conts def_conts' recursive recursive' Hrecursive Hhandler Hmeta
-           Hparams Hdef_conts IHdef_conts Hheld Htyped
+           Hparams Hdef_conts IHdef_conts Hheld Htyped Hstated_def
+           Hsymbols_def
        | plain c c' extra Hc [IHsame _]
        | plain remaining remaining_arity return_arity return_to return_to'
            exn_to exn_to' Hreturn [IHreturn _] Hraise _
@@ -1075,17 +1222,21 @@ Proof.
            [IHclosure IHon] Hnodup Hpasses ].
   - (* the same continuation *)
     split;
-      [ intros vs statics; exists 0; rewrite run_on_zero; apply answer_refl
-      | ].
+      [ intros vs; exists 0; rewrite run_on_zero; apply answer_refl | ].
     intros _ params target metadata' def_vars0 def_conts0 args vs vars conts'
-      statics hp rd -> Hnodup Hruns Hlen Hargs Hvars Hcont.
+      hp rd -> Hnodup Hruns Hlen Hargs Hvars Hcont.
     simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata'))
       eqn:Hkinds;
       [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
           rewrite Hvs, kinds_eqb_refl in Hkinds; discriminate Hkinds ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata'))
+      eqn:Hstated;
+      [ | exists 0; intros Hstrict;
+          destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+          rewrite Hpasses in Hstated; discriminate Hstated ].
     destruct (bind_params params vs def_vars0) as [bound | ] eqn:Hbind;
-      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as (_ & Hvs & _);
           destruct (bind_params_length params vs def_vars0 Hvs)
             as [bound Hsome];
           rewrite Hsome in Hbind; discriminate Hbind ].
@@ -1095,43 +1246,59 @@ Proof.
          def_conts0 statics _ rd_ Hnodup Hargs Hbind Hvars Hcont).
     apply answer_refl.
   - (* related closures *)
+    pose proof Hmeta as Hmeta_kinds. unfold stated in Hmeta_kinds.
+    injection Hmeta_kinds as Hmeta_kinds Hmeta_stated.
     split.
-    + intros vs statics. exists 0. rewrite run_on_zero. simpl. rewrite Hmeta.
+    + intros vs. exists 0. rewrite run_on_zero. simpl.
+      rewrite Hmeta_kinds, Hmeta_stated.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds; [ | apply answer_undefined ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+        eqn:Hpass; [ | apply answer_undefined ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
         [ | apply answer_undefined ].
       eexists. split; [ reflexivity | ].
       apply
-        (State_fwd (params_in_scope params (hm_params_kinds metadata) G) K
+        (State_fwd Y (params_in_scope params (hm_params_kinds metadata) G)
+           (params_stated params (hm_params_subkinds metadata) T) K
            (plain_forwards recursive ++ F));
-        [ exact Hhandler | | | ].
-      * apply (rec_conts_fwd G K F); assumption.
-      * apply (held_rec G); [ exact Hrecursive | ].
+        [ exact Hhandler | | | | | exact Hsymbols_def ].
+      * apply (rec_conts_fwd Y G T K F); assumption.
+      * apply (held_rec Y G T); [ exact Hrecursive | ].
         exact (held_bind K F params vs def_vars bound def_conts' Hparams Hbind
           Hheld).
       * rewrite <- Hkinds.
         exact (params_in_scope_hold params vs G def_vars bound Htyped Hbind).
+      * exact
+          (params_stated_bound statics params vs _ T def_vars bound
+             Hstated_def Hpass Hbind).
     + intros _ params0 target metadata0 def_vars0 def_conts0 args vs vars
-        conts' statics hp rd Hc' Hnodup Hruns Hlen Hargs Hvars Hcont.
+        conts' hp rd Hc' Hnodup Hruns Hlen Hargs Hvars Hcont.
       injection Hc' as Heq_params Heq_metadata Heq_handler Heq_vars Heq_conts
         Heq_recursive.
       subst params0 metadata0 handler' def_vars0 def_conts0 recursive'.
       unfold handlers_fwd in Hrecursive.
       destruct recursive as [ | kh rest]; [ | inversion Hrecursive ].
       simpl in Hhandler.
-      destruct (fwd_apply_cont_inv _ K F handler target Hhandler)
+      destruct (fwd_apply_cont_inv _ _ _ K F handler target Hhandler)
         as (b & -> & Hgoes).
       simpl.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds;
         [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
-            rewrite <- Hmeta, Hvs, kinds_eqb_refl in Hkinds;
+            rewrite <- Hmeta_kinds, Hvs, kinds_eqb_refl in Hkinds;
             discriminate Hkinds ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+        eqn:Hstated;
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+            rewrite <- Hmeta_stated, Hpasses in Hstated;
+            discriminate Hstated ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
-        [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & Hvs & _);
             destruct (bind_params_length params vs def_vars Hvs)
               as [bound Hsome];
             rewrite Hsome in Hbind; discriminate Hbind ].
@@ -1144,13 +1311,19 @@ Proof.
         kinds_hold (params_in_scope params (hm_params_kinds metadata) G) bound).
       { rewrite <- Hkinds.
         exact (params_in_scope_hold params vs G def_vars bound Htyped Hbind). }
-      destruct (goes_inv _ K F b target Hgoes)
+      assert (Hstated_bound :
+        stated_hold statics
+          (params_stated params (hm_params_subkinds metadata) T) bound)
+        by exact
+             (params_stated_bound statics params vs _ T def_vars bound
+                Hstated_def Hstated Hbind).
+      destruct (goes_inv _ _ _ K F b target Hgoes)
         as [-> | (params_b & target_b & action & Hentry & Hlength & Hkinds_b
                   & Htarget)].
       * (* the handler of the first closure is the same application *)
         destruct (IHdef_conts (ac_continuation b)) as [IHapply _].
         destruct (eval_simples bound (ac_args b)) as [vt | ] eqn:Hargs_b.
-        -- destruct (IHapply vt statics hp rd) as [n Hanswer].
+        -- destruct (IHapply vt hp rd) as [n Hanswer].
            exists (S n). unfold run_on at 1.
            rewrite run_succ_on, !step_apply_cont, Hargs_b.
            unfold apply_continuation. exact Hanswer.
@@ -1165,16 +1338,18 @@ Proof.
         specialize
           (IHon (no_entry_some F (ac_continuation b) params_b target_b Hentry)).
         pose proof
-          (strict_runs _ K (ac_continuation b) (ac_args b) params_b metadata_b
-             bound Htyped_bound Hse_b Hkinds_b)
+          (strict_runs _ _ _ K (ac_continuation b) (ac_args b) params_b
+             metadata_b bound statics Htyped_bound Hstated_bound
+             Hsymbols_def Hse_b
+             Hkinds_b)
           as Hruns_b.
         destruct (eval_simples bound (ac_args b)) as [vb | ] eqn:Hargs_b.
-        -- assert (Hruns_vb : runs_on_values params_b metadata_b vb).
+        -- assert (Hruns_vb : runs_on_stated statics params_b metadata_b vb).
            { intros Hstrict.
              destruct (Hruns_b Hstrict) as (vb' & Hvb' & Hrest).
              injection Hvb' as <-. exact Hrest. }
            destruct (IHon params_b target_b metadata_b def_vars_b def_conts_b
-                       (ac_args b) vb bound def_conts' statics hp rd Hresolve_b
+                       (ac_args b) vb bound def_conts' hp rd Hresolve_b
                        Hnodup_b Hruns_vb Hlength Hargs_b Hvars_b Hcont_b)
              as [n Hanswer].
            exists (S n). unfold run_on at 1.
@@ -1186,24 +1361,24 @@ Proof.
            destruct (Hruns_b Hstrict) as (vb' & Hvb' & _).
            discriminate Hvb'.
   - (* the same extra arguments *)
-    split; [ intros vs statics; simpl; apply IHsame | ].
+    split; [ intros vs; simpl; apply IHsame | ].
     intros _ params target metadata' def_vars0 def_conts0 args vs vars conts'
-      statics hp rd Hc'.
+      hp rd Hc'.
     discriminate Hc'.
   - (* what is left of the same over-application *)
     split.
-    + intros vs statics hp rd. rewrite !apply_cont_value_over_application.
+    + intros vs hp rd. rewrite !apply_cont_value_over_application.
       destruct vs as [ | v [ | v' vs]];
         try (exists 0; rewrite run_on_zero; apply answer_undefined).
       unfold call_function.
       apply run_call_fwd; [ exact Hreturn | exact Hraise | ].
       intros partial. apply IHreturn.
     + intros _ params target metadata' def_vars0 def_conts0 args vs vars conts'
-        statics hp rd Hc'.
+        hp rd Hc'.
       discriminate Hc'.
   - (* what a closure passes its parameters on to *)
     split; [ | intros Hfalse; discriminate Hfalse ].
-    intros vs statics hp rd.
+    intros vs hp rd.
     destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind.
     + (* the first comes to the application of the handler, which is one
          of the second to the values given *)
@@ -1217,7 +1392,7 @@ Proof.
       { intros x Hnotin Hfree. rewrite Hpasses in Hfree.
         destruct (params_only params x Hnotin Hfree). }
       destruct (IHon eq_refl params target metadata' def_vars def_conts'
-                  (map Var params) vs bound def_conts' statics hp rd eq_refl
+                  (map Var params) vs bound def_conts' hp rd eq_refl
                   Hnodup
                   ltac:(intros Hs; rewrite Hstrict in Hs; discriminate Hs)
                   (length_map Var params) Hvalues Hfrozen eq_refl)
@@ -1231,7 +1406,7 @@ Proof.
       exact Hanswer.
     + (* the closure does not run on these values, so the first run is
          undefined *)
-      destruct (IHclosure vs statics hp rd) as [n Hanswer]. exists n.
+      destruct (IHclosure vs hp rd) as [n Hanswer]. exists n.
       assert (Hundefined :
         apply_cont_value
           (Closure (Handler params metadata' (Apply_cont target)) def_vars
@@ -1241,7 +1416,8 @@ Proof.
       { simpl.
         destruct (kinds_eqb (map kind_of_value vs)
                     (hm_params_kinds metadata'));
-          [ rewrite Hbind | ]; reflexivity. }
+          [ rewrite Hbind; destruct (values_of_subkinds _ _ _) | ];
+          reflexivity. }
       rewrite Hundefined in Hanswer.
       rewrite (answer_undefined_inv _ Hanswer). intros Hs.
       rewrite Hstrict in Hs. discriminate Hs.
@@ -1265,42 +1441,61 @@ Qed.
 Lemma fwd_round_answer (st st' : state) :
   state_fwd st st' -> ∃ n : nat, answer (run (S n) st) (step st').
 Proof.
-  intros [G K F e e' vars conts conts' statics hp rd Hfwd Hconts Hheld Htyped].
+  intros [Y G T K F e e' vars conts conts' statics hp rd Hfwd Hconts Hheld
+            Htyped Hstated Hsymbols].
   destruct Hfwd
-    as [ G K F x kind d body body' Hx Hbody | G K F bindings body body' Hbody
-       | G K F k params metadata metadata' handler handler' entry body body'
+    as [ Y G T K F x kind d body body' Hx Hbody
+       | Y G T K F bindings body body' Hbody
+       | Y G T K F k params metadata metadata' handler handler' entry body body'
            Hhandler Hmeta Hparams Hk Hfits Hbody
-       | G K F handlers handlers' body body' Hhandlers Hbinds Hbody
-       | G K F ap ap' Hreturns | G K F ac ac' Hgoes
-       | G K F scrutinee arms arms' Harms | G K F ].
+       | Y G T K F handlers handlers' body body' Hhandlers Hbinds Hbody
+       | Y G T K F ap ap' Hreturns | Y G T K F ac ac' Hgoes
+       | Y G T K F scrutinee arms arms' Harms | Y G T K F ].
   - (* Let *)
     exists 0. rewrite run_one, !step_let_exec.
-    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ];
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ] eqn:Hexec;
       [ | apply answer_undefined ].
     destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind;
       [ | apply answer_undefined ].
     apply kind_eqb_eq in Hkind. subst kind.
     eexists. split; [ reflexivity | ].
-    apply (State_fwd ((x, kind_of_value v) :: G) K F);
-      [ exact Hbody | exact Hconts | | apply kinds_hold_cons, Htyped ].
-    apply held_var; assumption.
+    apply
+      (State_fwd Y ((x, kind_of_value v) :: G) ((x, stated_of_named T d) :: T)
+         K F);
+      [ exact Hbody | exact Hconts | | apply kinds_hold_cons, Htyped |
+      | exact Hsymbols ].
+    + apply held_var; assumption.
+    + apply stated_hold_cons; [ exact Hstated | ].
+      exact
+        (stated_of_named_sound statics hp hp' rd rd' T vars d v Hstated
+           Hexec).
   - (* Let_static *)
     exists 0. rewrite run_one, !step_let_static.
-    destruct (eval_static_bindings vars bindings statics) as [extended | ];
-      [ | apply answer_undefined ].
+    destruct (eval_static_bindings vars bindings statics) as [extended | ]
+      eqn:Hextended; [ | apply answer_undefined ].
+    pose proof
+      (eval_static_bindings_extend vars bindings statics extended Hextended)
+      as Hextend.
     eexists. split; [ reflexivity | ].
-    apply (State_fwd G K F); assumption.
+    apply (State_fwd (statics_stated bindings Y) G T K F); try assumption.
+    + intros k'. exact (cont_fwd_extend statics extended _ _ _ Hextend
+        (Hconts k')).
+    + exact (stated_hold_extend statics extended T vars Hextend Hstated).
+    + exact
+        (statics_stated_bound vars extended bindings statics Y Hextended
+           (symbols_hold_extend statics extended Y Hextend Hsymbols)).
   - (* Let_cont_non_recursive *)
     exists 0. rewrite run_one, !step_let_cont_non_recursive.
     eexists. split; [ reflexivity | ].
-    apply (State_fwd G ((k, hm_params_kinds metadata') :: K) ((k, entry) :: F));
-      [ exact Hbody | | | exact Htyped ].
+    apply (State_fwd Y G T ((k, stated metadata') :: K) ((k, entry) :: F));
+      [ exact Hbody | | | exact Htyped | exact Hstated | exact Hsymbols ].
     + intros k'. destruct (Pos.eq_dec k' k) as [-> | Hne].
       * rewrite !resolve_head.
-        apply (Closure_fwd _ G K F params metadata metadata' handler handler'
-          vars conts conts' [] []);
+        apply (Closure_fwd statics _ Y G T K F params metadata metadata' handler
+          handler' vars conts conts' [] []);
           [ apply Forall2_nil | exact Hhandler | exact Hmeta | exact Hparams
-          | exact Hconts | exact Hheld | exact Htyped ].
+          | exact Hconts | exact Hheld | exact Htyped | exact Hstated
+          | exact Hsymbols ].
       * rewrite !resolve_other by exact Hne. unfold no_entry.
         rewrite forward_of_other by exact Hne. exact (Hconts k').
     + intros k' params0 target Hsome.
@@ -1331,14 +1526,14 @@ Proof.
     exists 0. rewrite run_one, !step_let_cont_recursive, Hbinds.
     destruct (handlers_bind_statics handlers); [ apply answer_undefined | ].
     eexists. split; [ reflexivity | ].
-    apply (State_fwd G K (plain_forwards handlers ++ F));
-      [ exact Hbody | | | exact Htyped ].
-    + apply (rec_conts_fwd G K F); assumption.
-    + apply (held_rec G); assumption.
+    apply (State_fwd Y G T K (plain_forwards handlers ++ F));
+      [ exact Hbody | | | exact Htyped | exact Hstated | exact Hsymbols ].
+    + apply (rec_conts_fwd Y G T K F); assumption.
+    + apply (held_rec Y G T); assumption.
   - (* Apply: the same call, returning to related continuations *)
-    pose proof (conts_any F conts conts' Hconts) as Hany.
+    pose proof (conts_any statics F conts conts' Hconts) as Hany.
     assert (Hreturn :
-      cont_fwd true (resolve (ap_continuation ap) conts)
+      cont_fwd statics true (resolve (ap_continuation ap) conts)
         (resolve (ap_continuation ap') conts')).
     { destruct Hreturns as [ap | ap params target Hstrict Hentry Hpasses];
         [ apply Hany | ].
@@ -1347,7 +1542,9 @@ Proof.
         as (Hnodup & metadata' & def_vars & def_conts' & Hresolve & _ & Hcont
             & _).
       rewrite Hcont.
-      apply (Alias_fwd _ params metadata' target def_vars def_conts' Hstrict);
+      apply
+        (Alias_fwd statics _ params metadata' target def_vars def_conts'
+           Hstrict);
         [ | exact Hnodup | exact Hpasses ].
       rewrite <- Hresolve.
       pose proof (Hconts (ap_continuation ap)) as Hplain.
@@ -1382,17 +1579,17 @@ Proof.
       - destruct extra as [ | v extra]; simpl;
           [ apply Hany | apply Extra_args_fwd, Hany ].
       - intros partial.
-        exact (proj1 (cont_fwd_rounds _ _ _ Hreturn) [partial] statics hp rd_).
+        exact (proj1 (cont_fwd_rounds statics _ _ _ Hreturn) [partial] hp rd_).
           }
     destruct Hround as [n Hround]. exists n. rewrite run_succ_on.
     exact Hround.
   - (* Apply_cont *)
-    destruct (cont_fwd_rounds _ _ _ (Hconts (ac_continuation ac)))
+    destruct (cont_fwd_rounds statics _ _ _ (Hconts (ac_continuation ac)))
       as [Hsame Hon].
-    destruct (goes_inv G K F ac ac' Hgoes)
+    destruct (goes_inv Y G T K F ac ac' Hgoes)
       as [-> | (params & target & action & Hentry & Hlength & Hkinds & ->)].
     + destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
-      * destruct (Hsame vs statics hp rd) as [n Hanswer]. exists n.
+      * destruct (Hsame vs hp rd) as [n Hanswer]. exists n.
         rewrite run_succ_on, !step_apply_cont, Hargs.
         unfold apply_continuation. exact Hanswer.
       * exists 0. rewrite run_one, !step_apply_cont, Hargs.
@@ -1403,16 +1600,15 @@ Proof.
         as (Hnodup & metadata' & def_vars & def_conts' & Hresolve & Hvars
             & Hcont & Hse).
       pose proof
-        (strict_runs G K (ac_continuation ac) (ac_args ac) params metadata'
-           vars Htyped Hse Hkinds)
+        (strict_runs Y G T K (ac_continuation ac) (ac_args ac) params metadata'
+           vars statics Htyped Hstated Hsymbols Hse Hkinds)
         as Hruns.
       destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
-      * assert (Hruns_vs : runs_on_values params metadata' vs).
+      * assert (Hruns_vs : runs_on_stated statics params metadata' vs).
         { intros Hstrict. destruct (Hruns Hstrict) as (vs' & Hvs' & Hrest).
           injection Hvs' as <-. exact Hrest. }
         destruct (Hon params target metadata' def_vars def_conts' (ac_args ac)
-                    vs vars conts' statics hp rd Hresolve Hnodup Hruns_vs
-                      Hlength
+                    vs vars conts' hp rd Hresolve Hnodup Hruns_vs Hlength
                     Hargs Hvars Hcont)
           as [n Hanswer].
         exists n.
@@ -1426,13 +1622,13 @@ Proof.
       [ | apply answer_undefined ].
     destruct (naked_immediate_of_value v) as [i | ];
       [ | apply answer_undefined ].
-    pose proof (find_arm_goes G K F i arms arms' Harms) as Harm.
+    pose proof (find_arm_goes Y G T K F i arms arms' Harms) as Harm.
     destruct (find_arm i arms) as [ac | ], (find_arm i arms') as [ac' | ];
       try contradiction; [ | apply answer_undefined ].
     eexists. split; [ reflexivity | ].
-    apply (State_fwd G K F);
+    apply (State_fwd Y G T K F);
       [ apply Fwd_apply_cont, Harm | exact Hconts | exact Hheld
-      | exact Htyped ].
+      | exact Htyped | exact Hstated | exact Hsymbols ].
   - (* Invalid *)
     exists 0. rewrite run_one, !step_invalid. apply answer_undefined.
 Qed.
@@ -1489,9 +1685,10 @@ Proof.
     rewrite forward_applications_binds_statics, IH. reflexivity.
 Qed.
 
-Lemma goes_forward_apply_cont_keeping (G : kinds_in_scope)
+Lemma goes_forward_apply_cont_keeping (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope)
     (K : kinds_of_conts) (F : forwards) (ac : apply_cont) :
-  goes false G K F ac (forward_apply_cont_keeping F ac).
+  goes false Y G T K F ac (forward_apply_cont_keeping F ac).
 Proof.
   unfold forward_apply_cont_keeping.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hk;
@@ -1504,9 +1701,10 @@ Proof.
   apply Goes_keeping; [ assumption | assumption | intros Hs; discriminate Hs ].
 Qed.
 
-Lemma goes_forward_arm (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards)
+Lemma goes_forward_arm (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards)
     (ac : apply_cont) :
-  goes false G K F ac (forward_arm F ac).
+  goes false Y G T K F ac (forward_arm F ac).
 Proof.
   unfold forward_arm.
   destruct (forward_of F (ac_continuation ac)) as [[params target] | ] eqn:Hk;
@@ -1516,7 +1714,7 @@ Proof.
   destruct (ac_args ac) as [ | arg args] eqn:Hargs;
     [ | apply goes_forward_apply_cont_keeping ].
   destruct (no_trap_action ac); [ | apply goes_forward_apply_cont_keeping ].
-  pose proof (Goes_on false G K F ac [] target Hk) as Hgoes.
+  pose proof (Goes_on false Y G T K F ac [] target Hk) as Hgoes.
   rewrite Hargs in Hgoes.
   apply Hgoes; [ reflexivity | intros Hs; discriminate Hs ].
 Qed.
@@ -1591,7 +1789,7 @@ Qed.
 Lemma forwarding_fits (strict : bool) (k : continuation)
     (params : list variable) (metadata metadata' : handler_metadata)
     (handler' body : expr) :
-  strict_entry strict params metadata' ->
+  strict_length strict params metadata' ->
   entry_fits strict k params metadata' handler'
     (forwarding k params metadata handler' body)
   ∧ (∀ x : variable,
@@ -1735,13 +1933,14 @@ Proof.
 Qed.
 
 Fixpoint forward_applications_fwd (e : expr) :
-  ∀ (calls : bool) (G : kinds_in_scope) (K : kinds_of_conts) (F : forwards),
-    safe F e -> fwd false G K F e (forward_applications_under calls F e).
+  ∀ (calls : bool) (Y : symbols_stated) (G : kinds_in_scope)
+    (T : stated_in_scope) (K : kinds_of_conts) (F : forwards),
+    safe F e -> fwd false Y G T K F e (forward_applications_under calls F e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros calls G K F Hsafe; simpl.
+    intros calls Y G T K F Hsafe; simpl.
   - destruct (safe_let F x kind d body Hsafe) as [Hbody Hx].
     apply Fwd_let; [ exact Hx | apply forward_applications_fwd, Hbody ].
   - apply Fwd_let_static, forward_applications_fwd. exact Hsafe.
@@ -1752,7 +1951,7 @@ Proof.
          (forward_applications_under calls F handler) body)
       as (Hfits & Hvars & Hconts);
       [ intros Hstrict; discriminate Hstrict | ].
-    apply (Fwd_let_cont false G K F k params metadata metadata handler
+    apply (Fwd_let_cont false Y G T K F k params metadata metadata handler
       (forward_applications_under calls F handler)
       (forwarding k params metadata
          (forward_applications_under calls F handler) body));
@@ -1809,9 +2008,10 @@ Theorem forward_applications_with_refines :
 Proof.
   intros calls e vars conts statics hp rd.
   apply (rounds_refines (state_fwd false) (fwd_round false)).
-  apply (State_fwd false [] [] []);
+  apply (State_fwd false [] [] [] [] []);
     [ apply forward_applications_fwd, safe_none; reflexivity
-    | intros k; apply Same_fwd | apply held_nil | apply kinds_hold_nil ].
+    | intros k; apply Same_fwd | apply held_nil | apply kinds_hold_nil
+    | apply stated_hold_nil | apply symbols_hold_nil ].
 Qed.
 
 Theorem forward_applications_refines : forward_applications_refines_statement.

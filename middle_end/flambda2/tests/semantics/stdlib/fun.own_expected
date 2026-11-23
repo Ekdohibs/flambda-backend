@@ -1,0 +1,4 @@
+stdlib__Fun.fl: not checked: the model has not got static constant (Unique_block (tag 248) (shape Value_only)
+                 ((Stdlib__Fun.camlStdlib__Fun__immstring_0
+                   /workspace_root/stdlib/build/fun.ml:27,0--31)
+                 (Pccall/597N /workspace_root/stdlib/build/fun.ml:27,0--31)))

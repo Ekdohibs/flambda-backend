@@ -634,6 +634,8 @@ Proof.
              (unarize_per_parameter (code_params_arity c))
         && arity_eqb return_arity (code_result_arity c)));
     [ exact I | ].
+  destruct (negb (values_of_subkinds _ vs _));
+    [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ] eqn:Hbind;
     [ | exact I ].
@@ -704,6 +706,8 @@ Proof.
   - simpl. apply IH. rewrite forallb_app, Hvs, Hextra. reflexivity.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].

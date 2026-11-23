@@ -29,12 +29,13 @@
    needs review.
 
    The recursion is that of FlambdaCseProofs.v and of
-   FlambdaCseEquivalentProofs.v for the sharing of primitives, with
-   what is known holding where the term runs
-   (FlambdaCseSpec.all_computed_or_made). The lemmas of
-   FlambdaCseProofs.v keep it, and say that the constant which takes
-   the place of the length of an array made runs as the length does
-   ([made_length_named_same]). *)
+   FlambdaCseEquivalentProofs.v for the sharing of primitives, but
+   for the handlers of recursive continuations, which this rule
+   leaves and the sharing goes into, with what is known holding
+   where the term runs (FlambdaCseSpec.all_computed_or_made). The
+   lemmas of FlambdaCseProofs.v keep it, and say that the constant
+   which takes the place of the length of an array made runs as the
+   length does ([made_length_named_same]). *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.

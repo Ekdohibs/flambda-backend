@@ -339,4 +339,8 @@ let may_take params metadata f =
 (** val with_one_more : handler_metadata -> flambda_kind -> handler_metadata **)
 
 let with_one_more metadata kind =
-  make_handler_metadata (app metadata.hm_params_kinds (kind :: []))
+  { hm_params_kinds = app metadata.hm_params_kinds (kind :: []);
+    hm_params_subkinds =
+      firstn (length metadata.hm_params_kinds) metadata.hm_params_subkinds;
+    hm_is_exn_handler = false
+  }

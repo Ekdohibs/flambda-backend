@@ -1,0 +1,12 @@
+let $camlHidden_included__first_const_0 = Block 0 () in
+(let Pfield/17 = %block_load.[`1`] ($Hidden.camlHidden) in
+ let Pfield/18 = %block_load.[`0`] ($Hidden.camlHidden) in
+ let Pmakeblock/19 = %block.[`0`].`toplevel` (Pfield/18, Pfield/17) in
+ cont k/5 (Pmakeblock/19))
+  where k/5 define_root_symbol (module_block/14) =
+    let field_0/15 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/14)
+    in
+    let field_1/16 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/14)
+    in
+    let $camlHidden_included = Block 0 (field_0/15, field_1/16) in
+    cont done ($camlHidden_included)

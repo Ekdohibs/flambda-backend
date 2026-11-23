@@ -1,0 +1,14 @@
+(* The term after of name_in_a_refusal.fl, which says what the pair is for:
+   the end that is not a ghost is given the variable of the ghost region. *)
+let rgn = %begin_region () in
+let grgn = %begin_ghost_region () in
+let x = %opaque (41) in
+let p = %block.[`0`].`toplevel`.local[rgn] (x, 1) in
+let q = %opaque (p) in
+let a = %block_load.[`0`] (q) in
+let b = %block_load.[`1`] (q) in
+let s = %int_barith.add (a, b) in
+let u1 = %end_region (grgn) in
+let u2 = %end_ghost_region (grgn) in
+let $camlName_in_a_refusal = Block 0 (s) in
+cont done ($camlName_in_a_refusal)

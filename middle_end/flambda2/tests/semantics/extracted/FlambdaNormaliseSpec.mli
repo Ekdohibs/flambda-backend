@@ -11,6 +11,8 @@ open FlambdaNominalSpec
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
 open FlambdaSemanticsSpec
+open FlambdaStatedScopeSpec
+open FlambdaStatedSymbolsSpec
 open FlambdaTupledSpec
 open FlambdaValueSpec
 open List
@@ -128,28 +130,51 @@ val symbols_of :
   (symbol * code_id option) list ->
   (symbol * code_id option) list
 
-val call_agrees_b : apply_expr -> code -> bool
+val call_agrees_stated :
+  symbols_stated -> stated_in_scope -> apply_expr -> code -> bool
 
 val inline_known_apply :
+  stated_in_scope ->
   code_id list ->
   (code_id * code) list ->
   (symbol * code_id option) list ->
+  symbols_stated ->
   apply_expr ->
   expr
 
-val inline_known_calls :
+val inline_known_calls_under :
+  stated_in_scope ->
   code_id list ->
   (code_id * code) list ->
   (symbol * code_id option) list ->
+  symbols_stated ->
   expr ->
   expr
 
-val inline_known_calls_in_handler :
+val inline_known_calls_in_handler_under :
+  stated_in_scope ->
   code_id list ->
   (code_id * code) list ->
   (symbol * code_id option) list ->
+  symbols_stated ->
   continuation_handler ->
   continuation_handler
+
+val inline_known_calls_in_binding_knowing :
+  code_id list ->
+  (code_id * code) list ->
+  (symbol * code_id option) list ->
+  symbols_stated ->
+  static_binding ->
+  static_binding
+
+val inline_known_calls_in_code_knowing :
+  code_id list ->
+  (code_id * code) list ->
+  (symbol * code_id option) list ->
+  symbols_stated ->
+  code ->
+  code
 
 val inline_known_calls_in_binding :
   code_id list ->
@@ -158,12 +183,12 @@ val inline_known_calls_in_binding :
   static_binding ->
   static_binding
 
-val inline_known_calls_in_code :
+val inline_known_calls :
   code_id list ->
   (code_id * code) list ->
   (symbol * code_id option) list ->
-  code ->
-  code
+  expr ->
+  expr
 
 val binds_code : static_binding -> bool
 

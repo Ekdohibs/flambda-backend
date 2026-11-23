@@ -1,0 +1,4 @@
+stdlib__Stack.fl: not checked: the model has not got static constant (Unique_block (tag 248) (shape Value_only)
+                 ((Stdlib__Stack.camlStdlib__Stack__immstring_0
+                   /workspace_root/stdlib/build/stack.ml:23,0--15)
+                 (Pccall/959N /workspace_root/stdlib/build/stack.ml:23,0--15)))

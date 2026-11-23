@@ -262,25 +262,32 @@ Definition has_kind (vars : env) (p : variable) (kind : flambda_kind) : Prop :=
    applications. *)
 Lemma unalias_first_equivalent (j : continuation) (x p : variable)
     (kind : flambda_kind) (q : list variable) (kinds : list flambda_kind)
-    (handler body : expr) :
+    (sks : list param_subkind) (handler body : expr) :
   among x (p :: q) = false ->
   among p q = false ->
+  says_nothing_at sks 0 = true ->
   all_give_var j 0 x true body = true ->
   expr_equivalent
     (Let_cont_non_recursive j
        (Handler (p :: q)
-          {| hm_params_kinds := kind :: kinds; hm_is_exn_handler := false |}
+          {| hm_params_kinds := kind :: kinds;
+             hm_params_subkinds := sks;
+             hm_is_exn_handler := false |}
           handler)
        body)
     (Let_cont_non_recursive j
        (Handler q
-          {| hm_params_kinds := kinds; hm_is_exn_handler := false |}
+          {| hm_params_kinds := kinds;
+             hm_params_subkinds := drop_nth 0 sks;
+             hm_is_exn_handler := false |}
           (Let p kind (Simple (Var x)) handler))
        (drop_arg j 0 body)).
 Proof.
-  intros Hx Hfresh Hgive vars conts statics hp rd.
+  intros Hx Hfresh Hnothing Hgive vars conts statics hp rd.
   set (metadata :=
-    {| hm_params_kinds := kind :: kinds; hm_is_exn_handler := false |}).
+    {| hm_params_kinds := kind :: kinds;
+       hm_params_subkinds := sks;
+       hm_is_exn_handler := false |}).
   apply (equivalent_trans _
     (State body vars
        ((j, the_closure (p :: q) metadata handler vars conts) :: conts)
@@ -294,7 +301,7 @@ Proof.
     [ | apply equivalent_sym, step_equivalent, step_let_cont_non_recursive ].
   apply
     (site_equivalent j 0 x p kind (p :: q) metadata handler vars conts
-       eq_refl eq_refl Hx Hfresh).
+       eq_refl eq_refl Hx Hfresh Hnothing).
   apply (Rel_state_inside j 0 x p kind (p :: q) metadata handler vars conts
     true);
     [ apply agree_refl | reflexivity | exact Hgive | ].
@@ -320,6 +327,8 @@ Proof.
   intros Hp Hp' [v [Hv Hkind]] vs statics hp rd. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
     simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+    simpl; [ | exact I ].
   destruct (bind_params q vs vars) as [bound | ] eqn:Hbind; simpl;
     [ | exact I ].
   assert (Hbound : lookup p bound = Some v).
@@ -344,25 +353,31 @@ Qed.
    binding the variable to it, applies as the handler whose first
    parameter is the variable. *)
 Lemma renamed_param_alike (p p' : variable) (kind : flambda_kind)
-    (q : list variable) (kinds : list flambda_kind) (h : expr) (vars : env)
-    (conts : cont_env) :
+    (q : list variable) (kinds : list flambda_kind)
+    (sks : list param_subkind) (h : expr) (vars : env) (conts : cont_env) :
   among p q = false ->
   among p' q = false ->
   ~ var_free_in_expr p' h ->
   applies_alike
     (Closure
        (Handler (p' :: q)
-          {| hm_params_kinds := kind :: kinds; hm_is_exn_handler := false |}
+          {| hm_params_kinds := kind :: kinds;
+             hm_params_subkinds := sks;
+             hm_is_exn_handler := false |}
           (Let p kind (Simple (Var p')) h))
        vars conts [])
     (Closure
        (Handler (p :: q)
-          {| hm_params_kinds := kind :: kinds; hm_is_exn_handler := false |}
+          {| hm_params_kinds := kind :: kinds;
+             hm_params_subkinds := sks;
+             hm_is_exn_handler := false |}
           h)
        vars conts []).
 Proof.
   intros Hp Hp' Hfree vs statics hp rd. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (kind :: kinds)) eqn:Hkinds;
+    simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs _);
     simpl; [ | exact I ].
   destruct vs as [ | v vs]; simpl; [ exact I | ].
   apply kinds_eqb_eq in Hkinds. cbn [map] in Hkinds.
@@ -389,8 +404,10 @@ Qed.
    at which the variable is still that. *)
 Lemma give_one_equivalent (j : continuation) (p : variable)
     (kind : flambda_kind) (q : list variable) (kinds : list flambda_kind)
-    (h rest : expr) (vars : env) (conts : cont_env) (statics : static_env)
-    (hp : heap) (rd : read_record) :
+    (sks sks' : list param_subkind) (h rest : expr) (vars : env)
+    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
+  drop_nth 0 sks' = sks ->
+  says_nothing_at sks' 0 = true ->
   among p q = false ->
   all_give_var j 0 p true (give j [p] rest) = true ->
   has_kind vars p kind ->
@@ -398,19 +415,23 @@ Lemma give_one_equivalent (j : continuation) (p : variable)
     (State
        (Let_cont_non_recursive j
           (Handler q
-             {| hm_params_kinds := kinds; hm_is_exn_handler := false |} h)
+             {| hm_params_kinds := kinds;
+                hm_params_subkinds := sks;
+                hm_is_exn_handler := false |}
+             h)
           rest)
        vars conts statics hp rd)
     (State
        (Let_cont_non_recursive j
           (Handler (p :: q)
              {| hm_params_kinds := kind :: kinds;
+                hm_params_subkinds := sks';
                 hm_is_exn_handler := false |}
              h)
           (give j [p] rest))
        vars conts statics hp rd).
 Proof.
-  intros Hp Hgive Hkind.
+  intros <- Hnothing Hp Hgive Hkind.
   set (p' := fresh_name (p :: q ++ free_variables_of_expr h)).
   pose proof (fresh_name_fresh (p :: q ++ free_variables_of_expr h)) as Hfresh.
   fold p' in Hfresh. rewrite among_cons, among_app in Hfresh.
@@ -425,25 +446,43 @@ Proof.
   eapply equivalent_trans.
   { apply equivalent_sym.
     pose proof
-      (unalias_first_equivalent j p p' kind q kinds
+      (unalias_first_equivalent j p p' kind q kinds sks'
          (Let p kind (Simple (Var p')) h) (give j [p] rest))
       as Hunalias.
     rewrite drop_arg_give in Hunalias. apply Hunalias.
     - rewrite among_cons, Hp, orb_false_r. apply Pos.eqb_neq. congruence.
     - exact Hq.
+    - exact Hnothing.
     - exact Hgive. }
   apply let_cont_handler_alike.
-  exact (renamed_param_alike p p' kind q kinds h vars conts Hp Hq Hnot).
+  exact (renamed_param_alike p p' kind q kinds sks' h vars conts Hp Hq Hnot).
 Qed.
 
 (* ======================================================================== *)
 (* The parameters that a handler reads                                      *)
 (* ======================================================================== *)
 
+(* What is stated of parameters behind none more is what was stated;
+   and behind one more, without the first, what is stated behind one
+   fewer. *)
+Lemma subkinds_behind_none (sks : list param_subkind) :
+  subkinds_behind 0 sks = sks.
+Proof. destruct sks; reflexivity. Qed.
+
+Lemma drop_first_subkinds_behind (n : nat) (sks : list param_subkind) :
+  drop_nth 0 (subkinds_behind (S n) sks) = subkinds_behind n sks.
+Proof. destruct sks; reflexivity. Qed.
+
+(* And nothing is stated of the first. *)
+Lemma first_subkinds_behind (n : nat) (sks : list param_subkind) :
+  says_nothing_at (subkinds_behind (S n) sks) 0 = true.
+Proof. destruct sks; reflexivity. Qed.
+
 (* Each of them given, the last first. *)
 Lemma give_params_equivalent (j : continuation) (all q : list variable)
-    (kinds : list flambda_kind) (h rest : expr) (vars : env)
-    (conts : cont_env) (statics : static_env) (hp : heap) (rd : read_record) :
+    (kinds : list flambda_kind) (sks : list param_subkind) (h rest : expr)
+    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
+    (rd : read_record) :
   only_applied j all true rest = true ->
   ∀ read : list (variable * flambda_kind),
     (∀ p : variable, p ∈ map fst read -> p ∈ all) ->
@@ -453,13 +492,17 @@ Lemma give_params_equivalent (j : continuation) (all q : list variable)
       (State
          (Let_cont_non_recursive j
             (Handler q
-               {| hm_params_kinds := kinds; hm_is_exn_handler := false |} h)
+               {| hm_params_kinds := kinds;
+                  hm_params_subkinds := sks;
+                  hm_is_exn_handler := false |}
+               h)
             rest)
          vars conts statics hp rd)
       (State
          (Let_cont_non_recursive j
             (Handler (map fst read ++ q)
                {| hm_params_kinds := map snd read ++ kinds;
+                  hm_params_subkinds := subkinds_behind (length read) sks;
                   hm_is_exn_handler := false |}
                h)
             (give j (map fst read) rest))
@@ -467,8 +510,9 @@ Lemma give_params_equivalent (j : continuation) (all q : list variable)
 Proof.
   intros Honly read.
   induction read as [ | [p kind] read IH]; intros Hall Hdistinct Hkinds.
-  - cbn [map app]. rewrite give_nil. apply equivalent_refl.
-  - cbn [map fst snd app] in Hall, Hdistinct |- *.
+  - cbn [map app length]. rewrite give_nil, subkinds_behind_none.
+    apply equivalent_refl.
+  - cbn [map fst snd app length] in Hall, Hdistinct |- *.
     cbn [distinct] in Hdistinct.
     apply andb_true_iff in Hdistinct as [Hp Hdistinct].
     apply negb_true_iff in Hp.
@@ -476,7 +520,10 @@ Proof.
     eapply equivalent_trans.
     { apply IH; [ | exact Hdistinct | exact Hkinds ].
       intros p0 Hin. apply Hall. right. exact Hin. }
-    rewrite give_cons. apply give_one_equivalent; [ exact Hp | | exact Hkind ].
+    rewrite give_cons.
+    apply give_one_equivalent;
+      [ apply drop_first_subkinds_behind | apply first_subkinds_behind
+      | exact Hp | | exact Hkind ].
     rewrite <- give_cons.
     apply (only_applied_all_give_var j p all (map fst read) rest true true);
       [ auto | | exact Honly ].
@@ -571,7 +618,7 @@ Qed.
 (* It takes the parameters that it reads, where it is. *)
 Lemma take_params_equivalent (k j : continuation) (params q : list variable)
     (metadata : handler_metadata) (kinds : list flambda_kind)
-    (h rest body : expr) :
+    (sks : list param_subkind) (h rest body : expr) :
   distinct params = true ->
   distinct (params ++ q) = true ->
   only_applied j
@@ -582,7 +629,10 @@ Lemma take_params_equivalent (k j : continuation) (params q : list variable)
        (Handler params metadata
           (Let_cont_non_recursive j
              (Handler q
-                {| hm_params_kinds := kinds; hm_is_exn_handler := false |} h)
+                {| hm_params_kinds := kinds;
+                   hm_params_subkinds := sks;
+                   hm_is_exn_handler := false |}
+                h)
              rest))
        body)
     (Let_cont_non_recursive k
@@ -595,6 +645,11 @@ Lemma take_params_equivalent (k j : continuation) (params q : list variable)
                      map snd
                        (read_params params (hm_params_kinds metadata) h)
                      ++ kinds;
+                   hm_params_subkinds :=
+                     subkinds_behind
+                       (length
+                          (read_params params (hm_params_kinds metadata) h))
+                       sks;
                    hm_is_exn_handler := false |}
                 h)
              (give j
@@ -606,13 +661,15 @@ Proof.
   apply let_cont_handler_alike. intros vs statics' hp' rd'. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
     eqn:Hkinds; simpl; [ | exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata)); simpl;
+    [ | exact I ].
   destruct (bind_params params vs vars) as [bound | ] eqn:Hbind; simpl;
     [ | exact I ].
   apply kinds_eqb_eq in Hkinds. rewrite <- Hkinds in Honly |- *.
   apply
     (give_params_equivalent j
-       (map fst (read_params params (map kind_of_value vs) h)) q kinds h rest
-       bound conts statics' hp' rd' Honly);
+       (map fst (read_params params (map kind_of_value vs) h)) q kinds sks h
+       rest bound conts statics' hp' rd' Honly);
     [ auto | | ].
   - apply distinct_read_params, Hdistinct.
   - exact (bound_has_kinds h params vs vars bound Hbind Hparams).
@@ -691,10 +748,11 @@ Proof.
       as [[others switch'] | ] eqn:Hrest; [ | discriminate ].
     intros [= <- <-]. cbn [bind_lifted fold_right].
     rewrite give_all_let_cont. fold h'.
-    destruct mdj as [kinds exn]. cbn [hm_is_exn_handler hm_params_kinds] in *.
+    destruct mdj as [kinds sks exn].
+    cbn [hm_is_exn_handler hm_params_kinds hm_params_subkinds] in *.
     subst exn.
     eapply expr_equivalent_trans.
-    { exact (take_params_equivalent k j params q metadata kinds h'
+    { exact (take_params_equivalent k j params q metadata kinds sks h'
         (give_all moved rest) body Hparams Hdistinct Honly). }
     fold read.
     eapply expr_equivalent_trans.
@@ -709,6 +767,7 @@ Proof.
       (Let_cont_non_recursive_body j
          (Handler (map fst read ++ q)
             {| hm_params_kinds := map snd read ++ kinds;
+               hm_params_subkinds := subkinds_behind (length read) sks;
                hm_is_exn_handler := false |}
             h')
          Hole)

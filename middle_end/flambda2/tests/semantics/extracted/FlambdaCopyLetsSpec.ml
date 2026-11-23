@@ -118,7 +118,7 @@ let copy_let_code copy e =
   let p, p0 = copy in
   let ids, symbols = p in
   let lets, in_code = p0 in
-  if (exits_plain_knowing [] [] e && expr_free_of_heap e) && copies_apart ids
+  if (exits_plain_fine e && free_of_heap_fine e) && copies_apart ids
   then
     match copy_static_code ids symbols e with
     | Some e' -> copy_lets_in_code ids in_code (copy_lets_expr ids lets root e')

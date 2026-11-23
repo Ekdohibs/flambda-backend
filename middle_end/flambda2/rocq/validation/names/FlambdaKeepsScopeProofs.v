@@ -1465,6 +1465,29 @@ Proof.
   intros y [<- | []]. apply in_or_app. right. exact (Hknown entry Hentry).
 Qed.
 
+(* A handler whose body is rewritten within scope, with its parameters
+   and its metadata kept: for the handlers of a recursive [Let_cont] that
+   the sharing of primitives goes into.
+   FlambdaLoopsScopeProofs.v proves the same of its own
+   [scoped_handler_under], which is defined as that of
+   FlambdaScopeTactic.v is ([scoped_handler_under_intro]); that file
+   imports this one. *)
+Lemma scoped_handler_under_body (names : list variable)
+    (params : list variable) (metadata : handler_metadata)
+    (handler handler' : expr) :
+  scoped_under names handler handler' ->
+  scoped_handler_under names (Handler params metadata handler)
+    (Handler params metadata handler').
+Proof.
+  intros Hhandler Hclosed. scope_in Hclosed. scope.
+  destruct (Hhandler Hclosed) as (Hclosed' & Hv & Hk).
+  split; [ exact Hclosed' | split; [ | exact Hk ] ].
+  intros y Hy. apply in_without in Hy. destruct Hy as [Hy Hparams].
+  apply Hv, in_app_or in Hy. apply in_or_app.
+  destruct Hy as [Hy | Hy]; [ left | right; exact Hy ].
+  apply in_without. split; assumption.
+Qed.
+
 Fixpoint share_primitives_knowing_scoped (e : expr) :
   ∀ (names : list variable) (known : computed),
     computed_within names known ->
@@ -1483,8 +1506,19 @@ Proof.
     intros entry Hentry. apply in_or_app. left. exact (Hknown entry Hentry).
   - apply scoped_under_let_cont; apply share_primitives_knowing_scoped;
       [ apply forget_computed_vars_within, Hknown | exact Hknown ].
-  - apply scoped_under_let_cont_recursive.
-    apply share_primitives_knowing_scoped, Hknown.
+  - apply scoped_under_let_cont_recursive_handlers.
+    + rewrite map_map. apply map_ext. intros [k h]. reflexivity.
+    + apply
+        (scoped_handlers_under_map_keyed names
+           (fun _ h => share_primitives_in_handler known h)).
+      induction handlers as [ | [k [params metadata handler]] handlers IH];
+        [ apply Forall_nil | ].
+      apply Forall_cons; [ | exact IH ].
+      cbn [fst snd share_primitives_in_handler].
+      apply scoped_handler_under_body.
+      apply share_primitives_knowing_scoped, forget_computed_vars_within,
+        Hknown.
+    + apply share_primitives_knowing_scoped, Hknown.
 Qed.
 
 Lemma share_known_primitives_scoped (e : expr) :

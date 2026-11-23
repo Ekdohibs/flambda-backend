@@ -124,6 +124,12 @@ two calls that perform two effects: different
 two static blocks of values: the same
 a static block of values and a mixed one: different
 two static blocks whose fields have not the same debugging information (one has some: true): the same
+two static arrays of values: the same
+two static arrays of values of two lengths: different
+two static arrays of values whose fields have not the same debugging information: the same
+a name, and the name under a change of depth between two equal depths (the identity by Coercion.is_id: false): different
+a name, and the name under a change of depth between two depths: different
+a name under a change of depth, and under the change the other way: different
 two groups of two recursive continuations: the same
 a group of one recursive continuation and a group of two: different
 a direct call of the code that the unit binds:
@@ -199,3 +205,13 @@ the kind Vec256_array (a keyword of the text), written and read back: "invalid `
 the kind Vec512_array (a keyword of the text), written and read back: "invalid `Vec512_array`", the same
 the kind Float_block (a keyword of the text), written and read back: "invalid `Float_block`", the same
 the kind Empty_array (a keyword of the text), written and read back: "invalid `Empty_array`", the same
+a static block whose shape is that of a mixed block with no flat field, written and read back: the printer stops
+a poison constant with the name "variant_unboxing_field", written and read back: "cont done (poison.val."variant_unboxing_field")", the same
+a poison constant with the name "a \"name\" with quotes\\", written and read back: "cont done (poison.val."a \"name\" with quotes\\")", the same
+a name under a change of depth between two equal depths, the depth 1 (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth 1 -> 1)", the same
+a name under a change of depth between two equal depths, the depth "do not inline" (the identity by Coercion.is_id: false), written and read back: "cont done ($camlKinds ~ depth do_not_inline -> do_not_inline)", the same
+two marks of an inlined body whose stacks are not empty and have not the same debugging information: the same
+a mark of an inlined body whose stack is not empty and one whose stack is empty: different
+two marks of an inlined body with two inlining attributes: different
+a mark of an inlined body whose stack is not empty, written and read back: "let result/869 = %inlined_apply () in cont done (result/869)", the same
+a mark of an inlined body whose stack is empty, written and read back: "let result/879 = %inlined_apply.no_dbg () in cont done (result/879)", the same

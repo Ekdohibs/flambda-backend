@@ -1,0 +1,92 @@
+stdlib__Dynamic.fl:
+  in front of the two terms, the declarations of 6 C functions:
+    caml_dynamic_pop (a C function: noalloc), declared with no code
+    caml_restore_raw_backtrace (a C function: noalloc), declared with no code
+    caml_dynamic_push (a C function), declared with no code
+    caml_dynamic_get (a C function: noalloc), declared with no code
+    caml_dynamic_make (a C function), declared with no code
+    caml_get_exception_raw_backtrace (a C function), declared with no code
+  given the .cmx of Stdlib__Printexc, a prefix of 67 static bindings:
+    camlStdlib__Printexc__to_string_9_58_code deleted
+    camlStdlib__Printexc__to_string_default_8_57_code deleted
+    camlStdlib__Printexc__print_10_59_code deleted
+    camlStdlib__Printexc__catch_11_60_code deleted
+    camlStdlib__Printexc__print_backtrace_19_68_code deleted
+    camlStdlib__Printexc__get_backtrace_31_80_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:296,0--77]_48_48_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:297,0--77]_47_47_code deleted
+    camlStdlib__Printexc__register_printer_unsafe_33_82_code deleted
+    camlStdlib__Printexc__use_printers_4_53_code deleted
+    camlStdlib__Printexc__raw_backtrace_entries_13_62_code deleted
+    camlStdlib__Printexc__print_raw_backtrace_18_67_code deleted
+    camlStdlib__Printexc__raw_backtrace_to_string_21_70_code deleted
+    camlStdlib__Printexc__default_uncaught_exception_handler_37_86_code deleted
+    camlStdlib__Printexc__set_uncaught_exception_handler_unsafe_39_88_code deleted
+    camlStdlib__Printexc__backtrace_slots_26_75_code deleted
+    camlStdlib__Printexc__backtrace_slots_of_raw_entry_29_78_code deleted
+    camlStdlib__Printexc__raw_backtrace_length_30_79_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:285,0--118]_45_45_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:147,0--123]_44_44_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:288,0--135]_43_43_code deleted
+    camlStdlib__Printexc__exn_slot_id_35_84_code deleted
+    camlStdlib__Printexc__exn_slot_name_36_85_code deleted
+    camlStdlib__Printexc__string_of_extension_constructor_7_56_code deleted
+    camlStdlib__Printexc__backtrace_slot_is_raise_22_71_code deleted
+    camlStdlib__Printexc__backtrace_slot_is_inline_23_72_code deleted
+    camlStdlib__Printexc__backtrace_slot_location_24_73_code deleted
+    camlStdlib__Printexc__backtrace_slot_defname_25_74_code deleted
+    camlStdlib__Printexc__format_backtrace_slot_15_64_code deleted
+    camlStdlib__Printexc__register_printer_safe_32_81_code deleted
+    camlStdlib__Printexc__set_uncaught_exception_handler_safe_38_87_code deleted
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46_46_code stub (v1) v2 -> k1 * k2 =
+      apply direct(caml_get_exception_raw_backtrace (a C function)) caml_get_exception_raw_backtrace
+        (v1) -> k1 * k2
+    camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46_152 = closure Stdlib__Printexc.fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46 of
+      {Stdlib__Printexc.fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46 = camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46_46_code}
+      at {Stdlib__Printexc.fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46 = camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46_152}
+      {}
+    camlStdlib__Printexc = Block 0 (camlStdlib__Printexc__to_string_9_112,
+      camlStdlib__Printexc__to_string_default_8_111,
+      camlStdlib__Printexc__print_10_113, camlStdlib__Printexc__catch_11_114,
+      camlStdlib__Printexc__print_backtrace_19_121,
+      camlStdlib__Printexc__get_backtrace_31_133,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:296,0--77]_48_154,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:297,0--77]_47_153,
+      camlStdlib__Printexc__register_printer_unsafe_33_135,
+      camlStdlib__Printexc__use_printers_4_108,
+      camlStdlib__Printexc__raw_backtrace_entries_13_116,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:123,0--100]_46_152,
+      camlStdlib__Printexc__print_raw_backtrace_18_120,
+      camlStdlib__Printexc__raw_backtrace_to_string_21_123,
+      camlStdlib__Printexc__default_uncaught_exception_handler_37_140,
+      camlStdlib__Printexc__set_uncaught_exception_handler_unsafe_39_142,
+      camlStdlib__Printexc__backtrace_slots_26_128,
+      camlStdlib__Printexc__backtrace_slots_of_raw_entry_29_130,
+      camlStdlib__Printexc__Pmakeblock3548_151,
+      camlStdlib__Printexc__raw_backtrace_length_30_132,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:285,0--118]_45_150,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:147,0--123]_44_149,
+      camlStdlib__Printexc__fn[/workspace_root/stdlib/build/printexc.ml:288,0--135]_43_148,
+      camlStdlib__Printexc__exn_slot_id_35_137,
+      camlStdlib__Printexc__exn_slot_name_36_138,
+      camlStdlib__Printexc__Pmakeblock3539_147,
+      camlStdlib__Printexc__string_of_extension_constructor_7_110)
+    and 31 closures and 2 blocks of camlStdlib__Printexc that nothing asks for
+  before Simplify, after the prefix, with its 6 imports (15 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  after Simplify, after the prefix, with its 6 imports (9 steps): returns
+                                                                    [0:
+                                                                    <fun>;
+                                                                    <fun>;
+                                                                    <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
+  the check of regions: passes before, passes after
+  the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

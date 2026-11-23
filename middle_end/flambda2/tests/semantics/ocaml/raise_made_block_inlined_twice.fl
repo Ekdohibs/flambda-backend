@@ -1,0 +1,72 @@
+(let code inline(always) size(10)
+       fail_0 (reason/71 : val)
+         my_closure/72 &my_alloc_region/73 my_depth/74
+         -> k/26 * k/27
+         : imm tagged =
+   let next_depth/75 = rec_info (succ my_depth/74) in
+   let Pmakeblock/76 =
+     %block.[`0`].my_alloc_region/73
+       ($`*predef*`.caml_exn_Invalid_argument, reason/71 : val)
+   in
+   cont k/27 pop(regular k/27) (Pmakeblock/76)
+ in
+ let $camlRaise_made_block_inlined_twice__immstring_0 = "get_a" in
+ let code size(22)
+       get_a_1 (v/77 : [ 0 of imm tagged |1 of imm tagged ])
+         my_closure/78 &my_alloc_region/79 my_depth/80
+         -> k/28 * k/29
+         : imm tagged =
+   let next_depth/81 = rec_info (succ my_depth/80) in
+   let fail/82 = %project_value_slot.[get_a].[fail] (my_closure/78) in
+   (let prim/84 = %get_tag (v/77) in
+    let scrutinee_tag/85 = %tag_imm (prim/84) in
+    let untagged/86 = %untag_imm (scrutinee_tag/85) in
+    switch untagged/86
+      | 0 -> k/30
+      | 1 -> k/31)
+     where k/31 =
+       apply direct(fail_0 &my_alloc_region/79)
+         (fail/82 : val -> imm tagged)
+           ($camlRaise_made_block_inlined_twice__immstring_0)
+           -> k/28 * k/29
+     where k/30 =
+       let Pfield/83 = %block_load.[`0`] (v/77) in
+       cont k/28 (Pfield/83)
+ in
+ let $camlRaise_made_block_inlined_twice__immstring_1 = "get_b" in
+ let code size(22)
+       get_b_2 (v/87 : [ 0 of imm tagged |1 of imm tagged ])
+         my_closure/88 &my_alloc_region/89 my_depth/90
+         -> k/32 * k/33
+         : imm tagged =
+   let next_depth/91 = rec_info (succ my_depth/90) in
+   let fail/92 = %project_value_slot.[get_b].[fail_1] (my_closure/88) in
+   (let prim/94 = %get_tag (v/87) in
+    let scrutinee_tag/95 = %tag_imm (prim/94) in
+    let untagged/96 = %untag_imm (scrutinee_tag/95) in
+    switch untagged/96
+      | 0 -> k/34
+      | 1 -> k/35)
+     where k/35 =
+       let Pfield/93 = %block_load.[`0`] (v/87) in
+       cont k/32 (Pfield/93)
+     where k/34 =
+       apply direct(fail_0 &my_alloc_region/89)
+         (fail/92 : val -> imm tagged)
+           ($camlRaise_made_block_inlined_twice__immstring_1)
+           -> k/32 * k/33
+ in
+ let fail/97 = closure fail_0 @fail &toplevel in
+ let get_a/98 = closure get_a_1 @get_a &toplevel with { fail = fail/97 } in
+ let get_b/99 = closure get_b_2 @get_b &toplevel with { fail_1 = fail/97 } in
+ let Pmakeblock/100 = %block.[`0`].`toplevel` (get_a/98, get_b/99) in
+ cont k/25 (Pmakeblock/100))
+  where k/25 define_root_symbol (module_block/68) =
+    let field_0/69 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/68)
+    in
+    let field_1/70 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/68)
+    in
+    let $camlRaise_made_block_inlined_twice =
+      Block 0 (field_0/69, field_1/70)
+    in
+    cont done ($camlRaise_made_block_inlined_twice)

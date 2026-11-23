@@ -1,29 +1,89 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file is a transcription into Rocq of parts of files of the
+   compiler. Most of what it transcribes is of three files: the types at
+   the head of type_grammar.ml, and functions of it that make and inspect
+   types; the type of descriptions of type_descr.ml; and functions of
+   more_type_creators.ml that make types, which are in the last section of
+   this file. It also has definitions after types and small functions of
+   other modules of the compiler. The comment below says what is
+   transcribed, what is left out and how the rest is represented.
+
+   The header above is that of
+   middle_end/flambda2/types/grammar/type_grammar.ml,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/types/grammar/type_descr.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/types/grammar/more_type_creators.ml,
+     whose header is the same;
+   - middle_end/flambda2/kinds/flambda_kind.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/types/grammar/set_of_closures_contents.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   - middle_end/flambda2/term_basics/simple.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2017 OCamlPro SAS                                    *)
+(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+   - middle_end/flambda2/lattices/or_unknown.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/lattices/or_bottom.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/lattices/or_unknown_or_bottom.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+   - middle_end/flambda2/bound_identifiers/alloc_mode.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                  Mark Shinwell, Jane Street Europe                     *)
+(*   Copyright 2022 Jane Street Group LLC                                 *)
+   *)
 
 
 (* The grammar of Flambda types, as the model sees it.
@@ -70,10 +130,10 @@
      - [Closures]: in full.
      - [String]: in full; a string is the list of its bytes.
      - [Array] is left out. Its [element_kind] is a
-       [Flambda_kind.With_subkind.t], and the model has no subkinds; the
-       machine has no arrays either. It is to be added as a constructor
-       when the terms have arrays; until then the converter must refuse
-       a type that has one.
+       [Flambda_kind.With_subkind.t], and the types here have no
+       subkinds. The machine has arrays (FlambdaValueSpec.v); the
+       grammar has no constructor for their types yet, and until it
+       has the converter must refuse a type that has one.
    - [head_of_kind_naked_immediate] is the record that
      [Head_of_kind_naked_immediate.descr] gives, [naked_immediates] and
      [inverse_relations], and not the three constructors that represent
@@ -111,8 +171,9 @@
      records in a mutual definition. The others are records, their
      fields prefixed where the name is taken.
    - [Or_unknown.t], [Or_bottom.t], [Row_like_index_domain.t] and
-     [Alloc_mode.For_types.t] are in modules of those names, so that
-     [Or_unknown.Unknown], [Or_bottom.Bottom] and
+     [Alloc_mode.For_types.t] are in modules of those names (the last
+     in [Alloc_mode], as [Alloc_mode.t]: there is no [For_types] here),
+     so that [Or_unknown.Unknown], [Or_bottom.Bottom] and
      [Row_like_index_domain.Known] are told from the [Unknown], [Ok] and
      [Bottom] of [Or_unknown_or_bottom.t], which are not in a module, and
      from [Or_unknown.Known]. [Relation.descr] is [Relation.t].
@@ -1331,9 +1392,9 @@ with equation_names_of_env_extension (extension : env_extension)
    Not here: [tag_int8], [tag_int16] and their [alias_to] (the machine
    has no primitive that makes a tagged immediate of a small integer);
    [variant], [Row_like_for_blocks.create_exactly_multiple] and
-   [unknown_with_subkind] at a subkind that says something (the model
-   has no subkinds); the types of arrays; [check_equation], which
-   answers nothing. *)
+   [unknown_with_subkind] at a subkind that says something (the types
+   here have no subkinds); the types of arrays; [check_equation],
+   which answers nothing. *)
 
 (* [More_type_creators.unknown_like] and [bottom_like]. *)
 Definition unknown_like (t : flambda_type) : flambda_type :=

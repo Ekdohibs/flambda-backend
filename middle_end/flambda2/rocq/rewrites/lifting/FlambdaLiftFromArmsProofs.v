@@ -115,8 +115,11 @@ Proof.
   unfold static_fault in Hfault. simpl in Hfault.
   apply orb_false_iff in Hfault as [_ Hfault].
   destruct (no_rebinding statics0 _ Hfault) as [Hdistinct Hfresh].
-  destruct (eval_lifted_out_bindings [] lets root e statics0 Hdistinct Hfresh)
-    as (statics' & Heval & Hcode & Hbound).
+  destruct (eval_lifted_out_bindings [] [] lets root e statics0
+              (fun s const (Hin : Bind_symbol s const ∈ []) =>
+                 match Hin with end)
+              Hdistinct Hfresh)
+    as (statics' & Heval & Hcode & Hbound & _).
   pose proof (eval_static_bindings_extend [] _ statics0 statics' Heval)
     as Hextend.
   exists statics'. split.
@@ -223,7 +226,7 @@ Let bindings : list static_binding :=
 Let lifted : expr := Let_static bindings (lift_from_code [] lets root e).
 
 Hypothesis Hwf : well_formed_unit u lifted = true.
-Hypothesis Hplain : exits_plain_knowing [] [] e = true.
+Hypothesis Hplain : exits_are_plain (State e [] [] statics0 hp0 rd0).
 Hypothesis Hsome : bindings <> [].
 Hypothesis Hno_code : static_code statics0 = [].
 Hypothesis Hfree : static_names_free_in statics0 lifted = true.
@@ -231,7 +234,7 @@ Hypothesis Hfree : static_names_free_in statics0 lifted = true.
 (* The states are related, and the first is one of a unit that exits
    with symbols and constants only. *)
 Definition unit_lifted_plain (s s' : state) : Prop :=
-  unit_lifted lets e statics0 hp0 rd0 [] s s' ∧ plain_state s.
+  unit_lifted lets e statics0 hp0 rd0 [] s s' ∧ exits_are_plain s.
 
 (* The values at an exit are lifted, and are constants and symbols: they
    are the same. *)
@@ -244,7 +247,7 @@ Proof.
     (unit_lifted_step u lets e statics0 hp0 rd0 [] Hwf Hsome Hno_code Hfree
        (Forall_nil _) s s' Hlifted)
     as Hanswer.
-  pose proof (plain_step s Hplain_s) as Hstep.
+  pose proof (exits_are_plain_step s Hplain_s) as Hstep.
   destruct (step s) as [t | k vs | ]; unfold answered_heaps in *;
     [ | | exact I ].
   - destruct Hanswer as (m & t' & Hrun & Ht).
@@ -270,9 +273,7 @@ Proof.
     split; [ exact Hsame | ].
     rewrite (Hempty k vs hp Hexits) in Hheap |- *.
     exact (heap_alike_empty _ hp' Hheap).
-  - split;
-      [ left; split; reflexivity
-      | exact (plain_from e statics0 hp0 rd0 Hplain Hno_code) ].
+  - split; [ left; split; reflexivity | exact Hplain ].
 Qed.
 
 End Unit_refines.
@@ -281,8 +282,8 @@ Theorem lift_to_head_unit_program_refines :
   lift_to_head_unit_program_refines_statement.
 Proof.
   intros u lets e e'. unfold lift_to_head_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (well_formed_unit u (lift_to_head lets e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold program_refines.
@@ -298,18 +299,19 @@ Proof.
     { unfold lift_to_head. cbv zeta. rewrite Hbindings. reflexivity. }
     rewrite Hshape in Hwf |- *.
     exact (unit_lifted_refines u lets e empty_static_env empty_heap no_reads Hwf
-             Hplain Hsome eq_refl (free_in_empty _)
+             (exits_are_plain_from e empty_static_env Hplain eq_refl) Hsome
+             eq_refl (free_in_empty _)
              (fun k vs hp =>
-                free_of_heap_exits_empty e empty_static_env k vs hp
-                  Hheap_free eq_refl)).
+                free_of_heap_fine_exits_empty e empty_static_env k vs hp
+                  Hheap_free (fun _ => eq_refl))).
 Qed.
 
 Theorem lift_to_head_unit_refines_imports :
   lift_to_head_unit_refines_imports_statement.
 Proof.
   intros imports u lets e e'. unfold lift_to_head_unit. cbv zeta.
-  destruct (exits_plain_knowing [] [] e) eqn:Hplain; [ | discriminate ].
-  destruct (expr_free_of_heap e) eqn:Hheap_free; [ | discriminate ].
+  destruct (exits_plain_fine e) eqn:Hplain; [ | discriminate ].
+  destruct (free_of_heap_fine e) eqn:Hheap_free; [ | discriminate ].
   destruct (well_formed_unit u (lift_to_head lets e)) eqn:Hwf;
     [ | discriminate ].
   intros [= <-]. unfold unit_refines.
@@ -327,10 +329,12 @@ Proof.
     rewrite Hshape in Hwf |- *. intros Hfree.
     exact
       (unit_lifted_refines u lets e (imports_statics imports) empty_heap
-         no_reads Hwf Hplain Hsome eq_refl Hfree
+         no_reads Hwf
+         (exits_are_plain_from e (imports_statics imports) Hplain eq_refl)
+         Hsome eq_refl Hfree
          (fun k vs hp =>
-            free_of_heap_exits_empty e (imports_statics imports) k vs hp
-              Hheap_free eq_refl)).
+            free_of_heap_fine_exits_empty e (imports_statics imports) k vs hp
+              Hheap_free (fun _ => eq_refl))).
 Qed.
 
 (* ======================================================================== *)

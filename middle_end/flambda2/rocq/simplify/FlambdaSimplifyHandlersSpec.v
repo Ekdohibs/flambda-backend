@@ -68,8 +68,9 @@
      of the parameter and not only of its kind
      ([unknown_with_subkind]), and lifted constants and the unboxing
      of parameters add to the environment. Here there is no join of
-     environments and no subkind: what was known at the definition,
-     and the kind that the handler declares for each parameter.
+     environments and no subkind is read: what was known at the
+     definition, and the kind that the handler declares for each
+     parameter.
    - [handler_env] tests, before it defines each parameter, that the
      environment passes the test of well-formedness and does not have
      the variable (FlambdaSimplifyCodeEnvSpec.define_variables_checked),

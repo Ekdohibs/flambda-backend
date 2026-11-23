@@ -8,6 +8,7 @@ open FlambdaMapSpec
 open FlambdaModel
 open FlambdaPrimitiveModel
 open FlambdaPrimitiveSpec
+open FlambdaSubkindSpec
 open FlambdaValueSpec
 open List
 open ListDef
@@ -280,6 +281,8 @@ let call_code closure c vs args_arity return_arity return_to exn_to statics hp
             (unarize_per_parameter (code_params_arity c)))
       && arity_eqb return_arity (code_result_arity c))
   then Undefined
+  else if negb (values_of_subkinds statics vs (code_params_subkinds c))
+  then Undefined
   else
     match
       bind_params (code_params c) vs ((code_my_closure c, closure) :: [])
@@ -486,18 +489,21 @@ let rec apply_cont_value c vs statics hp rd =
     let (Handler (params, metadata, handler)) = h in
     if kinds_eqb (map kind_of_value vs) metadata.hm_params_kinds
     then
-      match bind_params params vs def_vars with
-      | Some handler_vars ->
-        Step
-          { state_expr = handler;
-            state_vars = handler_vars;
-            state_conts =
-              app (rec_closures recursive def_vars def_conts) def_conts;
-            state_statics = statics;
-            state_heap = hp;
-            state_reads = rd
-          }
-      | None -> Undefined
+      if values_of_subkinds statics vs metadata.hm_params_subkinds
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars ->
+          Step
+            { state_expr = handler;
+              state_vars = handler_vars;
+              state_conts =
+                app (rec_closures recursive def_vars def_conts) def_conts;
+              state_statics = statics;
+              state_heap = hp;
+              state_reads = rd
+            }
+        | None -> Undefined
+      else Undefined
     else Undefined
   | Outer k -> Exit (k, vs, hp, rd)
   | Extra_args (c0, extra) -> apply_cont_value c0 (app vs extra) statics hp rd

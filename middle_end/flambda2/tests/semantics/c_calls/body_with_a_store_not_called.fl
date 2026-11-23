@@ -1,0 +1,21 @@
+let $camlBody_with_a_store_not_called__first_const_0 = Block 0 () in
+(let code size(1)
+       same_0 (x/27)
+         my_closure/28 &my_alloc_region/29 my_depth/30
+         -> k/10 * k/11 =
+   let next_depth/31 = rec_info (succ my_depth/30) in
+   cont k/10 (x/27)
+ in
+ let store/32 = %block_load.[`0`] ($Body_with_a_store.camlBody_with_a_store)
+ in
+ let same/33 = closure same_0 @same &toplevel in
+ let Pmakeblock/34 = %block.[`0`].`toplevel` (store/32, same/33) in
+ cont k/9 (Pmakeblock/34))
+  where k/9 define_root_symbol (module_block/24) =
+    let field_0/25 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/24)
+    in
+    let field_1/26 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/24)
+    in
+    let $camlBody_with_a_store_not_called = Block 0 (field_0/25, field_1/26)
+    in
+    cont done ($camlBody_with_a_store_not_called)

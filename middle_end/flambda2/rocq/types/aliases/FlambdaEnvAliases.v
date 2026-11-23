@@ -1,37 +1,52 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                   Mark Shinwell, Jane Street Europe                    *)
+(*                                                                        *)
+(*   Copyright 2019 Jane Street Group LLC                                 *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* The header above is that of
+   middle_end/flambda2/types/env/aliases.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/identifiers/name.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* The aliases of the typing environment: which names and constants are
    known to be equal, and the canonical element of each class.
 
    This file is the model's copy of
    middle_end/flambda2/types/env/aliases.ml: the structure and the
-   functions on it, written as the OCaml is, function by function and
-   under its names, in a module [Aliases]. It extracts. What the
+   functions on it, in a module [Aliases]. The functions are written
+   as the OCaml is and, but for those named next, under its names.
+   Three functions of the module have names that are not names of
+   functions of aliases.ml; each is a part of one of its functions,
+   written apart: [at_mode] (a lookup that the OCaml writes in line),
+   [disjoint_alias_sets] (a test of its [invariant]) and
+   [add_alias_of_set] (the function [add_alias] that its
+   [add_alias_set] defines for itself). One type and three fields have
+   other names than the OCaml's: [is_canonical_or_alias] is its type
+   [canonical], and [set_const], [set_names] and [add_result_t] are
+   its fields [const], [names] and [t]. Four definitions stand before
+   the module. [name_is_symbol] is the model's form of the function
+   [is_symbol] of middle_end/flambda2/identifiers/name.ml: a match on
+   the two forms of a name, where the OCaml calls [pattern_match].
+   [name_of_simple], [const_eqb] and [simple_equal] are not names of
+   functions of aliases.ml; the comment at each says what it stands
+   for. The file extracts. What the
    structure means and what the functions guarantee is
    FlambdaEnvAliasesSpec.v, whose header says what is to be read here
    against the OCaml and lists every difference; in short:

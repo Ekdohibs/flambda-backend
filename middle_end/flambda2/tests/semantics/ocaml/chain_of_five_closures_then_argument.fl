@@ -1,0 +1,94 @@
+let $camlChain_of_five_closures_then_argument__first_const_0 = Block 0 () in
+(let code size(3)
+       a_1 (x/115 : imm tagged)
+         my_closure/116 &my_alloc_region/117 my_depth/118
+         -> k/36 * k/37
+         : imm tagged =
+   let next_depth/119 = rec_info (succ my_depth/118) in
+   let int_add/120 = %int_barith.add (x/115, 1) in
+   cont k/36 (int_add/120)
+ in
+ let code size(5)
+       b_2 (x/121 : imm tagged)
+         my_closure/122 &my_alloc_region/123 my_depth/124
+         -> k/38 * k/39
+         : imm tagged =
+   let next_depth/125 = rec_info (succ my_depth/124) in
+   let a/126 = %project_value_slot.[b].[a] (my_closure/122) in
+   apply direct(a_1 &my_alloc_region/123)
+     (a/126 : imm tagged -> imm tagged) (x/121) -> k/38 * k/39
+ in
+ let code size(5)
+       c_3 (x/127 : imm tagged)
+         my_closure/128 &my_alloc_region/129 my_depth/130
+         -> k/40 * k/41
+         : imm tagged =
+   let next_depth/131 = rec_info (succ my_depth/130) in
+   let b/132 = %project_value_slot.[c].[b] (my_closure/128) in
+   apply direct(b_2 &my_alloc_region/129)
+     (b/132 : imm tagged -> imm tagged) (x/127) -> k/40 * k/41
+ in
+ let code size(5)
+       d_4 (x/133 : imm tagged)
+         my_closure/134 &my_alloc_region/135 my_depth/136
+         -> k/42 * k/43
+         : imm tagged =
+   let next_depth/137 = rec_info (succ my_depth/136) in
+   let c/138 = %project_value_slot.[d].[c] (my_closure/134) in
+   apply direct(c_3 &my_alloc_region/135)
+     (c/138 : imm tagged -> imm tagged) (x/133) -> k/42 * k/43
+ in
+ let code size(5)
+       e_5 (x/139 : imm tagged)
+         my_closure/140 &my_alloc_region/141 my_depth/142
+         -> k/44 * k/45
+         : imm tagged =
+   let next_depth/143 = rec_info (succ my_depth/142) in
+   let d/144 = %project_value_slot.[e].[d] (my_closure/140) in
+   apply direct(d_4 &my_alloc_region/141)
+     (d/144 : imm tagged -> imm tagged) (x/139) -> k/44 * k/45
+ in
+ let code size(10)
+       f_6 (x/145 : imm tagged)
+         my_closure/146 &my_alloc_region/147 my_depth/148
+         -> k/46 * k/47
+         : imm tagged =
+   let next_depth/149 = rec_info (succ my_depth/148) in
+   let e/150 = %project_value_slot.[f].[e] (my_closure/146) in
+   let X/151 = %project_value_slot.[f].[X] (my_closure/146) in
+   let Pfield/152 = %block_load.[`0`] (X/151) in
+   apply direct(e_5 &my_alloc_region/147)
+     (e/150 : imm tagged -> imm tagged) (x/145) -> k/48 * k/47
+     where k/48 (apply_result/153 : imm tagged) =
+       let int_add/154 = %int_barith.add (apply_result/153, Pfield/152) in
+       cont k/46 (int_add/154)
+ in
+ let code loopify(never) size(93) functor
+       Make_0 (X/155 : val)
+         my_closure/156 &my_alloc_region/157 my_depth/158
+         -> k/49 * k/50
+         : val =
+   let next_depth/159 = rec_info (succ my_depth/158) in
+   let a/160 = closure a_1 @a &my_alloc_region/157 in
+   let b/161 = closure b_2 @b &my_alloc_region/157 with { a = a/160 } in
+   let c/162 = closure c_3 @c &my_alloc_region/157 with { b = b/161 } in
+   let d/163 = closure d_4 @d &my_alloc_region/157 with { c = c/162 } in
+   let e/164 = closure e_5 @e &my_alloc_region/157 with { d = d/163 } in
+   let f/165 = closure f_6 @f &my_alloc_region/157
+   with { e = e/164; X = X/155 }
+   in
+   let Pmakeblock/166 =
+     %block.[`0`].my_alloc_region/157
+       (a/160, b/161, c/162, d/163, e/164, f/165)
+   in
+   cont k/49 (Pmakeblock/166)
+ in
+ let Make/167 = closure Make_0 @Make &toplevel in
+ let Pmakeblock/168 = %block.[`0`].`toplevel` (Make/167) in
+ cont k/35 (Pmakeblock/168))
+  where k/35 define_root_symbol (module_block/113) =
+    let field_0/114 =
+      %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/113)
+    in
+    let $camlChain_of_five_closures_then_argument = Block 0 (field_0/114) in
+    cont done ($camlChain_of_five_closures_then_argument)

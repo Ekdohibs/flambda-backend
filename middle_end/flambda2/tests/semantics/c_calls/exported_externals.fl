@@ -1,0 +1,79 @@
+let $camlExported_externals__first_const_0 = Block 0 () in
+(let code size(20)
+       wait_and_signal_0 (c/81 : val, n/82 : imm tagged)
+         my_closure/83 &my_alloc_region/84 my_depth/85
+         -> k/24 * k/25
+         : imm tagged =
+   let next_depth/86 = rec_info (succ my_depth/85) in
+   apply ccall &my_alloc_region/84
+     ($`*extern*`.c_wait : val? * val? -> val?) (c/81, n/82) -> k/26 * k/25
+     where k/26 (Pccall/87) =
+       apply ccall &my_alloc_region/84
+         ($`*extern*`.c_signal : val? -> val?) (c/81) -> k/24 * k/25
+ in
+ let code size(10) stub
+       `fn[exported_externals.ml:42,0--40]_1` (prim/88 : val)
+         my_closure/89 &my_alloc_region/90 my_depth/91
+         -> k/27 * k/28
+         : imm tagged =
+   let next_depth/92 = rec_info (succ my_depth/91) in
+   apply ccall &my_alloc_region/90
+     ($`*extern*`.c_signal : val? -> val?) (prim/88) -> k/27 * k/28
+ in
+ let code size(10) stub
+       `fn[exported_externals.ml:40,0--43]_2`
+         (prim/93 : val, prim/94 : imm tagged)
+         my_closure/95 &my_alloc_region/96 my_depth/97
+         -> k/29 * k/30
+         : imm tagged =
+   let next_depth/98 = rec_info (succ my_depth/97) in
+   apply ccall &my_alloc_region/96
+     ($`*extern*`.c_wait : val? * val? -> val?)
+       (prim/93, prim/94)
+       -> k/29 * k/30
+ in
+ let code size(10) stub
+       `fn[exported_externals.ml:38,0--40]_3` (prim/99 : imm tagged)
+         my_closure/100 &my_alloc_region/101 my_depth/102
+         -> k/31 * k/32
+         : val =
+   let next_depth/103 = rec_info (succ my_depth/102) in
+   apply ccall &my_alloc_region/101
+     ($`*extern*`.c_create : val? -> val?) (prim/99) -> k/31 * k/32
+ in
+ let wait_and_signal/104 =
+   closure wait_and_signal_0 @wait_and_signal &toplevel
+ in
+ let `fn[exported_externals.ml:42,0--40]/105` =
+   closure `fn[exported_externals.ml:42,0--40]_1`
+     @`fn[exported_externals.ml:42,0--40]` &toplevel
+ in
+ let `fn[exported_externals.ml:40,0--43]/106` =
+   closure `fn[exported_externals.ml:40,0--43]_2`
+     @`fn[exported_externals.ml:40,0--43]` &toplevel
+ in
+ let `fn[exported_externals.ml:38,0--40]/107` =
+   closure `fn[exported_externals.ml:38,0--40]_3`
+     @`fn[exported_externals.ml:38,0--40]` &toplevel
+ in
+ let Pmakeblock/108 =
+   %block.[`0`].`toplevel`
+     (`fn[exported_externals.ml:38,0--40]/107`,
+      `fn[exported_externals.ml:40,0--43]/106`,
+      `fn[exported_externals.ml:42,0--40]/105`,
+      wait_and_signal/104)
+ in
+ cont k/23 (Pmakeblock/108))
+  where k/23 define_root_symbol (module_block/76) =
+    let field_0/77 = %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/76)
+    in
+    let field_1/78 = %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/76)
+    in
+    let field_2/79 = %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/76)
+    in
+    let field_3/80 = %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/76)
+    in
+    let $camlExported_externals =
+      Block 0 (field_0/77, field_1/78, field_2/79, field_3/80)
+    in
+    cont done ($camlExported_externals)

@@ -1,0 +1,39 @@
+let $camlBoxed_number_in_slot_not_known__first_const_0 = Block 0 () in
+(let code size(16)
+       `fn[boxed_number_in_slot_not_known.ml:45,2--31]_0`
+         (n/47 : int64 boxed)
+         my_closure/48 &my_alloc_region/49 my_depth/50
+         -> k/12 * k/13
+         : imm tagged =
+   let next_depth/51 = rec_info (succ my_depth/50) in
+   let limit/52 =
+     %project_value_slot.[`fn[boxed_number_in_slot_not_known.ml:45,2--31]`].[limit]
+       (my_closure/48)
+   in
+   let prim/53 = %unbox_num.`int64` (limit/52) in
+   let prim/54 = %unbox_num.`int64` (n/47) in
+   let prim/55 = %int_barith.`int64`.add (prim/54, prim/53) in
+   let int64_add/56 = %box_num.`int64`.my_alloc_region/49 (prim/55) in
+   let prim/57 = %unbox_num.`int64` (int64_add/56) in
+   let prim/58 = %num_conv.[`int64`].[`imm`] (prim/57) in
+   let int_of_int64/59 = %tag_imm (prim/58) in
+   cont k/12 (int_of_int64/59)
+ in
+ (let Popaque/62 = %opaque (1000) in
+  let prim/63 = %untag_imm (Popaque/62) in
+  let prim/64 = %num_conv.[`imm`].[`int64`] (prim/63) in
+  let limit/65 = %box_num.`int64`.`toplevel` (prim/64) in
+  let `fn[boxed_number_in_slot_not_known.ml:45,2--31]/66` =
+    closure `fn[boxed_number_in_slot_not_known.ml:45,2--31]_0`
+      @`fn[boxed_number_in_slot_not_known.ml:45,2--31]` &toplevel
+  with { limit = limit/65 }
+  in
+  cont k/14 (`fn[boxed_number_in_slot_not_known.ml:45,2--31]/66`))
+   where k/14 (add_limit/60 : val) =
+     let Pmakeblock/61 = %block.[`0`].`toplevel` (add_limit/60) in
+     cont k/11 (Pmakeblock/61))
+  where k/11 define_root_symbol (module_block/45) =
+    let field_0/46 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/45)
+    in
+    let $camlBoxed_number_in_slot_not_known = Block 0 (field_0/46) in
+    cont done ($camlBoxed_number_in_slot_not_known)

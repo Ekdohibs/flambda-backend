@@ -50,12 +50,20 @@
      FlambdaForwardSpec.forwarding ([passes], [arm_frozen_var],
      [arm_frozen_cont]): the pass makes those tests of an arm when an
      application comes to it;
-   - the variables of the two states are the same, and have the kinds
-     of their binders (FlambdaNormaliseProofs.kinds_hold);
+   - the variables of the two states are the same, have the kinds of
+     their binders (FlambdaNormaliseProofs.kinds_hold), and are of
+     what is known of them by the scope that the pass keeps beside the
+     kinds (FlambdaStatedScopeSpec.stated_hold), under the static
+     environment of the two states;
    - each continuation name stands, in the two states, for the same
      thing or for closures whose handlers are so related, under the
      same variables and continuations in turn so related
-     ([arm_cont_fwd]);
+     ([arm_cont_fwd]). The variables of such closures are of what was
+     known of them where the closure was made. That is said under a
+     static environment, so the relation is that of the continuations
+     of a state with a given static environment, and it is carried to
+     the larger one where a [Let_static] makes the static environment
+     grow ([arm_cont_fwd_extend]);
    - for each entry, the name stands in the second state for a closure
      whose handler is the [Switch] of the entry on the parameter at the
      position of the entry; and for each arm that passes, the
@@ -77,18 +85,25 @@
    it, an application that goes to an arm has arguments that are
    known, by the binders around it, to have the kinds that the handler
    of its continuation gives its parameters, as many as the handler
-   has parameters; the first run then takes its steps there too, the
-   second run is undefined where the first is, a round is read the
-   other way too ([arm_fwd_round_back]), and each term refines the
-   other, under any variables that have the kinds the pass starts
-   from ([forward_to_arms_kinded_under_equivalent_bound]).
+   has parameters, and to be of what the handler states of them
+   (FlambdaStatedScopeSpec.are_stated), so that the test which the
+   machine makes of their values passes
+   (FlambdaStatedScopeProofs.are_stated_sound, [arm_strict_runs]); the
+   first run then takes its steps there too, the second run is
+   undefined where the first is, a round is read the other way too
+   ([arm_fwd_round_back]), and each term refines the other, under any
+   variables that have the kinds the pass starts from and are of what
+   is known of them there
+   ([forward_to_arms_kinded_under_equivalent_bound]).
 
    In the body of code the kinded pass starts from the kinds of what a
-   call binds (FlambdaCodeLetsProofs.code_in_scope_hold), and a group
-   of static bindings may have the bodies of its code replaced, one
-   piece of code at a time
-   (FlambdaContextProofs.let_static_code_refines_where), as in
-   FlambdaForwardKindedProofs.v. *)
+   call binds (FlambdaCodeLetsProofs.code_in_scope_hold) and from what
+   the code states of its parameters, which the values that a call
+   binds are of, the machine having tested them
+   (FlambdaStatedScopeProofs.code_stated_bound); and a group of static
+   bindings may have the bodies of its code replaced, one piece of
+   code at a time
+   (FlambdaContextProofs.let_static_code_refines_stated). *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -101,7 +116,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaParamAliasesSpec FlambdaParamAliasesProofs FlambdaLoopLetsSpec
   FlambdaLoopLetsProofs FlambdaCodeLetsSpec FlambdaCodeLetsProofs
   FlambdaForwardSpec FlambdaForwardProofs FlambdaForwardKindedSpec
-  FlambdaForwardKindedProofs FlambdaForwardArmSpec.
+  FlambdaForwardKindedProofs FlambdaWellFormedSpec FlambdaWellFormedProofs
+  FlambdaStatedScopeSpec FlambdaStatedScopeProofs FlambdaForwardArmSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -343,9 +359,9 @@ Variable strict : bool.
    [strict], the arguments of the first are known, by the binders
    around it, to have the kinds that the handler gives its
    parameters. *)
-Inductive arm_goes (G : kinds_in_scope) (F : arm_forwards)
-    : apply_cont -> apply_cont -> Prop :=
-  | Arm_goes_same (ac : apply_cont) : arm_goes G F ac ac
+Inductive arm_goes (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards) : apply_cont -> apply_cont -> Prop :=
+  | Arm_goes_same (ac : apply_cont) : arm_goes G St F ac ac
   | Arm_goes_on (ac : apply_cont) (params : list variable)
       (metadata : handler_metadata) (i : nat) (arms : list (Z * apply_cont))
       (body : expr) (n : Z) (target : apply_cont) :
@@ -357,7 +373,18 @@ Inductive arm_goes (G : kinds_in_scope) (F : arm_forwards)
     length (ac_args ac) = length params ->
     (strict = true ->
      args_have_kinds G (ac_args ac) (hm_params_kinds metadata)) ->
-    arm_goes G F ac (forwarded params (ac_args ac) target).
+    (strict = true ->
+     are_stated St (ac_args ac) (hm_params_subkinds metadata) = true) ->
+    arm_goes G St F ac (forwarded params (ac_args ac) target).
+
+(* What [strict] asks of an entry: a handler that gives as many kinds
+   as it has parameters. (FlambdaForwardProofs.strict_entry asks also
+   that any values pass the test of what the handler states; here that
+   test is known to pass of the arguments of each application that
+   goes to an arm, by the scope.) *)
+Definition arm_strict_entry (params : list variable)
+    (metadata' : handler_metadata) : Prop :=
+  strict = true -> length params = length (hm_params_kinds metadata').
 
 (* What an entry says of a handler with these parameters and this
    metadata, as the second term has it. *)
@@ -371,48 +398,57 @@ Definition arm_entry_fits (params : list variable)
     ∧ metadata0 = metadata'
     ∧ (∃ p : variable,
         handler' = Switch (Var p) arms ∧ nth_error params i = Some p)
-    ∧ strict_entry strict params metadata'
+    ∧ arm_strict_entry params metadata'
   end.
 
 (* The second expression is the first with applications that go to
    arms. No binder binds a name that an entry in scope depends on. (The
    warning silenced is about induction schemes, which nothing uses.) *)
 #[local] Set Warnings "-register-all".
-Inductive arm_fwd : kinds_in_scope -> arm_forwards -> expr -> expr -> Prop :=
-  | Arm_fwd_let (G : kinds_in_scope) (F : arm_forwards) (x : variable)
-      (kind : flambda_kind) (d : named) (body body' : expr) :
+Inductive arm_fwd
+    : kinds_in_scope -> stated_in_scope -> arm_forwards -> expr -> expr
+      -> Prop :=
+  | Arm_fwd_let (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (x : variable) (kind : flambda_kind) (d : named)
+      (body body' : expr) :
     arm_var_unfrozen F x ->
-    arm_fwd ((x, kind) :: G) F body body' ->
-    arm_fwd G F (Let x kind d body) (Let x kind d body')
-  | Arm_fwd_let_static (G : kinds_in_scope) (F : arm_forwards)
-      (bindings : list static_binding) (body body' : expr) :
-    arm_fwd G F body body' ->
-    arm_fwd G F (Let_static bindings body) (Let_static bindings body')
-  | Arm_fwd_let_cont (G : kinds_in_scope) (F : arm_forwards)
-      (k : continuation) (params : list variable)
+    arm_fwd ((x, kind) :: G) ((x, stated_of_named St d) :: St) F body
+      body' ->
+    arm_fwd G St F (Let x kind d body) (Let x kind d body')
+  | Arm_fwd_let_static (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (bindings : list static_binding)
+      (body body' : expr) :
+    arm_fwd G St F body body' ->
+    arm_fwd G St F (Let_static bindings body) (Let_static bindings body')
+  | Arm_fwd_let_cont (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (k : continuation) (params : list variable)
       (metadata metadata' : handler_metadata) (handler handler' : expr)
       (e : option arm_entry) (body body' : expr) :
-    arm_fwd (params_in_scope params (hm_params_kinds metadata) G) F handler
+    arm_fwd (params_in_scope params (hm_params_kinds metadata) G)
+      (params_stated params (hm_params_subkinds metadata) St) F handler
       handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> arm_var_unfrozen F p) ->
     arm_cont_unfrozen F k ->
     arm_entry_fits params metadata' handler' e ->
-    arm_fwd G ((k, e) :: F) body body' ->
-    arm_fwd G F
+    arm_fwd G St ((k, e) :: F) body body' ->
+    arm_fwd G St F
       (Let_cont_non_recursive k (Handler params metadata handler) body)
       (Let_cont_non_recursive k (Handler params metadata' handler') body')
-  | Arm_fwd_let_cont_recursive (G : kinds_in_scope) (F : arm_forwards)
+  | Arm_fwd_let_cont_recursive (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards)
       (handlers handlers' : list (continuation * continuation_handler))
       (body body' : expr) :
     Forall2
       (fun kh kh' =>
          fst kh = fst kh'
          ∧ handler_params (snd kh) = handler_params (snd kh')
-         ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+         ∧ handler_stated (snd kh') = handler_stated (snd kh)
          ∧ arm_fwd
              (params_in_scope (handler_params (snd kh))
                 (handler_kinds (snd kh)) G)
+             (params_stated (handler_params (snd kh))
+                (handler_params_subkinds (snd kh)) St)
              (arm_plain handlers ++ F) (handler_expr (snd kh))
              (handler_expr (snd kh'))
          ∧ (∀ p : variable,
@@ -420,49 +456,58 @@ Inductive arm_fwd : kinds_in_scope -> arm_forwards -> expr -> expr -> Prop :=
          ∧ arm_cont_unfrozen F (fst kh))
       handlers handlers' ->
     handlers_bind_statics handlers' = handlers_bind_statics handlers ->
-    arm_fwd G (arm_plain handlers ++ F) body body' ->
-    arm_fwd G F (Let_cont_recursive handlers body)
+    arm_fwd G St (arm_plain handlers ++ F) body body' ->
+    arm_fwd G St F (Let_cont_recursive handlers body)
       (Let_cont_recursive handlers' body')
-  | Arm_fwd_apply (G : kinds_in_scope) (F : arm_forwards) (ap : apply_expr) :
-    arm_fwd G F (Apply ap) (Apply ap)
-  | Arm_fwd_apply_cont (G : kinds_in_scope) (F : arm_forwards)
-      (ac ac' : apply_cont) :
-    arm_goes G F ac ac' -> arm_fwd G F (Apply_cont ac) (Apply_cont ac')
-  | Arm_fwd_switch (G : kinds_in_scope) (F : arm_forwards)
-      (scrutinee : simple) (arms arms' : list (Z * apply_cont)) :
+  | Arm_fwd_apply (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (ap : apply_expr) :
+    arm_fwd G St F (Apply ap) (Apply ap)
+  | Arm_fwd_apply_cont (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (ac ac' : apply_cont) :
+    arm_goes G St F ac ac' ->
+    arm_fwd G St F (Apply_cont ac) (Apply_cont ac')
+  | Arm_fwd_switch (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (scrutinee : simple)
+      (arms arms' : list (Z * apply_cont)) :
     Forall2
-      (fun arm arm' => fst arm = fst arm' ∧ arm_goes G F (snd arm) (snd arm'))
+      (fun arm arm' =>
+         fst arm = fst arm' ∧ arm_goes G St F (snd arm) (snd arm'))
       arms arms' ->
-    arm_fwd G F (Switch scrutinee arms) (Switch scrutinee arms')
-  | Arm_fwd_invalid (G : kinds_in_scope) (F : arm_forwards) :
-    arm_fwd G F Invalid Invalid.
+    arm_fwd G St F (Switch scrutinee arms) (Switch scrutinee arms')
+  | Arm_fwd_invalid (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) :
+    arm_fwd G St F Invalid Invalid.
 
 (* The handlers of a recursive [Let_cont], one with one. *)
-Definition arm_handlers_fwd (G : kinds_in_scope) (inside F : arm_forwards)
+Definition arm_handlers_fwd (G : kinds_in_scope) (St : stated_in_scope)
+    (inside F : arm_forwards)
     (handlers handlers' : list (continuation * continuation_handler)) : Prop :=
   Forall2
     (fun kh kh' =>
        fst kh = fst kh'
        ∧ handler_params (snd kh) = handler_params (snd kh')
-       ∧ handler_kinds (snd kh') = handler_kinds (snd kh)
+       ∧ handler_stated (snd kh') = handler_stated (snd kh)
        ∧ arm_fwd
            (params_in_scope (handler_params (snd kh))
               (handler_kinds (snd kh)) G)
+           (params_stated (handler_params (snd kh))
+              (handler_params_subkinds (snd kh)) St)
            inside (handler_expr (snd kh)) (handler_expr (snd kh'))
        ∧ (∀ p : variable, p ∈ handler_params (snd kh) -> arm_var_unfrozen F p)
        ∧ arm_cont_unfrozen F (fst kh))
     handlers handlers'.
 
-Lemma arm_handlers_fwd_lookup (G : kinds_in_scope) (inside F : arm_forwards)
-    (k : continuation)
+Lemma arm_handlers_fwd_lookup (G : kinds_in_scope) (St : stated_in_scope)
+    (inside F : arm_forwards) (k : continuation)
     (handlers handlers' : list (continuation * continuation_handler)) :
-  arm_handlers_fwd G inside F handlers handlers' ->
+  arm_handlers_fwd G St inside F handlers handlers' ->
   match lookup k handlers, lookup k handlers' with
   | Some h, Some h' =>
     handler_params h = handler_params h'
-    ∧ handler_kinds h' = handler_kinds h
-    ∧ arm_fwd (params_in_scope (handler_params h) (handler_kinds h) G) inside
-        (handler_expr h) (handler_expr h')
+    ∧ handler_stated h' = handler_stated h
+    ∧ arm_fwd (params_in_scope (handler_params h) (handler_kinds h) G)
+        (params_stated (handler_params h) (handler_params_subkinds h) St)
+        inside (handler_expr h) (handler_expr h')
     ∧ (∀ p : variable, p ∈ handler_params h -> arm_var_unfrozen F p)
   | None, None => True
   | _, _ => False
@@ -477,10 +522,10 @@ Qed.
 
 (* The names of related handlers are not names that an entry depends
    on. *)
-Lemma arm_handlers_fwd_names (G : kinds_in_scope) (inside F : arm_forwards)
-    (k : continuation)
+Lemma arm_handlers_fwd_names (G : kinds_in_scope) (St : stated_in_scope)
+    (inside F : arm_forwards) (k : continuation)
     (handlers handlers' : list (continuation * continuation_handler)) :
-  arm_handlers_fwd G inside F handlers handlers' ->
+  arm_handlers_fwd G St inside F handlers handlers' ->
   lookup k handlers <> None ->
   arm_cont_unfrozen F k.
 Proof.
@@ -490,13 +535,14 @@ Proof.
   simpl in Hh. apply Hh.
 Qed.
 
-Lemma arm_find_arm_goes (G : kinds_in_scope) (F : arm_forwards) (i : Z)
-    (arms arms' : list (Z * apply_cont)) :
+Lemma arm_find_arm_goes (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards) (i : Z) (arms arms' : list (Z * apply_cont)) :
   Forall2
-    (fun arm arm' => fst arm = fst arm' ∧ arm_goes G F (snd arm) (snd arm'))
+    (fun arm arm' =>
+       fst arm = fst arm' ∧ arm_goes G St F (snd arm) (snd arm'))
     arms arms' ->
   match find_arm i arms, find_arm i arms' with
-  | Some ac, Some ac' => arm_goes G F ac ac'
+  | Some ac, Some ac' => arm_goes G St F ac ac'
   | None, None => True
   | _, _ => False
   end.
@@ -509,18 +555,18 @@ Qed.
 
 (* Every expression is related to itself, where no entry says anything. *)
 Fixpoint arm_fwd_refl (e : expr) :
-  ∀ (G : kinds_in_scope) (F : arm_forwards),
-    (∀ k : continuation, arm_forward_of F k = None) -> arm_fwd G F e e.
+  ∀ (G : kinds_in_scope) (St : stated_in_scope) (F : arm_forwards),
+    (∀ k : continuation, arm_forward_of F k = None) -> arm_fwd G St F e e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros G F Hnone.
+    intros G St F Hnone.
   - apply Arm_fwd_let;
       [ apply arm_var_unfrozen_none, Hnone | apply arm_fwd_refl, Hnone ].
   - apply Arm_fwd_let_static, arm_fwd_refl, Hnone.
-  - apply (Arm_fwd_let_cont G F k params metadata metadata handler handler
-      None);
+  - apply (Arm_fwd_let_cont G St F k params metadata metadata handler
+      handler None);
       [ apply arm_fwd_refl, Hnone | reflexivity
       | intros p _; apply arm_var_unfrozen_none, Hnone
       | apply arm_cont_unfrozen_none, Hnone | exact I | ].
@@ -572,7 +618,7 @@ Definition arm_held (F : arm_forwards) (vars : env) (conts' : cont_env)
       ∧ resolve k conts'
         = Closure (Handler params metadata (Switch (Var p) arms)) def_vars
             def_conts' []
-      ∧ strict_entry strict params metadata
+      ∧ arm_strict_entry params metadata
       ∧ ∀ (n : Z) (target : apply_cont),
           find_arm n arms = Some target ->
           passes k params metadata body target ->
@@ -589,49 +635,84 @@ Definition arm_held (F : arm_forwards) (vars : env) (conts' : cont_env)
    are in turn so related and for which those entries hold, the second
    handler giving the kinds of the first; or two that are related, with
    the same extra arguments; or what is left of the same
-   over-application, to return and to raise to two that are related. *)
-Inductive arm_cont_fwd : cont_value -> cont_value -> Prop :=
-  | Arm_same_fwd (c : cont_value) : arm_cont_fwd c c
-  | Arm_closure_fwd (G : kinds_in_scope) (F : arm_forwards)
-      (params : list variable) (metadata metadata' : handler_metadata)
-      (handler handler' : expr) (def_vars : env)
-      (def_conts def_conts' : cont_env)
+   over-application, to return and to raise to two that are related.
+   The variables of related closures are of what is known of them
+   (FlambdaStatedScopeSpec.stated_hold), which is said under a static
+   environment: the relation is that of the continuations of a state
+   with this static environment, and is kept where the static
+   environment grows ([arm_cont_fwd_extend]). *)
+Inductive arm_cont_fwd (statics : static_env)
+    : cont_value -> cont_value -> Prop :=
+  | Arm_same_fwd (c : cont_value) : arm_cont_fwd statics c c
+  | Arm_closure_fwd (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (params : list variable)
+      (metadata metadata' : handler_metadata) (handler handler' : expr)
+      (def_vars : env) (def_conts def_conts' : cont_env)
       (recursive recursive' : list (continuation * continuation_handler)) :
-    arm_handlers_fwd G (arm_plain recursive ++ F) F recursive recursive' ->
+    arm_handlers_fwd G St (arm_plain recursive ++ F) F recursive recursive' ->
     arm_fwd (params_in_scope params (hm_params_kinds metadata) G)
+      (params_stated params (hm_params_subkinds metadata) St)
       (arm_plain recursive ++ F) handler handler' ->
-    hm_params_kinds metadata' = hm_params_kinds metadata ->
+    stated metadata' = stated metadata ->
     (∀ p : variable, p ∈ params -> arm_var_unfrozen F p) ->
     (∀ k : continuation,
-      arm_cont_fwd (resolve k def_conts) (resolve k def_conts')) ->
+      arm_cont_fwd statics (resolve k def_conts) (resolve k def_conts')) ->
     arm_held F def_vars def_conts' ->
     kinds_hold G def_vars ->
-    arm_cont_fwd
+    stated_hold statics St def_vars ->
+    arm_cont_fwd statics
       (Closure (Handler params metadata handler) def_vars def_conts recursive)
       (Closure (Handler params metadata' handler') def_vars def_conts'
          recursive')
   | Arm_extra_args_fwd (c c' : cont_value) (extra : list value) :
-    arm_cont_fwd c c' ->
-    arm_cont_fwd (Extra_args c extra) (Extra_args c' extra)
+    arm_cont_fwd statics c c' ->
+    arm_cont_fwd statics (Extra_args c extra) (Extra_args c' extra)
   | Arm_over_fwd (remaining : list value)
       (remaining_arity return_arity : arity)
       (return_to return_to' exn_to exn_to' : cont_value) :
-    arm_cont_fwd return_to return_to' ->
-    arm_cont_fwd exn_to exn_to' ->
-    arm_cont_fwd
+    arm_cont_fwd statics return_to return_to' ->
+    arm_cont_fwd statics exn_to exn_to' ->
+    arm_cont_fwd statics
       (Over_application remaining remaining_arity return_arity return_to
          exn_to)
       (Over_application remaining remaining_arity return_arity return_to'
          exn_to').
 
+(* A static environment that extends another keeps the relation: what
+   a value is of, it is still of. *)
+Lemma arm_cont_fwd_extend (statics statics' : static_env)
+    (c c' : cont_value) :
+  statics_extend statics statics' ->
+  arm_cont_fwd statics c c' ->
+  arm_cont_fwd statics' c c'.
+Proof.
+  intros Hextend.
+  induction 1
+    as [ c
+       | G St F params metadata metadata' handler handler' def_vars def_conts
+           def_conts' recursive recursive' Hrecursive Hhandler Hmeta Hparams
+           Hdef_conts IHdef_conts Hheld Htyped Hscope
+       | c c' extra Hc IH
+       | remaining remaining_arity return_arity return_to return_to' exn_to
+           exn_to' Hreturn IHreturn Hraise IHraise ].
+  - apply Arm_same_fwd.
+  - apply (Arm_closure_fwd statics' G St F); try assumption.
+    exact (stated_hold_extend statics statics' St def_vars Hextend Hscope).
+  - apply Arm_extra_args_fwd, IH.
+  - apply Arm_over_fwd; assumption.
+Qed.
+
 Inductive arm_state_fwd : state -> state -> Prop :=
-  | Arm_state_fwd (G : kinds_in_scope) (F : arm_forwards) (e e' : expr)
-      (vars : env) (conts conts' : cont_env) (statics : static_env)
-      (hp : heap) (rd : read_record) :
-    arm_fwd G F e e' ->
-    (∀ k : continuation, arm_cont_fwd (resolve k conts) (resolve k conts')) ->
+  | Arm_state_fwd (G : kinds_in_scope) (St : stated_in_scope)
+      (F : arm_forwards) (e e' : expr) (vars : env)
+      (conts conts' : cont_env) (statics : static_env) (hp : heap)
+      (rd : read_record) :
+    arm_fwd G St F e e' ->
+    (∀ k : continuation,
+      arm_cont_fwd statics (resolve k conts) (resolve k conts')) ->
     arm_held F vars conts' ->
     kinds_hold G vars ->
+    stated_hold statics St vars ->
     arm_state_fwd (State e vars conts statics hp rd)
       (State e' vars conts' statics hp rd).
 
@@ -641,9 +722,9 @@ Proof. intros k params metadata i arms body Hsome. discriminate Hsome. Qed.
 Lemma arm_state_fwd_refl (s : state) : arm_state_fwd s s.
 Proof.
   destruct s as [e vars conts statics].
-  apply (Arm_state_fwd [] []);
+  apply (Arm_state_fwd [] [] []);
     [ apply arm_fwd_refl; reflexivity | intros k; apply Arm_same_fwd
-    | apply arm_held_nil | apply kinds_hold_nil ].
+    | apply arm_held_nil | apply kinds_hold_nil | apply stated_hold_nil ].
 Qed.
 
 (* Binding a variable that no entry depends on. *)
@@ -691,17 +772,18 @@ Qed.
 
 (* The closures of the handlers of a recursive [Let_cont], whose names no
    entry depends on. *)
-Lemma arm_held_rec (G : kinds_in_scope) (F : arm_forwards)
+Lemma arm_held_rec (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards)
     (handlers handlers' : list (continuation * continuation_handler))
     (vars def_vars : env) (def_conts' : cont_env) :
-  arm_handlers_fwd G (arm_plain handlers ++ F) F handlers handlers' ->
+  arm_handlers_fwd G St (arm_plain handlers ++ F) F handlers handlers' ->
   arm_held F vars def_conts' ->
   arm_held (arm_plain handlers ++ F) vars
     (rec_closures handlers' def_vars def_conts' ++ def_conts').
 Proof.
   intros Hhandlers Hheld k params metadata i arms body Hsome.
   rewrite arm_forward_of_plain in Hsome.
-  pose proof (arm_handlers_fwd_lookup _ _ _ k _ _ Hhandlers) as Hlookup.
+  pose proof (arm_handlers_fwd_lookup _ _ _ _ k _ _ Hhandlers) as Hlookup.
   destruct (lookup k handlers) eqn:Hk; [ discriminate Hsome | ].
   destruct (lookup k handlers') eqn:Hk'; [ contradiction | ].
   destruct (Hheld k params metadata i arms body Hsome)
@@ -714,39 +796,43 @@ Proof.
   split; [ exact Hvars | ].
   rewrite resolve_rec_closures.
   pose proof
-    (arm_handlers_fwd_lookup _ _ _ (ac_continuation target) _ _ Hhandlers)
+    (arm_handlers_fwd_lookup _ _ _ _ (ac_continuation target) _ _ Hhandlers)
     as Htarget.
   destruct (lookup (ac_continuation target) handlers') eqn:Ht';
     [ | exact Hcont ].
   destruct (lookup (ac_continuation target) handlers) eqn:Ht;
     [ | contradiction ].
   exfalso.
-  apply (arm_handlers_fwd_names _ _ _ (ac_continuation target) _ _ Hhandlers
-    ltac:(rewrite Ht; discriminate) k).
+  apply (arm_handlers_fwd_names _ _ _ _ (ac_continuation target) _ _
+    Hhandlers ltac:(rewrite Ht; discriminate) k).
   rewrite Hsome. exists params, metadata, i, arms, body, n, target. auto.
 Qed.
 
-Lemma arm_rec_conts_fwd (G : kinds_in_scope) (F : arm_forwards)
+Lemma arm_rec_conts_fwd (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards)
     (handlers handlers' : list (continuation * continuation_handler))
-    (def_vars : env) (def_conts def_conts' : cont_env) :
-  arm_handlers_fwd G (arm_plain handlers ++ F) F handlers handlers' ->
+    (def_vars : env) (def_conts def_conts' : cont_env)
+    (statics : static_env) :
+  arm_handlers_fwd G St (arm_plain handlers ++ F) F handlers handlers' ->
   (∀ k : continuation,
-    arm_cont_fwd (resolve k def_conts) (resolve k def_conts')) ->
+    arm_cont_fwd statics (resolve k def_conts) (resolve k def_conts')) ->
   arm_held F def_vars def_conts' ->
   kinds_hold G def_vars ->
+  stated_hold statics St def_vars ->
   ∀ k : continuation,
-    arm_cont_fwd
+    arm_cont_fwd statics
       (resolve k (rec_closures handlers def_vars def_conts ++ def_conts))
       (resolve k (rec_closures handlers' def_vars def_conts' ++ def_conts')).
 Proof.
-  intros Hhandlers Hconts Hheld Htyped k. rewrite !resolve_rec_closures.
-  pose proof (arm_handlers_fwd_lookup _ _ _ k _ _ Hhandlers) as Hlookup.
+  intros Hhandlers Hconts Hheld Htyped Hscope k.
+  rewrite !resolve_rec_closures.
+  pose proof (arm_handlers_fwd_lookup _ _ _ _ k _ _ Hhandlers) as Hlookup.
   destruct (lookup k handlers) as [[params metadata handler] | ],
     (lookup k handlers') as [[params' metadata' handler'] | ];
     try contradiction; [ | exact (Hconts k) ].
   destruct Hlookup as (Hparams & Hmeta & Hhandler & Hunfrozen).
   simpl in Hparams, Hmeta, Hhandler, Hunfrozen. subst params'.
-  apply (Arm_closure_fwd G F); assumption.
+  apply (Arm_closure_fwd statics G St F); assumption.
 Qed.
 
 (* ======================================================================== *)
@@ -775,41 +861,63 @@ Proof. intros _. reflexivity. Qed.
 
 (* Where [strict], the arguments of an application that goes to an arm
    have values, of the kinds that the handler of its entry gives its
-   parameters and as many as it has parameters: the closure of the
+   parameters, as many as it has parameters, and of what it states of
+   them, by what is known of the variables in scope: the closure of the
    entry runs on them. *)
-Lemma arm_strict_runs (G : kinds_in_scope) (args : list simple)
-    (params : list variable) (metadata : handler_metadata) (vars : env) :
+Lemma arm_strict_runs (G : kinds_in_scope) (St : stated_in_scope)
+    (args : list simple) (params : list variable)
+    (metadata : handler_metadata) (vars : env) (statics : static_env) :
   kinds_hold G vars ->
-  strict_entry strict params metadata ->
+  stated_hold statics St vars ->
+  arm_strict_entry params metadata ->
   (strict = true -> args_have_kinds G args (hm_params_kinds metadata)) ->
+  (strict = true ->
+   are_stated St args (hm_params_subkinds metadata) = true) ->
   strict = true ->
   ∃ vs : list value,
     eval_simples vars args = Some vs
     ∧ map kind_of_value vs = hm_params_kinds metadata
-    ∧ length params = length vs.
+    ∧ length params = length vs
+    ∧ values_of_subkinds statics vs (hm_params_subkinds metadata) = true.
 Proof.
-  intros Htyped Hse Hhave Hstrict.
+  intros Htyped Hscope Hse Hhave Hare Hstrict.
   destruct (Hhave Hstrict vars Htyped) as (vs & Hvs & Hk).
+  pose proof (Hse Hstrict) as Hlength.
+  assert (Hvs_length : length params = length vs)
+    by (rewrite Hlength, <- Hk; apply length_map).
   exists vs. split; [ exact Hvs | ]. split; [ exact Hk | ].
-  rewrite (Hse Hstrict), <- Hk. apply length_map.
+  split; [ exact Hvs_length | ].
+  exact
+    (are_stated_sound statics St vars args _ vs Hscope (Hare Hstrict) Hvs).
 Qed.
+
+(* What is asked of the values that the closure of an entry is applied
+   to, where [strict], under the static environment of the state. *)
+Definition arm_runs_on_values (statics : static_env)
+    (params : list variable) (metadata' : handler_metadata)
+    (vs : list value) : Prop :=
+  strict = true ->
+  map kind_of_value vs = hm_params_kinds metadata'
+  ∧ length params = length vs
+  ∧ values_of_subkinds statics vs (hm_params_subkinds metadata') = true.
 
 (* What the relation says of a handler that has become a [Switch], and
    of the two applications. *)
-Lemma arm_fwd_switch_inv (G : kinds_in_scope) (F : arm_forwards) (e : expr)
-    (scrutinee : simple) (arms' : list (Z * apply_cont)) :
-  arm_fwd G F e (Switch scrutinee arms') ->
+Lemma arm_fwd_switch_inv (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards) (e : expr) (scrutinee : simple)
+    (arms' : list (Z * apply_cont)) :
+  arm_fwd G St F e (Switch scrutinee arms') ->
   ∃ arms : list (Z * apply_cont),
     e = Switch scrutinee arms
     ∧ Forall2
         (fun arm arm' =>
-           fst arm = fst arm' ∧ arm_goes G F (snd arm) (snd arm'))
+           fst arm = fst arm' ∧ arm_goes G St F (snd arm) (snd arm'))
         arms arms'.
 Proof. intros Hfwd. inversion Hfwd; subst. eauto. Qed.
 
-Lemma arm_goes_inv (G : kinds_in_scope) (F : arm_forwards)
-    (b target : apply_cont) :
-  arm_goes G F b target ->
+Lemma arm_goes_inv (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards) (b target : apply_cont) :
+  arm_goes G St F b target ->
   target = b
   ∨ ∃ (params_b : list variable) (metadata_b : handler_metadata) (i_b : nat)
       (arms_b : list (Z * apply_cont)) (body_b : expr) (n_b : Z)
@@ -822,13 +930,15 @@ Lemma arm_goes_inv (G : kinds_in_scope) (F : arm_forwards)
       ∧ length (ac_args b) = length params_b
       ∧ (strict = true ->
          args_have_kinds G (ac_args b) (hm_params_kinds metadata_b))
+      ∧ (strict = true ->
+         are_stated St (ac_args b) (hm_params_subkinds metadata_b) = true)
       ∧ target = forwarded params_b (ac_args b) target_b.
 Proof.
   intros [ ac
          | ac params_b metadata_b i_b arms_b body_b n_b target_b Hentry Hnth
-             Hfind Hpasses Hlength Hkinds ];
+             Hfind Hpasses Hlength Hkinds Hstated ];
     [ left; reflexivity | right ].
-  exists params_b, metadata_b, i_b, arms_b, body_b, n_b, target_b. auto 10.
+  exists params_b, metadata_b, i_b, arms_b, body_b, n_b, target_b. auto 12.
 Qed.
 
 (* The same full call, returning and raising to related continuations. *)
@@ -836,8 +946,8 @@ Lemma arm_call_code_fwd (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) :
-  arm_cont_fwd return_to return_to' ->
-  arm_cont_fwd exn_to exn_to' ->
+  arm_cont_fwd statics return_to return_to' ->
+  arm_cont_fwd statics exn_to exn_to' ->
   arm_answer
     (call_code closure c vs args_arity return_arity return_to exn_to statics hp
        rd)
@@ -849,9 +959,9 @@ Proof.
     as [Hundefined | (callee_vars & Hcall)].
   - rewrite !Hundefined. apply arm_answer_undefined.
   - rewrite !Hcall. cbn [arm_answer]. eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd [] []);
+    apply (Arm_state_fwd [] [] []);
       [ apply arm_fwd_refl; reflexivity | | apply arm_held_nil
-      | apply kinds_hold_nil ].
+      | apply kinds_hold_nil | apply stated_hold_nil ].
     intros k'. unfold resolve. simpl.
     destruct (Pos.eqb k' (code_return_continuation c)); [ exact Hreturn | ].
     destruct (Pos.eqb k' (code_exn_continuation c));
@@ -864,8 +974,8 @@ Qed.
 Lemma arm_run_call_fwd (shape : option call_shape) (return_arity : arity)
     (return_to return_to' exn_to exn_to' : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) :
-  arm_cont_fwd return_to return_to' ->
-  arm_cont_fwd exn_to exn_to' ->
+  arm_cont_fwd statics return_to return_to' ->
+  arm_cont_fwd statics exn_to exn_to' ->
   (∀ partial : value,
     ∃ n : nat,
       arm_answer (run_on n (apply_cont_value return_to [partial] statics hp rd))
@@ -899,9 +1009,9 @@ Qed.
    position of the parameter tested is a number, comes, after some
    steps, to what answers one step of the [Apply_cont] of the arm of
    that number with those arguments put for the parameters. *)
-Lemma arm_cont_fwd_rounds (c c' : cont_value) :
-  arm_cont_fwd c c' ->
-  (∀ (vs : list value) (statics : static_env) (hp : heap) (rd : read_record),
+Lemma arm_cont_fwd_rounds (statics : static_env) (c c' : cont_value) :
+  arm_cont_fwd statics c c' ->
+  (∀ (vs : list value) (hp : heap) (rd : read_record),
     ∃ m : nat,
       arm_answer (run_on m (apply_cont_value c vs statics hp rd))
         (apply_cont_value c' vs statics hp rd))
@@ -909,7 +1019,7 @@ Lemma arm_cont_fwd_rounds (c c' : cont_value) :
        (arms' : list (Z * apply_cont)) (def_vars0 : env)
        (def_conts0 : cont_env) (i : nat) (n : Z) (target : apply_cont)
        (args : list simple) (vs : list value) (vars : env) (conts' : cont_env)
-       (statics : static_env) (hp : heap) (rd : read_record),
+       (hp : heap) (rd : read_record),
        c'
        = Closure (Handler params metadata' (Switch (Var p) arms')) def_vars0
            def_conts0 [] ->
@@ -917,7 +1027,7 @@ Lemma arm_cont_fwd_rounds (c c' : cont_value) :
        nth_error args i = Some (Const (Naked_immediate n)) ->
        find_arm n arms' = Some target ->
        NoDup params ->
-       runs_on_values strict params metadata' vs ->
+       arm_runs_on_values statics params metadata' vs ->
        length args = length params ->
        eval_simples vars args = Some vs ->
        (∀ x : variable,
@@ -934,27 +1044,32 @@ Lemma arm_cont_fwd_rounds (c c' : cont_value) :
 Proof.
   induction 1
     as [ c
-       | G F params metadata metadata' handler handler' def_vars def_conts
+       | G St F params metadata metadata' handler handler' def_vars def_conts
            def_conts' recursive recursive' Hrecursive Hhandler Hmeta Hparams
-           Hdef_conts IHdef_conts Hheld Htyped
+           Hdef_conts IHdef_conts Hheld Htyped Hscope
        | c c' extra Hc [IHsame _]
        | remaining remaining_arity return_arity return_to return_to' exn_to
            exn_to' Hreturn [IHreturn _] Hraise _ ].
   - (* the same continuation *)
     split;
-      [ intros vs statics hp; exists 0; rewrite run_on_zero;
+      [ intros vs hp; exists 0; rewrite run_on_zero;
         apply arm_answer_refl
       | ].
     intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-      vars conts' statics hp rd -> Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
+      vars conts' hp rd -> Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
       Hcont.
     simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata'))
       eqn:Hkinds;
       [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
           rewrite Hvs, kinds_eqb_refl in Hkinds; discriminate Hkinds ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata'))
+      eqn:Hstated;
+      [ | exists 0; intros Hstrict;
+          destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+          rewrite Hpasses in Hstated; discriminate Hstated ].
     destruct (bind_params params vs def_vars0) as [bound | ] eqn:Hbind;
-      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+      [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as (_ & Hvs & _);
           destruct (bind_params_length params vs def_vars0 Hvs)
             as [bound Hsome];
           rewrite Hsome in Hbind; discriminate Hbind ].
@@ -969,27 +1084,35 @@ Proof.
          def_conts0 statics _ rd_ Hnodup Hargs Hbind Hvars Hcont).
     apply arm_answer_refl.
   - (* related closures *)
+    pose proof Hmeta as Hmeta_kinds. unfold stated in Hmeta_kinds.
+    injection Hmeta_kinds as Hmeta_kinds Hmeta_stated.
     split.
-    + intros vs statics hp. exists 0. rewrite run_on_zero. simpl.
-      rewrite Hmeta.
+    + intros vs hp. exists 0. rewrite run_on_zero. simpl.
+      rewrite Hmeta_kinds, Hmeta_stated.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds; [ | apply arm_answer_undefined ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+        eqn:Hstated; [ | apply arm_answer_undefined ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
         [ | apply arm_answer_undefined ].
       eexists. split; [ reflexivity | ].
       apply
         (Arm_state_fwd (params_in_scope params (hm_params_kinds metadata) G)
+           (params_stated params (hm_params_subkinds metadata) St)
            (arm_plain recursive ++ F));
-        [ exact Hhandler | | | ].
-      * apply (arm_rec_conts_fwd G F); assumption.
-      * apply (arm_held_rec G); [ exact Hrecursive | ].
+        [ exact Hhandler | | | | ].
+      * apply (arm_rec_conts_fwd G St F); assumption.
+      * apply (arm_held_rec G St); [ exact Hrecursive | ].
         exact (arm_held_bind F params vs def_vars bound def_conts' Hparams
           Hbind Hheld).
       * rewrite <- Hkinds.
         exact (params_in_scope_hold params vs G def_vars bound Htyped Hbind).
+      * exact
+          (params_stated_bound statics params vs _ St def_vars bound Hscope
+             Hstated Hbind).
     + intros params0 metadata0 p arms' def_vars0 def_conts0 i n target args vs
-        vars conts' statics hp rd Hc' Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
+        vars conts' hp rd Hc' Hp Ha Harm Hnodup Hruns Hlen Hargs Hvars
         Hcont.
       injection Hc' as Heq_params Heq_metadata Heq_handler Heq_vars Heq_conts
         Heq_recursive.
@@ -997,17 +1120,24 @@ Proof.
       unfold arm_handlers_fwd in Hrecursive.
       destruct recursive as [ | kh rest]; [ | inversion Hrecursive ].
       simpl in Hhandler.
-      destruct (arm_fwd_switch_inv _ F handler (Var p) arms' Hhandler)
+      destruct (arm_fwd_switch_inv _ _ F handler (Var p) arms' Hhandler)
         as (arms & -> & Harms).
       simpl.
       destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
         eqn:Hkinds;
         [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [Hvs _];
-            rewrite <- Hmeta, Hvs, kinds_eqb_refl in Hkinds;
+            rewrite <- Hmeta_kinds, Hvs, kinds_eqb_refl in Hkinds;
             discriminate Hkinds ].
       apply kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds metadata))
+        eqn:Hstated;
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & _ & Hpasses);
+            rewrite <- Hmeta_stated, Hpasses in Hstated;
+            discriminate Hstated ].
       destruct (bind_params params vs def_vars) as [bound | ] eqn:Hbind;
-        [ | exists 0; intros Hstrict; destruct (Hruns Hstrict) as [_ Hvs];
+        [ | exists 0; intros Hstrict;
+            destruct (Hruns Hstrict) as (_ & Hvs & _);
             destruct (bind_params_length params vs def_vars Hvs)
               as [bound Hsome];
             rewrite Hsome in Hbind; discriminate Hbind ].
@@ -1020,21 +1150,27 @@ Proof.
         kinds_hold (params_in_scope params (hm_params_kinds metadata) G) bound).
       { rewrite <- Hkinds.
         exact (params_in_scope_hold params vs G def_vars bound Htyped Hbind). }
+      assert (Hscope_bound :
+        stated_hold statics
+          (params_stated params (hm_params_subkinds metadata) St) bound)
+        by exact
+             (params_stated_bound statics params vs _ St def_vars bound
+                Hscope Hstated Hbind).
       pose proof
         (tested_param_bound params args vs vars def_vars bound i p _ Hnodup
            Hargs Hbind Hp Ha)
         as Hp_bound.
-      pose proof (arm_find_arm_goes _ F n arms arms' Harms) as Hb.
+      pose proof (arm_find_arm_goes _ _ F n arms arms' Harms) as Hb.
       rewrite Harm in Hb.
       destruct (find_arm n arms) as [b | ] eqn:Hfind_b; [ | contradiction ].
-      destruct (arm_goes_inv _ F b target Hb)
+      destruct (arm_goes_inv _ _ F b target Hb)
         as [-> | (params_b & metadata_b & i_b & arms_b & body_b & n_b
                   & target_b & Hentry & Hnth_b & Hfind_tb & Hpasses_b
-                  & Hlength & Hkinds_b & Htarget)].
+                  & Hlength & Hkinds_b & Hstated_b & Htarget)].
       * (* the arm of the first closure is the same application *)
         destruct (IHdef_conts (ac_continuation b)) as [IHapply _].
         destruct (eval_simples bound (ac_args b)) as [vt | ] eqn:Hargs_b.
-        -- destruct (IHapply vt statics hp rd) as [m Hanswer].
+        -- destruct (IHapply vt hp rd) as [m Hanswer].
            exists (S (S m)).
            rewrite run_on_step,
              (step_tested_switch p arms n b bound _ statics hp rd Hp_bound
@@ -1058,18 +1194,19 @@ Proof.
         destruct (passes_inv _ _ _ _ _ Hpasses_b) as (Hnodup_b & _).
         destruct (IHdef_conts (ac_continuation b)) as [_ IHon].
         pose proof
-          (arm_strict_runs _ (ac_args b) params_b metadata_b bound
-             Htyped_bound Hse_b Hkinds_b)
+          (arm_strict_runs _ _ (ac_args b) params_b metadata_b bound statics
+             Htyped_bound Hscope_bound Hse_b Hkinds_b Hstated_b)
           as Hruns_b.
         subst target.
         destruct (eval_simples bound (ac_args b)) as [vb | ] eqn:Hargs_b.
-        -- assert (Hruns_vb : runs_on_values strict params_b metadata_b vb).
+        -- assert (Hruns_vb :
+             arm_runs_on_values statics params_b metadata_b vb).
            { intros Hstrict.
              destruct (Hruns_b Hstrict) as (vb' & Hvb' & Hrest).
              injection Hvb' as <-. exact Hrest. }
            destruct
              (IHon params_b metadata_b p_b arms_b def_vars_b def_conts_b i_b
-                n_b target_b (ac_args b) vb bound def_conts' statics hp
+                n_b target_b (ac_args b) vb bound def_conts' hp
                 rd Hresolve_b Hp_b Hnth_b Hfind_tb Hnodup_b Hruns_vb Hlength
                 Hargs_b Hvars_b Hcont_b)
              as [m Hanswer].
@@ -1088,20 +1225,20 @@ Proof.
            destruct (Hruns_b Hstrict) as (vb' & Hvb' & _).
            discriminate Hvb'.
   - (* the same extra arguments *)
-    split; [ intros vs statics hp; simpl; apply IHsame | ].
+    split; [ intros vs hp; simpl; apply IHsame | ].
     intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-      vars conts' statics hp rd Hc'.
+      vars conts' hp rd Hc'.
     discriminate Hc'.
   - (* what is left of the same over-application *)
     split.
-    + intros vs statics hp rd. rewrite !apply_cont_value_over_application.
+    + intros vs hp rd. rewrite !apply_cont_value_over_application.
       destruct vs as [ | v [ | v' vs]];
         try (exists 0; rewrite run_on_zero; apply arm_answer_undefined).
       unfold call_function.
       apply arm_run_call_fwd; [ exact Hreturn | exact Hraise | ].
       intros partial. apply IHreturn.
     + intros params metadata' p arms' def_vars0 def_conts0 i n target args vs
-        vars conts' statics hp rd Hc'.
+        vars conts' hp rd Hc'.
       discriminate Hc'.
 Qed.
 
@@ -1123,42 +1260,58 @@ Qed.
 Lemma arm_fwd_round_answer (st st' : state) :
   arm_state_fwd st st' -> ∃ m : nat, arm_answer (run (S m) st) (step st').
 Proof.
-  intros [G F e e' vars conts conts' statics hp rd Hfwd Hconts Hheld Htyped].
+  intros
+    [G St F e e' vars conts conts' statics hp rd Hfwd Hconts Hheld Htyped
+       Hscope].
   destruct Hfwd
-    as [ G F x kind d body body' Hx Hbody | G F bindings body body' Hbody
-       | G F k params metadata metadata' handler handler' entry body body'
+    as [ G St F x kind d body body' Hx Hbody
+       | G St F bindings body body' Hbody
+       | G St F k params metadata metadata' handler handler' entry body body'
            Hhandler Hmeta Hparams Hk Hfits Hbody
-       | G F handlers handlers' body body' Hhandlers Hbinds Hbody
-       | G F ap | G F ac ac' Hgoes
-       | G F scrutinee arms arms' Harms | G F ].
+       | G St F handlers handlers' body body' Hhandlers Hbinds Hbody
+       | G St F ap | G St F ac ac' Hgoes
+       | G St F scrutinee arms arms' Harms | G St F ].
   - (* Let *)
     exists 0. rewrite run_one, !step_let_exec.
-    destruct (exec_named _ _ rd_ _ d) as [[[v hp'] rd'] | ];
-      [ | apply arm_answer_undefined ].
+    destruct (exec_named statics hp rd vars d) as [[[v hp'] rd'] | ]
+      eqn:Hexec; [ | apply arm_answer_undefined ].
     destruct (kind_eqb (kind_of_value v) kind) eqn:Hkind;
       [ | apply arm_answer_undefined ].
     apply kind_eqb_eq in Hkind. subst kind.
     eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd ((x, kind_of_value v) :: G) F);
-      [ exact Hbody | exact Hconts | | apply kinds_hold_cons, Htyped ].
-    apply arm_held_var; assumption.
-  - (* Let_static *)
+    apply
+      (Arm_state_fwd ((x, kind_of_value v) :: G)
+         ((x, stated_of_named St d) :: St) F);
+      [ exact Hbody | exact Hconts | | apply kinds_hold_cons, Htyped | ].
+    + apply arm_held_var; assumption.
+    + apply stated_hold_cons; [ exact Hscope | ].
+      exact
+        (stated_of_named_sound statics hp hp' rd rd' St vars d v Hscope
+           Hexec).
+  - (* Let_static: the static environment grows *)
     exists 0. rewrite run_one, !step_let_static.
-    destruct (eval_static_bindings vars bindings statics) as [extended | ];
-      [ | apply arm_answer_undefined ].
+    destruct (eval_static_bindings vars bindings statics) as [extended | ]
+      eqn:Hextended; [ | apply arm_answer_undefined ].
+    pose proof
+      (eval_static_bindings_extend vars bindings statics extended Hextended)
+      as Hextend.
     eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd G F); assumption.
+    apply (Arm_state_fwd G St F);
+      [ exact Hbody | | exact Hheld | exact Htyped | ].
+    + intros k'.
+      exact (arm_cont_fwd_extend statics extended _ _ Hextend (Hconts k')).
+    + exact (stated_hold_extend statics extended St vars Hextend Hscope).
   - (* Let_cont_non_recursive *)
     exists 0. rewrite run_one, !step_let_cont_non_recursive.
     eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd G ((k, entry) :: F));
-      [ exact Hbody | | | exact Htyped ].
+    apply (Arm_state_fwd G St ((k, entry) :: F));
+      [ exact Hbody | | | exact Htyped | exact Hscope ].
     + intros k'. destruct (Pos.eq_dec k' k) as [-> | Hne].
       * rewrite !resolve_head.
-        apply (Arm_closure_fwd G F params metadata metadata' handler handler'
-          vars conts conts' [] []);
+        apply (Arm_closure_fwd statics G St F params metadata metadata'
+          handler handler' vars conts conts' [] []);
           [ apply Forall2_nil | exact Hhandler | exact Hmeta | exact Hparams
-          | exact Hconts | exact Hheld | exact Htyped ].
+          | exact Hconts | exact Hheld | exact Htyped | exact Hscope ].
       * rewrite !resolve_other by exact Hne. exact (Hconts k').
     + intros k' params0 metadata0 i arms body0 Hsome.
       destruct (Pos.eq_dec k' k) as [-> | Hne].
@@ -1188,10 +1341,10 @@ Proof.
     destruct (handlers_bind_statics handlers);
       [ apply arm_answer_undefined | ].
     eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd G (arm_plain handlers ++ F));
-      [ exact Hbody | | | exact Htyped ].
-    + apply (arm_rec_conts_fwd G F); assumption.
-    + apply (arm_held_rec G); assumption.
+    apply (Arm_state_fwd G St (arm_plain handlers ++ F));
+      [ exact Hbody | | | exact Htyped | exact Hscope ].
+    + apply (arm_rec_conts_fwd G St F); assumption.
+    + apply (arm_held_rec G St); assumption.
   - (* Apply: the same call, returning to related continuations *)
     assert (Hround :
       ∃ m : nat,
@@ -1211,18 +1364,20 @@ Proof.
           [ apply Hconts | apply Arm_extra_args_fwd, Hconts ].
       - intros partial.
         exact
-          (proj1 (arm_cont_fwd_rounds _ _ (Hconts (ap_continuation ap)))
-             [partial] statics hp rd_). }
+          (proj1
+             (arm_cont_fwd_rounds statics _ _ (Hconts (ap_continuation ap)))
+             [partial] hp rd_). }
     destruct Hround as [m Hround]. exists m. rewrite run_succ_on.
     exact Hround.
   - (* Apply_cont *)
-    destruct (arm_cont_fwd_rounds _ _ (Hconts (ac_continuation ac)))
+    destruct (arm_cont_fwd_rounds statics _ _ (Hconts (ac_continuation ac)))
       as [Hsame Hon].
-    destruct (arm_goes_inv G F ac ac' Hgoes)
+    destruct (arm_goes_inv G St F ac ac' Hgoes)
       as [-> | (params & metadata & i & arms & body & n & target & Hentry
-                & Hnth & Hfind & Hpasses & Hlength & Hkinds & ->)].
+                & Hnth & Hfind & Hpasses & Hlength & Hkinds & Hstated
+                & ->)].
     + destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
-      * destruct (Hsame vs statics hp rd) as [m Hanswer]. exists m.
+      * destruct (Hsame vs hp rd) as [m Hanswer]. exists m.
         rewrite run_succ_on, !step_apply_cont, Hargs.
         unfold apply_continuation. exact Hanswer.
       * exists 0. rewrite run_one, !step_apply_cont, Hargs.
@@ -1232,16 +1387,16 @@ Proof.
       destruct (Harms n target Hfind Hpasses) as [Hvars Hcont].
       destruct (passes_inv _ _ _ _ _ Hpasses) as (Hnodup & _).
       pose proof
-        (arm_strict_runs G (ac_args ac) params metadata vars Htyped Hse
-           Hkinds)
+        (arm_strict_runs G St (ac_args ac) params metadata vars statics Htyped
+           Hscope Hse Hkinds Hstated)
         as Hruns.
       destruct (eval_simples vars (ac_args ac)) as [vs | ] eqn:Hargs.
-      * assert (Hruns_vs : runs_on_values strict params metadata vs).
+      * assert (Hruns_vs : arm_runs_on_values statics params metadata vs).
         { intros Hstrict. destruct (Hruns Hstrict) as (vs' & Hvs' & Hrest).
           injection Hvs' as <-. exact Hrest. }
         destruct
           (Hon params metadata p arms def_vars def_conts' i n target
-             (ac_args ac) vs vars conts' statics hp rd Hresolve Hp Hnth Hfind
+             (ac_args ac) vs vars conts' hp rd Hresolve Hp Hnth Hfind
              Hnodup Hruns_vs Hlength Hargs Hvars Hcont)
           as [m Hanswer].
         exists m. rewrite run_succ_on, (step_apply_cont ac), Hargs.
@@ -1255,13 +1410,13 @@ Proof.
       [ | apply arm_answer_undefined ].
     destruct (naked_immediate_of_value v) as [i | ];
       [ | apply arm_answer_undefined ].
-    pose proof (arm_find_arm_goes G F i arms arms' Harms) as Harm.
+    pose proof (arm_find_arm_goes G St F i arms arms' Harms) as Harm.
     destruct (find_arm i arms) as [ac | ], (find_arm i arms') as [ac' | ];
       try contradiction; [ | apply arm_answer_undefined ].
     eexists. split; [ reflexivity | ].
-    apply (Arm_state_fwd G F);
+    apply (Arm_state_fwd G St F);
       [ apply Arm_fwd_apply_cont, Harm | exact Hconts | exact Hheld
-      | exact Htyped ].
+      | exact Htyped | exact Hscope ].
   - (* Invalid *)
     exists 0. rewrite run_one, !step_invalid. apply arm_answer_undefined.
 Qed.
@@ -1299,13 +1454,14 @@ Qed.
 (* ======================================================================== *)
 
 Fixpoint forward_to_arms_binds_statics (e : expr) :
-  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
-    binds_statics (forward_to_arms_under kinded G F e) = binds_statics e.
+  ∀ (kinded : bool) (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards),
+    binds_statics (forward_to_arms_under kinded G St F e) = binds_statics e.
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros kinded G F; simpl; try reflexivity.
+    intros kinded G St F; simpl; try reflexivity.
   - apply forward_to_arms_binds_statics.
   - rewrite forward_to_arms_binds_statics. reflexivity.
   - rewrite !forward_to_arms_binds_statics. reflexivity.
@@ -1320,8 +1476,8 @@ Qed.
 (* An application that the pass makes go to an arm is one that the
    relation lets go there. *)
 Lemma arm_goes_forward (kinded : bool) (G : kinds_in_scope)
-    (F : arm_forwards) (ac : apply_cont) :
-  arm_goes kinded G F ac (forward_to_arm_apply_cont kinded G F ac).
+    (St : stated_in_scope) (F : arm_forwards) (ac : apply_cont) :
+  arm_goes kinded G St F ac (forward_to_arm_apply_cont kinded G St F ac).
 Proof.
   unfold forward_to_arm_apply_cont, arm_of_apply_cont.
   destruct (lookup (ac_continuation ac) F)
@@ -1340,16 +1496,21 @@ Proof.
   destruct
     (Nat.eqb (length (ac_args ac)) (length params) && no_trap_action ac
      && no_trap_action target
-     && (negb kinded || have_kinds G (ac_args ac) (hm_params_kinds metadata)))
+     && (negb kinded
+         || (have_kinds G (ac_args ac) (hm_params_kinds metadata)
+             && are_stated St (ac_args ac) (hm_params_subkinds metadata))))
     eqn:Hcheck; [ | apply Arm_goes_same ].
   apply andb_true_iff in Hcheck as [Hcheck Hhave].
   apply andb_true_iff in Hcheck as [Hcheck _].
   apply andb_true_iff in Hcheck as [Hlength _].
   apply Nat.eqb_eq in Hlength.
-  apply (Arm_goes_on kinded G F ac params metadata i arms body n target);
+  apply (Arm_goes_on kinded G St F ac params metadata i arms body n target);
     [ unfold arm_forward_of; rewrite Hk; reflexivity | exact Hnth
-    | exact Hfind | exact Hpasses | exact Hlength | ].
-  intros ->. simpl in Hhave. exact (have_kinds_sound G _ _ Hhave).
+    | exact Hfind | exact Hpasses | exact Hlength | | ].
+  - intros ->. simpl in Hhave. apply andb_true_iff in Hhave as [Hhave _].
+    exact (have_kinds_sound G _ _ Hhave).
+  - intros ->. simpl in Hhave. apply andb_true_iff in Hhave as [_ Hare].
+    exact Hare.
 Qed.
 
 (* What the relation asks of an expression under the entries [F], as the
@@ -1434,8 +1595,8 @@ Proof.
       [ exists p; split;
           [ reflexivity | exact (position_of_nth p params i Hposition) ]
       | ].
-    intros ->. simpl in Hcheck. apply negb_false_iff, Nat.eqb_eq in Hcheck.
-    exact Hcheck.
+    intros ->. simpl in Hcheck. apply negb_false_iff in Hcheck.
+    apply Nat.eqb_eq, Hcheck.
   - intros x
       (params0 & metadata0 & i0 & arms0 & body0 & n & target & Hsome & _
        & Hpasses & Hnotin & Hfree).
@@ -1545,14 +1706,15 @@ Proof.
 Qed.
 
 Fixpoint forward_to_arms_fwd (e : expr) :
-  ∀ (kinded : bool) (G : kinds_in_scope) (F : arm_forwards),
+  ∀ (kinded : bool) (G : kinds_in_scope) (St : stated_in_scope)
+    (F : arm_forwards),
     arm_safe F e ->
-    arm_fwd kinded G F e (forward_to_arms_under kinded G F e).
+    arm_fwd kinded G St F e (forward_to_arms_under kinded G St F e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    intros kinded G F Hsafe; simpl.
+    intros kinded G St F Hsafe; simpl.
   - destruct (arm_safe_let F x kind d body Hsafe) as [Hbody Hx].
     apply Arm_fwd_let; [ exact Hx | apply forward_to_arms_fwd, Hbody ].
   - apply Arm_fwd_let_static, forward_to_arms_fwd. exact Hsafe.
@@ -1560,10 +1722,11 @@ Proof.
       as (Hhandler & Hbody & Hparams & Hk).
     set (handler' :=
       forward_to_arms_under kinded
-        (params_in_scope params (hm_params_kinds metadata) G) F handler).
+        (params_in_scope params (hm_params_kinds metadata) G)
+        (params_stated params (hm_params_subkinds metadata) St) F handler).
     destruct (arm_entry_of_fits kinded k params metadata handler' body)
       as (Hfits & Hvars & Hconts).
-    apply (Arm_fwd_let_cont kinded G F k params metadata metadata handler
+    apply (Arm_fwd_let_cont kinded G St F k params metadata metadata handler
       handler' (arm_entry_of kinded params metadata handler' body));
       [ apply forward_to_arms_fwd, Hhandler | reflexivity
       | exact Hparams | exact Hk | exact Hfits | ].
@@ -1613,34 +1776,44 @@ Qed.
 
 (* A term and what the pass makes of it, under the same environments
    that give the variables the kinds the pass starts from. *)
-Lemma forward_to_arms_related (kinded : bool) (G : kinds_in_scope) (e : expr)
-    (vars : env) (conts : cont_env) (statics : static_env) (hp : heap)
-      (rd : read_record) :
+Lemma forward_to_arms_related (kinded : bool) (G : kinds_in_scope)
+    (St : stated_in_scope) (e : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) :
   kinds_hold G vars ->
+  stated_hold statics St vars ->
   arm_state_fwd kinded (State e vars conts statics hp rd)
-    (State (forward_to_arms_under kinded G [] e) vars conts statics hp rd).
+    (State (forward_to_arms_under kinded G St [] e) vars conts statics hp rd).
 Proof.
-  intros Hhold.
-  apply (Arm_state_fwd kinded G []);
+  intros Hhold Hscope.
+  apply (Arm_state_fwd kinded G St []);
     [ apply forward_to_arms_fwd, arm_safe_none; reflexivity
-    | intros k; apply Arm_same_fwd | apply arm_held_nil | exact Hhold ].
+    | intros k; apply Arm_same_fwd | apply arm_held_nil | exact Hhold
+    | exact Hscope ].
 Qed.
 
 Theorem forward_to_arms_refines : forward_to_arms_refines_statement.
 Proof.
   intros e vars conts statics hp rd.
   apply (rounds_refines (arm_state_fwd false) (arm_fwd_round false)).
-  apply forward_to_arms_related, kinds_hold_nil.
+  apply forward_to_arms_related;
+    [ apply kinds_hold_nil | apply stated_hold_nil ].
 Qed.
 
-(* The kinded pass that starts from some kinds is an equivalence under
-   the variables that have them. *)
+(* The kinded pass that starts from some kinds and from what is known
+   of some variables is an equivalence under the variables that have
+   those kinds and are of what is known of them. *)
 Lemma forward_to_arms_kinded_under_equivalent_bound (G : kinds_in_scope)
-    (e : expr) :
-  expr_equivalent_bound G e (forward_to_arms_under true G [] e).
+    (St : stated_in_scope) (e : expr) (vars : env) (conts : cont_env)
+    (statics : static_env) (hp : heap) (rd : read_record) :
+  kinds_hold G vars ->
+  stated_hold statics St vars ->
+  equivalent (State e vars conts statics hp rd)
+    (State (forward_to_arms_under true G St [] e) vars conts statics hp rd).
 Proof.
-  intros vars conts statics hp rd Hhold.
-  pose proof (forward_to_arms_related true G e vars conts statics hp rd Hhold)
+  intros Hhold Hscope.
+  pose proof
+    (forward_to_arms_related true G St e vars conts statics hp rd Hhold
+       Hscope)
     as Hrel.
   apply refines_antisymmetric.
   - exact (rounds_refines (arm_state_fwd true) (arm_fwd_round true) _ _ Hrel).
@@ -1654,8 +1827,8 @@ Theorem forward_to_arms_kinded_equivalent :
 Proof.
   intros e vars conts statics hp rd.
   exact
-    (forward_to_arms_kinded_under_equivalent_bound [] e vars conts statics hp
-       rd_ (kinds_hold_nil vars)).
+    (forward_to_arms_kinded_under_equivalent_bound [] [] e vars conts statics
+       hp rd_ (kinds_hold_nil vars) (stated_hold_nil statics vars)).
 Qed.
 
 (* ======================================================================== *)
@@ -1685,22 +1858,31 @@ Proof.
 Qed.
 
 (* The body of code and the body as rewritten refine each other where
-   the code runs. *)
+   the code runs: the values that a call binds have the kinds of the
+   parameters and are of what the code states of them, and the closure
+   called is one. *)
 Lemma code_body_to_arms_refines (params : list variable)
     (my_closure : variable) (metadata : code_metadata) (body : expr) :
-  code_refines_where always params my_closure metadata body
-    (forward_to_arms_under true (code_in_scope params my_closure metadata) []
-       body)
-  ∧ code_refines_where always params my_closure metadata
+  code_refines_stated params my_closure metadata body
+    (forward_to_arms_under true (code_in_scope params my_closure metadata)
+       (code_stated params my_closure metadata) [] body)
+  ∧ code_refines_stated params my_closure metadata
       (forward_to_arms_under true (code_in_scope params my_closure metadata)
-         [] body)
+         (code_stated params my_closure metadata) [] body)
       body.
 Proof.
-  split; intros vs callee callee_vars conts statics hp rd _ Hkinds Hvalue Hbind;
+  split;
+    intros vs callee callee_vars conts statics hp rd Hkinds Hclosure Hvs Hbind;
     apply equivalent_refines; [ | apply equivalent_sym ];
-    apply forward_to_arms_kinded_under_equivalent_bound,
-      (code_in_scope_hold params my_closure metadata vs callee callee_vars
-         Hkinds Hvalue Hbind).
+    (apply forward_to_arms_kinded_under_equivalent_bound;
+     [ destruct (closure_of statics callee) as [[id slots] | ] eqn:Hof;
+         [ | contradiction ];
+       exact
+         (code_in_scope_hold params my_closure metadata vs callee callee_vars
+            Hkinds (closure_of_kind _ _ _ _ Hof) Hbind)
+     | exact
+         (code_stated_bound statics params my_closure metadata vs callee
+            callee_vars Hclosure Hvs Hbind) ]).
 Qed.
 
 (* A group of static bindings with the bodies of its code rewritten, one
@@ -1726,10 +1908,9 @@ Proof.
       simpl; try apply equivalent_refl.
     destruct (code_body_to_arms_refines params my_closure metadata code_body)
       as [Hthere Hback].
-    apply refines_antisymmetric;
-      apply (let_static_code_refines_where always always_extend);
+    apply refines_antisymmetric; apply let_static_code_refines_stated;
       first
-        [ exact I | exact Hthere | exact Hback
+        [ exact Hthere | exact Hback
         | apply forward_to_arms_binds_statics
         | symmetry; apply forward_to_arms_binds_statics ].
   - specialize (IH (done ++ [forward_to_arms_in_binding binding])).

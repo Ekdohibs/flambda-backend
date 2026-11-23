@@ -1,0 +1,121 @@
+let $camlSlot_through_other_function__first_const_0 = Block 0 () in
+(let code inline(always) size(10)
+       t_1 (x/119 : imm tagged)
+         my_closure/120 &my_alloc_region/121 my_depth/122
+         -> k/46 * k/47
+         : imm tagged =
+   let next_depth/123 = rec_info (succ my_depth/122) in
+   let u/124 = %project_value_slot.[t].[u] (my_closure/120) in
+   apply unknown_arity &my_alloc_region/121
+     (u/124 : imm tagged -> imm tagged) (x/119) -> k/48 * k/47
+     where k/48 (apply_result/125 : imm tagged) =
+       let int_add/126 = %int_barith.add (apply_result/125, 1) in
+       cont k/46 (int_add/126)
+ in
+ let code rec size(30)
+       w_2 (n/127 : imm tagged, x/128 : imm tagged)
+         my_closure/129 &my_alloc_region/130 my_depth/131
+         -> k/49 * k/50
+         : imm tagged =
+   let next_depth/132 = rec_info (succ my_depth/131) in
+   let u/133 = %project_value_slot.[w].[u_1] (my_closure/129) in
+   let t/134 = %project_value_slot.[w].[t] (my_closure/129) in
+   let v/135 = %project_function_slot.[w].[v] (my_closure/129) in
+   (let prim/137 = %phys_eq (n/127, 0) in
+    let eq/138 = %tag_imm (prim/137) in
+    (let untagged/139 = %untag_imm (eq/138) in
+     switch untagged/139
+       | 0 -> k/53
+       | 1 -> k/54)
+      where k/54 =
+        cont k/51
+      where k/53 =
+        cont k/52)
+     where k/52 =
+       let int_sub/136 = %int_barith.sub (n/127, 1) in
+       apply direct(v_3 &my_alloc_region/130)
+         (v/135 ~ depth my_depth/131 -> next_depth/132
+          : imm tagged * imm tagged -> imm tagged)
+           (int_sub/136, x/128)
+           -> k/49 * k/50
+     where k/51 =
+       apply direct(t_1 &my_alloc_region/130)
+         (t/134 : imm tagged -> imm tagged) (x/128) -> k/49 * k/50
+ and code rec size(32)
+       v_3 (n/140 : imm tagged, x/141 : imm tagged)
+         my_closure/142 &my_alloc_region/143 my_depth/144
+         -> k/55 * k/56
+         : imm tagged =
+   let next_depth/145 = rec_info (succ my_depth/144) in
+   let u/146 = %project_value_slot.[v].[u_1] (my_closure/142) in
+   let t/147 = %project_value_slot.[v].[t] (my_closure/142) in
+   let w/148 = %project_function_slot.[v].[w] (my_closure/142) in
+   (let prim/150 = %phys_eq (n/140, 0) in
+    let eq/151 = %tag_imm (prim/150) in
+    (let untagged/152 = %untag_imm (eq/151) in
+     switch untagged/152
+       | 0 -> k/59
+       | 1 -> k/60)
+      where k/60 =
+        cont k/57
+      where k/59 =
+        cont k/58)
+     where k/58 =
+       let int_sub/149 = %int_barith.sub (n/140, 1) in
+       apply direct(w_2 &my_alloc_region/143)
+         (w/148 ~ depth my_depth/144 -> next_depth/145
+          : imm tagged * imm tagged -> imm tagged)
+           (int_sub/149, x/141)
+           -> k/55 * k/56
+     where k/57 =
+       apply unknown_arity &my_alloc_region/143
+         (u/146 : imm tagged -> imm tagged) (x/141) -> k/55 * k/56
+ in
+ let code size(95)
+       make_0 (u/153 : val)
+         my_closure/154 &my_alloc_region/155 my_depth/156
+         -> k/61 * k/62
+         : val =
+   let next_depth/157 = rec_info (succ my_depth/156) in
+   let t/158 = closure t_1 @t &my_alloc_region/155 with { u = u/153 } in
+   let w/159 = closure w_2 @w &my_alloc_region/155
+   and v/160 = closure v_3 @v &my_alloc_region/155
+   with { u_1 = u/153; t = t/158 }
+   in
+   cont k/61 (w/159)
+ in
+ let code size(3)
+       next_4 (x/161 : imm tagged)
+         my_closure/162 &my_alloc_region/163 my_depth/164
+         -> k/63 * k/64
+         : imm tagged =
+   let next_depth/165 = rec_info (succ my_depth/164) in
+   let int_add/166 = %int_barith.add (x/161, 1) in
+   cont k/63 (int_add/166)
+ in
+ let make/167 = closure make_0 @make &toplevel in
+ let next/168 = closure next_4 @next &toplevel in
+ (let Popaque/171 = %opaque (make/167) in
+  apply unknown_arity &toplevel
+    (Popaque/171 : val? * imm tagged * imm tagged -> imm tagged)
+      (next/168, 2, 3)
+      -> k/65 * error)
+   where k/65 (result/169 : imm tagged) =
+     let Pmakeblock/170 =
+       %block.[`0`].`toplevel` (make/167, next/168, result/169)
+     in
+     cont k/45 (Pmakeblock/170))
+  where k/45 define_root_symbol (module_block/115) =
+    let field_0/116 =
+      %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/115)
+    in
+    let field_1/117 =
+      %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/115)
+    in
+    let field_2/118 =
+      %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/115)
+    in
+    let $camlSlot_through_other_function =
+      Block 0 (field_0/116, field_1/117, field_2/118)
+    in
+    cont done ($camlSlot_through_other_function)

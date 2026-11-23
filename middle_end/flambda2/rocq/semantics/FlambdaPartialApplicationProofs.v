@@ -206,6 +206,23 @@ Proof.
        unfold apply_continuation. simpl ap_continuation.
        rewrite resolve_head. cbn [apply_cont_value map kind_of_value].
        rewrite Hmetadata. reflexivity. }
+  (* and if it states nothing that a partial application is not *)
+  destruct
+    (values_of_subkinds statics
+       [Value_partial_application callee vs args_arity]
+       (hm_params_subkinds metadata))
+    eqn:Hsubkinds.
+  2: { apply Hwrong.
+       rewrite
+         (apply_partial
+            (Apply_expr f kind args k exn extra args_arity partial_arity)
+            vars _ statics _ rd_ callee vs extra_vs called slots c Hf Hargs
+              Hextra
+            Hclosure Hkind Hcode Htupled Hcount Hkinds Htest).
+       unfold apply_continuation. simpl ap_continuation.
+       rewrite resolve_head. cbn [apply_cont_value map kind_of_value].
+       rewrite Hmetadata. cbn [ap_args_arity]. rewrite Hsubkinds.
+       reflexivity. }
   eapply refines_trans.
   { apply equivalent_refines. eapply step_equivalent.
     rewrite
@@ -216,7 +233,7 @@ Proof.
          Hkind Hcode Htupled Hcount Hkinds Htest).
     unfold apply_continuation. simpl ap_continuation. rewrite resolve_head.
     cbn [apply_cont_value map kind_of_value]. rewrite Hmetadata.
-    reflexivity. }
+    cbn [ap_args_arity]. rewrite Hsubkinds. reflexivity. }
   (* the second call: undefined unless its arguments and its extra
      arguments have values, and its arguments are of the kinds of its
      arity *)
@@ -591,6 +608,7 @@ Proof.
   intros Hreturn Hexn. unfold call_code.
   destruct (binds_statics (code_body c)); [ exact I | ].
   destruct (negb _); [ exact I | ].
+  destruct (negb _); [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ];
     [ | exact I ].
@@ -654,6 +672,8 @@ Proof.
     intros c' vs statics hp rd Hc; apply cont_split_inv in Hc.
   - destruct Hc as (def_conts' & -> & Hconts). simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | exact I ].
@@ -793,6 +813,8 @@ Proof.
     by (apply kinds_per_parameter_eqb_eq; reflexivity).
   rewrite Hsame, Hrefl. cbn [andb].
   destruct (negb (arity_eqb return_arity (code_result_arity c)));
+    [ exact I | ].
+  destruct (negb (values_of_subkinds statics vs (code_params_subkinds c)));
     [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)])
     as [callee_vars | ];

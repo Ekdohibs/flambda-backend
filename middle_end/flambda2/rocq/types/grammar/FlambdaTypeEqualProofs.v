@@ -104,10 +104,14 @@ Proof.
   split; [ intros [= ->]; reflexivity | intros ->; reflexivity ].
 Qed.
 
+(* [boxable_number_eqb] is FlambdaKindModel.v's, which decides the
+   equality by cases. *)
 Lemma boxable_number_eqb_eq : decides_equality boxable_number_eqb.
 Proof.
-  intros k k'. unfold boxable_number_eqb. rewrite (kind_eqb_eq _ _).
-  split; [ apply unboxed_kind_injective | intros ->; reflexivity ].
+  intros k k'. unfold boxable_number_eqb.
+  destruct (boxable_number_eq_dec k k') as [Heq | Hne].
+  - split; [ intros _; exact Heq | reflexivity ].
+  - split; [ discriminate | intros Heq; contradiction ].
 Qed.
 
 Lemma is_null_eqb_eq : decides_equality is_null_eqb.

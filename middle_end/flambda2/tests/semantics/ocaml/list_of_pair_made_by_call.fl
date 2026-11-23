@@ -1,0 +1,135 @@
+let $camlList_of_pair_made_by_call__first_const_0 = Block 0 () in
+(let code size(3)
+       `fn[list_of_pair_made_by_call.ml:20,40--54]_1` (a/116 : imm tagged)
+         my_closure/117 &my_alloc_region/118 my_depth/119
+         -> k/46 * k/47
+         : imm tagged =
+   let next_depth/120 = rec_info (succ my_depth/119) in
+   let int_add/121 = %int_barith.add (a/116, 1) in
+   cont k/46 (int_add/121)
+ in
+ let code size(3)
+       `fn[list_of_pair_made_by_call.ml:20,62--76]_2` (a/122 : imm tagged)
+         my_closure/123 &my_alloc_region/124 my_depth/125
+         -> k/48 * k/49
+         : imm tagged =
+   let next_depth/126 = rec_info (succ my_depth/125) in
+   let int_sub/127 = %int_barith.sub (a/122, 1) in
+   cont k/48 (int_sub/127)
+ in
+ let code inline(always) size(39)
+       pick_0 (c/128 : imm tagged)
+         my_closure/129 &my_alloc_region/130 my_depth/131
+         -> k/50 * k/51
+         : val =
+   let next_depth/132 = rec_info (succ my_depth/131) in
+   (let prim/135 = %int_comp.ne (c/128, 0) in
+    let int_notequal/136 = %tag_imm (prim/135) in
+    (let untagged/137 = %untag_imm (int_notequal/136) in
+     switch untagged/137
+       | 0 -> k/54
+       | 1 -> k/55)
+      where k/55 =
+        cont k/52
+      where k/54 =
+        cont k/53)
+     where k/53 =
+       let `fn[list_of_pair_made_by_call.ml:20,40--54]/134` =
+         closure `fn[list_of_pair_made_by_call.ml:20,40--54]_1`
+           @`fn[list_of_pair_made_by_call.ml:20,40--54]` &my_alloc_region/130
+       in
+       cont k/50 (`fn[list_of_pair_made_by_call.ml:20,40--54]/134`)
+     where k/52 =
+       let `fn[list_of_pair_made_by_call.ml:20,62--76]/133` =
+         closure `fn[list_of_pair_made_by_call.ml:20,62--76]_2`
+           @`fn[list_of_pair_made_by_call.ml:20,62--76]` &my_alloc_region/130
+       in
+       cont k/50 (`fn[list_of_pair_made_by_call.ml:20,62--76]/133`)
+ in
+ let code rec loopify(default tailrec) size(33)
+       run_3
+         (acc/138 : imm tagged,
+          program/139 :
+            [ 0 | 0 of [ 0 of val? * imm tagged ] * [ 0 | 0 of val * val ] ])
+         my_closure/140 &my_alloc_region/141 my_depth/142
+         -> k/56 * k/57
+         : imm tagged =
+   let next_depth/143 = rec_info (succ my_depth/142) in
+   let pick/144 = %project_value_slot.[run].[pick] (my_closure/140) in
+   (let prim/150 = %is_int (program/139) in
+    let Pisint/151 = %tag_imm (prim/150) in
+    (let untagged/152 = %untag_imm (Pisint/151) in
+     switch untagged/152
+       | 0 -> k/61
+       | 1 -> k/56 (acc/138))
+      where k/61 =
+        cont k/58)
+     where k/58 =
+       let Pfield/145 = %block_load.[`1`] (program/139) in
+       ((let Pfield/147 = %block_load.[`0`] (program/139) in
+         let Pmixedfield/148 = %block_load.[`1`] (Pfield/147) in
+         apply direct(pick_0 &my_alloc_region/141)
+           (pick/144 : imm tagged -> val?) (Pmixedfield/148) -> k/60 * k/57
+           where k/60 (func/149) =
+             apply unknown_arity &my_alloc_region/141
+               (func/149 : imm tagged -> imm tagged) (acc/138) -> k/59 * k/57)
+          where k/59 (apply_result/146 : imm tagged) =
+            apply direct(run_3 &my_alloc_region/141)
+              (my_closure/140 ~ depth my_depth/142 -> next_depth/143
+               : imm tagged * val? -> imm tagged)
+                (apply_result/146, Pfield/145)
+                -> k/56 * k/57)
+ in
+ let code size(8)
+       op_4 (c/153)
+         my_closure/154 &my_alloc_region/155 my_depth/156
+         -> k/62 * k/63
+         : [ 0 of imm tagged * val? ] =
+   let next_depth/157 = rec_info (succ my_depth/156) in
+   let Pmakeblock/158 =
+     %block.[`0`].my_alloc_region/155 (1 : imm tagged, c/153)
+   in
+   cont k/62 (Pmakeblock/158)
+ in
+ let pick/159 = closure pick_0 @pick &toplevel in
+ let run/160 = closure run_3 @run &toplevel with { pick = pick/159 } in
+ let op/161 = closure op_4 @op &toplevel in
+ apply direct(op_4 &toplevel)
+   (op/161 : imm tagged -> [ 0 of imm tagged * imm tagged ])
+     (0)
+     -> k/65 * error
+   where k/65 (apply_result/164 : [ 0 of imm tagged * imm tagged ]) =
+     let Pmakeblock/165 =
+       %block.[`0`].`toplevel`
+         (apply_result/164 : [ 0 of imm tagged * imm tagged ],
+          0 :
+            [ 0
+            | 0 of [ 0 of imm tagged * imm tagged ] * [ 0 | 0 of val * val ]
+            ])
+     in
+     apply direct(run_3 &toplevel)
+       (run/160 : imm tagged * val -> imm tagged)
+         (0, Pmakeblock/165)
+         -> k/64 * error
+   where k/64 (result/162 : imm tagged) =
+     let Pmakeblock/163 =
+       %block.[`0`].`toplevel` (pick/159, run/160, op/161, result/162)
+     in
+     cont k/45 (Pmakeblock/163))
+  where k/45 define_root_symbol (module_block/111) =
+    let field_0/112 =
+      %block_load.tag[`0`].`size`[`4`].[`0`] (module_block/111)
+    in
+    let field_1/113 =
+      %block_load.tag[`0`].`size`[`4`].[`1`] (module_block/111)
+    in
+    let field_2/114 =
+      %block_load.tag[`0`].`size`[`4`].[`2`] (module_block/111)
+    in
+    let field_3/115 =
+      %block_load.tag[`0`].`size`[`4`].[`3`] (module_block/111)
+    in
+    let $camlList_of_pair_made_by_call =
+      Block 0 (field_0/112, field_1/113, field_2/114, field_3/115)
+    in
+    cont done ($camlList_of_pair_made_by_call)

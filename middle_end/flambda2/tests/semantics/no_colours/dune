@@ -1,0 +1,39 @@
+;; A control of what the test tool prints (see ../../tools/flsemantics.ml,
+;; the head of `main`): no escape sequence of a terminal, whether or not
+;; the tool runs Simplify. The fault that it is for is discrepancy N3-2 of
+;; the list in ../../../rocq/DECISIONS.md.
+;;
+;; The compiler colours the names that it prints unless that has been
+;; decided otherwise before the first of them is printed, and it is decided
+;; once. The tool runs Simplify through `Flambda2.flambda_to_flambda`, which
+;; decides it, against colours where the error output is not a terminal.
+;; With the option -after the tool reads the term after from a text and
+;; does not run Simplify: before the tool decided it itself, at the head of
+;; `main`, a name in one of its lines came out then between the escape
+;; sequences that colour it. So did, with or without that option, a kind in
+;; a fatal error of the compiler that is raised as the tool reads a text,
+;; which is before any run of Simplify; no rule here is of that.
+;;
+;; name_in_a_refusal: a pair under -after whose line of the check of regions
+;; names a variable (the two texts say why). name_in_a_refusal.expected is
+;; what the tool prints of it, and has no escape byte: without the call at
+;; the head of `main` the tool prints that line with three, and the rule
+;; below fails. `dune promote` updates the file; a file promoted with an
+;; escape byte in it is the fault that this control is for. The number in
+;; the name of the variable is the compiler's own for it, and it moves when
+;; the tool makes another number of variables before it reads the texts:
+;; promote then, and look that the file has no escape byte.
+
+(rule
+ (with-stdout-to
+  name_in_a_refusal.output
+  (run
+   ../../tools/flsemantics.exe
+   -after
+   %{dep:name_in_a_refusal_after.fl}
+   %{dep:name_in_a_refusal.fl})))
+
+(rule
+ (alias runtest)
+ (action
+  (diff name_in_a_refusal.expected name_in_a_refusal.output)))

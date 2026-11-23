@@ -60,7 +60,9 @@
    own ([normalise_before_inlined]) are made of these rewrites and
    commute with renaming too. The comparison of the two results
    answers the same when both are renamed
-   (FlambdaCompareAlphaSpec.expr_eqb_equivariant_statement).
+   (FlambdaCompareOrderLawsSpec.expr_says_at_least_equivariant_statement;
+   for the comparison that the rounds ask of a term and what a round
+   made of it, FlambdaCompareAlphaSpec.expr_eqb_equivariant_statement).
 
    The verdict does not depend on the names of the unit, where the
    code of the term before is closed. This file stated it of every
@@ -253,6 +255,7 @@
    then rounds of [give_scrutinees], of [unalias_params], of
    [numbers_in_arms], for the term before of
    FlambdaMergeSwitchesSpec.merge_switches, of
+   FlambdaUntagAtBinderSpec.bind_untaggings, of
    FlambdaCseSpec.share_known_primitives, of following aliases and of
    removing the [Let]s left unused, and then
    FlambdaGroupsUpSpec.groups_up ([tidied_before], [tidied_after]);
@@ -334,8 +337,13 @@
    ([equivariant_up_to]); that this composes with the rewrites above,
    for rewrites that keep scope ([keeps_scope]); and that the
    comparison of FlambdaCompareSpec.v, which is up to bound names,
-   answers the same ([expr_eqb_up_to_statement]). The three
-   definitions are to be reviewed. They speak of the free names by the
+   answers the same ([expr_eqb_up_to_statement]). The comparison that
+   the validation asks of a term made from the term before and one
+   made from the term after,
+   FlambdaCompareOrderSpec.expr_says_at_least, is up to bound names
+   in the same way ([expr_says_at_least_renamed_alike_statement]);
+   the form of [expr_eqb_up_to_statement] is not stated of it. The
+   three definitions are to be reviewed. They speak of the free names by the
    one function for each sort of FlambdaBindersSpec.v, which goes into
    code.
 
@@ -393,7 +401,8 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaNormaliseSpec FlambdaEquivarianceSpec FlambdaUnusedContsSpec
   FlambdaUnusedStaticsSpec FlambdaBlockLoadSpec FlambdaUnboxSpec
   FlambdaBindersSpec FlambdaWellFormedSpec FlambdaWellKindedSpec
-  FlambdaLiftSpec FlambdaCompareSpec FlambdaRecHandlersSpec
+  FlambdaLiftSpec FlambdaCompareSpec FlambdaCompareOrderSpec
+  FlambdaRecHandlersSpec
   FlambdaSinkContsSpec FlambdaSinkUsesSpec FlambdaShortcutSpec
   FlambdaSameHandlersSpec FlambdaUnusedParamsSpec
   FlambdaLoopAliasesSpec FlambdaLoopLetsSpec FlambdaCodeLetsSpec
@@ -1099,8 +1108,10 @@ Definition placed_equivariant_statement : Prop :=
    FlambdaValidateSpec.tidy_before_round for the term before, of
    [tidy_after_round] for the term after, and then
    FlambdaGroupsUpSpec.groups_up. The rounds are made of rewrites
-   above and of FlambdaCseSpec.share_known_primitives, which is
-   stated to commute with renaming in its file, as [groups_up] is. *)
+   above, of FlambdaCseSpec.share_known_primitives, which is stated
+   to commute with renaming in its file, as [groups_up] is, and of
+   FlambdaUntagAtBinderSpec.bind_untaggings, whose statement is in
+   FlambdaUntagAtBinderNamesSpec.v. *)
 Definition tidied_before_equivariant_statement : Prop :=
   ∀ rounds : nat, rewrite_equivariant (tidied_before rounds).
 
@@ -1386,6 +1397,19 @@ Definition expr_eqb_up_to_statement : Prop :=
     expr_eqb [] [] (f (rename_expr r e)) (rename_expr r e')
     = expr_eqb [] [] (f e) e'.
 
+(* What [expr_eqb_renamed_alike_statement] says, of the comparison
+   that lets its second term state less
+   (FlambdaCompareOrderSpec.expr_says_at_least), which is the one
+   that [validate_unit] asks of a term made from the term before and
+   one made from the term after: it is up to bound names too. The
+   first term is the one that is under the other renaming, as there. *)
+Definition expr_says_at_least_renamed_alike_statement : Prop :=
+  ∀ (r r' : renaming) (e e' : expr),
+    code_closed e = true ->
+    renames_alike r r' e ->
+    expr_says_at_least [] [] (rename_expr r' e) (rename_expr r e')
+    = expr_says_at_least [] [] e e'.
+
 (* Two renamings rename the continuations of a list alike. *)
 Definition rename_conts_alike (r r' : renaming) (ks : list continuation)
     : Prop :=
@@ -1544,7 +1568,9 @@ Definition placed_keeps_scope_statement : Prop := keeps_scope placed.
 
 (* So does what the check makes of the term before after that: the
    rewrites of its rounds keep scope (FlambdaKeepsScopeSpec.v,
-   FlambdaLoopsScopeSpec.v, and FlambdaStaticsScopeSpec.v for
+   FlambdaLoopsScopeSpec.v, FlambdaUntagAtBinderNamesSpec.v for
+   FlambdaUntagAtBinderSpec.bind_untaggings, and
+   FlambdaStaticsScopeSpec.v for
    FlambdaUnaliasParamsSpec.unalias_params and for
    FlambdaGroupsUpSpec.groups_up, which comes last). *)
 Definition tidied_before_keeps_scope_statement : Prop :=
@@ -1725,7 +1751,8 @@ Definition with_statics_first_renamed_alike_statement : Prop :=
    ordering of static bindings commute with those renamings and keep
    scope (FlambdaStaticsScopeSpec.v); and the comparison is up to bound
    names and does not tell apart two renamings that rename the free
-   names of its first term alike ([expr_eqb_renamed_alike_statement]).
+   names of its first term alike
+   ([expr_says_at_least_renamed_alike_statement]).
 
    What is not said. Nothing is said of a term before with open code.
    Before a round renamed binders apart this statement had no premise.

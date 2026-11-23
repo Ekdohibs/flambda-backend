@@ -599,6 +599,9 @@ Proof.
   end;
     [ | exact (Hwrong Hstep) ].
   cbn [negb] in Hstep.
+  destruct (values_of_subkinds statics fields (code_params_subkinds c));
+    [ | exact (Hwrong Hstep) ].
+  cbn [negb] in Hstep.
   destruct
     (bind_params (code_params c) fields [(code_my_closure c, callee)])
     as [callee_vars | ] eqn:Hbind; [ | exact (Hwrong Hstep) ].
@@ -615,7 +618,7 @@ Qed.
 Theorem inline_tupled_equivalent : inline_tupled_equivalent_statement.
 Proof.
   intros ap called c r tuple callee slots vars conts statics hp rd Hkind
-    Hcallee Hclosure Hcode Hinlinable Hreturn Hvalue.
+    Hcallee Hclosure Hcode Hinlinable Hreturn Hvalue Hnothing.
   pose proof Hinlinable as
     (_ & _ & _ & _ & _ & Hextra & Hargs_eq & Harity & Hmy_closure & Hparams
      & Htupled & Hvalues & Hsome & Hstatic).
@@ -668,6 +671,8 @@ Proof.
   unfold params_are_values in Hvalues.
   rewrite Hvalues, unarize_arity_of_kinds, kinds_eqb_refl in Hstep.
   cbn [andb negb] in Hstep.
+  rewrite (values_of_subkinds_nothing statics _ fields Hnothing) in Hstep.
+  cbn [negb] in Hstep.
   destruct (bind_params_some (code_params c) fields
               [(code_my_closure c, callee)])
     as [callee_vars Hbind].

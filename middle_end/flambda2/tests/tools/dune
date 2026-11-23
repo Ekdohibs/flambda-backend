@@ -6,7 +6,7 @@
    ocamlfrontend ocamloptcomp
    flambda2 flambda2_compare flambda2_parser flambda2_terms flambda2_cmx
    flambda2_kinds flambda2_numbers flambda2_bound_identifiers
-   flambda2_term_basics flambda2_rocq_semantics))
+   flambda2_term_basics flambda2_rocq_semantics flambda2_rocq_library))
 
 ;; The program of flsemantics.ml is flsemantics_main.ml; the rules of
 ;; ../semantics/ run it as flsemantics.exe.

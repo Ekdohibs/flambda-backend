@@ -1,0 +1,21 @@
+(* MUST BE REFUSED: a symbol is not in scope. It is
+   ../../statics_scope_used_on_the_other_path.fl with the run on the other
+   way: only k_b binds $S on the way to k_c, whose handler reads $S, and the
+   run takes the way that binds (v = 1), so no run reads a symbol that is not
+   bound. Both entries count all the same. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((switch v
+    | 0 -> k_a
+    | 1 -> k_b)
+   where k_b =
+     let $S = Block 0 (o) in
+     cont k_c (0)
+   where k_a =
+     cont k_c (0)
+   where k_c (y) =
+     let x = %block_load.[`0`] ($S) in
+     cont k_end (x))
+  where k_end (r) =
+    let $camlSymbol_join_one_entry_binds_run_binds = Block 0 (r) in
+    cont done ($camlSymbol_join_one_entry_binds_run_binds)

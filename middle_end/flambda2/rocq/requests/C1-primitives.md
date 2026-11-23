@@ -306,6 +306,12 @@ the number.
   defined in the model; R1 found it (its B1). fexpr builds `any_value`
   only, so no example changes. The tag is any integer, and the block may
   have no fields (decisions 12 and 13).
+  (Since then: the converter asks that there be as many kinds as
+  arguments and that each field be of kind value, and drops the subkind
+  of each field and whether it may be null; that is provisional
+  (decision D25 of `DECISIONS.md`). And the model has subkinds, at the
+  parameters of handlers and of code (`subkind` in
+  `FlambdaKindModel.v`); the block kind of a `Make_block` has none.)
 - `Block_load (Block_access_values tag size field_kind) field`, unary,
   value to value: field `field` of a block, made by `Make_block` or
   bound to a symbol; `tag` and `size` are options, the compiler's
@@ -414,6 +420,9 @@ a change to what is observable: decision 1 of section 7.
   are defined here. Kinds are in `FlambdaKindModel.v`, where C2 adds
   arities in its epoch. No subkinds. C2's invariant on values is an
   instance of the third law.
+  (Since then C2 has added subkinds there, for the parameters of
+  handlers and of code; the kinds of a primitive's arguments and of
+  its result have none.)
 
 ## 4. Statements that change meaning
 
@@ -780,6 +789,12 @@ terms that show each.
     together with kinds (decision 7): terms from real programs have
     subkinds on most blocks, so the refusal will cost coverage as soon
     as the corpus is not written in fexpr.
+    (Since then: this is decision D25 of `DECISIONS.md`. The converter
+    no longer refuses such a block kind: it drops the subkind of each
+    field, which is provisional. The human has ruled on the subkinds
+    of parameters, and the model has them (`subkind` in
+    `FlambdaKindModel.v`); what the kind of a field of a made block
+    promises is open.)
 
 ## 8. The plan for the epoch
 

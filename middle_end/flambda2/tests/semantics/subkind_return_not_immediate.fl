@@ -1,0 +1,10 @@
+let $Pair = Block 0 (1) in
+let code inline(never) size(1) given (x : imm tagged)
+    my_closure &my_region my_depth -> k * e =
+  cont k ($Pair)
+in
+let $Fn = closure given &toplevel in
+apply direct(given &toplevel) $Fn (3) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlSubkind_return_not_immediate = Block 0 (r) in
+    cont done ($camlSubkind_return_not_immediate)

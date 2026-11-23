@@ -1,0 +1,21 @@
+(* The term after of the control two_calls_other_later_function (see dune),
+   written by hand: Simplify did not make it. It is two_calls.fl but for one
+   thing: the second call is of c_three. *)
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall &toplevel
+        ($`*extern*`.c_one : val? -> val?) (a) -> returned * error
+        where returned (r) =
+          (apply ccall &toplevel
+             ($`*extern*`.c_three : val? -> val?) (r) -> returned_again * error
+             where returned_again (s) =
+               cont leave (s)))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlTwo_calls = Block 0 (v) in
+    cont done ($camlTwo_calls)

@@ -14,7 +14,8 @@ probed_called.fl:
   calls outside code: 1 before, 1 after
   anything goes, as the run before is undefined
   calls outside code once those of known code are inlined: 1
-  validated with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too
+  nothing to validate, as the term before is undefined
+  the validation accepts the pair with its imports, given the .cmx of 1 of them: the same once normalised and unused static bindings removed, at the head of the term after too
   the term before is undefined in the model, so the validation says nothing of this unit
   the check of regions: not run (the run is undefined for another reason) before, not run (the run is undefined for another reason) after
   the ends of regions (the model's ends_check, on a certificate that the tool guesses): accepted before, accepted after; with its option eo_own_end: accepted before, accepted after

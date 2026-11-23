@@ -1,0 +1,2 @@
+callee_bound_in_the_text.fl: the term after is read from callee_bound_in_the_text.fl; Simplify is not run
+callee_bound_in_the_text.fl: not checked: the model has not got a call of a C function whose callee is not a symbol of the compilation unit of external symbols

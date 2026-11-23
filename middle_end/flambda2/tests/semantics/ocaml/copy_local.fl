@@ -1,0 +1,23 @@
+let $camlCopy_local__first_const_0 = Block 0 () in
+(let code size(10)
+       copy_0 (pair/27 : [ 0 of imm tagged * imm tagged ])
+         my_closure/28 &my_alloc_region/29 my_depth/30
+         -> k/10 * k/11
+         : [ 0 of imm tagged * imm tagged ] =
+   let next_depth/31 = rec_info (succ my_depth/30) in
+   let Pfield/32 = %block_load.[`1`] (pair/27) in
+   let Pfield/33 = %block_load.[`0`] (pair/27) in
+   let Pmakeblock/34 =
+     %block.[`0`].my_alloc_region/29
+       (Pfield/33 : imm tagged, Pfield/32 : imm tagged)
+   in
+   cont k/10 (Pmakeblock/34)
+ in
+ let copy/35 = closure copy_0 @copy &toplevel in
+ let Pmakeblock/36 = %block.[`0`].`toplevel` (copy/35) in
+ cont k/9 (Pmakeblock/36))
+  where k/9 define_root_symbol (module_block/25) =
+    let field_0/26 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/25)
+    in
+    let $camlCopy_local = Block 0 (field_0/26) in
+    cont done ($camlCopy_local)

@@ -35,7 +35,8 @@
    [validate_unit] is the whole check, so that what it accepts is correct
    by one theorem and not by how a tool puts the proved pieces together.
    It compares the two terms as they are given, up to bound names
-   (FlambdaCompareSpec.expr_eqb). Failing that, it makes calls of
+   (FlambdaCompareOrderSpec.expr_says_at_least; "What a comparison
+   asks", below). Failing that, it makes calls of
    known arity, in the code of each stub of the term before, of the
    direct calls of code of the unit that is not a stub which it knows
    to be full calls, as Simplify does where it simplifies the code of
@@ -145,7 +146,12 @@
    the rounds are those that there were. Where the lifting says so,
    each of those rounds also uses, in the bodies of code, what
    [my_closure] is known to be from its code
-   (FlambdaClosureOfCodeSpec.know_own_closures;
+   (FlambdaClosureOfCodeSpec.know_own_closures), and then reads from
+   a closure whose code the body knows, [my_closure] or one that it
+   projects from such a closure, a value slot that the body reads
+   through the closure that the first holds in another of its value
+   slots, where every set with that code gave the two from one simple
+   (FlambdaSlotsThroughSpec.know_own_closures_through;
    [normalise_lifted_own]); where it does not, the rounds are again
    those that there were. Every round of that
    normalisation, after each
@@ -307,7 +313,14 @@
    applied once, whose handler is put at its application
    ([remove_unused_conts], [sink_let_conts], and [inline_tail_conts]
    or, for the term after,
-   FlambdaInlineTailSpec.inline_tail_conts_kinded). Then
+   FlambdaInlineTailSpec.inline_tail_conts_kinded). Then, in both
+   terms, the untagging of a parameter that states a tagged
+   immediate, of a continuation that a call returns to, is bound at
+   the head of the handler
+   (FlambdaUntagAtBinderSpec.bind_untaggings): where Simplify unboxes
+   such a parameter the term after untags it where the call returns,
+   and the term before untags it where it is read, which may be
+   after another call. Then
    what the handler of the term before computes again is shared with
    the first computation ([share_known_primitives]); aliases are
    followed and the [Let]s left unused are removed. The same is done
@@ -325,6 +338,7 @@
    FlambdaUnusedContsSpec.remove_unused_conts_equivalent_statement,
    FlambdaSinkContsSpec.sink_let_conts_equivalent_statement,
    FlambdaInlineTailSpec.inline_tail_conts_kinded_equivalent_statement,
+   FlambdaUntagAtBinderSpec.bind_untaggings_equivalent_statement,
    FlambdaCseEquivalentSpec.share_known_primitives_equivalent_statement).
    The tidying is not in a round of the normalisations for the reason
    that the placing is not: it needs the continuations placed, and
@@ -373,6 +387,45 @@
    in which something was lifted exits with constants and symbols only:
    that is one of the conditions.
 
+   What a comparison asks. Each of the six comparisons of
+   [validate_unit] is of a term made from the term before, first,
+   with a term made from the term after, second, and is
+   FlambdaCompareOrderSpec.expr_says_at_least. The two are to be the
+   same up to bound names but for what their binders state. Where
+   two handlers, or two pieces of code, are paired, the first is to
+   state at least as much of its parameters as the second
+   (FlambdaSubkindOrderSpec.params_say_at_least), and need not state
+   the same: Simplify states less in places. What two paired pieces
+   of code state of their results is compared the same way round;
+   the machine tests no result against it, so that part only makes
+   the comparison refuse more. What a comparison that passes gives
+   is that its second term refines its first
+   (FlambdaCompareOrderSpec.expr_says_at_least_sound_statement). It
+   does not give that the two are equivalent, and it does not say
+   that the values that code returns are of what the code states of
+   its results. That is the way round that the statements below
+   need: each concludes that the term after refines the term before,
+   and the term compared first is one that refines the term before,
+   the term compared second one that the term after refines. So a
+   verdict ([Same_up_to_bound_names] and the others) records by
+   which route the pair was accepted, and does not say that the two
+   terms compared state the same. The last two comparisons, of the
+   lifted terms, share one verdict, [Same_once_lifted].
+
+   The tests inside what is done to one of the two terms are not
+   comparisons of the one with the other. They ask
+   FlambdaCompareSpec.expr_eqb, which asks that paired binders state
+   the same: the tests of a fixed point ([iterate],
+   [normalise_before_round_avoiding]), which set a term against what
+   a round made of it; the test of [with_twins], of a term whose
+   parameters are bound again against the same with the twins made;
+   and the test of [keeps_a_return], of a term forwarded with its
+   calls against the same forwarded without them.
+
+   The six comparisons of [validate_unit] ask what the paragraphs
+   above say because of decision D25, at parameters: the machine tests
+   what a parameter states, and Simplify states less in places.
+
    The number of rounds, the names and the value slots to remove, the
    code to loopify with the names of its loops, what to lift and the
    code whose calls are not to be inlined
@@ -388,7 +441,8 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
-  FlambdaCompareSpec FlambdaNormaliseSpec FlambdaBlockLoadSpec
+  FlambdaCompareSpec FlambdaCompareOrderSpec FlambdaNormaliseSpec
+  FlambdaBlockLoadSpec
   FlambdaCodeLetsSpec FlambdaCseSpec FlambdaDeadParamsSpec FlambdaForwardSpec
   FlambdaForwardKindedSpec FlambdaForwardArmSpec FlambdaLiftContsSpec
   FlambdaIdentitiesSpec FlambdaMergeSwitchesSpec FlambdaMergeTablesSpec
@@ -420,10 +474,13 @@ From OxCamlFlambda2 Require Import FlambdaSharedReadsSpec.
 From OxCamlFlambda2 Require Import FlambdaStubCallsSpec.
 From OxCamlFlambda2 Require Import FlambdaCopyCodeSpec.
 From OxCamlFlambda2 Require Import FlambdaClosureCallsSpec.
-From OxCamlFlambda2 Require Import FlambdaClosureOfCodeSpec.
+From OxCamlFlambda2 Require Import FlambdaSlotsThroughSpec.
 From OxCamlFlambda2 Require Import FlambdaNeverReturnsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnusedHeadStaticsSpec.
 From OxCamlFlambda2 Require Import FlambdaSameHandlersSpec.
+From OxCamlFlambda2 Require Import FlambdaUntagAtBinderSpec.
+From OxCamlFlambda2 Require Import FlambdaStatedScopeSpec
+  FlambdaRecHandlersStatedSpec FlambdaCodeStatedSpec.
 From OxCamlFlambda2 Require FlambdaBindConstParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaUnaliasRecParamsSpec.
 From OxCamlFlambda2 Require Import FlambdaMadeLengthsSpec.
@@ -764,17 +821,43 @@ Definition normalise_params_round (e : expr) : expr :=
    that FlambdaLoopifySpec.loopify_unit puts in the body of code is
    given so: the loop has the parameters of the code and is entered
    with them, and the rounds of the first phase make no names
-   apart. *)
-Definition arms_expr_before (e : expr) : expr :=
+   apart.
+
+   That rewrite asks what is known of the variable where the handler
+   of the loop states something of its parameter
+   (FlambdaStatedScopeSpec.is_stated_at: the machine tests what a
+   handler states where it is applied; decision D25, at parameters).
+   So the step takes what is known of the variables bound around the
+   term and gives it to that rewrite ([arms_expr_before_stated]:
+   [S]). In the handler of a recursive continuation that is what the
+   handler states of its parameters and what was known around its
+   [Let_cont] (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated),
+   and in the body of code what the code states of its parameters
+   (FlambdaCodeStatedSpec.rewrite_code_stated): the loop that
+   [loopify_unit] puts in the body of code states of each parameter
+   what the code states of it, and is given the parameters of the
+   code. *)
+Definition arms_expr_before_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_conts
     (forward_applications
-       (forward_to_arms (lift_handler_conts (unalias_rec_params e)))).
+       (forward_to_arms (lift_handler_conts (unalias_rec_params_under S e)))).
+
+(* That step with nothing known. *)
+Definition arms_expr_before (e : expr) : expr := arms_expr_before_stated [] e.
+
+(* The step in the handlers of the recursive continuations of a term,
+   and then in the term. *)
+Definition arms_code_before_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  arms_expr_before_stated S
+    (rewrite_rec_handlers_stated arms_expr_before_stated S body).
 
 Definition arms_code_before (body : expr) : expr :=
-  arms_expr_before (rewrite_rec_handlers arms_expr_before body).
+  arms_code_before_stated [] body.
 
 Definition first_phase_round (e : expr) : expr :=
-  rewrite_code arms_code_before (arms_code_before (normalise_params_round e)).
+  rewrite_code_stated arms_code_before_stated
+    (arms_code_before (normalise_params_round e)).
 
 (* What ends the normalisation of the term before. The exception
    handlers that no call can raise to are made ordinary continuations
@@ -1208,16 +1291,27 @@ Definition normalise_lifted_calling_unset_statement : Prop :=
    of [my_closure] that every set with its code gives a closure in
    sight of one code is direct too (FlambdaSlotsOfCodeSpec.v).
    Simplify does all three from the type that it gives [my_closure]
-   in the code of a set that it simplifies. The sets are those that
-   the term of the round makes, so a set that a lifting has made
-   static, or a round has changed, is counted as it then is. A call
-   that this makes direct is one that the next round may inline. The
-   round of [normalise_lifted_calling] is named here and not written
-   again. *)
+   in the code of a set that it simplifies. Then, in the term that
+   those give, a value slot that the body of code reads through the
+   closure that a closure of known code holds in one of its value
+   slots is read from that closure itself, where every set with its
+   code gave the two from one simple. The closure of known code is
+   [my_closure], or one that the body projects from a closure so
+   known, as the second pass of [know_own_closures] knows it
+   (FlambdaClosureOfCodeSpec.codes_under_read;
+   FlambdaSlotsThroughSpec.v, whose [know_own_closures_through] is
+   the two in that order). Simplify makes that read in the terms that
+   the file was written from; that it makes it wherever this does is
+   not said. [know_own_closures] is applied to the term that the
+   round gives, and [read_slots_through] computes its tests from the
+   term that it gives; so a set that a lifting has made static, or a
+   round has changed, is counted as it then is. A call that this
+   makes direct is one that the next round may inline. The round of
+   [normalise_lifted_calling] is named here and not written again. *)
 Definition normalise_lifted_round_own (calling own : bool)
     (avoid : list continuation) (kept : list code_id) (e : expr) : expr :=
   let round := normalise_lifted_round_calling calling avoid kept e in
-  if own then know_own_closures round else round.
+  if own then know_own_closures_through round else round.
 
 (* [normalise_lifted_calling] with those rounds. With [own] unset it
    is [normalise_lifted_calling], by computation
@@ -1396,38 +1490,67 @@ Definition placed (e : expr) : expr :=
    once is moved to its application and its handler put there
    ([remove_unused_conts], [sink_let_conts], [inline_tail_conts]): a
    round of the normalisation does as much after its own fold, and
-   no round of it follows the placing. Then a primitive that was
+   no round of it follows the placing. Then the untagging of a
+   parameter that states a tagged immediate, of a continuation that
+   a call returns to, is bound at the head of the handler
+   (FlambdaUntagAtBinderSpec.bind_untaggings); a primitive that was
    computed is not computed again; aliases are followed, into the
    handlers of recursive continuations too for what is known where
-   they are defined; the [Let]s left unused are removed. *)
-Definition tidy_expr_before (e : expr) : expr :=
+   they are defined; the [Let]s left unused are removed.
+
+   Decision D25, at parameters. The equivalence of [bind_untaggings]
+   relies on the handler-entry subkind test of this machine. It fails
+   in the unchecked machine described in FlambdaUntagAtBinderSpec.v;
+   carrying this wiring to a machine without that guarantee needs a
+   new justification. The pass takes nothing of [S]: it reads what
+   the metadata of the handler itself states.
+
+   The first three rewrites ask what is known of a variable where
+   they take away a parameter that a handler states something of
+   (FlambdaStatedScopeSpec.is_stated_at; decision D25, at parameters):
+   the round takes what is known of the variables bound around the
+   term and gives it to them ([S]). *)
+Definition tidy_expr_before_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_defined_lets []
     (remove_unused_lets
        (follow_aliases_in_loops []
           (follow_aliases []
              (share_known_primitives
-                (inline_tail_conts
-                   (sink_let_conts
-                      (remove_unused_conts
-                         (merge_switches
-                            (collapse_switches
-                               (forward_applications
-                                  (fold_constants
-                                     (numbers_in_arms
-                                        (unalias_rec_params
-                                           (unalias_params
-                                              (give_scrutinees
-                                                 e))))))))))))))).
+                (bind_untaggings
+                   (inline_tail_conts
+                      (sink_let_conts
+                         (remove_unused_conts
+                            (merge_switches
+                               (collapse_switches
+                                  (forward_applications
+                                     (fold_constants
+                                        (numbers_in_arms
+                                           (unalias_rec_params_under S
+                                              (unalias_params_under S
+                                                 (give_scrutinees_under S
+                                                    e)))))))))))))))).
+
+(* That round with nothing known. *)
+Definition tidy_expr_before (e : expr) : expr := tidy_expr_before_stated [] e.
 
 (* The same for the body of code: that round, and the same for the
-   handler of each of its recursive continuations. *)
+   handler of each of its recursive continuations, with what the
+   handler states of its parameters and what is known of the variables
+   bound around its [Let_cont]
+   (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated). *)
+Definition tidy_code_before_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  rewrite_rec_handlers_stated tidy_expr_before_stated S
+    (tidy_expr_before_stated S body).
+
 Definition tidy_code_before (body : expr) : expr :=
-  rewrite_rec_handlers tidy_expr_before (tidy_expr_before body).
+  tidy_code_before_stated [] body.
 
 (* One round for the term before: that on the term itself, and on the
-   body of each piece of code. *)
+   body of each piece of code with what the code states of its
+   parameters (FlambdaCodeStatedSpec.rewrite_code_stated). *)
 Definition tidy_before_round (e : expr) : expr :=
-  rewrite_code tidy_code_before (tidy_code_before e).
+  rewrite_code_stated tidy_code_before_stated (tidy_code_before e).
 
 (* The term before as it is compared, when the rounds of the
    normalisations are over: its continuations placed, then the
@@ -1466,30 +1589,69 @@ Definition tidied_before (rounds : nat) (e : expr) : expr :=
    application gives that parameter one variable, [unalias_params]
    above takes the parameter away. The term before has its
    applications go to their arms in the rounds of its first phase
-   ([first_phase_round]). *)
-Definition tidy_expr_after (e : expr) : expr :=
+   ([first_phase_round]).
+
+   Three rewrites of the round ask what is known of a variable where
+   they take away a parameter that a handler states something of
+   ([give_scrutinees], [unalias_params] and [unalias_rec_params], by
+   FlambdaStatedScopeSpec.is_stated_at: the machine tests what a
+   handler states where it is applied; decision D25, at parameters).
+   The round takes what is known of the variables bound around the
+   term and gives it to those three ([tidy_expr_after_stated]: [S]).
+   The other rewrites of the round that test what a handler states
+   (FlambdaForwardKindedSpec.forward_kinded,
+   FlambdaForwardArmSpec.forward_to_arms_kinded,
+   FlambdaInlineTailSpec.inline_tail_conts_kinded) start from nothing
+   known, here as wherever they are applied. *)
+Definition tidy_expr_after_stated (S : stated_in_scope) (e : expr) : expr :=
   remove_unused_defined_lets_in_loops []
     (follow_aliases_in_loops []
        (follow_aliases []
           (share_known_primitives
-             (inline_tail_conts_kinded
-                (sink_let_conts
-                   (remove_unused_conts
-                      (forward_to_arms_kinded
-                         (lift_handler_conts
-                            (forward_kinded
-                               (fold_constants
-                                  (numbers_in_arms
-                                     (unalias_rec_params
-                                        (unalias_params
-                                           (give_scrutinees e)))))))))))))).
+             (bind_untaggings
+                (inline_tail_conts_kinded
+                   (sink_let_conts
+                      (remove_unused_conts
+                         (forward_to_arms_kinded
+                            (lift_handler_conts
+                               (forward_kinded
+                                  (fold_constants
+                                     (numbers_in_arms
+                                        (unalias_rec_params_under S
+                                           (unalias_params_under S
+                                              (give_scrutinees_under S
+                                                 e))))))))))))))).
+
+(* That round with nothing known. *)
+Definition tidy_expr_after (e : expr) : expr := tidy_expr_after_stated [] e.
+
+(* The same for the body of code: that round, and then the round for
+   the handler of each of its recursive continuations, with what the
+   handler states of its parameters and what is known of the variables
+   bound around its [Let_cont]
+   (FlambdaRecHandlersStatedSpec.rewrite_rec_handlers_stated). Inside
+   a loop the three rewrites then know what the loop states of its own
+   parameters: where a continuation of the loop states that its
+   parameter is a tagged immediate, and every application gives it a
+   parameter of the loop that is stated the same, the test of what is
+   stated passes, and the parameter is taken away if the other
+   conditions of the rewrite hold. (In the units with a loop on a
+   boolean flag the term before has lost that parameter.) *)
+Definition tidy_code_after_stated (S : stated_in_scope) (body : expr)
+    : expr :=
+  rewrite_rec_handlers_stated tidy_expr_after_stated S
+    (tidy_expr_after_stated S body).
 
 Definition tidy_code_after (body : expr) : expr :=
-  rewrite_rec_handlers tidy_expr_after (tidy_expr_after body).
+  tidy_code_after_stated [] body.
 
+(* One round for the term after: that on the term itself, and on the
+   body of each piece of code with what the code states of its
+   parameters (FlambdaCodeStatedSpec.rewrite_code_stated); then the
+   unused [Let]s of code that are sure to have a value are removed. *)
 Definition tidy_after_round (e : expr) : expr :=
   remove_unused_defined_lets_in_code
-    (rewrite_code tidy_code_after (tidy_code_after e)).
+    (rewrite_code_stated tidy_code_after_stated (tidy_code_after e)).
 
 Definition tidied_after (rounds : nat) (e : expr) : expr :=
   groups_up (iterate rounds tidy_after_round (placed e)).
@@ -1532,7 +1694,13 @@ Definition with_returns (taken : bool) (e : expr) : expr :=
 (* The check                                                                *)
 (* ======================================================================== *)
 
-(* How a pair of terms was found to be correct, if it was.
+(* How a pair of terms was found to be correct, if it was: by which
+   route [validate_unit] accepted it. The last two comparisons, of
+   the lifted terms, share the verdict [Same_once_lifted]. "Same" is
+   up to bound names and up to what the binders state, of which the
+   term made from the term before may state more
+   (FlambdaCompareOrderSpec.expr_says_at_least); no verdict says that
+   the two terms state the same.
    [Same_once_unused_statics_removed] is of the term after as it is
    once normalised, placed and tidied: the bindings are removed from
    the term before only. [Same_once_head_statics_removed] is of the
@@ -1550,7 +1718,7 @@ Inductive validation : Type :=
 Definition validate_unit (rounds : nat) (unused : dropped)
     (slots : list value_slot) (G : loopified) (Ls : list lifting)
     (kept : list code_id) (before after : expr) : validation :=
-  if expr_eqb [] [] before after then Same_up_to_bound_names
+  if expr_says_at_least [] [] before after then Same_up_to_bound_names
   else
     let before :=
       loopify_unit G (cut_returns [] (demote_full_stub_calls before))
@@ -1561,20 +1729,20 @@ Definition validate_unit (rounds : nat) (unused : dropped)
       tidied_before rounds
         (with_returns taken (normalise_before rounds kept before))
     in
-    if expr_eqb [] [] (order_statics_as after normalised) after
+    if expr_says_at_least [] [] (order_statics_as after normalised) after
     then Same_once_normalised
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as after (without_statics unused normalised)) after
     then Same_once_unused_statics_removed
     else
     let after := without_head_statics unused after in
     if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as after (without_statics unused normalised)) after
     then Same_once_head_statics_removed
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as (float_code (with_code_first after))
            (float_code
               (without_statics unused
@@ -1586,7 +1754,7 @@ Definition validate_unit (rounds : nat) (unused : dropped)
         (float_code (with_code_first after))
     then Same_once_lifted
     else if
-      expr_eqb [] []
+      expr_says_at_least [] []
         (order_statics_as (with_statics_first Ls after)
            (with_statics_first Ls
               (without_statics unused

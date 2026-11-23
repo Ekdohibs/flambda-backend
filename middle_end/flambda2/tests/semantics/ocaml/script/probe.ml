@@ -1,5 +1,5 @@
-(* A unit with a probe, which from_ocaml.sh refuses (probe.says): the text of
-   its term does not say that the call of the handler is a probe. *)
+(* A unit with a probe. from_ocaml.sh makes its text (probe.says); it refused
+   the unit while the text did not say that the call of the handler is one. *)
 
 external ( + ) : int -> int -> int = "%addint"
 

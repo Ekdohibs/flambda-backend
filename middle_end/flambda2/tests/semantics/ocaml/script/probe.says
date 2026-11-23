@@ -1,5 +1,1 @@
-probe.ml: the term that the compiler gives to Simplify has a call
-that is a probe. The text does not say so, and the call is read
-as a plain call, which is always made: the unit read is not the
-compiler's.
-refused
+made

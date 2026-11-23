@@ -1,0 +1,22 @@
+(* MUST BE REFUSED: a symbol is not in scope. k_c is entered from k_m alone;
+   k_m is entered from k_a and from k_b, and only k_b binds $S. What is bound
+   on every way to k_c is what is bound on every way to k_m and then what the
+   handler of k_m binds: nothing. *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+(((switch v
+     | 0 -> k_a
+     | 1 -> k_b)
+    where k_b =
+      let $S = Block 0 (o) in
+      cont k_m (0)
+    where k_a =
+      cont k_m (0)
+    where k_m (z) =
+      cont k_c (z))
+   where k_c (y) =
+     let x = %block_load.[`0`] ($S) in
+     cont k_end (x))
+  where k_end (r) =
+    let $camlSymbol_through_inner_join_one_entry_binds = Block 0 (r) in
+    cont done ($camlSymbol_through_inner_join_one_entry_binds)

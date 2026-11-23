@@ -11,8 +11,8 @@ let $camlUnused_tupled_function_param__Pmakeblock_3 =
            $camlUnused_tupled_function_param__const_block_2)
 in
 let $camlUnused_tupled_function_param__const_block_0 =
-  Block 0 (poison.val.reaper_field_of_static_const,
-           poison.val.reaper_field_of_static_const)
+  Block 0 (poison.val."reaper_field_of_static_const",
+           poison.val."reaper_field_of_static_const")
 in
 let code loopify(never) size(1) newer_version_of(tupled_0) tupled 
       tupled_0_1 (param, param_1)

@@ -1,3 +1,0 @@
-made_array_checked_store.fl: round trip the same
-made_array_checked_store.fl, after Simplify: round trip DIFFERS
-  the two terms are printed the same: they differ in what the printer does not show

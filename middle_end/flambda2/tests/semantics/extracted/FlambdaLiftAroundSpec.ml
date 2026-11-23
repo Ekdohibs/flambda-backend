@@ -218,7 +218,7 @@ let lift_around_unit u lets places e =
   let groups = groups_of lets places e in
   let lifted = lift_around lets groups root e in
   if
-    ((exits_plain_knowing [] [] e && expr_free_of_heap e)
+    ((exits_plain_fine e && free_of_heap_fine e)
     && around_ok lets groups [] root e)
     && well_formed_unit u lifted
   then Some lifted

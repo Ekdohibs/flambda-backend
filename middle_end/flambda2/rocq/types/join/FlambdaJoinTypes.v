@@ -1,29 +1,40 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2021 OCamlPro SAS                                    *)
+(*   Copyright 2014--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes the functions of
+   middle_end/flambda2/types/meet_and_n_way_join.ml that join types:
+   [n_way_join], the functions that it calls and their helpers, written
+   again in Gallina; and, in [n_way_join_function_slot_indexed_product],
+   the test of kinds that [Product.Function_slot_indexed.create] of
+   middle_end/flambda2/types/grammar/type_grammar.ml makes. Each function
+   of the first of those files that the head comment below names in its
+   list of what is here, and does not say is left out, is a definition of
+   its own name here, but for the eleven functions
+   [n_way_join_head_of_kind_naked_float32] to
+   [n_way_join_head_of_kind_naked_mask], which are one definition here,
+   [n_way_join_head_of_kind_naked_numbers]. The definitions are not in the
+   order of that file. The head comment below says what the model has of
+   each function and what is left out.
+
+   The header above is that of
+   middle_end/flambda2/types/meet_and_n_way_join.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/grammar/type_grammar.ml,
+     whose header is the same. *)
 
 
 (* The n-way join of types: the functions of
@@ -42,8 +53,8 @@
    that [gather_function_types_before_fix] has here. Lines are those of
    the file before the change, which moves nothing above line 2920.
 
-   Every join function of that file is here, and the helpers that they
-   call; what the model has of each is said below.
+   What this file has of the join functions of that file and their
+   helpers, and what it leaves out, is said below.
 
    How the compiler's functions are written here.
    - The state of the join of environments ([Join_env.t]) is any type:
@@ -86,7 +97,7 @@
    - A set of numbers or of strings is a list (FlambdaTypeGrammar.v);
      the union of two is their concatenation without repeats.
 
-   What is here, in the order of the compiler's file.
+   What is here of the compiler's file.
    - [map_join_result] (line 49), [join_alloc_mode] (768),
      [n_way_join_unknown] (790),
      [n_way_join_head_of_kind_naked_number] (803), [deduce_is_int] and

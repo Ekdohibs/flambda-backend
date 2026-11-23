@@ -31,11 +31,13 @@
    of a symbol beside the code.
 
    This file is to be reviewed: [closed_named], [lifted_out],
-   [lift_from_code], [lifted_out_bindings] and [once_each], against
-   what Simplify does (below); [lift_from_code_unit], which is
-   extracted and run by
-   the validation of middle_end/flambda2/tests/semantics/; and the
-   statements.
+   [lift_from_code], [lifted_out_bindings], [once_each] and
+   [put_once_each], against what Simplify does (below);
+   [lift_from_code_unit], which is extracted and run by the validation
+   of middle_end/flambda2/tests/semantics/; and the statements, the
+   last two of which are the rewrite computed on two small units: one
+   symbol given to two [Let]s of two bodies that make the same block,
+   and to two that do not.
 
    What Simplify does. The conditions under which it lifts a [Let] do
    not ask that the [Let] is at the toplevel of the unit
@@ -77,20 +79,33 @@
    that of its handler (FlambdaLiftSpec.rec_handlers_map).
 
    Two [Let]s may be given one symbol. Where inlining has made two
-   [Let]s of one closure that captures nothing, Simplify has one
-   symbol for both. The bindings that stand for the [Let]s lifted out
-   of one body are put once each ([once_each]): a binding is left out
-   if one before it binds the same symbol to the same constant. The
-   same constant is the same term (FlambdaModel.static_const_eq_dec);
-   the constants compared mention no variable, so the same term is
-   the same thing wherever it is evaluated. If a guess gives one
-   symbol to two [Let]s that do not make the same constant, both
-   bindings stay, the symbol is bound twice, the result is not a
-   well-formed unit, and [lift_from_code_unit] gives nothing: the
-   guess is refused and the unit stays as it is. Nothing is shared
-   between the bodies of two pieces of code, or between code and the
-   term outside it: a guess that gives one symbol to [Let]s of two
-   bodies is refused in the same way.
+   [Let]s of one closure that captures nothing, Simplify may have one
+   symbol for both. In one body: a function is inlined twice there.
+   In two bodies, in the case that was observed: Simplify lifts the
+   closure of a local function in the function that makes it, and
+   then inlines that function, as simplified, into another function
+   of the unit (lifted_closure_in_two_bodies.ml, of the units of
+   middle_end/flambda2/tests/semantics/ocaml/, is such a unit). It is
+   not said that Simplify always shares so, in one body or in two.
+   The bindings that stand for the [Let]s lifted out of the bodies of
+   the code that one group of static bindings binds are put once each
+   across the group ([once_each], [put_once_each]): a binding is left
+   out if one before it, lifted out of the same body or of the body
+   of code bound earlier in the group, binds the same symbol to the
+   same constant. The same constant is the same term
+   (FlambdaModel.static_const_eq_dec); the constants compared mention
+   no variable, so the same term is the same thing wherever it is
+   evaluated, in one body or in another. If a guess gives one symbol
+   to two [Let]s that do not make the same constant, both bindings
+   stay, the symbol is bound twice, the result is not a well-formed
+   unit, and [lift_from_code_unit] gives nothing: the guess is
+   refused and the unit stays as it is. Only bindings that are lifted
+   out are compared: a binding that the unit has is never left out,
+   and none is left out for one. Nothing is shared between the code
+   of two groups, or between code and the term outside it: a guess
+   that gives one symbol to [Let]s of the bodies of code that two
+   groups bind, or to one in code and one outside, is refused in the
+   same way.
 
    What is shared has no identity. FlambdaLiftSpec.lift_named lifts a
    closure, a boxed number, a block made by [Make_block], which is the
@@ -104,14 +119,24 @@
    executes a primitive of the heap (FlambdaHeapSpec.exec_prim): one
    that makes a block or an array allocates a location of its own
    each time it is executed. [lift_from_code_unit] lifts nothing in a
-   unit that has a primitive of the heap
-   (FlambdaHeapFreeSpec.expr_free_of_heap; a limit, the CR at
+   unit that has a primitive of the heap, unless the unit has none
+   outside the bodies of its code and calls nothing outside them
+   (FlambdaHeapFreeSpec.free_of_heap_fine; a limit, the CR at
    FlambdaLiftSpec.lift_unit). A [Let] that is lifted out mentions no
    variable, so what is put once holds symbols and constants only. A
    location of the heap is a value that only a variable holds, so the
    constant holds none itself: a closure or a block that is put once
    may lead, through a symbol, to something that can be written, and
-   is not that thing.
+   is not that thing. Of two such constants that a unit makes apart,
+   by one [Let] executed twice, by two [Let]s of one body or by two
+   of two bodies, the physical comparison has no value in the model
+   (FlambdaPrimitiveSpec.eval_phys_equal: none on two allocated
+   values; decision D19, which is open); nor has it one of a symbol
+   bound to such a constant and itself, the symbol being no identity
+   (FlambdaValueSpec.identity_of). No more is said here of physical
+   equality: what the lifting changes at an exit of the unit and in
+   its heap, and the tests under which the unit lifted refines the
+   unit, are below ("Why it is right").
 
    A [Let] whose parts are variables bound to symbols by an earlier
    lifting is closed once those aliases are followed: the validator
@@ -128,14 +153,17 @@
    an exit of the unit, among its values and in what the cells of its
    heap hold, so [lift_from_code_unit] makes the same two checks of
    the unit as FlambdaLiftSpec.lift_unit:
-   FlambdaLiftSpec.exits_plain_knowing, the unit gives only symbols
-   and constants to the continuations that it may leave through; and
-   FlambdaHeapFreeSpec.expr_free_of_heap, the unit has no primitive of
-   the heap, so that the heaps of two exits are empty (a limit: the CR
-   at FlambdaLiftSpec.lift_unit). It also checks that the result is a
-   well-formed unit: the symbols given are then new and distinct, and
-   the group of the code is executed once. With the three, the unit
-   lifted refines the unit, run on its own
+   FlambdaLiftSpec.exits_plain_fine, the unit gives only symbols
+   and constants to the continuations that its run may leave through;
+   and FlambdaHeapFreeSpec.free_of_heap_fine, its run executes no
+   primitive of the heap, so that the heaps of two exits are empty (a
+   limit: the CR at FlambdaLiftSpec.lift_unit). Each is of the whole
+   unit, or, where the unit calls nothing outside the bodies of its
+   code, of what is outside them: the run of such a unit enters no
+   code (decision D65, the CRs at the two). It also checks that the
+   result is a well-formed unit: the symbols given are then new and
+   distinct, and the group of the code is executed once. With the
+   three, the unit lifted refines the unit, run on its own
    ([lift_from_code_unit_program_refines_statement]).
 
    The second run binds the symbol when the group of the code is
@@ -151,13 +179,16 @@
    fields is a symbol bound to nothing: decision D8), the refinement
    asks nothing more of the second run.
 
-   Two [Let]s with one symbol add nothing to this: both are aliases
-   of a symbol that is bound, once, to what each of them makes.
+   Two [Let]s with one symbol add nothing to this, in one body or in
+   two bodies of the code of one group: both are aliases of a symbol
+   that is bound, once, to what each of them makes, and the group is
+   bound in one step, before any of its code can be called.
 
    What is not here: lifting out of the arm of a test at toplevel
    (FlambdaLiftFromArmsSpec.v, which uses the functions of this file);
    a constant with a variable in it; and the sharing of a constant
-   with one that the unit binds already.
+   with one that the unit binds already, or with one lifted out of
+   code that another group binds.
 
    The proofs are in FlambdaLiftFromCodeProofs.v, which needs no
    review. *)
@@ -259,6 +290,25 @@ Fixpoint once_each (seen bindings : list static_binding)
     else binding :: once_each (binding :: seen) rest
   end.
 
+(* The bindings of a group, rewritten. [parts] has, for each binding of
+   the group in turn, the bindings that stand for the [Let]s lifted out
+   of the body of its code (none for a binding that is not of code),
+   and the binding itself with those [Let]s made aliases; [seen] has
+   the bindings lifted out that have been put so far. What is lifted
+   out of a body is put before its code, once each: a binding is left
+   out if one of [seen], or one put before it, binds the same symbol
+   to the same constant. The bindings that the group had are never
+   left out, and are not in [seen]. *)
+Fixpoint put_once_each (seen : list static_binding)
+    (parts : list (list static_binding * static_binding))
+    : list static_binding :=
+  match parts with
+  | [] => []
+  | (lifted, binding) :: rest =>
+    let put := once_each seen lifted in
+    put ++ binding :: put_once_each (put ++ seen) rest
+  end.
+
 (* ======================================================================== *)
 (* The rewrite                                                              *)
 (* ======================================================================== *)
@@ -267,8 +317,11 @@ Fixpoint once_each (seen bindings : list static_binding)
    the symbols that stand for them, and with every group of static
    bindings rewritten: the code that [K] names has the [Let]s that [K]
    gives for it made aliases, and the bindings that stand for them are
-   put before it, once each. [at_path] is the path of the expression.
-   For a unit, [lets] is empty: only its code is rewritten. *)
+   put before it, once each across the group ([put_once_each]).
+   [at_path] is the path of the expression. For a unit, [lets] is
+   empty: only its code is rewritten. [binding_lift_from_code] gives,
+   for a binding of a group, what is lifted out of the body of its
+   code and the binding rewritten. *)
 Fixpoint lift_from_code (K : lets_in_code) (lets : list (path * lift_to))
     (at_path : path) (e : expr) : expr :=
   match e with
@@ -279,7 +332,8 @@ Fixpoint lift_from_code (K : lets_in_code) (lets : list (path * lift_to))
     | None => Let x kind d body
     end
   | Let_static bindings body =>
-    Let_static (flat_map (binding_lift_from_code K) bindings)
+    Let_static
+      (put_once_each [] (map (binding_lift_from_code K) bindings))
       (lift_from_code K lets (xO at_path) body)
   | Let_cont_non_recursive k h body =>
     Let_cont_non_recursive k (handler_lift_from_code K lets (xI at_path) h)
@@ -298,14 +352,14 @@ with handler_lift_from_code (K : lets_in_code)
     Handler params metadata (lift_from_code K lets at_path handler)
   end
 with binding_lift_from_code (K : lets_in_code)
-    (binding : static_binding) : list static_binding :=
+    (binding : static_binding) : list static_binding * static_binding :=
   match binding with
   | Bind_code id (Code params my_closure ret exn metadata body) =>
-    once_each [] (lifted_out_bindings (lets_of K id) root body)
-    ++ [Bind_code id
-          (Code params my_closure ret exn metadata
-             (lift_from_code K (lets_of K id) root body))]
-  | Bind_deleted_code _ | Bind_symbol _ _ => [binding]
+    ( lifted_out_bindings (lets_of K id) root body,
+      Bind_code id
+        (Code params my_closure ret exn metadata
+           (lift_from_code K (lets_of K id) root body)) )
+  | Bind_deleted_code _ | Bind_symbol _ _ => ([], binding)
   end.
 
 (* ======================================================================== *)
@@ -313,16 +367,17 @@ with binding_lift_from_code (K : lets_in_code)
 (* ======================================================================== *)
 
 (* The unit with the [Let]s of the guess lifted out of its code: if the
-   unit exits with symbols and constants only and has no primitive of
-   the heap, and the result is a well-formed unit. The second is a
-   limit, and not a condition of the lifting: the CR at
+   unit passes the test of the exits (FlambdaLiftSpec.exits_plain_fine)
+   and the guard of the heap (FlambdaHeapFreeSpec.free_of_heap_fine),
+   and the result is a well-formed unit. The second is a limit, and
+   not a condition of the lifting: the CR at
    FlambdaLiftSpec.lift_unit. *)
 Definition lift_from_code_unit (u : unit_interface) (K : lets_in_code)
     (e : expr) : option expr :=
   let lifted := lift_from_code K [] root e in
   if
-    exits_plain_knowing [] [] e
-    && expr_free_of_heap e
+    exits_plain_fine e
+    && free_of_heap_fine e
     && well_formed_unit u lifted
   then Some lifted
   else None.
@@ -363,3 +418,88 @@ Definition lift_from_code_equivariant_statement : Prop :=
     (at_path : path) (e : expr),
     rename_expr r (lift_from_code K lets at_path e)
     = lift_from_code K lets at_path (rename_expr r e).
+
+(* ======================================================================== *)
+(* The rewrite computed on two small units                                  *)
+(* ======================================================================== *)
+
+(* In each unit one group binds two pieces of code, [first] and
+   [second]. The body of each makes a block of two constants by the
+   [Let] at its root and returns a constant; the guess gives the two
+   [Let]s the one symbol [shared]. *)
+Section Examples.
+
+Let x : variable := 1%positive.
+Let my_closure : variable := 2%positive.
+Let made : variable := 3%positive.
+Let y : variable := 4%positive.
+Let my_closure' : variable := 5%positive.
+Let made' : variable := 6%positive.
+Let ret : continuation := 1%positive.
+Let exn : continuation := 2%positive.
+Let ret' : continuation := 3%positive.
+Let exn' : continuation := 4%positive.
+Let done : continuation := 5%positive.
+Let raised : continuation := 6%positive.
+Let first : code_id := 1%positive.
+Let second : code_id := 2%positive.
+Let shared : symbol := 1%positive.
+
+Definition two_bodies_arity : arity := [Singleton Value].
+
+Definition two_bodies_block (n : Z) : named :=
+  Prim (Variadic (Make_block (Block_kind_values 0)))
+    [Const (Tagged_immediate 1); Const (Tagged_immediate n)].
+
+(* The code [first], with the defining expression given for its
+   [Let]. *)
+Definition two_bodies_first (d : named) : code :=
+  Code [x] my_closure ret exn
+    (make_code_metadata two_bodies_arity two_bodies_arity)
+    (Let made Value d
+       (Apply_cont (Apply_cont_expr ret [Const (Tagged_immediate 0)] None))).
+
+(* The code [second], the same under other names. *)
+Definition two_bodies_second (d : named) : code :=
+  Code [y] my_closure' ret' exn'
+    (make_code_metadata two_bodies_arity two_bodies_arity)
+    (Let made' Value d
+       (Apply_cont
+          (Apply_cont_expr ret' [Const (Tagged_immediate 0)] None))).
+
+(* The unit: [first] makes the block of 1 and 2, and [second] the
+   block of 1 and [n]. *)
+Definition two_bodies_unit (n : Z) : expr :=
+  Let_static
+    [Bind_code first (two_bodies_first (two_bodies_block 2));
+     Bind_code second (two_bodies_second (two_bodies_block n))]
+    (Apply_cont (Apply_cont_expr done [Const (Tagged_immediate 0)] None)).
+
+(* The guess: the [Let] at the root of each body, to [shared]. *)
+Definition two_bodies_guess : lets_in_code :=
+  [(first, [(root, Lift_to_symbol shared)]);
+   (second, [(root, Lift_to_symbol shared)])].
+
+(* Where the two [Let]s make the same block, [shared] is bound to it
+   once, before [first], and both [Let]s are aliases of it. *)
+Definition lift_from_code_two_bodies_statement : Prop :=
+  lift_from_code_unit (Unit_interface done raised) two_bodies_guess
+    (two_bodies_unit 2)
+  = Some
+      (Let_static
+         [Bind_symbol shared
+            (Static_const_block 0
+               [Const (Tagged_immediate 1); Const (Tagged_immediate 2)]);
+          Bind_code first (two_bodies_first (Simple (Symbol shared)));
+          Bind_code second (two_bodies_second (Simple (Symbol shared)))]
+         (Apply_cont
+            (Apply_cont_expr done [Const (Tagged_immediate 0)] None))).
+
+(* Where they make two different blocks, [shared] would be bound
+   twice: nothing is given. *)
+Definition lift_from_code_two_blocks_statement : Prop :=
+  lift_from_code_unit (Unit_interface done raised) two_bodies_guess
+    (two_bodies_unit 3)
+  = None.
+
+End Examples.

@@ -161,10 +161,18 @@ let block_access_kind =
   let open D in
   let tag = or_unknown @@ labeled "tag" scannable_tag in
   let size = or_unknown @@ labeled "size" target_ocaml_int in
+  (* The kind of a field of the flat suffix is written [flat[KIND]], and that of
+     a field of the value prefix as the kind of a field of a block of values is,
+     [imm] or nothing. The first is looked for first: the second is there by
+     default. It stands before the tag and the size, and is looked for before
+     them: they are looked for among the parameters that have parameters of
+     their own, and would take [flat[KIND]] for theirs. *)
   let|= mixed_field_kind =
     let open P.Mixed_block_access_field_kind in
+    let| suffix_k =
+      labeled "flat" flat_suffix_element, fun _ fse -> Flat_suffix fse
+    in
     let| value_k = block_access_field_kind, fun _ bak -> Value_prefix bak in
-    let| suffix_k = flat_suffix_element, fun _ fse -> Flat_suffix fse in
     return_either (function
       | Value_prefix bak -> value_k bak
       | Flat_suffix fse -> suffix_k fse)
@@ -177,9 +185,9 @@ let block_access_kind =
   in
   let| mixed =
     param5_case
-      ~decode:(fun _ () tag size field_kind shape ->
+      ~decode:(fun _ () field_kind tag size shape ->
         P.Block_access_kind.Mixed { tag; size; field_kind; shape })
-      (flag "mixed") tag size mixed_field_kind mixed_block_shape
+      (flag "mixed") mixed_field_kind tag size mixed_block_shape
   in
   let| value_k =
     param3_case block_access_field_kind tag size
@@ -190,7 +198,7 @@ let block_access_kind =
     return_either (function
       | Values { field_kind; tag; size } -> value_k (field_kind, tag, size)
       | Naked_floats { size } -> naked_float ((), size)
-      | Mixed m -> mixed ((), m.tag, m.size, m.field_kind, m.shape)))
+      | Mixed m -> mixed ((), m.field_kind, m.tag, m.size, m.shape)))
 
 type block_kind =
   | FNaked_floats
@@ -358,7 +366,9 @@ let boxable_number =
         "vec512", Naked_vec512;
         "mask", Naked_mask ]
 
-let array_kind =
+(* [written_array_kind] is an array kind that is always written; with
+   [array_kind], [Values] is the kind where none is written. *)
+let written_array_kind, array_kind =
   let open D in
   let open P.Array_kind in
   let ak =
@@ -378,7 +388,9 @@ let array_kind =
         let| vec512 = flag_case "vec512" Naked_vec512s in
         let| mask = flag_case "mask" Naked_masks in
         let| gc_ign = flag_case "gc_ign" Gc_ignorable_values in
-        let| product = list ak, fun _ aks -> Unboxed_product aks in
+        (* The components of a product are read in the order of the text: one of
+           them may be a product again, which is a list, beside flags. *)
+        let| product = ordered_list ak, fun _ aks -> Unboxed_product aks in
         return_either (function
           | Immediates -> imm ()
           | Values -> values ()
@@ -397,7 +409,42 @@ let array_kind =
           | Gc_ignorable_values -> gc_ign ()
           | Unboxed_product aks -> product aks))
   in
-  default ~def:Values ak
+  ak, default ~def:Values ak
+
+(* The array kind of [%array_load] and [%array_set], where a load kind or a set
+   kind follows it. An unboxed product is looked for first: it is written as a
+   list, a list and a flag are found whatever their order, and the flag of the
+   load kind or set kind would otherwise be taken for the array kind and the
+   product left over. *)
+let accessed_array_kind =
+  let open D in
+  patterns
+  @@
+  let| product =
+    ( ordered_list written_array_kind,
+      fun _ aks -> P.Array_kind.Unboxed_product aks )
+  in
+  let| other = written_array_kind, fun _ k -> k in
+  return_either (fun (k : P.Array_kind.t) ->
+      match k with
+      | Unboxed_product aks -> product aks
+      | Immediates | Gc_ignorable_values | Values | Naked_floats
+      | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s | Naked_int32s
+      | Naked_int64s | Naked_nativeints | Naked_vec128s | Naked_vec256s
+      | Naked_vec512s | Naked_masks ->
+        other k)
+
+(* For [%array_load] and [%array_set]: the array kind and the load kind or set
+   kind [access] as they are written. [unwritten] is the kind that the reader
+   gives the access where none is written, which depends on the array kind
+   alone. [access] is left out only where it is that one. Where it is written,
+   the array kind is written too, [Values] included: the first flag would
+   otherwise be read as the array kind. *)
+let written_array_kinds (k : P.Array_kind.t) access ~unwritten ~compare =
+  match unwritten with
+  | Some unwritten when compare access unwritten = 0 ->
+    (if P.Array_kind.compare k Values = 0 then None else Some k), None
+  | Some _ | None -> Some k, Some access
 
 let array_kind_for_length =
   let open D in
@@ -541,8 +588,8 @@ let kind =
            "float", K.naked_float;
            "int8", K.naked_int8;
            "int16", K.naked_int16;
-           "int32", K.naked_int8;
-           "int64", K.naked_int16;
+           "int32", K.naked_int32;
+           "int64", K.naked_int64;
            "nativeint", K.naked_nativeint;
            "vec128", K.naked_vec128;
            "vec256", K.naked_vec256;
@@ -735,11 +782,84 @@ let probe_is_enabled =
         let name = unwrap_loc name in
         P.Probe_is_enabled { name; enabled_at_init }))
 
+(* The inlining attribute of the call whose inlined body [%inlined_apply] marks:
+   nothing for the default, and after "always" and after "unroll" the reason why
+   the attribute is not expected to be used, if it is not. *)
+let inlined_attribute : Inlined_attribute.t param_cons =
+  let open D in
+  let use_info =
+    default ~def:Inlined_attribute.Use_info.Expected_to_be_used
+    @@ constructor_flag
+         Inlined_attribute.Use_info.
+           [ ( "unused_because_of_call_site_decision",
+               Unused_because_of_call_site_decision );
+             "unused_because_function_unknown", Unused_because_function_unknown;
+             "jsir_inlining_disabled", Jsir_inlining_disabled ]
+  in
+  default ~def:Inlined_attribute.Default_inlined ~eq:Inlined_attribute.equal
+  @@ patterns
+  @@
+  let| always =
+    ( param2 (flag "always") use_info,
+      fun _ ((), use_info) -> Inlined_attribute.Always_inlined use_info )
+  in
+  let| hint = flag_case "hint" Inlined_attribute.Hint_inlined in
+  let| forward = flag_case "forward" Inlined_attribute.Forward_inlined in
+  let| never = flag_case "never" Inlined_attribute.Never_inlined in
+  let| unroll =
+    ( param2 (labeled "unroll" int) use_info,
+      fun _ (n, use_info) -> Inlined_attribute.Unroll (n, use_info) )
+  in
+  return_either (fun (attribute : Inlined_attribute.t) ->
+      match attribute with
+      | Always_inlined use_info -> always ((), use_info)
+      | Hint_inlined -> hint ()
+      | Forward_inlined -> forward ()
+      | Never_inlined -> never ()
+      | Unroll (n, use_info) -> unroll (n, use_info)
+      | Default_inlined ->
+        Misc.fatal_error "The default inlining attribute is not written")
+
+(* The debugging information of the mark is a stack: for each inlined call that
+   the mark stands for, the debugging information of the call, the symbol of its
+   function and an identifier. The text does not write what the stack holds, as
+   it writes no debugging information. It does say whether the stack is empty,
+   which the compiler reads: after a mark whose stack is not empty, the
+   translation to Cmm takes itself to be in an inlined body
+   ([To_cmm_env.currently_in_inlined_body]). A mark that the compiler makes has
+   a stack that is not empty ([Closure_conversion] makes the marks, with
+   [Inlined_debuginfo.create]), and is written with no word for it; a mark whose
+   stack is empty is written with [no_dbg].
+
+   The type of the stack is abstract, so the reader makes a stack that is not
+   empty with that same function, for one call: of a code ID that it makes for
+   that, which no code of the unit has, and with no debugging information of the
+   call. With none, [Inlined_debuginfo.rewrite] gives back the debugging
+   information that it is given, so the symbol of that code ID reaches no
+   debugging information of the inlined body.
+
+   What the stack of the term held does not come back: the debugging information
+   of the inlined call, which [Inlined_debuginfo.rewrite] puts before that of
+   the inlined body, and with it the assumption of zero allocation of the call,
+   which can be carried into that of the body through [Debuginfo.inline] (an
+   inferred assumption of the call is dropped; otherwise the two are met) and
+   which the backend's checker reads. *)
 let enter_inlined_apply =
   D.(
-    nullary "%inlined_apply" ~params:param0 (fun _env () ->
-        P.Enter_inlined_apply
-          { dbg = Inlined_debuginfo.none; inlined_attribute = Default_inlined }))
+    nullary "%inlined_apply"
+      ~params:(param2 (bool_flag "no_dbg") inlined_attribute)
+      (fun _env (no_dbg, inlined_attribute) ->
+        let dbg =
+          if no_dbg
+          then Inlined_debuginfo.none
+          else
+            Inlined_debuginfo.create
+              ~called_code_id:
+                (Code_id.create ~name:"inlined_body" ~debug:Debuginfo.none
+                   (Current_unit.get_cu_exn ()))
+              ~apply_dbg:Debuginfo.none
+        in
+        P.Enter_inlined_apply { dbg; inlined_attribute }))
 
 let domain_index =
   D.(nullary "%domain_index" ~params:param0 (fun _env () -> P.Domain_index))
@@ -847,10 +967,12 @@ let is_flat_float_array =
     unary "%is_flat_float_array" ~params:param0 (fun _ () ->
         P.Is_flat_float_array))
 
+(* The test for a value of a variant type is written with no parameter, and the
+   test that works on any value with [generic]. *)
 let is_int =
   D.(
-    unary "%is_int" ~params:param0 (fun _ () ->
-        P.Is_int { variant_only = true } (* CR vlaviron: discuss *)))
+    unary "%is_int" ~params:(bool_flag "generic") (fun _ generic ->
+        P.Is_int { variant_only = not generic }))
 
 let is_null = D.(unary "%is_null" ~params:param0 (fun _ () -> P.Is_null))
 
@@ -868,10 +990,15 @@ let make_lazy =
     unary "%lazy" ~params:(param2 lazy_tag alloc_region)
       (fun _ (lazy_tag, alloc_region) -> P.Make_lazy { lazy_tag; alloc_region }))
 
+(* With no parameter: the identity that nothing sees through, on a value.
+   [middle_end_only] is for the one that only the middle end does not see
+   through, and the kind is written if it is not that of values. *)
 let opaque_identity =
   D.(
-    unary "%opaque" ~params:param0 (fun _ () ->
-        P.Opaque_identity { middle_end_only = false; kind = Flambda_kind.value }))
+    unary "%opaque"
+      ~params:(param2 (bool_flag "middle_end_only") kind)
+      (fun _ (middle_end_only, kind) ->
+        P.Opaque_identity { middle_end_only; kind }))
 
 let reinterpret_64_bit_word =
   D.(
@@ -890,30 +1017,34 @@ let untag_immediate =
   D.(unary "%untag_imm" ~params:param0 (fun _ () -> P.Untag_immediate))
 
 let project_value_slot =
-  (* CR mshinwell: support non-value kinds in the projection syntax. Note that
-     if the value slot's definition (in a "with" clause, where kinds are
-     supported) has already been parsed, the slot registered under this name
-     will have the correct kind and the kind here is ignored. *)
+  (* The kind of the value slot is written after its name where it is not that
+     of values. It is the kind that the slot is given if the projection is the
+     first place where the text names it. If the slot's definition (in a "with"
+     clause, which has the kind too) has already been parsed, the slot
+     registered under this name has its kind and the kind here is ignored. *)
   (* If a function slot is fresh when defining a primitive, it means it does not
   exist in constructions, but only in projections. As such, it will be deleted
   when computing the slot_offsets. This means we can give it a dummy size. *)
-  let kind = Flambda_kind.value in
   D.(
     unary "%project_value_slot"
       ~params:
-        (param2
-           (maps (positional string)
-              ~from:(fun env pf ->
-                Fexpr_to_flambda_commons.fresh_or_existing_function_slot env pf
-                  ~size:0)
-              ~to_:(fun env pf ->
-                Flambda_to_fexpr_commons.Env.translate_function_slot env pf))
-           (maps (positional string)
-              ~from:(fun env vs ->
-                Fexpr_to_flambda_commons.fresh_or_existing_value_slot env vs
-                  kind)
-              ~to_:(fun env vs ->
-                Flambda_to_fexpr_commons.Env.translate_value_slot env vs)))
+        (maps
+           (param3
+              (maps (positional string)
+                 ~from:(fun env pf ->
+                   Fexpr_to_flambda_commons.fresh_or_existing_function_slot env
+                     pf ~size:0)
+                 ~to_:(fun env pf ->
+                   Flambda_to_fexpr_commons.Env.translate_function_slot env pf))
+              (positional string) kind)
+           ~from:(fun env (project_from, vs, kind) ->
+             ( project_from,
+               Fexpr_to_flambda_commons.fresh_or_existing_value_slot env vs kind
+             ))
+           ~to_:(fun env (project_from, vs) ->
+             ( project_from,
+               Flambda_to_fexpr_commons.Env.translate_value_slot env vs,
+               Value_slot.kind vs )))
       (fun _ (project_from, value_slot) ->
         P.Project_value_slot { project_from; value_slot }))
 
@@ -1001,44 +1132,40 @@ let array_load =
         "vec512", Naked_vec512s;
         "mask", Naked_masks ]
   in
+  (* The load kind that is read where none is written: the one that goes with
+     the array kind. *)
+  let unwritten (k : P.Array_kind.t) : P.Array_load_kind.t option =
+    match k with
+    | Immediates -> Some Immediates
+    | Gc_ignorable_values -> Some Gc_ignorable_values
+    | Values -> Some Values
+    | Naked_floats -> Some Naked_floats
+    | Naked_float32s -> Some Naked_float32s
+    | Naked_ints -> Some Naked_ints
+    | Naked_int8s -> Some Naked_int8s
+    | Naked_int16s -> Some Naked_int16s
+    | Naked_int32s -> Some Naked_int32s
+    | Naked_int64s -> Some Naked_int64s
+    | Naked_nativeints -> Some Naked_nativeints
+    | Naked_vec128s -> Some Naked_vec128s
+    | Naked_vec256s -> Some Naked_vec256s
+    | Naked_vec512s -> Some Naked_vec512s
+    | Naked_masks -> Some Naked_masks
+    | Unboxed_product _ -> None
+  in
   binary "%array_load"
     ~params:
       (maps
-         (param3 array_kind (option load_kind) opt_mutability)
+         (param3 (option accessed_array_kind) (option load_kind) opt_mutability)
          ~from:(fun _ (k, lk, m) ->
-           let lk : P.Array_load_kind.t =
-             match lk with
-             | Some lk -> lk
-             | None -> (
-               match (k : P.Array_kind.t) with
-               | Immediates -> Immediates
-               | Gc_ignorable_values -> Gc_ignorable_values
-               | Values -> Values
-               | Naked_floats -> Naked_floats
-               | Naked_float32s -> Naked_float32s
-               | Naked_ints -> Naked_ints
-               | Naked_int8s -> Naked_int8s
-               | Naked_int16s -> Naked_int16s
-               | Naked_int32s -> Naked_int32s
-               | Naked_int64s -> Naked_int64s
-               | Naked_nativeints -> Naked_nativeints
-               | Naked_vec128s -> Naked_vec128s
-               | Naked_vec256s -> Naked_vec256s
-               | Naked_vec512s -> Naked_vec512s
-               | Naked_masks -> Naked_masks
-               | Unboxed_product _ ->
-                 Misc.fatal_error "missing product array load kind")
-           in
-           k, lk, m)
+           let k = Option.value k ~default:P.Array_kind.Values in
+           match lk, unwritten k with
+           | Some lk, _ | None, Some lk -> k, lk, m
+           | None, None -> Misc.fatal_error "missing product array load kind")
          ~to_:(fun _ (k, lk, m) ->
-           let lk =
-             match (k : P.Array_kind.t) with
-             | Unboxed_product _ -> Some lk
-             | Immediates | Gc_ignorable_values | Values | Naked_floats
-             | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
-             | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
-             | Naked_vec256s | Naked_vec512s | Naked_masks ->
-               None
+           let k, lk =
+             written_array_kinds k lk ~unwritten:(unwritten k)
+               ~compare:P.Array_load_kind.compare
            in
            k, lk, m))
     (fun _ (k, lk, m) -> P.Array_load (k, lk, m))
@@ -1115,7 +1242,7 @@ let float_comp =
         "ge", Yielding_bool (Ge ());
         "eq", Yielding_bool Eq;
         "ne", Yielding_bool Neq;
-        "lt", Yielding_int_like_compare_functions () ]
+        "qmark", Yielding_int_like_compare_functions () ]
   in
   binary "%float_comp" ~params:(param2 float_bitwidth comp) (fun _ (w, c) ->
       P.Float_comp (w, c))
@@ -1191,48 +1318,41 @@ let array_set =
       | Naked_masks -> mask ()
       | Gc_ignorable_values -> gc_ign ())
   in
+  (* The set kind that is read where none is written: the one that goes with the
+     array kind, an assignment on the heap for [Values]. *)
+  let unwritten (k : P.Array_kind.t) : P.Array_set_kind.t option =
+    match k with
+    | Values ->
+      Some
+        (Values (P.Init_or_assign.Assignment Alloc_mode.For_assignments.heap))
+    | Immediates -> Some Immediates
+    | Gc_ignorable_values -> Some Gc_ignorable_values
+    | Naked_floats -> Some Naked_floats
+    | Naked_float32s -> Some Naked_float32s
+    | Naked_ints -> Some Naked_ints
+    | Naked_int8s -> Some Naked_int8s
+    | Naked_int16s -> Some Naked_int16s
+    | Naked_int32s -> Some Naked_int32s
+    | Naked_int64s -> Some Naked_int64s
+    | Naked_nativeints -> Some Naked_nativeints
+    | Naked_vec128s -> Some Naked_vec128s
+    | Naked_vec256s -> Some Naked_vec256s
+    | Naked_vec512s -> Some Naked_vec512s
+    | Naked_masks -> Some Naked_masks
+    | Unboxed_product _ -> None
+  in
   ternary "%array_set"
     ~params:
       (maps
-         (param2 array_kind (option set_kind))
+         (param2 (option accessed_array_kind) (option set_kind))
          ~from:(fun _ (k, sk) ->
-           let sk : P.Array_set_kind.t =
-             match sk with
-             | Some sk -> sk
-             | None -> (
-               match (k : P.Array_kind.t) with
-               | Values ->
-                 Values
-                   (P.Init_or_assign.Assignment Alloc_mode.For_assignments.heap)
-               | Immediates -> Immediates
-               | Gc_ignorable_values -> Gc_ignorable_values
-               | Naked_floats -> Naked_floats
-               | Naked_float32s -> Naked_float32s
-               | Naked_ints -> Naked_ints
-               | Naked_int8s -> Naked_int8s
-               | Naked_int16s -> Naked_int16s
-               | Naked_int32s -> Naked_int32s
-               | Naked_int64s -> Naked_int64s
-               | Naked_nativeints -> Naked_nativeints
-               | Naked_vec128s -> Naked_vec128s
-               | Naked_vec256s -> Naked_vec256s
-               | Naked_vec512s -> Naked_vec512s
-               | Naked_masks -> Naked_masks
-               | Unboxed_product _ ->
-                 Misc.fatal_error "Missing product array set kind")
-           in
-           k, sk)
+           let k = Option.value k ~default:P.Array_kind.Values in
+           match sk, unwritten k with
+           | Some sk, _ | None, Some sk -> k, sk
+           | None, None -> Misc.fatal_error "Missing product array set kind")
          ~to_:(fun _ (k, sk) ->
-           let sk =
-             match (k : P.Array_kind.t) with
-             | Unboxed_product _ -> Some sk
-             | Immediates | Gc_ignorable_values | Values | Naked_floats
-             | Naked_float32s | Naked_ints | Naked_int8s | Naked_int16s
-             | Naked_int32s | Naked_int64s | Naked_nativeints | Naked_vec128s
-             | Naked_vec256s | Naked_vec512s | Naked_masks ->
-               None
-           in
-           k, sk))
+           written_array_kinds k sk ~unwritten:(unwritten k)
+             ~compare:P.Array_set_kind.compare))
     (fun _ (k, sk) -> P.Array_set (k, sk))
 
 let atomic_exchange =
@@ -1357,8 +1477,8 @@ module OfFlambda = struct
     | Optimised_out kind -> optimised_out env kind
     | Probe_is_enabled { name; enabled_at_init } ->
       probe_is_enabled env (wrap_loc name, enabled_at_init)
-    | Enter_inlined_apply { dbg = _; inlined_attribute = _ } ->
-      enter_inlined_apply env ()
+    | Enter_inlined_apply { dbg; inlined_attribute } ->
+      enter_inlined_apply env (Inlined_debuginfo.is_none dbg, inlined_attribute)
     | Domain_index -> domain_index env ()
     | Dls_get -> dls_get env ()
     | Tls_get -> tls_get env ()
@@ -1386,12 +1506,13 @@ module OfFlambda = struct
     | Int_arith (i, o) -> int_uarith env (i, o)
     | Int_as_pointer a -> int_as_pointer env a
     | Is_flat_float_array -> is_flat_float_array env ()
-    | Is_int _ -> is_int env () (* CR vlaviron: discuss *)
+    | Is_int { variant_only } -> is_int env (not variant_only)
     | Is_null -> is_null env ()
     | Make_lazy { lazy_tag; alloc_region } ->
       make_lazy env (lazy_tag, alloc_region)
     | Num_conv { src; dst } -> num_conv env (src, dst)
-    | Opaque_identity _ -> opaque_identity env ()
+    | Opaque_identity { middle_end_only; kind } ->
+      opaque_identity env (middle_end_only, kind)
     | Unbox_number bk -> unbox_num env bk
     | Untag_immediate -> untag_immediate env ()
     | Project_value_slot { project_from; value_slot } ->

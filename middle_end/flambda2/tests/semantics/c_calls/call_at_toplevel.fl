@@ -1,0 +1,11 @@
+let $camlCall_at_toplevel__first_const_0 = Block 0 () in
+apply ccall &toplevel
+  ($`*extern*`.c_fresh_id : val? -> val?) (0) -> k/8 * error
+  where k/8 (id/12) =
+    let Pmakeblock/13 = %block.[`0`].`toplevel` (id/12) in
+    cont k/7 (Pmakeblock/13)
+  where k/7 define_root_symbol (module_block/10) =
+    let field_0/11 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/10)
+    in
+    let $camlCall_at_toplevel = Block 0 (field_0/11) in
+    cont done ($camlCall_at_toplevel)

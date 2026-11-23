@@ -4,6 +4,7 @@ open BinPos
 open Datatypes
 open FlambdaMapSpec
 open FlambdaModel
+open FlambdaStatedScopeSpec
 open FlambdaUnaliasParamsSpec
 open FlambdaUnusedContsSpec
 open List
@@ -53,10 +54,18 @@ val handler_first_scrutinee :
   variable list option
 
 val give_first :
-  variable list -> nat -> continuation -> continuation_handler -> expr -> expr
+  stated_in_scope ->
+  variable list ->
+  nat ->
+  continuation ->
+  continuation_handler ->
+  expr ->
+  expr
 
-val give_at : nat -> continuation -> continuation_handler -> expr -> expr
+val give_at :
+  stated_in_scope -> nat -> continuation -> continuation_handler -> expr -> expr
 
-val give_from : nat -> continuation -> continuation_handler -> expr -> expr
+val give_from :
+  stated_in_scope -> nat -> continuation -> continuation_handler -> expr -> expr
 
-val give_scrutinees : expr -> expr
+val give_scrutinees_under : stated_in_scope -> expr -> expr

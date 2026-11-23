@@ -1,29 +1,46 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* Parts of this file are written after parts of two files of the compiler;
+   the file as a whole transcribes none. [tuple_access] is the kind of block
+   access that [project_tuple] builds in
+   middle_end/flambda2/simplify/simplify_common.ml: values, the tag 0, the
+   size of the tuple, any value as the kind of a field; and the load that
+   [tuple_fields_from] evaluates is the immutable load at it that the same
+   function builds. In [detuple], the arity that results is the one that
+   [simplify_direct_tuple_application] builds in
+   middle_end/flambda2/simplify/simplify_apply_expr.ml: as many values as
+   the tuple has components, then the arity of the call less its first
+   parameter. The rest of the file, the abstract machine and what it means
+   for two terms to behave alike, is not a transcription: where one of its
+   comments names a file of the compiler, it says what the compiler does
+   there, or quotes it.
+
+   The header above is that of
+   middle_end/flambda2/simplify/simplify_common.ml,
+   the first of the files of the compiler of which this file transcribes
+   parts. The others:
+   - middle_end/flambda2/simplify/simplify_apply_expr.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2020 OCamlPro SAS                                    *)
+(*   Copyright 2014--2020 Jane Street Group LLC                           *)
+   *)
 
 (* Execution of the terms of FlambdaModel.v, and what it means for two
    terms to behave alike.
@@ -251,7 +268,7 @@ From Stdlib Require Import ZArith List.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec.
 From OxCamlFlambda2 Require Export FlambdaValueSpec FlambdaPrimitiveSpec
-  FlambdaHeapSpec.
+  FlambdaHeapSpec FlambdaSubkindSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -684,7 +701,14 @@ Definition with_extra_args (c : cont_value) (extra : list value)
      results of the code, unboxed products and all
      ([simplify_direct_function_call], by
      [Flambda_arity.equal_ignoring_subkinds];
-     [Application_result_kind_mismatch]). *)
+     [Application_result_kind_mismatch]).
+
+   And each argument must be of what the parameter of the code states
+   of it beyond its kind ([values_of_subkinds], against
+   [cm_params_subkinds]): the body is not entered with a value of
+   another shape. Simplify reads what a parameter states into its
+   type; no test of the compiler is transcribed here. What the code
+   states of its results is not tested. Decision D25, at parameters. *)
 Definition call_code (closure : value) (c : code) (vs : list value)
     (args_arity return_arity : arity) (return_to exn_to : cont_value)
     (statics : static_env) (hp : heap) (rd : read_record) : step_result :=
@@ -695,6 +719,8 @@ Definition call_code (closure : value) (c : code) (vs : list value)
        && kinds_per_parameter_eqb (unarize_per_parameter args_arity)
             (unarize_per_parameter (code_params_arity c))
        && arity_eqb return_arity (code_result_arity c))
+  then Undefined
+  else if negb (values_of_subkinds statics vs (code_params_subkinds c))
   then Undefined
   else
     match bind_params (code_params c) vs [(code_my_closure c, closure)] with
@@ -1153,7 +1179,14 @@ Definition run_call (return_partial : value -> step_result)
    exception continuation is that of the over-application, extra
    arguments included. No variable is bound there, and the kind of the
    value is not tested: a value that can be called is of kind
-   [Value]. *)
+   [Value].
+
+   The values must also be of what the handler states of its
+   parameters beyond their kinds ([values_of_subkinds], against
+   [hm_params_subkinds]): otherwise there is no step. So a handler is
+   not entered with a value of another shape, whichever it is: an
+   ordinary one, one of a recursive group, an exception handler, the
+   one that a call returns to. Decision D25, at parameters. *)
 Fixpoint apply_cont_value (c : cont_value) (vs : list value)
     (statics : static_env) (hp : heap) (rd : read_record)
       {struct c} : step_result :=
@@ -1162,13 +1195,16 @@ Fixpoint apply_cont_value (c : cont_value) (vs : list value)
   | Closure (Handler params metadata handler) def_vars def_conts recursive =>
     if kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata)
     then
-      match bind_params params vs def_vars with
-      | Some handler_vars =>
-        Step (State handler handler_vars
-          (rec_closures recursive def_vars def_conts ++ def_conts) statics hp
-            rd)
-      | None => Undefined
-      end
+      if values_of_subkinds statics vs (hm_params_subkinds metadata)
+      then
+        match bind_params params vs def_vars with
+        | Some handler_vars =>
+          Step (State handler handler_vars
+            (rec_closures recursive def_vars def_conts ++ def_conts) statics
+              hp rd)
+        | None => Undefined
+        end
+      else Undefined
     else Undefined
   | Extra_args c extra => apply_cont_value c (vs ++ extra) statics hp rd
   | Over_application remaining remaining_arity return_arity return_to exn_to =>

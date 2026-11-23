@@ -90,6 +90,10 @@ let twin_params_list ts params handler =
 let twin_metadata ts metadata =
   { hm_params_kinds =
       app metadata.hm_params_kinds (moved_from ts O metadata.hm_params_kinds);
+    hm_params_subkinds =
+      app
+        (stated_of_params metadata)
+        (map (fun _ -> any_value) (moved_from ts O (stated_of_params metadata)));
     hm_is_exn_handler = metadata.hm_is_exn_handler
   }
 

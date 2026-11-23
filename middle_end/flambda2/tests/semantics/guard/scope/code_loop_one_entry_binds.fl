@@ -1,0 +1,29 @@
+(* MUST BE REFUSED: a code id is not in scope (asked for by R3). A recursive
+   continuation k_loop with two entries from outside, k_a and k_b. Only k_b
+   binds the code n_0 on the way. The handler of k_loop allocates a closure of
+   n_0 and goes round once more; it binds no static name itself. The run takes
+   the way that binds (v = 1). *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+(((switch v
+     | 0 -> k_a
+     | 1 -> k_b)
+    where k_b =
+      let code size(1) n_0 (x) my_closure &my_region my_depth -> k * e =
+        cont k (x)
+      in
+      cont k_loop (0)
+    where k_a =
+      cont k_loop (0))
+   where rec k_loop (i) =
+     let f = closure n_0 @n &toplevel in
+     let more = %int_comp.`lt` (i, 1) in
+     (switch more
+        | 0 -> k_end (f)
+        | 1 -> k_next
+        where k_next =
+          let i2 = %int_barith.`add` (i, 1) in
+          cont k_loop (i2)))
+  where k_end (r) =
+    let $camlCode_loop_one_entry_binds = Block 0 (r) in
+    cont done ($camlCode_loop_one_entry_binds)

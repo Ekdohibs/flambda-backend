@@ -774,9 +774,63 @@ Proof.
     + injection Hlength as Hlength. f_equal. exact (IH l1 l2 H1 H2 Hlength).
 Qed.
 
+(* The values of the arguments that are no regions reach only symbols
+   that may be evaluated. *)
+Lemma simples_live_dropped (rs : region_state) (args : list simple) :
+  ∀ (places : list bool) (vs : list value),
+    simples_live rs args places = true ->
+    eval_simples (state_vars (rs_state rs)) args = Some vs ->
+    forallb (value_all (live_symbol rs)) (drop_regions places vs) = true.
+Proof.
+  induction args as [ | s args IH]; intros places vs Hlive Hvs.
+  - simpl in Hvs. injection Hvs as <-. destruct places; reflexivity.
+  - simpl in Hvs.
+    destruct (eval_simple (state_vars (rs_state rs)) s) as [v | ] eqn:Hv;
+      [ | discriminate ].
+    destruct (eval_simples (state_vars (rs_state rs)) args) as [rest | ]
+      eqn:Hrest; [ | discriminate ].
+    injection Hvs as <-.
+    simpl in Hlive. apply andb_true_iff in Hlive as [Hs Hlive].
+    rewrite Hv in Hs.
+    destruct places as [ | place places].
+    + simpl in Hs, Hlive. cbn [drop_regions forallb]. rewrite Hs.
+      exact (IH [] rest Hlive eq_refl).
+    + simpl in Hs, Hlive. destruct place; cbn [drop_regions forallb].
+      * exact (IH places rest Hlive eq_refl).
+      * rewrite Hs. exact (IH places rest Hlive eq_refl).
+Qed.
+
+(* Values that are of what is stated of the parameters that are no
+   regions are of what is stated of all, where nothing is stated of
+   those that are regions. *)
+Lemma values_of_subkinds_undropped (statics : static_env) :
+  ∀ (places : list bool) (vs : list value) (sks : list param_subkind),
+    regions_state_nothing places sks = true ->
+    values_of_subkinds statics (drop_regions places vs)
+      (drop_regions places sks)
+    = true ->
+    values_of_subkinds statics vs sks = true.
+Proof.
+  induction places as [ | place places IH]; intros vs sks Hnothing H;
+    [ exact H | ].
+  destruct vs as [ | v vs]; [ apply values_of_subkinds_no_values | ].
+  destruct sks as [ | ps sks]; [ reflexivity | ].
+  cbn [regions_state_nothing] in Hnothing.
+  apply andb_true_iff in Hnothing as [Hps Hnothing].
+  cbn [drop_regions] in H. rewrite values_of_subkinds_cons.
+  destruct place.
+  - cbn [negb orb] in Hps.
+    rewrite value_at_eq, (says_nothing_any statics _ _ v Hps).
+    exact (IH vs sks Hnothing H).
+  - rewrite values_of_subkinds_cons in H.
+    apply andb_true_iff in H as [Hv Hvs]. rewrite Hv.
+    exact (IH vs sks Hnothing Hvs).
+Qed.
+
 (* The erased term gives the erased handler the arguments that are no
    regions. Where that has a step, the arguments have values, of the
-   kinds of the handler, and are as many as its parameters. *)
+   kinds of the handler and of what it states, and are as many as its
+   parameters. *)
 Lemma region_apply_cont_back (rs : region_state) (s' : state)
     (ac : apply_cont) :
   symbols_fresh rs = true ->
@@ -784,6 +838,9 @@ Lemma region_apply_cont_back (rs : region_state) (s' : state)
   state_expr (rs_state rs) = Apply_cont ac ->
   simples_fault rs (ac_args ac) (region_places rs) = None ->
   simples_live rs (ac_args ac) (region_places rs) = true ->
+  forallb (fun '(_, allocated) => allocated_all (live_symbol rs) allocated)
+    (static_values (live_statics rs))
+  = true ->
   regions_given rs = true ->
   existsb (simple_open_mark rs) (ac_args ac) = true ->
   step s' <> Undefined ->
@@ -792,7 +849,7 @@ Proof.
   intros Hfresh
     (rconts & He & Hcalls & Hagree & Hvars & Hconts & Hstatics & Hheap
      & Hreads)
-    Hexpr Hfault Hlive Hgiven Hmark.
+    Hexpr Hfault Hlive Hstatics_live Hgiven Hmark.
   pose proof (symbols_fresh_expr rs Hfresh) as Hbelow.
   rewrite Hexpr in Hbelow.
   change (forallb (simple_below (rs_base rs)) (ac_args ac) = true) in Hbelow.
@@ -808,10 +865,10 @@ Proof.
     try (exfalso;
          pose proof (simples_fault_mark_place rs _ [] Hfault Hmark) as H;
          discriminate H).
-  destruct h as [params [kinds is_exn] handler].
+  destruct h as [params [kinds subkinds is_exn] handler].
   unfold region_params, handler_kinds in Hfault, Hlive, Hgiven.
   cbn [hm_params_kinds] in Hfault, Hlive, Hgiven.
-  cbn [hm_params_kinds].
+  cbn [hm_params_kinds hm_params_subkinds].
   apply andb_true_iff in Hgiven as [Hgiven_args Hgiven_params].
   (* The continuation is one that [erase] lists. *)
   pose proof (Hagree (ac_continuation ac)) as Hk.
@@ -848,9 +905,12 @@ Proof.
     eqn:Hvs';
     [ | intros H; contradiction (H eq_refl) ].
   unfold apply_continuation. rewrite <- Hc'.
-  cbn [erase_handler apply_cont_value hm_params_kinds].
+  cbn [erase_handler apply_cont_value hm_params_kinds hm_params_subkinds].
   destruct (kinds_eqb (map kind_of_value vs') (drop_regions _ kinds))
     eqn:Hkinds';
+    [ | intros H; contradiction (H eq_refl) ].
+  destruct (values_of_subkinds statics' vs' (drop_regions _ subkinds))
+    eqn:Hstated';
     [ | intros H; contradiction (H eq_refl) ].
   destruct (bind_params (drop_regions _ params) vs' vars1') as [bound' | ]
     eqn:Hbind';
@@ -870,6 +930,14 @@ Proof.
     (kinds_given rs (ac_args ac) kinds vs Hlive Hfault Hgiven_args Hvs
        Hkinds'),
     kinds_eqb_refl.
+  rewrite
+    (values_of_subkinds_undropped (live_statics rs) _ vs subkinds
+       (handler_regions_state_nothing _ _ _ _ Hh)
+       (values_of_subkinds_back rs statics' Hfresh Hstatics Hstatics_live vs'
+          _ _
+          (values_back rs _ vs' Hrelated
+             (simples_live_dropped rs (ac_args ac) _ vs Hlive Hvs))
+          Hstated')).
   assert (Hlength : length params = length vs).
   { apply (drop_regions_lengths (map (fun kind => kind_eqb kind Region) kinds)).
     - exact Hgiven_params.
@@ -1118,7 +1186,8 @@ Proof.
       apply
         (region_apply_cont_back (with_counts rs counts) s' ac Hfresh_c
            Herased_c Hexpr);
-        [ | | exact Hgiven | | exact Hstep' ].
+        [ | | exact (statics_live_with_counts rs counts R2) | exact Hgiven |
+        | exact Hstep' ].
       * change (region_places (with_counts rs counts)) with (region_places rs).
         rewrite simples_fault_with_counts. exact Hfault.
       * change (region_places (with_counts rs counts)) with (region_places rs).

@@ -1,0 +1,92 @@
+let $camlSlot_through_held_functor__first_const_0 = Block 0 () in
+(let code inline(always) size(13)
+       lt_1 (a/99 : val, b/100 : val)
+         my_closure/101 &my_alloc_region/102 my_depth/103
+         -> k/34 * k/35
+         : imm tagged =
+   let next_depth/104 = rec_info (succ my_depth/103) in
+   let Ord/105 = %project_value_slot.[lt].[Ord] (my_closure/101) in
+   (let Pfield/109 = %block_load.[`0`] (Ord/105) in
+    apply unknown_arity &my_alloc_region/102
+      (Pfield/109 : val * val -> imm tagged) (a/99, b/100) -> k/36 * k/35)
+     where k/36 (apply_result/106 : imm tagged) =
+       let prim/107 = %int_comp.lt (apply_result/106, 0) in
+       let int_lessthan/108 = %tag_imm (prim/107) in
+       cont k/34 (int_lessthan/108)
+ in
+ let code inline(always) size(40)
+       smaller_2 (a/110 : val, b/111 : val)
+         my_closure/112 &my_alloc_region/113 my_depth/114
+         -> k/37 * k/38
+         : val =
+   let next_depth/115 = rec_info (succ my_depth/114) in
+   let lt/116 = %project_value_slot.[smaller].[lt] (my_closure/112) in
+   let Ord/117 = %project_value_slot.[smaller].[Ord_1] (my_closure/112) in
+   apply direct(lt_1 &my_alloc_region/113)
+     (lt/116 : val * val -> [ 0 |1 ]) (a/110, b/111) -> k/41 * k/38
+     where k/41 (apply_result/123 : [ 0 |1 ]) =
+       ((let untagged/124 = %untag_imm (apply_result/123) in
+         switch untagged/124
+           | 0 -> k/42
+           | 1 -> k/37 (a/110))
+          where k/42 =
+            cont k/39)
+     where k/39 =
+       ((let Pfield/122 = %block_load.[`0`] (Ord/117) in
+         apply unknown_arity &my_alloc_region/113
+           (Pfield/122 : val * val -> imm tagged)
+             (a/110, b/111)
+             -> k/40 * k/38)
+          where k/40 (apply_result/118 : imm tagged) =
+            let prim/119 = %phys_eq (apply_result/118, 0) in
+            let eq/120 = %tag_imm (prim/119) in
+            let untagged/121 = %untag_imm (eq/120) in
+            switch untagged/121
+              | 0 -> k/37 (b/111)
+              | 1 -> k/37 (a/110))
+ in
+ let code size(9)
+       smallest_3 (a/125 : val, b/126 : val, c/127 : val)
+         my_closure/128 &my_alloc_region/129 my_depth/130
+         -> k/43 * k/44
+         : val =
+   let next_depth/131 = rec_info (succ my_depth/130) in
+   let smaller/132 =
+     %project_value_slot.[smallest].[smaller] (my_closure/128)
+   in
+   apply direct(smaller_2 &my_alloc_region/129)
+     (smaller/132 : val * val -> val) (a/125, b/126) -> k/45 * k/44
+     where k/45 (apply_result/133 : val) =
+       apply direct(smaller_2 &my_alloc_region/129)
+         (smaller/132 : val * val -> val)
+           (apply_result/133, c/127)
+           -> k/43 * k/44
+ in
+ let code loopify(never) size(99) functor
+       Make_0 (Ord/134 : val)
+         my_closure/135 &my_alloc_region/136 my_depth/137
+         -> k/46 * k/47
+         : val =
+   let next_depth/138 = rec_info (succ my_depth/137) in
+   let lt/139 = closure lt_1 @lt &my_alloc_region/136
+   with { Ord = Ord/134 }
+   in
+   let smaller/140 = closure smaller_2 @smaller &my_alloc_region/136
+   with { lt = lt/139; Ord_1 = Ord/134 }
+   in
+   let smallest/141 = closure smallest_3 @smallest &my_alloc_region/136
+   with { smaller = smaller/140 }
+   in
+   let Pmakeblock/142 =
+     %block.[`0`].my_alloc_region/136 (lt/139, smaller/140, smallest/141)
+   in
+   cont k/46 (Pmakeblock/142)
+ in
+ let Make/143 = closure Make_0 @Make &toplevel in
+ let Pmakeblock/144 = %block.[`0`].`toplevel` (Make/143) in
+ cont k/33 (Pmakeblock/144))
+  where k/33 define_root_symbol (module_block/97) =
+    let field_0/98 = %block_load.tag[`0`].`size`[`1`].[`0`] (module_block/97)
+    in
+    let $camlSlot_through_held_functor = Block 0 (field_0/98) in
+    cont done ($camlSlot_through_held_functor)

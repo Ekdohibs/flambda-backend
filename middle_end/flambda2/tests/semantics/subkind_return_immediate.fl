@@ -1,0 +1,9 @@
+let code inline(never) size(1) five (x : imm tagged)
+    my_closure &my_region my_depth -> k * e =
+  cont k (5)
+in
+let $Fn = closure five &toplevel in
+apply direct(five &toplevel) $Fn (3) -> k1 * error
+  where k1 (r : imm tagged) =
+    let $camlSubkind_return_immediate = Block 0 (r) in
+    cont done ($camlSubkind_return_immediate)

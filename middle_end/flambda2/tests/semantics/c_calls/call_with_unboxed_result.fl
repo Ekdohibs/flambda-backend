@@ -1,0 +1,62 @@
+(let $camlCall_with_unboxed_result__immstring_0 = "%d" in
+ let code size(10)
+       to_string_0 (n/66 : int32 boxed)
+         my_closure/67 &my_alloc_region/68 my_depth/69
+         -> k/26 * k/27
+         : val =
+   let next_depth/70 = rec_info (succ my_depth/69) in
+   apply ccall &my_alloc_region/68
+     ($`*extern*`.c_int32_format : val? * val? -> val?)
+       ($camlCall_with_unboxed_result__immstring_0, n/66)
+       -> k/26 * k/27
+ in
+ let code size(53)
+       of_string_opt_1 (s/71 : val)
+         my_closure/72 &my_alloc_region/73 my_depth/74
+         -> k/28 * k/29
+         : [ 0 | 0 of int32 boxed ] =
+   let next_depth/75 = rec_info (succ my_depth/74) in
+   let try_region/76 = %begin_try_region () in
+   let try_ghost_region/77 = %begin_try_ghost_region () in
+   cont k/34 push(k/30)
+     where k/34 =
+       (apply ccall &my_alloc_region/73
+          ($`*extern*`.c_int32_of_string_unboxed : val? -> int32)
+            (s/71)
+            -> k/35 * k/30
+          where k/35 (Pccall/86 : int32) =
+            let Pccall/87 = %box_num.`int32`.my_alloc_region/73 (Pccall/86)
+            in
+            let Pmakeblock/88 =
+              %block.[`0`].my_alloc_region/73 (Pccall/87 : int32 boxed)
+            in
+            cont k/33 (Pmakeblock/88))
+     where k/33 (body_result/85 : [ 0 | 0 of int32 boxed ]) =
+       cont k/28 pop(k/30) (body_result/85)
+     where k/30 exn (exn/78 : val) =
+       let unit/79 = %end_try_region (try_region/76) in
+       let unit/80 = %end_try_ghost_region (try_ghost_region/77) in
+       ((let Pfield/81 = %block_load.[`0`] (exn/78) in
+         let prim/82 = %phys_eq (Pfield/81, $`*predef*`.caml_exn_Failure) in
+         let eq/83 = %tag_imm (prim/82) in
+         (let untagged/84 = %untag_imm (eq/83) in
+          switch untagged/84
+            | 0 -> k/32
+            | 1 -> k/28 (0))
+           where k/32 =
+             cont k/31)
+          where k/31 =
+            cont k/29 pop(reraise k/29) (exn/78))
+ in
+ let to_string/89 = closure to_string_0 @to_string &toplevel in
+ let of_string_opt/90 = closure of_string_opt_1 @of_string_opt &toplevel in
+ let Pmakeblock/91 = %block.[`0`].`toplevel` (to_string/89, of_string_opt/90)
+ in
+ cont k/25 (Pmakeblock/91))
+  where k/25 define_root_symbol (module_block/63) =
+    let field_0/64 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/63)
+    in
+    let field_1/65 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/63)
+    in
+    let $camlCall_with_unboxed_result = Block 0 (field_0/64, field_1/65) in
+    cont done ($camlCall_with_unboxed_result)

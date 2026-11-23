@@ -141,6 +141,9 @@ type static_data =
   | Block of
       { tag : tag_scannable;
         mutability : mutability;
+        kinds : kind_with_subkind list option;
+            (* The kinds of the fields, for a block with unboxed fields; [None]
+               for a block whose fields are all values. *)
         elements : field_of_block list
       }
   | Boxed_float32 of float or_variable
@@ -270,13 +273,34 @@ type function_call =
    no arities is [Indirect], and is read with one value for each argument and
    one for the result. *)
 
+(* The operations of effects, in the order of [Call_kind.Effect.t]. What an
+   operation is given stands with it, in the order of the fields there: the call
+   has no callee and no arguments. *)
+type effect_operation =
+  | Perform
+  | Reperform
+  | With_stack
+  | With_stack_preemptible
+  | Continue
+  | Discontinue
+  | Discontinue_with_backtrace
+
 type call_kind =
   | Function of function_call
   | Method of
       { kind : Call_kind.Method_kind.t;
         obj : simple
       }
-  | C_call of { alloc : bool }
+  | Effect of
+      { operation : effect_operation;
+        operands : simple list
+      }
+  | C_call of
+      { alloc : bool;
+        is_c_builtin : bool;
+        effects : Effects.t;
+        coeffects : Coeffects.t
+      }
 
 type function_arities =
   { params_arity : arity option;
@@ -291,11 +315,11 @@ type inline_attribute = Inline_attribute.t =
   | Default_inline
 
 type inlined_attribute =
-  | Always_inlined
+  | Always_inlined of Inlined_attribute.Use_info.t
   | Hint_inlined
   | Forward_inlined
   | Never_inlined
-  | Unroll of int
+  | Unroll of int * Inlined_attribute.Use_info.t
   | Default_inlined
 
 type inlining_state = { depth : int (* CR lmaurer: Add inlining arguments *) }
@@ -307,6 +331,11 @@ type loopify_attribute = Loopify_attribute.t =
   | Default_loopify_and_tailrec
   | Default_loopify_and_not_tailrec
 
+type probe =
+  { name : string;
+    enabled_at_init : bool
+  }
+
 type apply =
   { func : simple option;
     continuation : result_continuation;
@@ -317,7 +346,8 @@ type apply =
     arities : function_arities option;
     inlined : inlined_attribute option;
     inlining_state : inlining_state option;
-    nontail : bool
+    nontail : bool;
+    probe : probe option
   }
 
 type size = int

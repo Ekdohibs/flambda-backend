@@ -294,6 +294,8 @@ Lemma call_code_permuted (p : permutation) (closure : value) (c : code)
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ reflexivity | ].
   rewrite kinds_permuted. destruct (negb _); [ reflexivity | ].
+  rewrite values_of_subkinds_permuted.
+  destruct (negb _); [ reflexivity | ].
   change [(code_my_closure c, permute_value p closure)]
     with (permute_env p [(code_my_closure c, closure)]).
   rewrite bind_params_permuted.
@@ -476,6 +478,9 @@ Proof.
     intros vs statics hp rd.
   - simpl. rewrite kinds_permuted.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | reflexivity ].
+    rewrite values_of_subkinds_permuted.
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | reflexivity ].
     rewrite bind_params_permuted.
     destruct (bind_params params vs def_vars) as [handler_vars | ]; simpl;
@@ -679,6 +684,7 @@ Lemma call_code_heap (closure : value) (c : code) (vs : list value)
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ exact I | ].
   destruct (negb _); [ exact I | ].
+  destruct (negb _); [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
     [ reflexivity | exact I ].
 Qed.
@@ -713,6 +719,8 @@ Proof.
     intros vs statics hp rd.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars); [ reflexivity | exact I ].
   - reflexivity.

@@ -45,10 +45,14 @@
    Then pairs that differ in what stands beside a kind (the grouping of an
    arity; the tag, the mutability and the allocation mode of a block that is
    made; the mutability of a read and the kind of a write at an offset), and
-   things that a text cannot write: that a call is a probe, a call that performs
-   an effect, the shape of a static block, the debugging information of its
-   fields (which is not compared, as no other debugging information is), and a
-   group of two recursive continuations.
+   things that a text could not write when they were put here: that a call is a
+   probe, a call that performs an effect, the shape of a static block, the
+   debugging information of its fields and of those of a static array of values
+   (which is not compared, as no other debugging information is), and a group of
+   two recursive continuations. And pairs built in memory of a name under a
+   coercion: the first is a name, and the name under a change of depth between
+   two equal depths, which is not the identity coercion, and the comparison
+   calls the two different.
 
    Then the unit that the comparison gives for two different units, where the
    kind of a call of the first unit has a name that the second unit binds under
@@ -69,7 +73,27 @@
    has, and the fifteen words that begin with a capital and are keywords of the
    text, which the printer must write in backquotes. The one argument of the
    test is a text with code, for the constructor that takes the metadata of
-   code. *)
+   code.
+
+   And a unit with a static block whose shape is that of a mixed block with no
+   field in its flat suffix is given to the printer of texts, which stops: the
+   text writes the kinds of the fields, and those give the shape of a block of
+   values.
+
+   And a unit that returns a poison constant is written and read back, for two
+   names: the printer writes the name as a string, which is what the reader
+   takes.
+
+   And a unit that returns a name under a change of depth between two equal
+   depths is written and read back, for a depth that is a number and for the
+   depth that the reader has as one constant: the reader reads a change of
+   depth, not the identity.
+
+   Last, the mark of an inlined body, whose debugging information is a stack.
+   Pairs of marks built in memory are compared: the comparison compares the
+   inlining attribute and whether the stack is empty, and not what the stack
+   holds. And a unit with a mark is written and read back, for a stack that is
+   not empty and for the empty one, which the text writes [no_dbg]. *)
 
 open Flambda2_bound_identifiers
 open Flambda2_identifiers
@@ -328,7 +352,9 @@ let call_that_performs eff =
     ~call_kind:(Call_kind.effect_ (Call_kind.Effect.perform ~eff))
     ~args_arity:Flambda_arity.nullary ~return_arity:any ~extra_args:[] ()
 
-let static_block ?(dbg = Debuginfo.none) shape =
+(* A unit that binds a symbol to the static constant made from two fields with
+   the given debugging information, and returns it. *)
+let static_constant ?(dbg = Debuginfo.none) make =
   unit
     (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
       let block =
@@ -346,11 +372,36 @@ let static_block ?(dbg = Debuginfo.none) shape =
         (Flambda.Named.create_static_consts
            (Flambda.Static_const_group.create
               [ Flambda.Static_const_or_code.create_static_const
-                  (Static_const.block Tag.Scannable.zero Immutable shape
+                  (make
                      [ Simple.With_debuginfo.create argument dbg;
                        Simple.With_debuginfo.create argument dbg ]) ]))
         ~body ~free_names_of_body:Unknown
       |> Flambda.Expr.create_let)
+
+let static_block ?dbg shape =
+  static_constant ?dbg (Static_const.block Tag.Scannable.zero Immutable shape)
+
+(* A static immutable array of values, of two elements or of one. *)
+let static_array ?dbg ?(short = false) () =
+  static_constant ?dbg (fun fields ->
+      Static_const.immutable_value_array
+        (if short then [List.hd fields] else fields))
+
+(* A depth that is made anew at each call, so that two of them that are equal
+   are not the same value in memory. *)
+let[@inline never] depth n =
+  Rec_info_expr.const ~depth:(Or_infinity.Finite n)
+    ~unrolling:Rec_info_expr.Unrolling_state.not_unrolling
+
+(* The same of the depth "do not inline". *)
+let[@inline never] do_not_inline unrolling =
+  Rec_info_expr.const ~depth:Or_infinity.Infinity ~unrolling
+
+(* A unit that returns the symbol of the module under the given coercion. *)
+let returns_under coercion =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      jump return_continuation [Simple.with_coercion argument coercion])
 
 (* A group of [n] recursive continuations, of which the first is called. *)
 let recursive_group n =
@@ -461,6 +512,34 @@ let () =
      (one has some: %b): %s\n"
     (not (Debuginfo.is_none somewhere))
     (answer (static_block Value_only) (static_block ~dbg:somewhere Value_only));
+  Printf.printf "two static arrays of values: %s\n"
+    (answer (static_array ()) (static_array ()));
+  Printf.printf "two static arrays of values of two lengths: %s\n"
+    (answer (static_array ()) (static_array ~short:true ()));
+  Printf.printf
+    "two static arrays of values whose fields have not the same debugging \
+     information: %s\n"
+    (answer (static_array ()) (static_array ~dbg:somewhere ()));
+  let between_equal_depths =
+    Coercion.change_depth
+      ~from:(depth (Sys.opaque_identity 1))
+      ~to_:(depth (Sys.opaque_identity 1))
+  in
+  Printf.printf
+    "a name, and the name under a change of depth between two equal depths \
+     (the identity by Coercion.is_id: %b): %s\n"
+    (Coercion.is_id between_equal_depths)
+    (answer (returns_under Coercion.id) (returns_under between_equal_depths));
+  Printf.printf
+    "a name, and the name under a change of depth between two depths: %s\n"
+    (answer
+       (returns_under Coercion.id)
+       (returns_under (Coercion.change_depth ~from:(depth 1) ~to_:(depth 2))));
+  Printf.printf
+    "a name under a change of depth, and under the change the other way: %s\n"
+    (answer
+       (returns_under (Coercion.change_depth ~from:(depth 1) ~to_:(depth 2)))
+       (returns_under (Coercion.change_depth ~from:(depth 2) ~to_:(depth 1))));
   Printf.printf "two groups of two recursive continuations: %s\n"
     (answer (recursive_group 2) (recursive_group 2));
   Printf.printf "a group of one recursive continuation and a group of two: %s\n"
@@ -593,11 +672,9 @@ let invalid reason =
       ~return_continuation:_ ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
       Flambda.Expr.create_invalid reason)
 
-(* A unit that is one invalid expression whose message is the given name,
-   written by the printer of texts and read back by the reader: the text, and
-   what the comparison says of the unit and the unit read. *)
-let written_and_read_back name =
-  let unit1 = invalid (Message name) in
+(* A unit written by the printer of texts and read back by the reader: the text,
+   and what the comparison says of the unit and the unit read. *)
+let unit_written_and_read_back unit1 =
   let text =
     Flambda2_ui.Flambda_colours.without_colours ~f:(fun () ->
         Format.asprintf "%a" Flambda2_parser.Print_fexpr.flambda_unit
@@ -614,6 +691,34 @@ let written_and_read_back name =
   in
   Sys.remove file;
   String.trim text, read
+
+(* The same of a unit that is one invalid expression whose message is the given
+   name. *)
+let written_and_read_back name =
+  unit_written_and_read_back (invalid (Message name))
+
+(* A unit that returns a poison constant of the kind of values with the given
+   name. *)
+let poison name =
+  unit
+    (fun ~return_continuation ~exn_continuation:_ ~toplevel_my_alloc_region:_ ->
+      jump return_continuation
+        [Simple.const (Reg_width_const.const_poison K.value name)])
+
+(* A stack of debugging information for the mark of an inlined body, which is
+   not empty: that of one inlined call, with the given debugging information of
+   the call. *)
+let stack_of_one_call apply_dbg =
+  Inlined_debuginfo.create
+    ~called_code_id:
+      (Code_id.create ~name:"inlined" ~debug:Debuginfo.none compilation_unit)
+    ~apply_dbg
+
+(* A unit that binds a variable to the mark of an inlined body and returns
+   it. *)
+let mark ?(inlined_attribute = Inlined_attribute.Default_inlined) dbg =
+  let_prim (fun ~toplevel_my_alloc_region:_ ->
+      Flambda_primitive.Nullary (Enter_inlined_apply { dbg; inlined_attribute }))
 
 (* The words that begin with a capital and are keywords of the text: the names
    of the static constants. *)
@@ -751,4 +856,66 @@ let () =
     (List.filter_map
        (fun (_, reason) -> Flambda2_compare.Compare.name_of_invalid reason)
        reasons
-    @ ["Message"; "Not_yet"] @ keywords_with_a_capital)
+    @ ["Message"; "Not_yet"] @ keywords_with_a_capital);
+  (let no_flat_field : K.Scannable_block_shape.t =
+     Mixed_record
+       (K.Mixed_block_shape.from_prefix_size_and_suffix_elements 2 [])
+   in
+   Printf.printf
+     "a static block whose shape is that of a mixed block with no flat field, \
+      written and read back: %s\n"
+     (match unit_written_and_read_back (static_block no_flat_field) with
+     | _text, read -> read
+     | exception Misc.Fatal_error -> "the printer stops"));
+  List.iter
+    (fun name ->
+      let text, read = unit_written_and_read_back (poison name) in
+      Printf.printf
+        "a poison constant with the name %S, written and read back: \"%s\", %s\n"
+        name
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    ["variant_unboxing_field"; "a \"name\" with quotes\\"];
+  List.iter
+    (fun (what, from, to_) ->
+      let coercion = Coercion.change_depth ~from ~to_ in
+      let text, read = unit_written_and_read_back (returns_under coercion) in
+      Printf.printf
+        "a name under a change of depth between two equal depths, %s (the \
+         identity by Coercion.is_id: %b), written and read back: \"%s\", %s\n"
+        what (Coercion.is_id coercion)
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    [ "the depth 1", depth (Sys.opaque_identity 1), depth (Sys.opaque_identity 1);
+      ( "the depth \"do not inline\"",
+        Rec_info_expr.do_not_inline,
+        do_not_inline
+          (Sys.opaque_identity Rec_info_expr.Unrolling_state.do_not_unroll) ) ];
+  Printf.printf
+    "two marks of an inlined body whose stacks are not empty and have not the \
+     same debugging information: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark (stack_of_one_call somewhere)));
+  Printf.printf
+    "a mark of an inlined body whose stack is not empty and one whose stack is \
+     empty: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark Inlined_debuginfo.none));
+  Printf.printf
+    "two marks of an inlined body with two inlining attributes: %s\n"
+    (answer
+       (mark (stack_of_one_call Debuginfo.none))
+       (mark ~inlined_attribute:Never_inlined
+          (stack_of_one_call Debuginfo.none)));
+  List.iter
+    (fun (what, dbg) ->
+      let text, read = unit_written_and_read_back (mark dbg) in
+      Printf.printf
+        "a mark of an inlined body whose stack is %s, written and read back: \
+         \"%s\", %s\n"
+        what
+        (String.concat " " (String.split_on_char '\n' text))
+        read)
+    ["not empty", stack_of_one_call somewhere; "empty", Inlined_debuginfo.none]

@@ -2,11 +2,11 @@
    element is stored with the check of the index, which takes the length of the
    array. Simplify knows the length from the allocation: in the term after the
    check compares the index with the number 3, where the term before takes the
-   length of the array at each turn. The two passes of the validation that know
-   the length of an array made by a [Let], the sharing of primitives and the
-   pass of the lengths alone, do not carry what they know of the allocation into
-   the handler of a recursive continuation, which the loop is. The term before
-   keeps the length in its loop, and this unit is not validated. *)
+   length of the array at each turn. The sharing of primitives of the
+   validation, which knows the length of an array made by a [Let], carries what
+   it knows of the allocation into the handler of a recursive continuation,
+   which the loop is: the length in the loop of the term before becomes that
+   number too, and this unit is validated with its imports. *)
 
 external opaque : 'a -> 'a = "%opaque"
 

@@ -4,12 +4,14 @@
     | 0 -> k1
     | 1 -> k2)
    where k2 =
-     apply direct(f_0 &toplevel) inlined(always)
+     apply direct(f_0 &toplevel)
+            inlined(always, unused_because_of_call_site_decision)
        ($Value_slot_use_a.camlValue_slot_use_a__f_3 : imm tagged -> val)
          (0)
          -> k * error
    where k1 =
-     apply direct(f_0 &toplevel) inlined(always)
+     apply direct(f_0 &toplevel)
+            inlined(always, unused_because_of_call_site_decision)
        ($Value_slot_use_a.camlValue_slot_use_a__f_3 : imm tagged -> val)
          (1)
          -> k * error)

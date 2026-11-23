@@ -80,7 +80,8 @@
      each by the projection that Simplify makes
      ([inline_tupled_statement]), and the two are equivalent where the
      callee is a closure of that code, the call returns at the result
-     arity of the code and the value of the tuple is no location
+     arity of the code, the value of the tuple is no location and the
+     code states nothing of its parameters beyond their kinds
      ([inline_tupled_equivalent_statement]).
      FlambdaApplySpec.inlinable excludes tupled code, as its bindings
      are of the parameters to the arguments; these are the bindings for
@@ -434,8 +435,8 @@ Definition inline_tupled_statement : Prop :=
    as for the refinement. If it has not, the call is undefined and so
    is one of the projections. If the argument has no value both go
    wrong.
-   Of a location the two need not be equivalent, hence the last
-   premise. The code has a parameter ([tupled_inlinable]), so the call
+   Of a location the two need not be equivalent, hence the premise on
+   locations. The code has a parameter ([tupled_inlinable]), so the call
    reads the tuple, and is undefined: FlambdaSemanticsSpec.tuple_fields
    reads no cell. A projection reads the cell that the heap binds the
    location to (FlambdaHeapSpec.exec_unary_on_cell). Where that is a
@@ -445,7 +446,10 @@ Definition inline_tupled_statement : Prop :=
    which the call does not. (Where the location is bound to nothing,
    or one of the projections has no value on its cell, the inlined
    body goes wrong, as the call does.) The refinement above asks
-   nothing of the tuple: an undefined call is refined by anything. *)
+   nothing of the tuple: an undefined call is refined by anything.
+   The code must state nothing of its parameters beyond their kinds:
+   the call tests the fields of the tuple against what it states, and
+   the projections of the inlined body test their kinds only. *)
 Definition inline_tupled_equivalent_statement : Prop :=
   ∀ (ap : apply_expr) (called : code_id) (c : code) (r : renaming)
     (tuple : simple) (callee : value) (slots : list (value_slot * value))
@@ -458,5 +462,6 @@ Definition inline_tupled_equivalent_statement : Prop :=
     tupled_inlinable ap c r tuple ->
     ap_return_arity ap = code_result_arity c ->
     (∀ l : location, eval_simple vars tuple <> Some (Value_location l)) ->
+    subkinds_say_nothing (code_params_subkinds c) = true ->
     equivalent (State (Apply ap) vars conts statics hp rd)
       (State (inlined_tupled_body c r ap tuple) vars conts statics hp rd).

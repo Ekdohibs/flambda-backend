@@ -1,0 +1,12 @@
+(* A primitive that the conversion refuses, on a variable and on a constant
+   that is poison. The name of the constant, which is any string, is the print
+   that the compiler has of the variable in the process of the tool that reads
+   this text: its name, a slash, the stamp 9 and the mark UV. The line "not
+   checked" shows the variable by its name alone and the constant as the
+   compiler shows it. A tool that takes the stamp out by replacing the print of
+   the variable wherever it is in the printed primitive changes the name of
+   the constant too, which is not what the expected file says. *)
+let x = %opaque (1) in
+let r = %poke.[`imm`] (x, poison.imm."x/9UV") in
+let $camlNot_checked_poison_named_as_variable = Block 0 (x) in
+cont done ($camlNot_checked_poison_named_as_variable)

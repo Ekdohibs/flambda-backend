@@ -151,6 +151,7 @@ let wrap_return i k h body =
         ( Handler
             ( drop_nth i params,
               { hm_params_kinds = drop_nth i metadata.hm_params_kinds;
+                hm_params_subkinds = drop_nth i metadata.hm_params_subkinds;
                 hm_is_exn_handler = false
               },
               handler ),

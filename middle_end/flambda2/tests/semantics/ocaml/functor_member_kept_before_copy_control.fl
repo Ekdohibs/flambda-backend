@@ -1,0 +1,217 @@
+let $camlFunctor_member_kept_before_copy_control__first_const_0 = Block 0 ()
+in
+(let code rec loopify(default tailrec) size(51)
+       lookup_1
+         (k/159 : val,
+          t/160 : [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ])
+         my_closure/161 &my_alloc_region/162 my_depth/163
+         -> k/60 * k/61
+         : [ 0 | 0 of val? ] =
+   let next_depth/164 = rec_info (succ my_depth/163) in
+   let K/165 = %project_value_slot.[lookup].[K] (my_closure/161) in
+   (let prim/174 = %is_int (t/160) in
+    let Pisint/175 = %tag_imm (prim/174) in
+    (let untagged/176 = %untag_imm (Pisint/175) in
+     switch untagged/176
+       | 0 -> k/68
+       | 1 -> k/60 (0))
+      where k/68 =
+        cont k/62)
+     where k/62 =
+       let `*match*/166` = %block_load.[`0`] (t/160) in
+       ((let Pmixedfield/172 = %block_load.[`0`] (`*match*/166`) in
+         let Pfield/173 = %block_load.[`0`] (K/165) in
+         apply unknown_arity &my_alloc_region/162
+           (Pfield/173 : val * val? -> [ 0 |1 ])
+             (k/159, Pmixedfield/172)
+             -> k/65 * k/61)
+          where k/65 (apply_result/170 : [ 0 |1 ]) =
+            ((let untagged/171 = %untag_imm (apply_result/170) in
+              switch untagged/171
+                | 0 -> k/66
+                | 1 -> k/67)
+               where k/67 =
+                 cont k/63
+               where k/66 =
+                 cont k/64)
+          where k/64 =
+            let Pfield/169 = %block_load.[`1`] (t/160) in
+            apply direct(lookup_1 &my_alloc_region/162)
+              (my_closure/161 ~ depth my_depth/163 -> next_depth/164
+               : val * val? -> [ 0 | 0 of val? ])
+                (k/159, Pfield/169)
+                -> k/60 * k/61
+          where k/63 =
+            let Pmixedfield/167 = %block_load.[`1`] (`*match*/166`) in
+            let Pmakeblock/168 =
+              %block.[`0`].my_alloc_region/162 (Pmixedfield/167)
+            in
+            cont k/60 (Pmakeblock/168))
+ in
+ let code rec size(50)
+       without_2
+         (k/177 : val,
+          t/178 : [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ])
+         my_closure/179 &my_alloc_region/180 my_depth/181
+         -> k/69 * k/70
+         : [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ] =
+   let next_depth/182 = rec_info (succ my_depth/181) in
+   let K/183 = %project_value_slot.[without].[K_1] (my_closure/179) in
+   (let prim/192 = %is_int (t/178) in
+    let Pisint/193 = %tag_imm (prim/192) in
+    (let untagged/194 = %untag_imm (Pisint/193) in
+     switch untagged/194
+       | 0 -> k/76
+       | 1 -> k/69 (0))
+      where k/76 =
+        cont k/71)
+     where k/71 =
+       let rest/184 = %block_load.[`1`] (t/178) in
+       let entry/185 = %block_load.[`0`] (t/178) in
+       ((let Pmixedfield/190 = %block_load.[`0`] (entry/185) in
+         let Pfield/191 = %block_load.[`0`] (K/183) in
+         apply unknown_arity &my_alloc_region/180
+           (Pfield/191 : val * val? -> [ 0 |1 ])
+             (k/177, Pmixedfield/190)
+             -> k/74 * k/70)
+          where k/74 (apply_result/188 : [ 0 |1 ]) =
+            ((let untagged/189 = %untag_imm (apply_result/188) in
+              switch untagged/189
+                | 0 -> k/75
+                | 1 -> k/69 (rest/184))
+               where k/75 =
+                 cont k/72)
+          where k/72 =
+            (apply direct(without_2 &my_alloc_region/180)
+               (my_closure/179 ~ depth my_depth/181 -> next_depth/182
+                : val * val? ->
+                  [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ]
+                )
+                 (k/177, rest/184)
+                 -> k/73 * k/70
+               where k/73
+                       (apply_result/186 :
+                          [ 0
+                          | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ]
+                          ]) =
+                 let Pmakeblock/187 =
+                   %block.[`0`].my_alloc_region/180
+                     (entry/185 : [ 0 of val * val? ],
+                      apply_result/186 :
+                        [ 0
+                        | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ])
+                 in
+                 cont k/69 (Pmakeblock/187)))
+ in
+ let code size(20)
+       put_3
+         (k/195 : val,
+          v/196,
+          t/197 : [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ])
+         my_closure/198 &my_alloc_region/199 my_depth/200
+         -> k/77 * k/78
+         : [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ] =
+   let next_depth/201 = rec_info (succ my_depth/200) in
+   let without/202 = %project_value_slot.[put].[without] (my_closure/198) in
+   apply direct(without_2 &my_alloc_region/199)
+     (without/202
+      : val * [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ] ->
+        [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ]
+      )
+       (k/195, t/197)
+       -> k/79 * k/78
+     where k/79
+             (apply_result/203 :
+                [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ]) =
+       let Pmakeblock/204 =
+         %block.[`0`].my_alloc_region/199 (k/195 : val, v/196)
+       in
+       let Pmakeblock/205 =
+         %block.[`0`].my_alloc_region/199
+           (Pmakeblock/204 : [ 0 of val * val? ],
+            apply_result/203 :
+              [ 0 | 0 of [ 0 of val * val? ] * [ 0 | 0 of val * val ] ])
+       in
+       cont k/77 (Pmakeblock/205)
+ in
+ let code loopify(never) size(157) functor
+       Table_0 (K/206 : val)
+         my_closure/207 &my_alloc_region/208 my_depth/209
+         -> k/80 * k/81
+         : val =
+   let next_depth/210 = rec_info (succ my_depth/209) in
+   let lookup/211 = closure lookup_1 @lookup &my_alloc_region/208
+   with { K = K/206 }
+   in
+   let without/212 = closure without_2 @without &my_alloc_region/208
+   with { K_1 = K/206 }
+   in
+   let put/213 = closure put_3 @put &my_alloc_region/208
+   with { without = without/212 }
+   in
+   let Pmakeblock/214 =
+     %block.[`0`].my_alloc_region/208 (lookup/211, without/212, put/213)
+   in
+   cont k/80 (Pmakeblock/214)
+ in
+ let code size(5)
+       same_4 (a/215 : imm tagged, b/216 : imm tagged)
+         my_closure/217 &my_alloc_region/218 my_depth/219
+         -> k/82 * k/83
+         : imm tagged =
+   let next_depth/220 = rec_info (succ my_depth/219) in
+   let prim/221 = %phys_eq (a/215, b/216) in
+   let eq/222 = %tag_imm (prim/221) in
+   cont k/82 (eq/222)
+ in
+ let Table/223 = closure Table_0 @Table &toplevel in
+ (let same/230 = closure same_4 @same &toplevel in
+  let Pmakeblock/231 = %block.[`0`].`toplevel` (same/230) in
+  apply direct(Table_0 &toplevel)
+    (Table/223 : val -> val) (Pmakeblock/231) -> k/84 * error)
+   where k/84 (T/224 : val) =
+     ((let Pfield/229 = %block_load.[`2`] (T/224) in
+       apply unknown_arity &toplevel
+         (Pfield/229
+          : imm tagged * imm tagged * imm tagged ->
+            [ 0
+            | 0 of [ 0 of imm tagged * imm tagged ] * [ 0 | 0 of val * val ]
+            ]
+          )
+           (1, 10, 0)
+           -> k/86 * error)
+        where k/86
+                (apply_result/227 :
+                   [ 0
+                   | 0 of [ 0 of imm tagged * imm tagged ] *
+                       [ 0 | 0 of val * val ] ]) =
+          let Pfield/228 = %block_load.[`0`] (T/224) in
+          apply unknown_arity &toplevel
+            (Pfield/228
+             : imm tagged *
+               [ 0
+               | 0 of [ 0 of imm tagged * imm tagged ] *
+                   [ 0 | 0 of val * val ] ] ->
+               [ 0 | 0 of imm tagged ]
+             )
+              (1, apply_result/227)
+              -> k/85 * error
+        where k/85 (result/225 : [ 0 | 0 of imm tagged ]) =
+          let Pmakeblock/226 =
+            %block.[`0`].`toplevel` (Table/223, T/224, result/225)
+          in
+          cont k/59 (Pmakeblock/226)))
+  where k/59 define_root_symbol (module_block/155) =
+    let field_0/156 =
+      %block_load.tag[`0`].`size`[`3`].[`0`] (module_block/155)
+    in
+    let field_1/157 =
+      %block_load.tag[`0`].`size`[`3`].[`1`] (module_block/155)
+    in
+    let field_2/158 =
+      %block_load.tag[`0`].`size`[`3`].[`2`] (module_block/155)
+    in
+    let $camlFunctor_member_kept_before_copy_control =
+      Block 0 (field_0/156, field_1/157, field_2/158)
+    in
+    cont done ($camlFunctor_member_kept_before_copy_control)

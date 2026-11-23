@@ -58,7 +58,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaMapProofs FlambdaSemanticsSpec FlambdaSemanticsProofs
   FlambdaContextSpec FlambdaContextProofs
   FlambdaNormaliseSpec FlambdaNormaliseProofs FlambdaUnusedContsSpec
-  FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
+  FlambdaStatedScopeSpec FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaGiveScrutineeSpec.
 Import ListNotations.
 
@@ -508,6 +508,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     simpl. apply Rel_state_same. intros k1 Hk1. apply rec_conts_plain.
     + intros k2 Hk2. apply Hdc. unfold closure_mentions. rewrite Hk2.
@@ -516,6 +518,8 @@ Proof.
       cbn [cont_free_in_handler_b]. rewrite Hk1. reflexivity.
   - cbn [give_in_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
       [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound; [ | exact I ].
     cbn [result_related].
@@ -819,65 +823,68 @@ End Site.
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
-Lemma give_at_equivalent (i : nat) (k : continuation)
+Lemma give_at_equivalent (S : stated_in_scope) (i : nat) (k : continuation)
     (h : continuation_handler) (body : expr) :
   expr_equivalent (Let_cont_non_recursive k h body)
-    (Let_cont_non_recursive k h (give_at i k h body)).
+    (Let_cont_non_recursive k h (give_at S i k h body)).
 Proof.
   unfold give_at.
   destruct (first_scrutinee k i [] body) as [xs | ];
     [ | intros vars conts statics hp rd; apply equivalent_refl ].
   induction xs as [ | x xs IH]; cbn [give_first];
     [ intros vars conts statics hp rd; apply equivalent_refl | ].
-  destruct (unalias_param i k h (give_scrutinee x k i None body));
+  destruct (unalias_param S i k h (give_scrutinee x k i None body));
     [ | exact IH ].
   exact (plug_equivalent (Let_cont_non_recursive_body k h Hole) _ _
     (not_many _) (give_scrutinee_equivalent x k i body)).
 Qed.
 
-Lemma give_from_equivalent (i : nat) :
+Lemma give_from_equivalent (S : stated_in_scope) (i : nat) :
   ∀ (k : continuation) (h : continuation_handler) (body : expr),
     expr_equivalent (Let_cont_non_recursive k h body)
-      (Let_cont_non_recursive k h (give_from i k h body)).
+      (Let_cont_non_recursive k h (give_from S i k h body)).
 Proof.
   induction i as [ | i IH]; intros k h body; cbn [give_from].
   - intros vars conts statics hp rd. apply equivalent_refl.
-  - exact (expr_equivalent_trans _ _ _ (give_at_equivalent i k h body)
-      (IH k h (give_at i k h body))).
+  - exact (expr_equivalent_trans _ _ _ (give_at_equivalent S i k h body)
+      (IH k h (give_at S i k h body))).
 Qed.
 
 (* Each layer is a context around what the induction gives; then the
-   parameters of the [Let_cont] are looked at. *)
-Fixpoint give_scrutinees_equivalent_aux (e : expr) :
-  expr_equivalent e (give_scrutinees e).
+   parameters of the [Let_cont] are looked at. What is known of the
+   variables in scope chooses what is given, and the equivalence is
+   under all environments whatever it is. *)
+Fixpoint give_scrutinees_under_equivalent (e : expr) :
+  ∀ S : stated_in_scope, expr_equivalent e (give_scrutinees_under S e).
 Proof.
   destruct e
     as [ x kind d body | bindings body | k [params metadata handler] body
        | handlers body | ap | ac | scrutinee arms | ];
-    cbn [give_scrutinees];
+    intros S; cbn [give_scrutinees_under];
     try (intros vars conts statics hp rd; apply equivalent_refl).
   - exact (plug_equivalent (Let_body x kind d Hole) _ _ (not_many _)
-      (give_scrutinees_equivalent_aux body)).
+      (give_scrutinees_under_equivalent body _)).
   - exact (plug_equivalent (Let_static_body bindings Hole) _ _ (not_many _)
-      (give_scrutinees_equivalent_aux body)).
-  - apply (expr_equivalent_trans _
-      (Let_cont_non_recursive k
-         (Handler params metadata (give_scrutinees handler)) body)).
+      (give_scrutinees_under_equivalent body S)).
+  - set (handler' :=
+      give_scrutinees_under
+        (params_stated params (hm_params_subkinds metadata) S) handler).
+    apply (expr_equivalent_trans _
+      (Let_cont_non_recursive k (Handler params metadata handler') body)).
     + exact (plug_equivalent
         (Let_cont_non_recursive_handler k params metadata Hole body) _ _
-        (not_many _) (give_scrutinees_equivalent_aux handler)).
+        (not_many _) (give_scrutinees_under_equivalent handler _)).
     + apply (expr_equivalent_trans _
-        (Let_cont_non_recursive k
-           (Handler params metadata (give_scrutinees handler))
-           (give_scrutinees body))).
+        (Let_cont_non_recursive k (Handler params metadata handler')
+           (give_scrutinees_under S body))).
       * exact (plug_equivalent
-          (Let_cont_non_recursive_body k
-             (Handler params metadata (give_scrutinees handler)) Hole)
-          _ _ (not_many _) (give_scrutinees_equivalent_aux body)).
+          (Let_cont_non_recursive_body k (Handler params metadata handler')
+             Hole)
+          _ _ (not_many _) (give_scrutinees_under_equivalent body S)).
       * apply give_from_equivalent.
   - exact (plug_equivalent (Let_cont_recursive_body handlers Hole) _ _
-      (not_many _) (give_scrutinees_equivalent_aux body)).
+      (not_many _) (give_scrutinees_under_equivalent body S)).
 Qed.
 
 Theorem give_scrutinees_equivalent : give_scrutinees_equivalent_statement.
-Proof. exact give_scrutinees_equivalent_aux. Qed.
+Proof. intros e. exact (give_scrutinees_under_equivalent e []). Qed.

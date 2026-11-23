@@ -642,10 +642,14 @@ Proof.
   rewrite Hparams, Hmy_closure, Hret, Hexn, Hbody, drop_slots_binds_statics.
   destruct (binds_statics (code_body c)); [ exact I | ].
   rewrite Hparams_arity, Hresult_arity.
-  match goal with
-  | |- context [negb ?agrees] => destruct (negb agrees)
-  end;
-    [ exact I | ].
+  assert (Hsubkinds :
+    code_params_subkinds (drop_slots_code D c) = code_params_subkinds c)
+    by (destruct c; reflexivity).
+  rewrite Hsubkinds,
+    (values_of_subkinds_same_observations statics (trim_statics statics) vs _
+       (block_of_drop statics) (boxed_number_of_drop statics)).
+  destruct (negb (kinds_eqb _ _ && _ && _)); [ exact I | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ exact I | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
     [ | exact I ].
   reflexivity.
@@ -717,6 +721,11 @@ Proof.
     intros vs statics hp rd.
   - unfold result_trimmed. simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    rewrite
+      (values_of_subkinds_same_observations statics (trim_statics statics) vs
+         _ (block_of_drop statics) (boxed_number_of_drop statics)).
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ];
       [ | exact I ].

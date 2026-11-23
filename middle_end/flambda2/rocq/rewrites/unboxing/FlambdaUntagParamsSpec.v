@@ -298,12 +298,24 @@ Definition untag_params_list (us : list nat) (params : list variable)
     : list variable :=
   kept_from us 0 params ++ rev (moved_from us 0 params).
 
+(* What a handler states of its parameters, no further than it has
+   kinds for them: an entry beyond is of no parameter, and would come
+   to be of one where parameters are put after the others. *)
+Definition stated_of_params (metadata : handler_metadata)
+    : list param_subkind :=
+  firstn (length (hm_params_kinds metadata)) (hm_params_subkinds metadata).
+
+(* Nothing is stated of an untagged parameter. *)
 Definition untag_metadata (us : list nat) (metadata : handler_metadata)
     : handler_metadata :=
   {| hm_params_kinds :=
        kept_from us 0 (hm_params_kinds metadata)
        ++ map (fun _ => untagged_kind)
             (rev (moved_from us 0 (hm_params_kinds metadata)));
+     hm_params_subkinds :=
+       kept_from us 0 (stated_of_params metadata)
+       ++ map (fun _ => any_value)
+            (rev (moved_from us 0 (stated_of_params metadata)));
      hm_is_exn_handler := hm_is_exn_handler metadata |}.
 
 (* The untagged variables in a handler: its untagged parameters, and

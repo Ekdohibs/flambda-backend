@@ -51,7 +51,7 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
       ((let Pfield = %block_load.[`0`] (b) in
         let Pmixedfield = %block_load.[`0`] (Pfield) in
         let Popaque = %opaque (0) in
-        let Pobj_magic = %opaque (Popaque) in
+        let Pobj_magic = %opaque.middle_end_only (Popaque) in
         apply unknown_arity &my_alloc_region
           (Pobj_magic : _ -> [ 0 |1 ]) (Pmixedfield) -> k3 * k1
           where k3 (param : [ 0 |1 ]) =
@@ -71,7 +71,7 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
                      let Pfield = %block_load.[`0`] (b) in
                      let Pmixedfield = %block_load.[`1`] (Pfield) in
                      let Popaque = %opaque (0) in
-                     let Pobj_magic = %opaque (Popaque) in
+                     let Pobj_magic = %opaque.middle_end_only (Popaque) in
                      let Pmakeblock =
                        %block.[`0`].my_alloc_region
                          (Pobj_magic : imm tagged, Pmixedfield : imm tagged)
@@ -85,7 +85,7 @@ let code loopify(never) size(86) newer_version_of(inv_borne_sup_1)
                      let Pfield = %block_load.[`0`] (b) in
                      let Pmixedfield = %block_load.[`1`] (Pfield) in
                      let Popaque = %opaque (0) in
-                     let Pobj_magic = %opaque (Popaque) in
+                     let Pobj_magic = %opaque.middle_end_only (Popaque) in
                      let Pmakeblock =
                        %block.[`0`].my_alloc_region
                          (Pobj_magic : imm tagged, Pmixedfield : imm tagged)

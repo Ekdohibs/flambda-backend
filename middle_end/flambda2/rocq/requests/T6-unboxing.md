@@ -20,10 +20,13 @@ Summary.
   sources are validated with it in Rocq, and are not without it.
 - Where one application gives a block that the term does not show (a
   parameter of the function, the result of a call, the entry of a
-  loop), Simplify adds a load that is justified by a subkind. The model
-  has no subkinds; there the term after is less defined than the term
-  before, and no rewrite on either side can be proved. This is the
-  first thing asked (section 5).
+  loop), Simplify adds a load that is justified by a subkind. When
+  this was written the model had no subkinds; there the term after was
+  less defined than the term before, and no rewrite on either side
+  could be proved. This was the first thing asked (section 5). The
+  model has since been given subkinds at the parameters of handlers
+  and of code (decision D25); this request says nothing of what is
+  done with them.
 - Variants need no statement about poison and no answer on D26. A
   second pass is built and proved for them:
   `FlambdaUnboxVariantsSpec.unbox_variant_params`. It makes a
@@ -342,10 +345,14 @@ not make one less defined.
 What justifies the load in the compiler is the type of the argument,
 and for an argument that is a parameter of the function, the result of
 a call or the parameter of a recursive continuation, that type comes
-from its subkind (`T.unknown_with_subkind`). The model has no subkinds
-(`FlambdaModel.v`, "What is left out"). In every measured example in
-which a use is not built in the term, the subkind is the only source:
-`pair_join`, `pair_kept`, and the entry of every loop.
+from its subkind (`T.unknown_with_subkind`). When this was written the
+model had no subkinds. It has them now at the parameters of handlers
+and of code (decision D25: `subkind` of `FlambdaKindModel.v`,
+`hm_params_subkinds` and `cm_params_subkinds` of `FlambdaModel.v`),
+and what follows in this section is as it was written. In every
+measured example in which a use is not built in the term, the subkind
+is the only source: `pair_join`, `pair_kept`, and the entry of every
+loop.
 
 Asked of C2 and C0, and a decision for the human:
 

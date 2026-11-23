@@ -644,6 +644,8 @@ Proof.
   - simpl.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
+      [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ]; [ | exact I ].
     simpl. apply Rel_state_same. intros k1 Hk1. apply rec_conts_plain.
     + intros k2 Hk2. apply Hdc. unfold closure_mentions. rewrite Hk2.
@@ -652,6 +654,8 @@ Proof.
       cbn [cont_free_in_handler_b]. rewrite Hk1. reflexivity.
   - cbn [number_in_handler apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds m));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds m));
       [ | exact I ].
     destruct (bind_params ps vs dv) as [bound | ] eqn:Hbound; [ | exact I ].
     cbn [result_related].

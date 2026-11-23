@@ -138,10 +138,17 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   semantics/FlambdaClosuresSpec.v \
   rewrites/closures/FlambdaCodeLetsProofs.v \
   rewrites/closures/FlambdaCodeLetsSpec.v \
+  rewrites/common/FlambdaCodeStatedNamesProofs.v \
+  rewrites/common/FlambdaCodeStatedProofs.v \
+  rewrites/common/FlambdaCodeStatedSpec.v \
   nominal/FlambdaCompareAlphaProofs.v \
   nominal/FlambdaCompareAlphaSpec.v \
   nominal/FlambdaCompareConverseProofs.v \
   nominal/FlambdaCompareConverseSpec.v \
+  nominal/FlambdaCompareOrderLawsProofs.v \
+  nominal/FlambdaCompareOrderLawsSpec.v \
+  nominal/FlambdaCompareOrderProofs.v \
+  nominal/FlambdaCompareOrderSpec.v \
   nominal/FlambdaCompareProofs.v \
   nominal/FlambdaCompareSpec.v \
   semantics/FlambdaContAlikeProofs.v \
@@ -321,6 +328,9 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/lets/FlambdaReadsAfterSpec.v \
   rewrites/loops/FlambdaRecHandlersProofs.v \
   rewrites/loops/FlambdaRecHandlersSpec.v \
+  rewrites/loops/FlambdaRecHandlersStatedNamesProofs.v \
+  rewrites/loops/FlambdaRecHandlersStatedProofs.v \
+  rewrites/loops/FlambdaRecHandlersStatedSpec.v \
   rewrites/lets/FlambdaRecoverComparisonProofs.v \
   rewrites/lets/FlambdaRecoverComparisonScopeProofs.v \
   rewrites/lets/FlambdaRecoverComparisonScopeSpec.v \
@@ -426,6 +436,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/continuations/FlambdaSinkUsesSpec.v \
   rewrites/closures/FlambdaSlotsOfCodeProofs.v \
   rewrites/closures/FlambdaSlotsOfCodeSpec.v \
+  rewrites/closures/FlambdaSlotsThroughProofs.v \
+  rewrites/closures/FlambdaSlotsThroughSpec.v \
   rewrites/common/FlambdaSpineWalkNamesProofs.v \
   rewrites/common/FlambdaSpineWalkNamesSpec.v \
   rewrites/common/FlambdaSpineWalkProofs.v \
@@ -434,6 +446,13 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   nominal/FlambdaStateSupportSpec.v \
   semantics/FlambdaStaticProofs.v \
   semantics/FlambdaStaticSpec.v \
+  rewrites/common/FlambdaStatedScopeNamesProofs.v \
+  rewrites/common/FlambdaStatedScopeProofs.v \
+  rewrites/common/FlambdaStatedScopeSpec.v \
+  rewrites/common/FlambdaStatedSymbolsNamesProofs.v \
+  rewrites/common/FlambdaStatedSymbolsProofs.v \
+  rewrites/common/FlambdaStatedSymbolsSpec.v \
+  rewrites/common/FlambdaStatedContextProofs.v \
   wellformed/FlambdaStaticsInScopeProofs.v \
   wellformed/FlambdaStaticsInScopeSpec.v \
   rewrites/statics/FlambdaStaticsOrderProofs.v \
@@ -442,6 +461,12 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   validation/names/FlambdaStaticsScopeSpec.v \
   rewrites/calls/FlambdaStubCallsProofs.v \
   rewrites/calls/FlambdaStubCallsSpec.v \
+  semantics/FlambdaSubkindBinderProofs.v \
+  semantics/FlambdaSubkindBinderSpec.v \
+  semantics/FlambdaSubkindOrderProofs.v \
+  semantics/FlambdaSubkindOrderSpec.v \
+  semantics/FlambdaSubkindProofs.v \
+  semantics/FlambdaSubkindSpec.v \
   terms/FlambdaTermInductionProofs.v \
   wellformed/FlambdaTrapProofs.v \
   wellformed/FlambdaTrapSpec.v \
@@ -481,6 +506,12 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/unboxing/FlambdaUnboxVariantsRenameSpec.v \
   rewrites/unboxing/FlambdaUnboxVariantsSpec.v \
   semantics/FlambdaUnitFromProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderExamplesProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderExamplesSpec.v \
+  rewrites/unboxing/FlambdaUntagAtBinderNamesProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderNamesSpec.v \
+  rewrites/unboxing/FlambdaUntagAtBinderProofs.v \
+  rewrites/unboxing/FlambdaUntagAtBinderSpec.v \
   rewrites/unboxing/FlambdaUntagParamsNamesProofs.v \
   rewrites/unboxing/FlambdaUntagParamsProofs.v \
   rewrites/unboxing/FlambdaUntagParamsSpec.v \
@@ -500,6 +531,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/statics/FlambdaUnusedStaticsSpec.v \
   validation/checks/FlambdaValidateCopyingProofs.v \
   validation/checks/FlambdaValidateCopyingSpec.v \
+  validation/checks/FlambdaValidateDemotedProofs.v \
+  validation/checks/FlambdaValidateDemotedSpec.v \
   validation/checks/FlambdaValidateImportsProofs.v \
   validation/names/FlambdaValidateImportsRenameProofs.v \
   validation/names/FlambdaValidateImportsRenameSpec.v \
@@ -537,6 +570,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
 )
 FLAMBDA2_EXTRACT := $(FLAMBDA2_DIR)/validation/checks/FlambdaExtract.v
 FLAMBDA2_EXTRACTED_DIR := $(ROOT)/middle_end/flambda2/tests/semantics/extracted
+FLAMBDA2_EXTRACTED_LIBRARY_DIR := \
+  $(ROOT)/middle_end/flambda2/tests/semantics/extracted_rocq_library
 FLAMBDA2_TYPES := $(addprefix $(FLAMBDA2_DIR)/, \
   types/naive/FlambdaAliasesProofs.v \
   types/naive/FlambdaAliasesSpec.v \
@@ -815,6 +850,41 @@ all: layout $(SOURCES:.v=.vo) claims
 # another, are errors with the name of the folder. The lines of _CoqProject
 # there, which an editor reads, must be the flags of FLAGS: the same
 # directories under the same libraries. The recipe itself does not run Rocq.
+#
+# Every .v file of the sources begins with a header. For a file of
+# FLAMBDA2_TRANSCRIBED it is the header of a file of the compiler, and
+# the comment under it says of which and why: the recipe asks that its
+# first 26 lines be not the licence header of the other .v files and that
+# the lines of comment at its head have the word License, and does not
+# compare them with the file of the compiler. Every other .v file begins
+# with the licence header: its first 26 lines are the first 26 lines of
+# rocq/OxCamlLogic.v. A file that begins otherwise is an error here, with
+# its name, and so is a name of FLAMBDA2_TRANSCRIBED that no file has.
+# The files looked at are the .v files that are in the five directories
+# of the sources, and not those of the lists above, so that a file that
+# no list names is looked at too.
+FLAMBDA2_TRANSCRIBED := \
+  rewrites/lets/FlambdaIdentitiesSpec.v \
+  semantics/FlambdaPrimitiveSpec.v \
+  semantics/FlambdaSemanticsSpec.v \
+  semantics/FlambdaSubkindOrderSpec.v \
+  terms/FlambdaKindModel.v \
+  terms/FlambdaModel.v \
+  terms/FlambdaPrimitiveModel.v \
+  types/aliases/FlambdaEnvAliases.v \
+  types/env/FlambdaBindingTime.v \
+  types/env/FlambdaTypingEnv.v \
+  types/env/FlambdaTypingEnvExtension.v \
+  types/grammar/FlambdaTypeGrammar.v \
+  types/grammar/FlambdaTypeProject.v \
+  types/join/FlambdaJoinEnv.v \
+  types/join/FlambdaJoinTypes.v \
+  types/meet/FlambdaExpandHead.v \
+  types/meet/FlambdaMeet.v \
+  types/meet/FlambdaMeetEnv.v \
+  types/meet/FlambdaMeetGrammar.v \
+  types/provers/FlambdaProvers.v \
+  types/provers/FlambdaReify.v
 FLAMBDA2_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2) \
   $(FLAMBDA2_EXTRACT))
 FLAMBDA2_TYPES_LISTED := $(patsubst $(FLAMBDA2_DIR)/%,%,$(FLAMBDA2_TYPES))
@@ -882,6 +952,54 @@ layout:
 	      "flags of rocq/Makefile (< Makefile, > _CoqProject):" >&2; \
 	    diff "$$layout_dir/flags" "$$layout_dir/project" | grep '^[<>]' >&2; \
 	  fi; \
+	  printf '%s\n' $(FLAMBDA2_TRANSCRIBED) | LC_ALL=C sort \
+	    > "$$layout_dir/transcribed"; \
+	  LC_ALL=C comm -23 "$$layout_dir/transcribed" "$$layout_dir/found" \
+	    > "$$layout_dir/gone"; \
+	  if [ -s "$$layout_dir/gone" ]; then bad=1; \
+	    echo "error: FLAMBDA2_TRANSCRIBED of rocq/Makefile names files" \
+	      "that are not under $(FLAMBDA2_DIR):" >&2; \
+	    sed 's/^/  /' "$$layout_dir/gone" >&2; \
+	  fi; \
+	  head -n 26 $(STDLIB_DIR)/OxCamlLogic.v > "$$layout_dir/header" \
+	    || { echo "error: head failed on OxCamlLogic.v" >&2; exit 1; }; \
+	  for f in $$(LC_ALL=C comm -13 "$$layout_dir/transcribed" \
+	        "$$layout_dir/found" | sed 's,^,$(FLAMBDA2_DIR)/,') \
+	      $(STDLIB_DIR)/*.v $(BACKEND_DIR)/*.v $(SSA_DIR)/*.v \
+	      $(LOOP_DIR)/*.v; do \
+	    head -n 26 "$$f" > "$$layout_dir/head" \
+	      || { echo "error: head failed on $$f" >&2; exit 1; }; \
+	    s=0; cmp -s "$$layout_dir/head" "$$layout_dir/header" || s=$$?; \
+	    case $$s in \
+	      0) ;; \
+	      1) bad=1; \
+	        echo "error: $$f: its first 26 lines are not the licence" \
+	          "header of the .v files (the first 26 lines of" \
+	          "rocq/OxCamlLogic.v), and it is not a file of" \
+	          "FLAMBDA2_TRANSCRIBED" >&2;; \
+	      *) echo "error: cmp failed on $$f (status $$s)" >&2; exit 1;; \
+	    esac; \
+	  done; \
+	  for f in $$(LC_ALL=C comm -12 "$$layout_dir/transcribed" \
+	        "$$layout_dir/found" | sed 's,^,$(FLAMBDA2_DIR)/,'); do \
+	    head -n 26 "$$f" > "$$layout_dir/head" \
+	      || { echo "error: head failed on $$f" >&2; exit 1; }; \
+	    s=0; cmp -s "$$layout_dir/head" "$$layout_dir/header" || s=$$?; \
+	    case $$s in \
+	      1) ;; \
+	      0) bad=1; \
+	        echo "error: $$f: it is a file of FLAMBDA2_TRANSCRIBED and" \
+	          "begins with the licence header of the other .v files, not" \
+	          "with the header of a file of the compiler" >&2;; \
+	      *) echo "error: cmp failed on $$f (status $$s)" >&2; exit 1;; \
+	    esac; \
+	    sed -n '/^(\*.*\*)$$/!q;p' "$$f" > "$$layout_dir/box" \
+	      || { echo "error: sed failed on $$f" >&2; exit 1; }; \
+	    if ! grep -q 'License' "$$layout_dir/box"; then bad=1; \
+	      echo "error: $$f: it is a file of FLAMBDA2_TRANSCRIBED and the" \
+	        "lines of comment at its head have not the word License" >&2; \
+	    fi; \
+	  done; \
 	  [ $$bad = 0 ]
 
 # The review document, rocq/review.pdf: ROCQ-REVIEW-GUIDE.md, in parts, with
@@ -1057,11 +1175,42 @@ $(EXTRACT:.v=.vo): $(EXTRACT)
 # FlambdaExtract.v writes the machine of the Flambda 2 semantics as OCaml
 # modules into the directory of the test tool that runs it
 # (middle_end/flambda2/tests/semantics/extracted/); nothing there is written
-# by hand but the dune file.
+# by hand but the dune file and README.md, which says under which notice
+# the generated files stand.
+#
+# Rocq also writes there the files of each module of its own library that
+# the machine uses (Datatypes, BinInt and the like). Those files are Rocq's
+# and not ours. Once formatted they are moved to a directory of their own,
+# middle_end/flambda2/tests/semantics/extracted_rocq_library/, which has
+# the licence of Rocq's library (LICENSE, a copy of the file that Rocq's
+# package installs) and says what they are generated from (README.md);
+# README.md and the dune file are the only files there that are written
+# by hand. No list of their names is kept: a generated file is
+# moved when no .v file of $(SOURCES) has the name of its module, so the
+# file of a module that a later change of the model brings is moved as
+# well.
+#
+# The compilation writes FlambdaExtract.vo before the files are formatted
+# and moved. If the compilation, the formatting or a move fails, the recipe
+# removes that .vo, so that the next make runs the extraction again and
+# does not take an unfinished move for a finished one.
+FLAMBDA2_OWN_MODULES := $(basename $(notdir $(SOURCES)))
+
 $(FLAMBDA2_EXTRACT:.v=.vo): $(FLAMBDA2_EXTRACT)
-	cd $(FLAMBDA2_EXTRACTED_DIR) && $(ROCQ) compile $(FLAGS) $<
+	{ cd $(FLAMBDA2_EXTRACTED_DIR) && $(ROCQ) compile $(FLAGS) $<; } \
+	  || { s=$$?; rm -f $@; exit $$s; }
 	$(OCAMLFORMAT) -i $(FLAMBDA2_EXTRACTED_DIR)/*.ml \
-	  $(FLAMBDA2_EXTRACTED_DIR)/*.mli
+	  $(FLAMBDA2_EXTRACTED_DIR)/*.mli || { s=$$?; rm -f $@; exit $$s; }
+	@set -eu; trap 'rm -f $@' 0; \
+	  for f in $(FLAMBDA2_EXTRACTED_DIR)/*.ml \
+	      $(FLAMBDA2_EXTRACTED_DIR)/*.mli; do \
+	    m=$${f##*/}; m=$${m%.*}; \
+	    case " $(FLAMBDA2_OWN_MODULES) " in \
+	      *" $$m "*) ;; \
+	      *) mv "$$f" $(FLAMBDA2_EXTRACTED_LIBRARY_DIR)/;; \
+	    esac; \
+	  done; \
+	  trap - 0
 
 %.vo: %.v
 	$(ROCQ) compile $(FLAGS) $<

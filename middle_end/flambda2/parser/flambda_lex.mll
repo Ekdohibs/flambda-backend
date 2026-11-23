@@ -36,6 +36,7 @@ let keyword_table =
     "array", KWD_ARRAY;
     "available", KWD_AVAILABLE;
     "boxed", KWD_BOXED;
+    "builtin", KWD_BUILTIN;
     "ccall", KWD_CCALL;
     "mcall", KWD_MCALL;
     "self", KWD_SELF;
@@ -50,6 +51,7 @@ let keyword_table =
     "deleted", KWD_DELETED;
     "depth", KWD_DEPTH;
     "direct", KWD_DIRECT;
+    "effect", KWD_EFFECT;
     "unknown_arity", KWD_UNKNOWN_ARITY;
     "do_not_inline", KWD_DO_NOT_INLINE;
     "done", KWD_DONE;
@@ -82,13 +84,17 @@ let keyword_table =
     "nativeint", KWD_NATIVEINT;
     "never", KWD_NEVER;
     "newer_version_of", KWD_NEWER_VERSION_OF;
+    "no_coeffects", KWD_NO_COEFFECTS;
+    "no_effects", KWD_NO_EFFECTS;
     "noalloc", KWD_NOALLOC;
     "nontail", KWD_NONTAIL;
     "notrace", KWD_NOTRACE;
     "null", KWD_NULL;
     "of", KWD_OF;
+    "only_generative_effects", KWD_ONLY_GENERATIVE_EFFECTS;
     "poison", KWD_POISON;
     "pop", KWD_POP;
+    "probe", KWD_PROBE;
     "product", KWD_PRODUCT;
     "push", KWD_PUSH;
     "rec", KWD_REC;
@@ -257,7 +263,10 @@ rule token = parse
          { FLOAT (lit |> Float.of_string, modif) }
   | (float_literal | int_literal) identchar+ as lit
          { error ~lexbuf (Invalid_literal lit) }
-  | '"' (([^ '"'] | '\\' '"')* as s) '"'
+  | '"' (([^ '"' '\\'] | '\\' _)* as s) '"'
+         (* A backslash is taken with the character after it, whatever that is,
+            so that the quote which ends a string that ends in a backslash
+            (written as two) is not taken for one that a backslash escapes. *)
          (* CR-someday lmaurer: Escape sequences, multiline strings *)
          { STRING (Scanf.unescaped s) }
   | eof  { EOF }

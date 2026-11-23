@@ -261,6 +261,10 @@ Definition together_metadata (boxed : boxable_number) (us : list nat)
        kept_from us 0 (hm_params_kinds metadata)
        ++ map (fun _ => unboxed_kind boxed)
             (rev (moved_from us 0 (hm_params_kinds metadata)));
+     hm_params_subkinds :=
+       kept_from us 0 (stated_of_params metadata)
+       ++ map (fun _ => any_value)
+            (rev (moved_from us 0 (stated_of_params metadata)));
      hm_is_exn_handler := hm_is_exn_handler metadata |}.
 
 Fixpoint together_expr (boxed : boxable_number) (sites active : positions)

@@ -135,6 +135,11 @@ let untag_named untagged d =
 let untag_params_list us params =
   app (kept_from us O params) (rev (moved_from us O params))
 
+(** val stated_of_params : handler_metadata -> param_subkind list **)
+
+let stated_of_params metadata =
+  firstn (length metadata.hm_params_kinds) metadata.hm_params_subkinds
+
 (** val untag_metadata : nat list -> handler_metadata -> handler_metadata **)
 
 let untag_metadata us metadata =
@@ -144,6 +149,12 @@ let untag_metadata us metadata =
         (map
            (fun _ -> untagged_kind)
            (rev (moved_from us O metadata.hm_params_kinds)));
+    hm_params_subkinds =
+      app
+        (kept_from us O (stated_of_params metadata))
+        (map
+           (fun _ -> any_value)
+           (rev (moved_from us O (stated_of_params metadata))));
     hm_is_exn_handler = metadata.hm_is_exn_handler
   }
 

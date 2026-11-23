@@ -1,29 +1,41 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2018--2021 OCamlPro SAS                                    *)
+(*   Copyright 2018--2021 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes into Rocq a file of the compiler,
+   middle_end/flambda2/types/reify.ml. Its types [to_lift] and
+   [reification_result] and its functions [try_to_reify_fields] and [reify]
+   are written again here for the types of the model, without the cases of
+   arrays; the head comment below gives their lines of that file and says
+   how the definitions differ from the compiler's. One function here is of
+   another file of the compiler: [unboxed_number_kind] is the function
+   [Flambda_kind.Boxable_number.unboxed_kind], lines 509 to 519 of
+   middle_end/flambda2/kinds/flambda_kind.ml, as a kind of naked numbers.
+
+   The header above is that of
+   middle_end/flambda2/types/reify.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/kinds/flambda_kind.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2017--2019 OCamlPro SAS                                    *)
+(*   Copyright 2017--2019 Jane Street Group LLC                           *)
+   *)
 
 
 
@@ -39,8 +51,8 @@
    - [to_lift] and [reification_result], each in a module of its name
      ([To_lift.t], [Reification_result.t]), so that their constructors
      are told apart from those of the grammar of types and of the
-     answers of the provers (25 to 64);
-   - [try_to_reify_fields] (66 to 91);
+     answers of the provers (26 to 64);
+   - [try_to_reify_fields] (66 to 89);
    - [reify] (222 to 793), without the cases of arrays.
 
    How the definitions differ from the compiler's.

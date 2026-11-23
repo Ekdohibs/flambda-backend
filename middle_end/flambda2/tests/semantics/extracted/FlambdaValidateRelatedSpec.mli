@@ -1,6 +1,6 @@
 open Datatypes
 open FlambdaBindersSpec
-open FlambdaCompareSpec
+open FlambdaCompareOrderSpec
 open FlambdaFloatCodeSpec
 open FlambdaImportsSpec
 open FlambdaKnownSlotsSpec

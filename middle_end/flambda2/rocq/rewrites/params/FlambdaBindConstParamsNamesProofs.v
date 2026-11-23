@@ -46,6 +46,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaValidatorEquivarianceSpec FlambdaScopedProofs
   FlambdaUnaliasParamsSpec FlambdaUnaliasParamsProofs
   FlambdaUnaliasParamsNamesProofs FlambdaEquivarianceTactic
+  FlambdaStatedScopeSpec FlambdaStatedScopeNamesProofs
   FlambdaBindConstParamsSpec.
 Import ListNotations.
 
@@ -91,6 +92,14 @@ Lemma first_given_equivariant (r : renaming) (k : continuation)
 Proof. equivariance. Qed.
 #[local] Hint Rewrite first_given_equivariant : equivariance.
 
+(* The test of what is known of the symbol or the constant is made
+   from the empty scope, which a renaming leaves as it is. *)
+Lemma is_stated_at_nothing_known_equivariant (r : renaming)
+    (sks : list param_subkind) (i : nat) (s : simple) :
+  is_stated_at [] sks i (rename_simple r s) = is_stated_at [] sks i s.
+Proof. exact (is_stated_at_equivariant r [] sks i s). Qed.
+#[local] Hint Rewrite is_stated_at_nothing_known_equivariant : equivariance.
+
 #[local] Ltac eqv_database ::= eqv_database_by_one_pass.
 
 Lemma bind_const_params_renamed : rewrite_equivariant bind_const_params.
@@ -114,9 +123,11 @@ Proof.
   destruct (first_given k i body) as [[s | ] | ]; try discriminate.
   destruct
     (is_plain s && negb (hm_is_exn_handler metadata) && all_give k i s body
-     && negb (among p (drop_nth i params)))
+     && negb (among p (drop_nth i params))
+     && is_stated_at [] (hm_params_subkinds metadata) i s)
     eqn:Hcond; [ | discriminate ].
   intros [= <- <-].
+  apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hcond _].
   apply andb_true_iff in Hcond as [Hplain _].

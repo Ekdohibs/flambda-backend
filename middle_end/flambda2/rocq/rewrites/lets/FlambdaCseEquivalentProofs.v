@@ -95,9 +95,35 @@ Proof.
       * apply let_cont_non_recursive_refines_step,
           share_primitives_knowing_refined, Hhold.
       * apply share_primitives_in_handler_refined, Hhold.
-    + (* Let_cont_recursive *)
-      apply let_cont_recursive_refines_step; [ reflexivity | intros _ ].
-      apply share_primitives_knowing_refined, Hhold.
+    + (* Let_cont_recursive: the body; then the handlers, all at once,
+         each under what is known less what mentions its parameters. *)
+      apply (refines_trans _
+        (State
+           (Let_cont_recursive
+              (map (fun '(k, h) => (k, share_primitives_in_handler known h))
+                 handlers)
+              body)
+           vars conts statics hp rd)).
+      * apply let_cont_recursive_refines_step; [ reflexivity | intros _ ].
+        apply share_primitives_knowing_refined, Hhold.
+      * apply
+          (let_cont_recursive_handlers_refine_where_memory
+             (all_computed_or_made known vars)
+             (all_computed_or_made_extend known vars)
+             (all_computed_or_made_evolves known vars));
+          [ exact Hhold
+          | apply share_primitives_in_handlers_bind_statics
+          | | ];
+          (induction handlers as [ | [k [params metadata handler]] handlers IH];
+             cbn [map share_primitives_in_handler];
+             [ apply Forall2_nil | ];
+           apply Forall2_cons; [ | exact IH ];
+           split; [ reflexivity | ]; cbn [snd]; apply Handler_related;
+           intros vs handler_vars conts' statics' hp' rd' Hhold' _ Hbind;
+           apply share_primitives_knowing_refined;
+           exact
+             (all_computed_or_made_bind_params statics' hp' rd' params known
+                vs vars handler_vars Hhold' Hbind)).
     + apply refines_refl.
     + apply refines_refl.
     + apply refines_refl.

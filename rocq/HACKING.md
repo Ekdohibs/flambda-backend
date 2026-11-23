@@ -1040,29 +1040,32 @@ that every such file changed since this work began is named here.
     is a kind of its own, and is not `invalid` alone. A kind that is a
     keyword of the text is written in backquotes.
 
-  These changes mend cases of the nine losses. Other cases of them
-  remain: a direct call that has no callee, as the calls made under
-  `-Oclassic` are, has nowhere to write its arities. And other losses
-  remain. The numbers that follow are answers of the compiler's
-  comparison of two terms (`middle_end/flambda2/compare/`), which does
-  not read everything that a term holds. Of the term that the compiler
-  gives to Simplify, on 2,689 units compiled with no option that changes
-  what the optimiser does: for 2,677 the text read back is the term, and
-  12 are not read back (a closure that keeps an unboxed number in a
-  value slot, 9; a number that the reader does not take, 3). A second
-  set of 706 units, written to reach what the first has little of
-  (unboxed numbers and products in every position, records with unboxed
-  fields, C calls, probes, effects, objects), has 607 for which the text
-  read back is the term, 40 for which it is read back as another term,
-  and 59 whose text is not read back or not written; each unit of it has
-  the same answer at `-O3` and at `-g`, and under `-Oclassic` the text
-  read back is the term for 40 of the 706 only. Of the term that
-  Simplify returns, on the first set, the text read back is the term for
-  2,559; the other 130 show static constants, 44; a poison constant, 42;
-  a number that the reader does not take, 15; code of another unit, 9;
-  an unboxed number in a value slot, 7; the primitives `Array_set` and
-  `Array_load`, 7; a coercion, 6. The differences and failures that
-  remain in these measures are not mended here.
+  These changes mended cases of the nine losses. Other cases of them
+  remained: a direct call that has no callee had nowhere to write its
+  arities, and under `-Oclassic` a direct call of code that does not use
+  its closure has none. And other losses remained. The last entry of
+  this list tells what was done about them since; the numbers that
+  follow are of the tree as these changes left it. They are answers of
+  the compiler's comparison of two terms
+  (`middle_end/flambda2/compare/`), which does not read everything that
+  a term holds. Of the term that the compiler gives to Simplify, on
+  2,689 units compiled with no option that changes what the optimiser
+  does: for 2,677 the text read back is the term, and 12 are not read
+  back (a closure that keeps an unboxed number in a value slot, 9; a
+  number that the reader does not take, 3). A second set of 706 units,
+  written to reach what the first has little of (unboxed numbers and
+  products in every position, records with unboxed fields, C calls,
+  probes, effects, objects), has 607 for which the text read back is the
+  term, 40 for which it is read back as another term, and 59 whose text
+  is not read back or not written; each unit of it has the same answer
+  at `-O3` and at `-g`, and under `-Oclassic` the text read back is the
+  term for 40 of the 706 only. Of the term that Simplify returns, on the
+  first set, the text read back is the term for 2,559; the other 130
+  show static constants, 44; a poison constant, 42; a number that the
+  reader does not take, 15; code of another unit, 9; an unboxed number
+  in a value slot, 7; the primitives `Array_set` and `Array_load`, 7; a
+  coercion, 6. The differences and failures in these measures were
+  not mended by these changes.
 
   The reader also takes `%bytes_length` for the length of a byte
   sequence; before, it took it for the length of a string. A text
@@ -1132,6 +1135,161 @@ that every such file changed since this work began is named here.
   "Flambda 2 Rocq: T6: the comparison of units compares two static",
   "Flambda 2 Rocq: T6: the unit that the comparison gives" and "Flambda
   2 Rocq: T6: an invalid expression".
+- The text of a term again, in `middle_end/flambda2/parser/`, with
+  two more changes to the comparison of two units: what the entries
+  above left of the losses that the two sets of units show. Each item
+  has a control in `middle_end/flambda2/tests/semantics/text_is_term/`,
+  lines of `middle_end/flambda2/tests/api_tests/compare_kinds.ml` or a
+  pair of texts of
+  `middle_end/flambda2/tests/api_tests/compare_texts.ml`, and is given
+  with the discrepancy that records the loss. The text now writes, and
+  the reader takes:
+  - the comparison of two floats that gives -1, 0 or 1
+    (`%float_comp.qmark`; it was written as the test "less than";
+    P1-12);
+  - that the test for an immediate is the one that works on any value
+    (`%is_int.generic`; C2-26, C1-10);
+  - that an opaque identity is one that only the middle end does not
+    see through, and its kind (`%opaque.middle_end_only`; C2-27);
+  - the kind of a read and of a write of an array, where it is not the
+    one that goes with the kind of the array
+    (`%array_set.values.value.init`, ``%array_load.`imm`.`vec128` ``;
+    P1-9, T5b-17, X5-32);
+  - of a call of a C function, that the function is a builtin, and its
+    effects and coeffects (`ccall noalloc builtin no_effects
+    no_coeffects`; T3-22);
+  - that a call is a probe (`probe("name" enabled_at_init)`; C2-17);
+  - the arities of a direct call that has no callee, with a blank in
+    the place of the callee (`(_ : imm tagged -> imm tagged)`; what
+    was left of C2-5 and R2-12);
+  - under `-Oclassic`, that an inlining attribute of a call is not
+    expected to be used (`unroll(3,
+    unused_because_function_unknown)`); and, of the mark of an inlined
+    body, its inlining attribute (``%inlined_apply.`always` ``) and
+    whether its stack of debugging information is empty
+    (`%inlined_apply.no_dbg` if it is, which no mark that the compiler
+    makes is); the reader gives any other mark a stack that is not
+    empty, where it gave the empty one (T3-22);
+  - that a field of a mixed block that is read or written is of the
+    flat suffix (``flat[`float`]``; T3-22, T4-14);
+  - the kinds of the fields of a static block that has unboxed fields
+    (`Block 0 of val * float (...)`; C2-29), from which the reader
+    makes the shape of the block, as it now makes the shape of a block
+    in the kind of a value (T3-22);
+  - the kind of a value slot where it is read, if it is not that of
+    values (``%project_value_slot.[f].[x].`float` ``; T4-15);
+  - a call that is an operation of effects (`effect(perform x)`;
+    C2-15); before, the printer stopped on one;
+  - the name of a poison constant as a string
+    (`poison.val."name"`; C2-14).
+
+  The reader alone changes for nine things that the printer wrote
+  already: the kinds `int8`, `int16` and `mask` (X2-10, R6-1); the
+  kinds of boxed vectors (T3-22); the words `int32` and `int64` among
+  the parameters of a primitive, which it took for 8 and 16 bits
+  (C2-28); an integer constant beyond 63 bits (C1-11, its first part);
+  a string that ends in a backslash (X5-8); the kind of an array of
+  unboxed products, which it reads in the order of the text (T6-9,
+  T4-16); a name that has a slash of its own, of which it takes the
+  stamp after the last slash (X2-8); the inlining attribute of a call
+  that is forwarded (`inlined(forward)`), for which the grammar had no
+  rule (T6-12); and a change of depth between two equal depths
+  (`~ depth do_not_inline -> do_not_inline`), which it reads as a
+  change of depth, where it read the identity coercion. For the
+  compiler the two are different coercions: `Coercion.change_depth`
+  gives the identity only if the two depths are the same value in
+  memory (X3-8), and terms that Simplify returns have changes between
+  two equal depths that are two values. The reader gave that function
+  one value twice for `do_not_inline`; it now gives it the second depth
+  as a value of its own, whatever the depth.
+
+  The comparison of units compares two static arrays of values by their
+  fields, without their debugging information, as it compares two static
+  blocks. Of the mark of an inlined body it compares the inlining
+  attribute and whether the stack of debugging information is empty,
+  which the translation to Cmm reads; it does not compare what the stack
+  holds, which the text does not write. It compares two coercions as it
+  did, with `Coercion.equal`, for which a change of depth between two
+  equal depths is not the identity. As before, the compiler does not
+  call the comparison when it compiles.
+
+  The measures of the entry on the text of a term, made again, with the
+  comparison as it is now, which still does not read everything that a
+  term holds. "The text is the term" is the answer of that comparison:
+  it reports equality on the parts that it compares, up to the names
+  bound. Debugging information is not compared in full: not that of a
+  call or of a primitive, nor that of the fields of a static array or of
+  a static block (X5-10, T5-11); of the mark of an inlined body, only
+  whether it has any. In this compiler the debugging information also
+  carries the assumptions of zero allocation, which the backend's
+  checker reads and which the text does not keep. It does not establish
+  that the term read back has all that Simplify reads. Of the term that
+  the compiler gives to Simplify, the text read back is the term for
+  each of the 2,689 units of the first set, compiled as that entry says.
+  For the second set, it is the term for each of the 706 units at the
+  default flags, at `-O3` and at `-g`, and under `-Oclassic` for 672 of
+  the 706. Of the term that Simplify returns, which the driver of the
+  check takes if it is given `-after-simplify`, on the first set, it is
+  the term for 2,680. The 34 of the second set and the 9 of the first
+  that are left have code of another unit, which the text names like
+  code of the unit (X2-9, X4-4): the reader has no way to make the code
+  ID of another unit from its name, and that is not mended. Two controls
+  show it, one whose text is read back as another term and one whose
+  text is not read back.
+
+  For the forms that the printer wrote before these changes, a text
+  written before reads as before, with these exceptions. `builtin`,
+  `no_effects`, `no_coeffects`, `only_generative_effects`, `probe` and
+  `effect` are keywords: a text that has one of them as a bare name is
+  no longer read (in backquotes the name still is). A text with one of
+  the kinds that the reader misread is read as the printer meant it:
+  `int32` and `int64` among the parameters of a primitive, the kind of
+  an array of unboxed products, and the kind of a value that is a block
+  with unboxed fields, which is read with the shape of a mixed block. In
+  printed and in hand-written texts alike, an even-length run of
+  backslashes before a quote now leaves that quote to end the string. A
+  change of depth written between two equal depths is read as a change
+  of depth; it was read as the identity where the reader made the two
+  depths as one value in memory, as it did for `do_not_inline`. A text
+  with `inlined(forward)`, which was not read, is read. A text with
+  `%inlined_apply`, which was read as a mark with the empty stack, is
+  read as a mark with a stack that is not empty. A text written by hand
+  may read otherwise in one more way: a parameter of a primitive that
+  the reader did not know was left over, with "Unexpected parameter" on
+  the standard error, and the primitive was read without it; the
+  parameters listed above (`generic` after `%is_int`, `middle_end_only`
+  after `%opaque` and the others) are now taken. The printer, for its
+  part, refuses two things more: a constructor in the kind of a value,
+  and a static block, whose shape is not the one that the kinds of its
+  fields give. Both are now refused rather than printing a shape the
+  reader cannot recover; no unit that was measured has either. The
+  compiler prints these texts under `-drawfexpr`, `-dfexpr` and the
+  flags beside them, and does not read a text when it compiles. Because
+  the printer changes, 19 reference files of the testsuite change (dumps
+  kept under `testsuite/tests/flambda2` and `testsuite/tests/reaper`).
+  Tests: the controls of
+  `middle_end/flambda2/tests/semantics/text_is_term/`;
+  `middle_end/flambda2/tests/api_tests/compare_kinds.ml` and
+  `middle_end/flambda2/tests/api_tests/compare_texts.ml`; and the texts
+  of `middle_end/flambda2/tests/semantics/ocaml/`, which the tests make
+  again with the compiler. Files:
+  `middle_end/flambda2/compare/compare.ml`,
+  `middle_end/flambda2/parser/fexpr.ml`,
+  `middle_end/flambda2/parser/fexpr_prim.ml`,
+  `middle_end/flambda2/parser/fexpr_prim_descr.ml`,
+  `middle_end/flambda2/parser/fexpr_prim_descr.mli`,
+  `middle_end/flambda2/parser/fexpr_to_flambda.ml`,
+  `middle_end/flambda2/parser/fexpr_to_flambda_commons.ml`,
+  `middle_end/flambda2/parser/flambda_lex.mll`,
+  `middle_end/flambda2/parser/flambda_parser.mly`,
+  `middle_end/flambda2/parser/flambda_to_fexpr.ml`,
+  `middle_end/flambda2/parser/print_fexpr.ml`,
+  `middle_end/flambda2/parser/shape_of_kinds.ml` and
+  `middle_end/flambda2/parser/shape_of_kinds.mli`. Commits: 26, whose
+  subjects begin "Flambda 2 Rocq: T6: the text of a term", "Flambda 2
+  Rocq: T6: the reader of texts", "Flambda 2 Rocq: T6: the printer of
+  texts", "Flambda 2 Rocq: T6: the mark of an inlined body" or "Flambda
+  2 Rocq: T6: the comparison of units".
 
 ### Testing Simplify against the semantics
 
@@ -1253,10 +1411,25 @@ not a proof.
   it to `FlambdaExtract.v`, and chain it in `flsemantics.ml`.
 - The machine is extracted by `FlambdaExtract.v` into
   `tests/semantics/extracted/` (`make -C rocq all` regenerates it; the
-  files are committed, and none is written by hand). No part of the
-  compiler is built from it.
+  generated files are committed, and none of them is written by hand).
+  The directory has a `README.md`, written by hand, which says what each
+  file is generated from and under which notice it stands. No part of
+  the compiler is built from it.
+- The modules of Rocq's own library that the machine uses (`Datatypes`,
+  `BinInt` and the like) are generated with it. Their files are Rocq's
+  and not ours, so the same rule of `rocq/Makefile` moves them to
+  `tests/semantics/extracted_rocq_library/`, a library of its own, which
+  has the licence of Rocq's library (`LICENSE`) and a `README.md` that
+  says what the files are generated from. The rule has no list of names:
+  a generated file is moved when its module is not a `.v` file of this
+  tree. If a change to the model makes the extraction write a file there
+  for a module that the table of that `README.md` has not got, or no
+  longer write one of them, tell the integrator: the table and the entry
+  of `middle_end/flambda2/rocq/EXTERNAL-SOURCES.md` for those files
+  change in the same stage.
 - Who commits the extracted files. Only the integrator commits
-  `tests/semantics/extracted/`, on the integration branch. They are
+  `tests/semantics/extracted/`, on the integration branch, and
+  `tests/semantics/extracted_rocq_library/` with it. They are
   generated, one file from many sources, so two workstream branches that
   each committed them would conflict at every merge, in files nobody
   wrote. On a workstream branch, run `make -C rocq all` before the tests,
@@ -1264,9 +1437,18 @@ not a proof.
   out of your commits: stage the files you changed by name, not with
   `git add -A`. `git status` will go on showing them as modified;
   `git checkout -- middle_end/flambda2/tests/semantics/extracted` puts
-  them back, which a rebase needs first. When a branch is merged, the
+  them back, which a rebase needs first (the same with
+  `extracted_rocq_library`). When a branch is merged, the
   integrator runs `make -C rocq all` on the result and commits what it
   regenerates, on top of the branch.
+  In a series that is cut for the record on the base that the integrator
+  names, the commit of the tool carries the regenerated files: run `make
+  -C rocq all` at that commit and add by name what it wrote. The
+  integrator makes no further commit of them: it checks them by a build
+  from nothing at the commit, which must write each generated file of
+  the commit again with the same bytes, and no generated file that the
+  commit has not got. On a branch that is not such a series, leave them
+  out as said above.
 - An extracted file that is no longer written. The extraction writes a
   file for each module that something extracted uses, and leaves every
   other file of the directory as it is. So when what is extracted no
@@ -1274,10 +1456,12 @@ not a proof.
   were last written and are still compiled into the library of the
   tests, and `git diff` after `make -C rocq all` does not show them. To
   see them: delete every `.ml` and `.mli` of `tests/semantics/extracted/`
-  (not its `dune` file, which is written by hand) and
+  and of `tests/semantics/extracted_rocq_library/` (not their `dune`
+  and `README.md` files, which are written by hand, and not `LICENSE` of
+  the second) and
   `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.vo`, and run
-  `make -C rocq all`. Look at `git status` of the directory only when
-  that build has succeeded: a build that stops before the extraction
+  `make -C rocq all`. Look at `git status` of the two directories only
+  when that build has succeeded: a build that stops before the extraction
   leaves every file deleted. A file then shown as deleted is one that
   the extraction no longer writes. That alone does not show that nothing
   uses it: a test tool is written by hand and may still name the module.
@@ -1293,10 +1477,23 @@ not a proof.
   `.fl` example and its expected file), goes at the end of the branch,
   after the commit with the lines for the shared lists if there is one:
   one commit, or a short series in which each builds on the one before.
-  Every commit before that must pass `make -C rocq all` and
-  `make -C rocq assumptions`. The integrator does not fast-forward
-  those last commits: it applies them in order, and the first of them
-  as one commit with the regenerated files.
+  Every commit before that must pass `make -C rocq all` and `make -C
+  rocq assumptions`. At a freeze the integrator checks this commit by
+  commit. Where what the two targets read (the `.v` files,
+  `rocq/Makefile`, the `_CoqProject`, the generated files, the items of
+  the trust ledger) is not what it was at the parent, both targets are
+  run from nothing at the commit; where what the build and the tests
+  read is not what it was at the parent, the compiler and the tools are
+  built and the test aliases are run with the files of the commit. A
+  commit takes its parent's result only if it changes nothing but
+  documents that neither target, the build nor a test reads; a document
+  that one of them reads is not such a document, as the trust ledger is
+  not, whose items `make -C rocq assumptions` takes. Cut your series on
+  the base that the integrator names and run the same at each of your
+  commits before you send it: where the tree is the same, your run is
+  the one that counts. The integrator does not fast-forward those last
+  commits: it applies them in order, and the first of them as one commit
+  with the regenerated files.
 - Trusted and unverified: the conversion from Flambda terms to model
   terms, primitives and constants included. It must send each to the one
   of the same name, and refuse what the model has not got; read it in
@@ -1312,6 +1509,17 @@ not a proof.
   @middle_end/flambda2/tests/semantics/runtest` (after
   `make -s boot-compiler`). The expected output of `X.fl` is
   `X.expected`, beside it.
+  An exit status of 0 from a dune alias does not by itself show that the
+  actions ran. Asked in a build directory that has been used, dune runs
+  no action whose inputs it holds unchanged; `--force` runs again the
+  actions attached to the alias and not the rules that write what they
+  compare; and a shared cache, where one is on, can supply a result. A
+  run that is to count (at a cut, in a gate, in a tester's record) is
+  made in a build directory created for that run with
+  `DUNE_CACHE=disabled`; or its record gives evidence that the actions
+  in question were executed in that run and not restored from a cache. A
+  control that fails as it must is evidence for the actions that it
+  exercises and for no other.
 - To add an example, add `X.fl`, whose module symbol must match its name,
   and `X.expected`; `dune promote` writes the latter from what the tool
   printed. Nothing else is to be touched: there is no list of examples.
@@ -1702,6 +1910,9 @@ which the file takes and which proofs do not.
   needs the regenerated extracted files is in the last commit, and no
   document or comment cites a commit that is not on the integration
   branch or a file that is not in the tree.
+- The account of provenance of the series says, for each new source or
+  test file, whether anything in it is copied or adapted from a file of
+  the repository, and from which.
 - A change to the body of a definition of a Spec file, or of
   `FlambdaModel.v`, `FlambdaPrimitiveModel.v` or `FlambdaKindModel.v`,
   comes with the list of the statements already in the tree that the

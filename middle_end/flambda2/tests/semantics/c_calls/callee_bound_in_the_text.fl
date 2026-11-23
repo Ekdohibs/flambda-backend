@@ -1,0 +1,22 @@
+(* A CONTROL of a refusal (see dune). The callee of the call of a C function
+   is a symbol that the text itself binds, as a block, and not a symbol of the
+   compilation unit of external symbols. No compiler makes such a call. The
+   call is in the arm of a test that the run does not take, as in guarded.fl.
+   The conversion refuses the call, and the text is not checked. *)
+let $camlCallee_bound_in_the_text__f = Block 0 () in
+let a = %opaque (1) in
+let c = %int_comp.`lt` (a, 1) in
+((switch c
+    | 0 -> skip
+    | 1 -> call)
+   where call =
+     (apply ccall &toplevel
+        ($camlCallee_bound_in_the_text__f : val? * val? -> val?) (a, 1)
+        -> returned * error
+        where returned (r) =
+          cont leave (r))
+   where skip =
+     cont leave (7))
+  where leave (v) =
+    let $camlCallee_bound_in_the_text = Block 0 (v) in
+    cont done ($camlCallee_bound_in_the_text)

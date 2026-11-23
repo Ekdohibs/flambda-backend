@@ -1006,7 +1006,8 @@ Proof.
   exact (unbox_parameter_refines k (read_position r) params metadata
     (with_one_more metadata (read_kind r)) (read_variable r) x (read_kind r)
     handler (read_without r) extend fits Hdistinct
-    (position_nth x params _ Hposition) eq_refl Hextend
+    (position_nth x params _ Hposition) eq_refl
+    (with_one_more_subkinds metadata (read_kind r)) Hextend
     (Halike eq_refl Hne Hdistinct Hfresh) known body extended vars conts
     statics hp rd_ Hbody Hfacts).
 Qed.

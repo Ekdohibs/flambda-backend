@@ -1,0 +1,30 @@
+(* MUST BE REFUSED: a symbol is not in scope. The partner of
+   symbol_bound_before_loop_used_after_loop.fl. The loop k_loop has two
+   entries from outside, and only one binds $S; the loop itself mentions no
+   symbol; the handler of k_after, which the loop leaves to, reads $S. The run
+   takes the entry that binds (v = 1). *)
+let o = %opaque (1) in
+let v = %untag_imm (o) in
+((((switch v
+      | 0 -> k_a
+      | 1 -> k_b)
+     where k_b =
+       let $S = Block 0 (o) in
+       cont k_loop (0)
+     where k_a =
+       cont k_loop (0))
+    where rec k_loop (i) =
+      let more = %int_comp.`lt` (i, 1) in
+      (switch more
+         | 0 -> k_after (i)
+         | 1 -> k_next
+         where k_next =
+           let i2 = %int_barith.`add` (i, 1) in
+           cont k_loop (i2)))
+   where k_after (n) =
+     let x = %block_load.[`0`] ($S) in
+     let sum = %int_barith.`add` (n, x) in
+     cont k_end (sum))
+  where k_end (r) =
+    let $camlSymbol_loop_one_entry_binds_used_after_loop = Block 0 (r) in
+    cont done ($camlSymbol_loop_one_entry_binds_used_after_loop)

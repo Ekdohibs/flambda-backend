@@ -1,3 +1,30 @@
+(******************************************************************************
+ *                                  OxCaml                                    *
+ * -------------------------------------------------------------------------- *
+ *                               MIT License                                  *
+ *                                                                            *
+ * Copyright (c) 2026 Jane Street Group LLC                                   *
+ * opensource-contacts@janestreet.com                                         *
+ *                                                                            *
+ * Permission is hereby granted, free of charge, to any person obtaining a    *
+ * copy of this software and associated documentation files (the "Software"), *
+ * to deal in the Software without restriction, including without limitation  *
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
+ * and/or sell copies of the Software, and to permit persons to whom the      *
+ * Software is furnished to do so, subject to the following conditions:       *
+ *                                                                            *
+ * The above copyright notice and this permission notice shall be included    *
+ * in all copies or substantial portions of the Software.                     *
+ *                                                                            *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
+ * DEALINGS IN THE SOFTWARE.                                                  *
+ ******************************************************************************)
+
 (* Proofs of the statements of FlambdaValidateRelatedSpec.v. Nothing
    here needs review.
 
@@ -22,7 +49,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaSemanticsProofs FlambdaBindersSpec FlambdaCompareSpec
-  FlambdaCompareProofs FlambdaNormaliseSpec FlambdaNormaliseProofs
+  FlambdaCompareProofs FlambdaCompareOrderSpec FlambdaCompareOrderProofs
+  FlambdaNormaliseSpec FlambdaNormaliseProofs
   FlambdaStaticsOrderSpec FlambdaStaticsOrderProofs FlambdaUnusedStaticsSpec
   FlambdaUnusedStaticsProofs FlambdaUnusedHeadStaticsSpec
   FlambdaUnusedHeadStaticsProofs FlambdaLoopifySpec FlambdaLoopifyProofs
@@ -42,7 +70,7 @@ From OxCamlFlambda2 Require Import FlambdaModel FlambdaSemanticsSpec
   FlambdaHoistStaticsSpec FlambdaHoistStaticsObservedSpec
   FlambdaHoistStaticsObservedProofs FlambdaValidateRelatedSpec.
 From OxCamlFlambda2 Require FlambdaSharedReadsProofs.
-From OxCamlFlambda2 Require FlambdaClosureOfCodeProofs.
+From OxCamlFlambda2 Require FlambdaSlotsThroughProofs.
 From OxCamlFlambda2Types Require FlambdaSimplifyCarriedSpec
   FlambdaSimplifyCarriedProofs.
 Import ListNotations.
@@ -329,8 +357,11 @@ Proof.
 Qed.
 
 (* The same of the rounds that end with what the closures of the code
-   of the unit are known to be, where they are asked to: that step
-   refines the unit followed by what may follow a unit. *)
+   of the unit are known to be and then with the value slots that are
+   read through them
+   (FlambdaSlotsThroughSpec.know_own_closures_through), where they are
+   asked to: that step refines the unit followed by what may follow a
+   unit. *)
 Lemma iterate_lifted_own_refines_followed (calling own : bool)
     (rounds : nat) (avoid : list continuation) (kept : list code_id) :
   ∀ e : expr,
@@ -355,8 +386,9 @@ Proof.
       (normalise_lifted_round_calling_refines_followed calling avoid kept e
          Hone)).
     destruct own; [ | apply refines_refl ].
-    exact (FlambdaClosureOfCodeProofs.know_own_closures_refines_observed
-             imports [] conts _ Hobservers). }
+    exact
+      (FlambdaSlotsThroughProofs.know_own_closures_through_refines_observed
+         imports [] conts _ Hobservers). }
   destruct
     (expr_eqb [] [] e (normalise_lifted_round_own calling own avoid kept e));
     [ exact Hround | ].
@@ -598,13 +630,13 @@ Proof.
      && head_removal_free_in statics unused a
      && lifted_observed_free_in statics rounds (unit_continuations Ls) Ls
           kept source
-     && (expr_eqb [] []
+     && (expr_says_at_least [] []
            (order_statics_as (float_code (with_code_first c))
               (float_code lifted))
            (float_code (with_code_first c))
          || statics_first_free_in statics Ls c
             && statics_first_free_in statics Ls lifted
-            && expr_eqb [] []
+            && expr_says_at_least [] []
                  (order_statics_as (with_statics_first Ls c)
                     (with_statics_first Ls lifted))
                  (with_statics_first Ls c))) eqn:Htests;
@@ -647,12 +679,16 @@ Proof.
   - (* the first comparison: the code of the unit after first *)
     apply (refines_trans _
       (State (with_code_first c) [] conts statics empty_heap no_reads)).
-    { apply expr_equivalent_refines.
-      apply (expr_equivalent_trans _ _ _ (float_code_equivalent _)).
-      apply (expr_equivalent_trans _ _ _
-        (order_statics_as_equivalent (float_code (with_code_first c)) _)).
-      apply (expr_equivalent_trans _ _ _ (expr_eqb_sound _ _ Hsame)).
-      apply expr_equivalent_sym, float_code_equivalent. }
+    { apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _ (float_code_equivalent _))).
+      apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _
+           (order_statics_as_equivalent (float_code (with_code_first c))
+              _))).
+      apply (expr_refines_trans _ _ _
+        (expr_says_at_least_sound _ _ Hsame)).
+      apply expr_equivalent_refines, expr_equivalent_sym,
+        float_code_equivalent. }
     apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.
@@ -665,10 +701,10 @@ Proof.
          (with_statics_first_equivalent_followed Ls lifted Hfree_lifted))).
     apply (refines_trans _
       (State (with_statics_first Ls c) [] conts statics empty_heap no_reads)).
-    { apply expr_equivalent_refines.
-      apply (expr_equivalent_trans _ _ _
-        (order_statics_as_equivalent (with_statics_first Ls c) _)).
-      exact (expr_eqb_sound _ _ Hsame). }
+    { apply (expr_refines_trans _ _ _
+        (expr_equivalent_refines _ _
+           (order_statics_as_equivalent (with_statics_first Ls c) _))).
+      exact (expr_says_at_least_sound _ _ Hsame). }
     apply (refines_trans _ (State c [] conts statics empty_heap no_reads));
       [ | exact Hcleaned ].
     apply equivalent_refines, equivalent_sym.

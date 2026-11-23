@@ -352,6 +352,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ]
     eqn:Hargs; [ | exact I ].
   destruct (kinds_eqb _ _); [ | exact I ].
+  destruct (values_of_subkinds _ _ _); [ | exact I ].
   destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
     [ | exact I ].
   destruct Hc as [Hdef_vars Hdef_conts].
@@ -510,6 +511,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
     [ | discriminate ].
   destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (values_of_subkinds _ _ _); [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ];
     [ | discriminate ].
   intros [= <-].
@@ -1261,6 +1263,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
     [ | discriminate ].
   destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (values_of_subkinds _ _ _); [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ];
     [ | discriminate ].
   intros [= <-]. repeat split; reflexivity.
@@ -1311,6 +1314,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs0 | ];
     [ | discriminate ].
   destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (values_of_subkinds _ _ _); [ | discriminate ].
   destruct (bind_params params vs0 def_vars); discriminate.
 Qed.
 
@@ -1405,6 +1409,7 @@ Proof.
   destruct (eval_simples (state_vars (rs_state rs)) (ac_args ac)) as [vs | ];
     [ | discriminate ].
   destruct (kinds_eqb _ _); [ | discriminate ].
+  destruct (values_of_subkinds _ _ _); [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ];
     [ | discriminate ].
   intros [= <-]. reflexivity.

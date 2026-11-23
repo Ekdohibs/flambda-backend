@@ -33,10 +33,13 @@ From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaModel FlambdaMapSpec
   FlambdaSemanticsSpec FlambdaSemanticsProofs FlambdaWellFormedSpec
   FlambdaWellFormedProofs FlambdaContextSpec FlambdaContextProofs
-  FlambdaNominalSpec FlambdaNormaliseSpec FlambdaNormaliseProofs
+  FlambdaNominalSpec FlambdaStatedScopeSpec FlambdaStatedContextProofs
+  FlambdaNormaliseSpec FlambdaNormaliseProofs
   FlambdaEquivarianceSpec FlambdaEquivarianceProofs
   FlambdaInlineSiblingsSpec FlambdaInlineSiblingsProofs
   FlambdaValidatorEquivarianceBaseProofs FlambdaKnownSiblingsSpec.
+From OxCamlFlambda2 Require FlambdaStatedScopeProofs
+  FlambdaStatedSymbolsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -95,58 +98,72 @@ Proof.
     try apply equivalent_refl.
   set (others_code := codes_of (done ++ todo) []).
   set (others_symbols := symbols_of (done ++ todo) []).
-  cbn [inline_known_calls_in_binding inline_known_calls_in_code].
+  unfold inline_known_calls_in_binding.
+  cbn [inline_known_calls_in_binding_knowing
+       inline_known_calls_in_code_knowing].
   set (c := Code params my_closure ret exn metadata code_body).
   set
     (c' :=
        Code params my_closure ret exn metadata
-         (inline_known_calls kept others_code others_symbols code_body)).
+         (inline_known_calls_under (code_stated params my_closure metadata)
+            kept others_code others_symbols [] code_body)).
+  (* The body of the code is compared where it is entered: there its
+     parameters are of what the code states and its closure is no
+     null, which is what is known in it. *)
   assert (Hrefine :
-    bindings_refine (statics_know_both others_code others_symbols)
+    bindings_refine_stated (statics_know_both others_code others_symbols [])
       (done ++ Bind_code id c :: todo) (done ++ Bind_code id c' :: todo)
-    ∧ bindings_refine (statics_know_both others_code others_symbols)
+    ∧ bindings_refine_stated (statics_know_both others_code others_symbols [])
         (done ++ Bind_code id c' :: todo) (done ++ Bind_code id c :: todo)).
   { repeat split;
-      (apply Forall2_app; [ apply bindings_related_refl | ]);
-      (apply Forall2_cons; [ | apply bindings_related_refl ]);
-      apply Binding_code, Codes_related;
+      (apply Forall2_app; [ apply bindings_related_where_refl | ]);
+      (apply Forall2_cons; [ | apply bindings_related_where_refl ]);
+      apply Binding_code_where, Codes_related_where;
       first
         [ apply inline_known_calls_binds_statics
         | symmetry; apply inline_known_calls_binds_statics
-        | intros vars' conts' statics' hp' rd' [Hcode' Hsymbols'];
+        | intros vs callee callee_vars conts' statics' hp' rd'
+            [Hcode' [Hsymbols' HY']] _ Hclosure Hvs Hbind;
+          pose proof
+            (FlambdaStatedScopeProofs.code_stated_bound statics' params
+               my_closure metadata vs callee callee_vars Hclosure Hvs Hbind)
+            as Hentered;
           first
             [ apply equivalent_refines,
                 inline_known_calls_equivalent_knowing; assumption
             | apply equivalent_refines, equivalent_sym,
                 inline_known_calls_equivalent_knowing; assumption ] ]. }
-  destruct Hrefine as [[Hf Hb] [Hf' Hb']].
-  apply (fun H =>
-    eval_static_bindings_related _ vars _ _ H statics statics
-      (statics_related_refl _ statics)) in Hf, Hb, Hf', Hb'.
+  destruct Hrefine as [Hforwards Hbackwards].
+  pose proof
+    (related_bindings_equivalent_stated_where
+       (statics_know_both others_code others_symbols [])
+       (statics_know_both_extend others_code others_symbols []) vars _ _ statics
+       Hforwards Hbackwards)
+    as Hrelated.
   apply let_static_equivalent_step.
   destruct (eval_static_bindings vars (done ++ Bind_code id c :: todo) statics)
     as [extended | ] eqn:Hbindings,
     (eval_static_bindings vars (done ++ Bind_code id c' :: todo) statics)
     as [extended' | ] eqn:Hbindings';
     try contradiction; [ | exact I ].
-  assert (Hok : statics_know_both others_code others_symbols extended).
+  assert (Hok : statics_know_both others_code others_symbols [] extended).
   { split;
       [ exact (statics_know_others vars done _ todo statics extended Hbindings)
-      | exact
-          (statics_know_other_symbols vars done id c todo statics extended
-             Hbindings) ]. }
-  assert (Hok' : statics_know_both others_code others_symbols extended').
+      | split;
+          [ exact
+              (statics_know_other_symbols vars done id c todo statics
+                 extended Hbindings)
+          | apply FlambdaStatedSymbolsProofs.symbols_hold_nil ] ]. }
+  assert (Hok' : statics_know_both others_code others_symbols [] extended').
   { split;
       [ exact
           (statics_know_others vars done _ todo statics extended' Hbindings')
-      | exact
-          (statics_know_other_symbols vars done id c' todo statics extended'
-             Hbindings') ]. }
-  apply refines_antisymmetric;
-    apply (related_states_refines
-      (statics_know_both others_code others_symbols)
-      (statics_know_both_extend others_code others_symbols));
-    try assumption; apply cont_env_related_refl.
+      | split;
+          [ exact
+              (statics_know_other_symbols vars done id c' todo statics
+                 extended' Hbindings')
+          | apply FlambdaStatedSymbolsProofs.symbols_hold_nil ] ]. }
+  exact (Hrelated Hok Hok' body vars conts hp rd).
 Qed.
 
 (* The bindings of a group, one after the other. *)

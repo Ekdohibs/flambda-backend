@@ -121,9 +121,14 @@
    [validate_unit_knowing_copying_verdict_imports_statement]; and
    "validated with nothing imported:" otherwise, which is then of the
    two terms run from empty environments, by the two statements
-   first named. Where the two terms have in front of them a prefix
-   made from the .cmx files of other units, the verdict line says so
-   in the words that the tool has for every verdict, and the
+   first named. Where the tool finds the run of the term before that
+   the line is of undefined within its bound of steps, no line begins
+   "validated": a line that begins "nothing to validate" comes first,
+   and the line of the function asked begins "the validation accepts
+   the pair" where the verdict line would begin "validated", with the
+   same words after it. Where the two terms have in front of them a
+   prefix made from the .cmx files of other units, the verdict line
+   says so in the words that the tool has for every verdict, and the
    statements are of the two terms with the prefix. That the tool
    calls these functions on the terms that it reads, and prints so,
    is not proved (rocq/TRUST-LEDGER.md).
@@ -152,9 +157,10 @@
    What is not said. Nothing is said of the two terms under all
    environments, or followed by what may follow a unit: the second
    check of a unit (FlambdaValidateRelatedSpec.v) does not ask for the
-   copies. A lifting lifts nothing from a term that has a primitive
-   of the heap (the guard at FlambdaLiftSpec.lift_unit and its like),
-   and no copy for a [Let] is made of one. Each tests the term that
+   copies. A lifting lifts nothing from a term that does not pass the
+   guard of the heap (FlambdaHeapFreeSpec.free_of_heap_fine, at
+   FlambdaLiftSpec.lift_unit and its like), and no copy for a [Let]
+   is made of one. Each tests the term that
    it is given, which is the term before as the steps before it have
    made it, and not the term before as it came. Of such a term the
    two functions say what the function asked says of it. Nothing is

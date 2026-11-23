@@ -306,12 +306,17 @@ fields of the tuple, each by the projection that Simplify makes
 conditions `tupled_inlinable`, which are those of `inlinable` but for
 the arguments); and the two are equivalent where the callee is a
 closure of that code, the call returns at the result arity of the
-code and the value of the tuple is no location
+code, the value of the tuple is no location and the code states
+nothing of its parameters beyond their kinds
 (`inline_tupled_equivalent_statement`), which is the form that a
 rewrite of the term after Simplify needs. Of a location the two need
 not be equivalent: the call, which reads no cell, is undefined, and
 the projections read the cell that the heap binds the location to,
-and may have their values. The refinement asks nothing of the tuple.
+and may have their values. Nor need they be of code that states
+something of its parameters beyond their kinds (decision D25, at
+parameters): the call tests the fields of the tuple against what the
+code states, and the projections test their kinds only. The
+refinement asks nothing of the tuple.
 The validation uses the
 refinement: `FlambdaNormaliseSpec.inline_apply`, which inlines the
 direct calls of known code in the term before, has a second case, for

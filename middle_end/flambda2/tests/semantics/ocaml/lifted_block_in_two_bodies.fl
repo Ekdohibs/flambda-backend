@@ -1,0 +1,89 @@
+let $camlLifted_block_in_two_bodies__first_const_0 = Block 0 () in
+(let code inline(never) size(9)
+       node_0
+         (l/66 :
+            [ 0
+            | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                [ 0 | 0 of val * imm tagged * val ] ],
+          v/67 : imm tagged,
+          r/68 :
+            [ 0
+            | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+                [ 0 | 0 of val * imm tagged * val ] ])
+         my_closure/69 &my_alloc_region/70 my_depth/71
+         -> k/26 * k/27
+         : [ 0
+           | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+               [ 0 | 0 of val * imm tagged * val ] ] =
+   let next_depth/72 = rec_info (succ my_depth/71) in
+   let Pmakeblock/73 =
+     %block.[`0`].my_alloc_region/70
+       (l/66 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ],
+        v/67 : imm tagged,
+        r/68 :
+          [ 0
+          | 0 of [ 0 | 0 of val * imm tagged * val ] * imm tagged *
+              [ 0 | 0 of val * imm tagged * val ] ])
+   in
+   cont k/26 (Pmakeblock/73)
+ in
+ let code inline(always) size(9)
+       with_node_1 (param/74 : imm tagged)
+         my_closure/75 &my_alloc_region/76 my_depth/77
+         -> k/28 * k/29
+         : [ 0 of val * imm tagged ] =
+   let next_depth/78 = rec_info (succ my_depth/77) in
+   let node/79 = %project_value_slot.[with_node].[node] (my_closure/75) in
+   let Pmakeblock/80 =
+     %block.[`0`].my_alloc_region/76 (node/79 : val, 0 : imm tagged)
+   in
+   cont k/28 (Pmakeblock/80)
+ in
+ let code size(27)
+       either_2 (b/81 : imm tagged)
+         my_closure/82 &my_alloc_region/83 my_depth/84
+         -> k/30 * k/31
+         : [ 0 of val * imm tagged ] =
+   let next_depth/85 = rec_info (succ my_depth/84) in
+   let node/86 = %project_value_slot.[either].[node_1] (my_closure/82) in
+   let with_node/87 =
+     %project_value_slot.[either].[with_node] (my_closure/82)
+   in
+   (let untagged/89 = %untag_imm (b/81) in
+    switch untagged/89
+      | 0 -> k/34
+      | 1 -> k/35)
+     where k/35 =
+       cont k/32
+     where k/34 =
+       cont k/33
+     where k/33 =
+       let Pmakeblock/88 =
+         %block.[`0`].my_alloc_region/83 (node/86 : val, 1 : imm tagged)
+       in
+       cont k/30 (Pmakeblock/88)
+     where k/32 =
+       apply direct(with_node_1 &my_alloc_region/83)
+         (with_node/87 : imm tagged -> [ 0 of val * imm tagged ])
+           (0)
+           -> k/30 * k/31
+ in
+ let node/90 = closure node_0 @node &toplevel in
+ let with_node/91 = closure with_node_1 @with_node &toplevel
+ with { node = node/90 }
+ in
+ let either/92 = closure either_2 @either &toplevel
+ with { node_1 = node/90; with_node = with_node/91 }
+ in
+ let Pmakeblock/93 = %block.[`0`].`toplevel` (with_node/91, either/92) in
+ cont k/25 (Pmakeblock/93))
+  where k/25 define_root_symbol (module_block/63) =
+    let field_0/64 = %block_load.tag[`0`].`size`[`2`].[`0`] (module_block/63)
+    in
+    let field_1/65 = %block_load.tag[`0`].`size`[`2`].[`1`] (module_block/63)
+    in
+    let $camlLifted_block_in_two_bodies = Block 0 (field_0/64, field_1/65) in
+    cont done ($camlLifted_block_in_two_bodies)

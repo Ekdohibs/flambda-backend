@@ -1,29 +1,36 @@
-(******************************************************************************
- *                                  OxCaml                                    *
- * -------------------------------------------------------------------------- *
- *                               MIT License                                  *
- *                                                                            *
- * Copyright (c) 2026 Jane Street Group LLC                                   *
- * opensource-contacts@janestreet.com                                         *
- *                                                                            *
- * Permission is hereby granted, free of charge, to any person obtaining a    *
- * copy of this software and associated documentation files (the "Software"), *
- * to deal in the Software without restriction, including without limitation  *
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,   *
- * and/or sell copies of the Software, and to permit persons to whom the      *
- * Software is furnished to do so, subject to the following conditions:       *
- *                                                                            *
- * The above copyright notice and this permission notice shall be included    *
- * in all copies or substantial portions of the Software.                     *
- *                                                                            *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR *
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   *
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL    *
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER *
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING    *
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER        *
- * DEALINGS IN THE SOFTWARE.                                                  *
- ******************************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                        Basile Clément, OCamlPro                        *)
+(*                                                                        *)
+(*   Copyright 2013--2025 OCamlPro SAS                                    *)
+(*   Copyright 2014--2025 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(* This file transcribes into Gallina functions of the compiler's
+   join_env.ml, the environment side of the n-way join of typing
+   environments; its last definition transcribes the n-way entry of
+   join_levels.ml. The comment below describes what is here against
+   join_env.ml and differences from the OCaml.
+
+   The header above is that of
+   middle_end/flambda2/types/env/join_env.ml,
+   the first of the files of the compiler that this file transcribes.
+   It also transcribes:
+   - middle_end/flambda2/types/join_levels.ml,
+     whose header differs from the one above; its lines of authors and
+     of copyright:
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*   Copyright 2013--2019 OCamlPro SAS                                    *)
+(*   Copyright 2014--2019 Jane Street Group LLC                           *)
+   *)
 
 
 (* The environment side of the n-way join of typing environments.
@@ -31,12 +38,12 @@
    This file is to be reviewed line by line against
    middle_end/flambda2/types/env/join_env.ml, as FlambdaTypingEnv.v is
    against typing_env.ml, and its last function against the n-way
-   entry of types/join_levels.ml. It holds definitions only, in modules
-   that have the compiler's names. What the join guarantees is
+   entry of types/join_levels.ml. It holds definitions only; its modules
+   have the compiler's names. What the join guarantees is
    FlambdaJoinSpec.v. [Type_grammar.project_variables_out], which the
    join calls, is FlambdaTypeProject.v.
 
-   What is here, against join_env.ml, in the order of that file:
+   What is here, against join_env.ml:
    - [Index]: the environments joined are numbered from 0 in the order
      of the list given ([Index.fold_list]). An index is a position, not
      a name: renaming leaves it alone. [Index.choose] is

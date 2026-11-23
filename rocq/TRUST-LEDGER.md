@@ -168,12 +168,13 @@ it gave back.
   trip of the conversion of the same unit, read from its term
   before, the text that the tool writes of its own term after has
   the closure, and the tool said in words that it is not read back.
-  Two more texts that the compiler prints are not read, and the
-  tool gives no verdict of the unit. The printer writes a variable
-  as its name, a `/` and its stamp; the reader cuts what it reads
-  at every `/` and stops with a fatal error where that gives more
-  than two pieces (`chop_stamp` in
-  `parser/fexpr_to_flambda_commons.ml`; X2-8). A variable has a `/`
+  Two more texts that the compiler prints were not read, and the
+  tool gave no verdict of the unit; the reader now reads both. The
+  printer writes a variable as its name, a `/` and its stamp; the
+  reader cut what it read at every `/` and stopped with a fatal
+  error where that gave more than two pieces (`chop_stamp` in
+  `parser/fexpr_to_flambda_commons.ml`; X2-8), and now takes the
+  stamp after the last `/`. A variable has a `/`
   in its own name where it is an operator with a `/` in its name
   that the unit binds, as a function or as a parameter; where it
   is of an anonymous function and the source was given with a
@@ -181,37 +182,44 @@ it gave back.
   others, which is of a term after. The scripts compile a copy of
   the source in a directory of its own, under its bare name, so
   the second does not arise through them. Of a unit that binds
-  such an operator they make the text, and the tool ended on the
+  such an operator they made the text, and the tool ended on the
   fatal error, which it does not catch, with status 2; `/` and
   `/.` were run.
   And the printer writes the kinds of unboxed 8-bit and 16-bit
   integers as `int8` and `int16`, which the grammar of the reader
-  has not got as the kind of a number
-  (`parser/flambda_parser.mly`, `naked_number_kind`; X2-10): of a
-  unit with a parameter of such a kind the scripts make the text,
-  and the tool printed a syntax error with the file and the line
-  and ended with status 1. That is also the status of a check that
-  fails: a status that is not 0 is not by itself a verdict. A rule
-  of the tests fails on either, and what the tool printed says
-  which it is. The three were observed of units not in this tree.
-  Each is a stop and not a wrong verdict: nothing is printed of the
-  two runs or of a validation. The loss is the reader's: the model
+  had not got as the kind of a number
+  (`parser/flambda_parser.mly`, `naked_number_kind`; X2-10) and has
+  now: of a unit with a parameter of such a kind the scripts made
+  the text, and the tool printed a syntax error with the file and
+  the line and ended with status 1. That is also the status of a
+  check that fails: a status that is not 0 is not by itself a
+  verdict. A rule of the tests fails on either, and what the tool
+  printed says which it is. The three were observed of units not in
+  this tree.
+  Each was a stop and not a wrong verdict: nothing was printed of the
+  two runs or of a validation. The loss was the reader's: the model
   has the two kinds (`FlambdaKindModel.Kind_naked_int8`,
   `Kind_naked_int16`) and its variables are numbers
   (`FlambdaModel.variable`), and the driver of the compiler's own
   run, which reads no text, validates the unit with the operator
   and the unit with the parameter. All of this was seen with the
   scripts and the tool of 2abcee6155, and was not run again on what
-  has come since.
-  A fourth text that the reader does not read is of a number
+  has come since. The reader has since been given the name with a `/`
+  of its own and the kinds `int8`, `int16` and `mask`
+  (`rocq/HACKING.md`, "Changes to the compiler made on this branch",
+  the entry "The text of a term again", which says how each is
+  tested); the units on which the two stops were seen were not run
+  again for this entry.
+  A fourth text that the reader did not read was of a number
   (C1-11), and units of this tree have it. The printer writes a
   naked integer of 64 bits, or of the width of the machine, with
   all its digits and the suffix `L` or `n` (`parser/print_fexpr.ml`).
-  The reader gives the digits of a constant that stands in an
-  expression to `int_of_string` before it looks at the suffix
-  (`parser/flambda_parser.mly`, `make_const_int`), and that fails
+  The reader gave the digits of a constant that stands in an
+  expression to `int_of_string` before it looked at the suffix
+  (`parser/flambda_parser.mly`, `make_const_int`), and that failed
   outside the 63 bits of its own integers, with an exception that
-  nothing catches. A number that is static data is read another way
+  nothing caught; it now reads the digits as the suffix says. A
+  number that is static data is read another way
   (`make_boxed_const_int`). Simplify can put such a number bare in
   an argument, as it does where two boxed numbers meet and it
   removes the box. Four units of `tests/semantics/ocaml/library`
@@ -220,47 +228,68 @@ it gave back.
   `nativeint_laws_more.ml`). The terms before of these four have
   the numbers as static data: their texts are read, and each is
   validated, the check making its term after in memory and reading
-  no text of it. The compiler's text of the term after of each is
+  no text of it. The compiler's text of the term after of each was
   not read. And the round trip of the conversion, which reads back
-  a text of the term after, says "round trip the same" of the unit
+  a text of the term after, said "round trip the same" of the unit
   of the file and "not read back" of the unit after Simplify, with
   the exception of the parser named: its rules run on that
-  directory and keep the four answers as expected files
-  (`tests/semantics/roundtrip`). Until the tool made that line of an
+  directory, and kept the four answers as expected files until the
+  reader read such a number (`tests/semantics/roundtrip`, whose
+  README tells it). Until the tool made that line of an
   exception of the parser, it ended on the exception there, with
   status 2, and no rule ran the round trip on that directory: that
   was seen with the tool of the tree that first had those units
-  together with all that came in with them. Nothing of what is said
-  of the round trip holds of the term after of those four units.
-  Two primitive annotations are also lost by the text; the tool
+  together with all that came in with them. While the reader stopped
+  there, nothing of what is said of the round trip held of the term
+  after of those four units.
+  Two primitive annotations were also lost by the text, which writes
+  both now; the tool
   reconstructs the second from the argument and leaves the first. The
-  printer writes both forms
-  of `Is_int` as `%is_int`, and the reader gives `variant_only = true`,
+  printer wrote both forms
+  of `Is_int` as `%is_int`, and the reader gave `variant_only = true`,
   even where the compiler had the generic form
   (`parser/fexpr_prim.ml`; C2-26). A generic test of a closure gives
   0; the form for variants has no value on that closure in the model.
-  The printer writes `Opaque_identity` as `%opaque` without its kind,
-  and the reader gives the kind of values, even where the compiler had
+  The printer wrote `Opaque_identity` as `%opaque` without its kind,
+  and the reader gave the kind of values, even where the compiler had
   a naked number (C2-27). The model's opaque identity has no value on
   an argument of another kind. The conversion from a term in memory
   keeps both the variant flag and the opaque identity's kind; the text
-  loses them first.
+  lost them first. The printer now writes the generic form as
+  `%is_int.generic`, and the kind of an `Opaque_identity` unless it is
+  the kind of values, with `middle_end_only` where the primitive is
+  for the middle end only; the reader takes each. A text made before
+  the printer wrote them, or written by hand, may have neither, and
+  what follows is of such a text too.
   A unit read from a text is normalised before Simplify and the
   conversion see it (`with_lost_kinds`, called in `check_file`; the
   round trip of the conversion applies it to the unit of the file and
-  to each unit that it reads back): every `Opaque_identity` is given
-  the kind of its argument as the reader has it, which is the kind of
+  to each unit that it reads back): every `Opaque_identity` whose
+  kind as read is the kind of values, and is not the kind of its
+  argument, is given the kind of its argument as the reader has it.
+  A kind as read that is not the kind of values was written by the
+  text, and is kept whatever the kind of the argument: the
+  primitive keeps the kind that the text wrote, and where the two
+  kinds differ the machine has no step for it. The kind of values
+  as read is treated the same whether the text wrote it, left it
+  out because the printer writes none for it, or lost another
+  kind: the three are one term as read. The kind of the argument
+  is the kind of
   a constant, that of values for a symbol, and for a variable the
   kind that the reader made it with, from the kind written at a
   parameter or from the defining expression of its `Let`. A `Let`
   whose variable the reader made at the kind of values for want of
   that kind binds a new variable of the kind given; the bodies of
-  code are gone into; a unit that has no `Opaque_identity` at another
-  kind than its argument's is not gone through and is the unit as
-  read. The compiler takes the argument of the primitive to have the
+  code are gone into; a unit that has neither an `Opaque_identity` at
+  the kind of values whose argument is of another kind, nor a call
+  that the same pass
+  gives an arity or refuses the unit for (below), is not gone through
+  and is the unit as read. The compiler takes the argument of the
+  primitive to have the
   kind that the primitive carries
   (`Flambda_primitive.arg_kind_of_unary_primitive`). So the kind
-  given to an `Opaque_identity` is the compiler's kind where the kind
+  given to an `Opaque_identity` for which the text had none is the
+  compiler's kind where the kind
   now obtained for its argument is the kind of that argument in the
   compiler's term and the annotation of the primitive there agrees
   with it. The first need not hold: the compiler's term may bind a
@@ -273,33 +302,32 @@ it gave back.
   recovery of the compiler's kind is claimed: the primitive there,
   the variable bound to it and what is bound below to them may be
   given kinds that the compiler's term had not, even where the kind
-  of values that the reader gave was the compiler's. The text does
-  not record the lost annotation, so nothing in it shows which is the
-  case. The step is not
+  of values that the reader gave was the compiler's. A text that has
+  no kind for the primitive does not record the lost annotation, so
+  nothing in it shows which is the case. The step is not
   a check of the compiler's term. What the compiler prints with
   `-drawflambda` has the kind, and no rule of the tests reads it.
   Trusted of this step, as of the one that sets the modes of
   parameters: that the unit which it builds again is the unit read,
   but for those kinds and for the variables and continuations that
-  are made fresh. Where the kind of the argument comes from a nullary
-  primitive at one of the two kinds that the reader's table of kinds
-  gives for two words each (`parser/fexpr_prim.ml`, `kind`), the unit
-  is not checked (`kinds_opaque_misread.fl`, in `tests/semantics/`).
-  The units there whose names begin with `kinds_opaque_` show the
-  step: before it, a unit that applies the primitive to a naked
-  number was undefined in the model as read, the tool's Simplify made
-  it `Invalid`, and the tool printed a validation that said nothing.
-  The flag of `Is_int` is not restored. Two examples not in this tree
-  show that loss: the compiler's own term is defined, but the term
-  read before Simplify is undefined in the model. In one of them the
-  tool's Simplify makes the unit `Invalid`. In both the tool prints a
-  validation and the warning that it says nothing of the unit because
-  the term before is undefined. That verdict is of the pair
-  obtained through the text, not the compiler's own pair. Where this
-  loss makes the source undefined in the model, every target refines
-  it there; this does not say that the validator accepts every such
-  pair. Neither comparing the two model runs nor proving refinement of
-  that pair recovers the meaning lost from the program's term.
+  are made fresh. The units of `tests/semantics/` whose names begin
+  with `kinds_opaque_` show the step: before it, a unit that applies
+  the primitive to a naked number was undefined in the model as read,
+  the tool's Simplify made it `Invalid`, and the tool printed a
+  validation that said nothing.
+  The flag of `Is_int` is not restored in a text that has not got
+  it. Two examples not in this tree showed that loss, with the texts
+  of the printer of before: the compiler's own term is defined, but
+  the term read before Simplify was undefined in the model. In one of
+  them the tool's Simplify made the unit `Invalid`. In both the tool
+  printed a validation and the warning that it says nothing of the
+  unit because the term before is undefined. That verdict was of the
+  pair obtained through the text, not the compiler's own pair. Where
+  this loss makes the source undefined in the model, every target
+  refines it there; this does not say that the validator accepts
+  every such pair. Neither comparing the two model runs nor proving
+  refinement of that pair recovers the meaning lost from the
+  program's term.
   A text need not write the arity of the arguments of a direct call
   or of a call of unknown arity. Where a text leaves it out the
   reader gives such a call its default, one value of any sort for
@@ -309,9 +337,9 @@ it gave back.
   of the lists in code that a unit imports, or in a term that is
   given in memory and not as a text. The printer writes the arity
   beside the callee unless it is
-  that default; a direct call with no callee, which the step before
-  Simplify makes at `-Oclassic`, has no place in the text for its
-  arity. Before the printer wrote it, a unit that gives a function an
+  that default, and in the place of the callee of a direct call that
+  has none, which the step before Simplify makes at `-Oclassic`.
+  Before the printer wrote it, a unit that gives a function an
   unboxed number was therefore undefined in the model as read, and
   the tool's Simplify made a direct call of it `Invalid`. The same
   pass over a unit read gives such a call an arity where the arity as
@@ -346,9 +374,7 @@ it gave back.
   component that is an unboxed product.
   The tool checks none of the three. Together they suffice, and they
   are not necessary; where one fails no recovery of the compiler's
-  arity is claimed. Where the kind of an argument comes from a word
-  that the reader may misread, the unit is not checked
-  (`kinds_call_misread.fl`).
+  arity is claimed.
   The arity so given is flat, one component for each argument that
   the text writes, as the reader's was. The compiler's arity groups
   the kinds of an argument that is an unboxed product, which may be
@@ -458,12 +484,17 @@ it gave back.
   the compiler's driver with two hooks registered
   (`driver/compiler_hooks.mli`), and gives the two terms of the
   compiler's own run, as they are in memory, to the check of the
-  tool (`Flsemantics.check`). No unit of the examples has an
-  expected file of what it prints, so no rule of the tree runs it
-  for that; the controls of
-  `middle_end/flambda2/tests/semantics/own_run/` run it: one gives
-  it a second unit in a process, and seven compare the files that
-  it writes of a unit with those that the compiler writes. A verdict that
+  tool (`Flsemantics.check`). The rules of
+  `middle_end/flambda2/tests/semantics/ocaml/` run it on each unit of
+  that directory in the context main. Its output is compared with
+  `X.expected`, the expectation also used for the text-based run, with
+  the documented textual normalization for units listed in
+  `own_run_numbers.txt`; an `X.own_expected`, when present, is used
+  instead. The controls of
+  `middle_end/flambda2/tests/semantics/own_run/` run it besides: one
+  gives it a second unit in a process, and seven compare the files
+  that it writes of a unit with those that the compiler writes. A
+  verdict that
   it prints does not rest on the entry above: there is no text, no
   reader and no second run of Simplify. In its place it rests on
   the two hooks: that `Raw_flambda2` is given the term that the
@@ -546,11 +577,11 @@ it gave back.
   - that a block marked `Mutable` or `Immutable_unique` is converted
     only where it has as many kinds of fields as arguments, every one
     of kind value, whatever its subkind and whether or not it may be
-    null; that much of the kind of a field is dropped, as it is of a
-    parameter (decision D25, which is open), and only where it has an
-    argument: one made with no field as a term runs is refused, as
-    the compiler makes none (a static block with no field is another
-    thing, and not of these cases). The case of a block marked
+    null; that much of the kind of a field is dropped (decision D25,
+    which is open for the fields of a made block), and only where it
+    has an argument: one made with no field as a term runs is refused,
+    as the compiler makes none (a static block with no field is
+    another thing, and not of these cases). The case of a block marked
     `Immutable` is as it was: it does not ask for an argument, and
     nothing here is said of it;
   - that a store into a block is the model's `Block_set` on the block
@@ -575,23 +606,29 @@ it gave back.
     tool converts a term that is read from its text. The text keeps
     the mark of a `Block_set` (`init`), and the refusal of a
     `Block_set` so marked stands of a term read from its text. Of an
-    `Array_set` the text that the compiler prints keeps the set
-    kind, and with it the mark, only where the array is one of
-    unboxed products; of any other the parser gives the set kind
-    that goes with the array kind, which at the array kind `Values`
-    is an assignment on the heap (the paragraph "The round trip"
-    below; discrepancy P1-9). So this refusal does not keep outside
-    the conversion the store that the compiler makes for a function
-    whose recursion is in the tail of a constructor, which is an
+    `Array_set` the printer writes the set kind, and with it the
+    mark, wherever the set kind is not the one that goes with the
+    array kind, which at the array kind `Values` is an assignment
+    on the heap; the reader takes a set kind that is written
+    (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`). So
+    the store that the compiler makes for a function whose
+    recursion is in the tail of a constructor, which is an
     `Array_set` at the array kind `Values`, marked
-    `Initialization`, whose destination is a block. Read from the
-    text that the compiler prints, that store has lost its mark: it
-    is converted as an assignment, and a run that comes to it is
-    undefined (the end of this bullet). Where the run before is
-    undefined the tool says so, and the validation says nothing of
-    the unit. An `Array_set` is refused for its mark only where a
-    text has the set kind written out, as that of one control has
-    (`heap_array_set_initialising.fl`).
+    `Initialization`, whose destination is a block, has its mark in
+    the text that the printer makes of it
+    (`tests/semantics/text_is_term/first_write_of_a_cell.ml` is of
+    such a function), and a unit read from that text is refused
+    for the store. An `Array_set` is refused for its mark only
+    where the text has the set kind written out, as that of one
+    control has (`heap_array_set_initialising.fl`). In a text in
+    which the set kind of a store is not written (one made before
+    the printer wrote it, or one written by hand) the parser gives
+    the store the set kind that goes with its array kind (the
+    paragraph "The round trip" below; discrepancy P1-9): the store
+    of such a function is then read as an assignment and
+    converted, and a run that comes to it is undefined (the end of
+    this bullet). Where the run before is undefined the tool says
+    so, and the validation says nothing of the unit.
     The set kinds of immediates and of values that the collector may
     ignore carry no such mark, and a store at one of them is
     converted where the array kind of the primitive is that of
@@ -624,9 +661,11 @@ it gave back.
     says nothing of the unit.
   *Which lines the guard of the liftings governs.* Each of the four
   liftings to symbols of the validation lifts nothing in what it is
-  given, where that term has a primitive of the heap
-  (`FlambdaHeapFreeSpec.expr_free_of_heap`, a limit pending decision
-  D40). The test is of the term that the lifting is given: the other
+  given, where that term does not pass the liftings' test of the heap
+  (`FlambdaHeapFreeSpec.free_of_heap_fine`, a limit pending decision
+  D40): a term that has a primitive of the heap outside the bodies of
+  its code, or that has one in them and a call outside them (decision
+  D65). The test is of the term that the lifting is given: the other
   rewrites of the validation may still validate a unit that stores,
   and a lifting may be given a term from which a rewrite before it
   has removed the primitive. A line that begins "validated" is of the
@@ -634,8 +673,8 @@ it gave back.
   that line is the step of the validation that accepted. The step
   that names a lifting ("the same once closures and blocks are
   lifted to symbols") has other rewrites than its liftings, and a
-  unit that has a primitive of the heap in both terms may be
-  validated at it with nothing lifted in either: the verdict names
+  unit neither of whose terms passes the test may be validated at it
+  with nothing lifted in either: the verdict names
   the step, and not that something was lifted. The second check
   (the entry "A check that does not establish `refines`") is another
   comparison: its liftings are made without the test of the exits
@@ -643,17 +682,61 @@ it gave back.
   is printed under "not validated" where that check accepts, for a
   unit that stores as for another; it is not printed for every unit
   that stores, and the unit stays not validated. Where a term of the
-  two has a primitive of the heap that line says that the test of
-  the heap was left out. Under "not validated", where the run before
-  that is shown is not undefined, and under a verdict that names a
-  lifting, where either of the two terms that the validation was
-  given (the prefix in front where there is one) has a primitive of
-  the heap, one line more says which of the two has one; under the
-  verdict it adds that the line above names the step at which the
-  validation accepted. It is a
+  two does not pass the test of the heap that line says that the
+  test of the heap was left out. Under "not validated", where the run
+  before that is shown is not undefined, and under the line of an
+  acceptance at the step that names a lifting, whether that line
+  begins "validated" or "the validation accepts the pair", where
+  either of the two terms that the validation was given (the prefix
+  in front where there is one) does not pass the test of the heap,
+  one line more says which of the two does not, and what a term that
+  does not pass has; under the line of an acceptance it adds that the
+  line above names the step at which the validation accepted. It is a
   fact of those two terms, not of what each lifting was given, and
   under "not validated" it does not say why the unit is not
   validated.
+  *The mark of decision D65.* A lifting asks two tests of the term
+  that it is given. They were `FlambdaLiftSpec.exits_plain_knowing`
+  and `FlambdaHeapFreeSpec.expr_free_of_heap`, which read the bodies
+  of the code of the unit; they are the finer
+  `FlambdaLiftSpec.exits_plain_fine` and
+  `FlambdaHeapFreeSpec.free_of_heap_fine` (decision D65: yes,
+  provisionally, by the human on 18 November 2026; to be come back
+  to). Where the validation accepts at the step that names a lifting,
+  one line may say how the term before, as the validation was given
+  it (the prefix in front where there is one), answers the two pairs
+  of tests. There is no such line where the term passes the tests as
+  they were. Where it passes the finer tests and not those, the line
+  is "(decision D65: the guards of the liftings pass by the finer
+  tests alone)"; where it passes neither, it is "(decision D65: the
+  term before as given passes neither the liftings' tests as they
+  were nor the finer ones)". It is the last of the lines in brackets
+  under the line of the acceptance. That line is the one that begins
+  "validated", or, where the tool finds the run before that the
+  acceptance is of undefined within its bound of steps, the one that
+  begins "the validation accepts the pair"; a unit of the second kind
+  is not a validated unit, with the line of the mark or without it. A
+  unit whose output has the line carries the mark of the decision.
+  The mark is a sign: it is neither necessary nor sufficient for the
+  acceptance to rest on the finer tests. It is not sufficient because
+  it is of the term as given: the step may accept with nothing
+  lifted, and a lifting asks its tests of the term that it is given,
+  after the rewrites before it, so that a term which passes neither
+  as given may pass the finer tests alone once the rounds have
+  inlined its calls of known code. It is not necessary for two
+  reasons. That no rewrite of the validation makes, of a term that
+  passes the tests as they were, one that fails them is believed and
+  is not a theorem of the model. And the line is printed at the one
+  step: where the validation is asked of the term before with copies
+  of code (`FlambdaValidateCopyingSpec.before_copied`), liftings and
+  copies that ask the finer tests are made before it is asked, and it
+  may then accept at a step that names no lifting, with no such line.
+  So a count of the units that carry the mark is not a count of the
+  units whose acceptance rests on the finer tests, and bounds it on
+  neither side. That count is made by running the validation with
+  the tests as they were and with the finer ones on the same units.
+  The tool has no switch that asks the tests as they were; one is
+  owed.
   *The array kind of a store, and the kind of a length.* Where the
   validation's folding of constants visits a store into an array or
   a length of an array, it writes the array kind of the store, or
@@ -727,22 +810,34 @@ it gave back.
   *The round trip* covers the cases of the four primitives that the
   conversion admits: `flmodel_to_fexpr.ml` writes each back as the
   compiler's (`heap_primitive`), every allocation on the heap and
-  every assignment with the mode of the heap. One thing of a store
-  into an array the text does not keep. For the three array kinds
-  of values, which are the array kinds of the stores that the
-  conversion admits, the text of fexpr writes the array kind of a
-  store and not its set kind, and the parser gives a store whose
-  set kind is not written the one that goes with its array kind
-  (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`;
-  discrepancy P1-9). The parser reads a set kind that is written,
-  for an array of any kind; the printer writes one only for an
-  array of unboxed products, which the conversion refuses. Simplify
+  every assignment with the mode of the heap. Of a store into an
+  array the text has the array kind and, where it is needed, the
+  set kind. For the three array kinds of values, which are the
+  array kinds of the stores that the conversion admits, the
+  printer writes the array kind of a store, unless it is `Values`
+  and no set kind follows it, and writes its set kind wherever
+  that is not the one that goes with the array kind; the parser
+  reads a set kind that is written, for an array of any kind,
+  gives a store whose set kind is not written the one that goes
+  with its array kind, and one whose array kind is not written
+  the array kind `Values`
+  (`middle_end/flambda2/parser/fexpr_prim.ml`, `array_set`). Simplify
   gives a store the array kind of immediates where the type of the
   array proves it and leaves the set kind as it was, that of values
   or of values that the collector may ignore; the conversion admits
-  such a store, and of a term that has one, where the whole term is
-  converted, the round trip says that the two terms differ and that
-  they are printed the same. A unit that the
+  such a store, its text has both kinds, and of the two units of
+  the tree in which one was found the tool says "round trip the
+  same", of the unit and of the unit after Simplify
+  (`middle_end/flambda2/tests/semantics/roundtrip/README.md` names
+  them; the rules of that directory accept that answer and "not
+  converted" alike where an example has no expected file, so a
+  rule that passes does not show which was given). A text in
+  which the set kind of such a store is not
+  written (one made before the printer wrote it, or one written by
+  hand) is read with the set kind that goes with the array kind,
+  which may not be the one that the term had (discrepancy P1-9);
+  the round trip starts from the term as read, and says nothing
+  of that. A unit that the
   conversion refuses, as one with a store marked `Initialization`,
   is "not converted" there too. So the round trip checks the term of the
   model that the conversion makes, and not that the modes of the
@@ -775,6 +870,69 @@ it gave back.
   compiler checks that where code is made). Not cross-checked: how an
   arity is grouped into unboxed products, which is rebuilt through
   `Flambda_arity.fold_per_parameter`.
+- **The subkinds of parameters that the conversion gives**, in the
+  same file (`convert_subkind`, `convert_field_subkinds`,
+  `convert_params_subkinds`; decision D25, at parameters). A handler
+  and code get what the compiler states of each of their parameters
+  beyond its kind (`Bound_parameter.kind`, a
+  `Flambda_kind.With_subkind.t`): whether the value may be null, and
+  that it is a tagged immediate, a boxed number of one of nine kinds,
+  or a variant with its constant constructors and, for each tag of a
+  block, its fields with what is stated of each. The machine has no
+  step where a handler is applied, or the body of code entered, with
+  a value that is not of what is stated
+  (`FlambdaSubkindSpec.values_of_subkinds`), so a subkind that the
+  conversion gets wrong makes a run undefined that should not be, or
+  the reverse. Trusted: that what is given is the compiler's. The
+  test is of the value that the model has. Two sorts of value are of
+  no subkind but the one that says nothing of a shape, so they pass a
+  parameter that states nothing, or only that the value is not null,
+  and no other: a location, which is what the machine has for a block
+  that can change (the test reads no heap), and a symbol of which
+  nothing is known, which is what the tool puts for a field of the
+  block of another unit that its `.cmx` does not describe. A run is
+  undefined in the model, whatever the program does, where it gives
+  one of them to a parameter that states a shape of it (a tagged
+  immediate, a boxed number or a variant), or gives a block with one
+  of them in a field to a parameter that states a shape of that
+  field: the model then says nothing of the unit. A field of which
+  the parameter states nothing, or only that it is not null, takes
+  one. Units of the tree meet both:
+  `region_cell_no_frame.fl`, whose text states of its cell only that
+  it is not null, and `ocaml/pairs/partly_tested.ml` and
+  `ocaml/pairs/hidden_joined.ml`. Two
+  things are given as less than the compiler states, which can only
+  make a run defined where the compiler's statement would make it
+  undefined: the subkinds of arrays and of a block of floats are given
+  as stating nothing but whether the value may be null; and a
+  constructor whose fields are not all values, or of whose fields the
+  compiler states nothing, keeps its tag, and nothing is said of its
+  fields. Where no parameter states anything the list is empty, which
+  is what `FlambdaModel.make_handler_metadata` gives a handler. What
+  code states of its results is converted too
+  (`convert_result_subkinds`, into
+  `FlambdaModel.cm_result_subkinds`): each result by the function
+  that converts what a parameter states (`convert_subkind`), with
+  the same two things given as less. No machine tests a returned
+  value against it, and no statement that is proved rests on it. A
+  comparison of the validation reads it
+  (`FlambdaCompareOrderSpec.code_metadata_says_at_least`): of two
+  pieces of code that it pairs, the one of the term made from the
+  term after may state of a result no more than the one of the term
+  made from the term before. The tests of equality inside the
+  rewrites (`FlambdaCompareSpec.expr_eqb`) read it too. So a result
+  that the conversion gets wrong can make them pass or refuse
+  wrongly, and changes no run. A statement of a result that is false
+  in both terms is not seen. The commit that began to give them
+  changed no expected or stored file of the tree, and added no
+  control that shows the comparison refusing a pair for what the
+  term after states of a result, or passing one where the term after
+  states less. The round trip covers this much: the printer of the
+  model writes what the parameters and the results state
+  (`flmodel_to_fexpr.ml`, `kinded_parameters`,
+  `arity_with_subkinds`), and the term read back is compared with
+  the first by `FlambdaCompareSpec.expr_eqb`, which asks the two to
+  state the same.
 - **Tupled functions** are in the model as code that is marked
   (`FlambdaModel.cm_is_tupled`), and the converter gives code the mark
   of `Code0.is_tupled`. A direct call and a call of unknown arity of
@@ -961,21 +1119,55 @@ it gave back.
   is a probe is refused (`convert_apply`). The program runs the handler
   of a probe only while the probe is enabled, and the model has no
   notion of a probe being enabled. The refusal goes by the mark that a
-  term in memory has on such a call. The text of a term has no such
-  mark and its reader gives none, so the refusal does not detect a
+  term in memory has on such a call. The text of a term now writes
+  the mark and its reader takes it, so a unit read from such a text
+  is refused as a term in memory is. A text made before the printer
+  wrote the mark has none, and the refusal does not detect a
   probe whose mark the text has lost: a unit that has a probe of its
-  own is read, from its text, as a unit with a plain call, and is
+  own is read, from such a text, as a unit with a plain call, and is
   checked as one. The scripts that make the texts of
-  `tests/semantics/ocaml` refuse a unit whose term has a call that is
-  a probe, by the mark that `-drawflambda` prints of such a call,
-  where the tool is to be run on the unit (`from_ocaml.sh` there and
-  in `pairs/`; `script/` there has a unit that is refused and the
-  same unit without the probe); the tool reads any text that it is
+  `tests/semantics/ocaml` make the text of a unit that has a probe
+  as they make any other (`from_ocaml.sh` there and in `pairs/`;
+  `script/` there has a unit with a probe and the same unit
+  without, and of each the script says "made"), and the tool says
+  of such a unit that it is not checked, as the expected file of
+  `pairs/probed.ml` has it; the tool reads any text that it is
   given. The mark is met in a body taken from the `.cmx` of
   another unit, which is then left out of the prefix, as code whose
   body the model has not got (the entry on what those files say), the
   unit being still checked; and in the term that Simplify makes of a
   unit, where it inlines such a body, the unit being then not checked.
+  *A pause* (decision D64): the primitive `Cpu_relax`, which has no
+  argument and returns the unit value, is converted as
+  `Opaque_identity` of the unit value (`convert_prim`). The model has
+  no primitive for a pause and no event of a pause or of a poll: it
+  has no time and one thread, and what a polling point may run (a
+  finaliser, a signal handler) it has for no allocation either. So the
+  form binds the unit value, leaves the heap as it is, costs the step
+  of a `Let`, and records no effect of pausing. What that gives away:
+  the theorem of a validation is about the converted terms, and it
+  does not establish that Simplify kept a pause, nor where, nor how
+  many times. Whether the validator accepts a term in which Simplify
+  had removed a pause, moved it or made it twice is promised neither
+  way. The opaque `Let`s stay in the terms that it compares, and can
+  make its comparisons differ: none of its rewrites folds an
+  `Opaque_identity`, removes its `Let` for being unused
+  (`FlambdaNormaliseSpec.prim_may_fold`) or shares two
+  (`FlambdaCseSpec.shareable`), as Simplify does none of these to a
+  `Cpu_relax`, whose effects are arbitrary
+  (`effects_and_coeffects_of_nullary_primitive` of
+  `terms/flambda_primitive.ml`). Nor is anything claimed of the two
+  runs that the tool makes, whose comparison is apart from the
+  validation: a `Let` is a step, so their numbers of steps may differ
+  with the pauses, and a run that the bound of steps ends is printed
+  as still running, the comparison of the runs being then "not
+  decided" where the run before is not undefined; the validation is
+  asked all the same. In the ordinary conversion, which is the one
+  that the validation is given, this is the form that the end of the
+  region of a handler has (*Regions*, above), and there the model does
+  not tell a pause from one; the conversion for the check of regions
+  keeps that end as a primitive of regions where its region is kept.
+  The unit `cpu_relax.fl` of `tests/semantics` has the primitive.
   *Phantom bindings*: a binding whose variables are phantom is refused
   (`convert_let`, before any of its cases). The program runs nothing
   for such a binding (`To_cmm_expr.let_expr` compiles its body alone),
@@ -992,7 +1184,7 @@ it gave back.
   the mode that a term in memory has on its bound variables. The text
   of a term does not say the mode and its reader gives the normal
   one, so the refusal cannot detect a phantom binding whose mode a
-  text has lost, as for probes. The texts of the tests are of terms
+  text has lost. The texts of the tests are of terms
   before Simplify as the compiler prints them, which have none; the
   tool reads any text that it is given. The mode is met in a body
   taken from the `.cmx` of a unit compiled with those flags, which is
@@ -1371,8 +1563,8 @@ it gave back.
   and the tool still does not ask it (the entry above).
 - **Calls that never return**, in the same file (`convert_apply`). A
   call whose result continuation is `Never_returns`, whatever its call
-  kind among those that the conversion takes (a method call, a C call
-  and an effect are refused before that), is converted to a call that
+  kind among those that the conversion takes (a method call and an
+  effect are refused before that), is converted to a call that
   returns to a continuation bound around it and used nowhere else,
   whose handler is `Invalid` and whose parameters are of the kinds of
   the return arity of the call, which the call keeps; the continuation
@@ -1392,6 +1584,270 @@ it gave back.
   the callee does not return in native code. The term of the model has
   a continuation that the compiler's term has not, and the round trip
   of the conversion prints it.
+- **Calls of C functions**, in the same file (`convert_apply`,
+  `c_function_id`, `with_c_function_declarations`,
+  `undefined_at_a_c_call`; the comment "Calls of C functions"). WHAT A
+  CALL OF A C FUNCTION IS IN THE MODEL IS DECISION D50, RULED ON 18
+  NOVEMBER 2026: A RUN IS UNDEFINED AT A CALL OF A C FUNCTION OF WHICH
+  THE MODEL SAYS NOTHING, and it says nothing of any yet. It is the
+  reading called (U) in
+  `middle_end/flambda2/rocq/requests/P1-c-calls.md`.
+  The conversion makes of such a call a direct call of code that the
+  term declares and does not bind. Each C function, as a call
+  describes it, has one code id: the description is the linkage name
+  of the callee and the four things that the compiler says of the
+  function at the call (whether it is called through `caml_c_call`,
+  whether it may be taken for a builtin, its effects, its coeffects).
+  The code ids are declared deleted in front of the two terms, and the
+  machine has no step for a direct call of code that is not bound
+  (`FlambdaSemanticsSpec.shape_of_closure_call`), so a run is
+  undefined at the call. No statement of the model is changed, and
+  none about a C function is used.
+  Kept of a call, and compared by the validation
+  (`FlambdaCompareSpec.apply_eqb`, `call_kind_eqb`): the function and
+  its four marks (two calls that differ in one of them are calls of
+  different code), the arguments, the two arities, of every kind, the
+  continuation that the call returns to, the exception continuation
+  and its extra arguments. Not kept: the allocation mode of the call
+  and the region that it names (what the check of regions is to say
+  of a C function that allocates in a region of its caller belongs
+  with the rule of regions, which is not decided), the subkinds of
+  the arities, the position, the inlining attribute and the
+  debugging information. The text of a term writes all four marks
+  (`ccall`, with `noalloc`, `builtin`, `no_effects` or
+  `only_generative_effects`, `no_coeffects`); a text made before it
+  wrote the last three has `noalloc` alone, and is read as a call of
+  a function that is no builtin and has effects and coeffects, so
+  such a text and the compiler's term of the same unit can be calls
+  of different code.
+  THE CALLEE, AND THE WORDS AFTER "validated". In a term that the
+  compiler makes, the callee of such a call is a symbol of the
+  compilation unit of external symbols
+  (`middle_end/flambda2/from_lambda/closure_conversion.ml` makes the
+  call with one, and nothing else makes such a call but the reader
+  of a text, `middle_end/flambda2/parser/fexpr_to_flambda.ml`): a
+  symbol of another unit that nothing binds, so an import, of the
+  class of data, which the count of imports counts. A unit that has
+  such a call in one of its two terms then has an import, and where
+  it is validated its line is what the tool's test of the imports
+  gives for any unit that has one (the entries "What the tool
+  reports" and "What the `.cmx` files of other units say", below):
+  "validated with its imports" where the verdict passes the test,
+  "validated with nothing imported" and under it "not validated with
+  its imports" where it does not, or the two lines that say the same
+  given the `.cmx` files, where there is a prefix. None of them
+  begins "validated:". THE CONVERSION ASKS THE SAME OF EVERY TERM:
+  `c_function_of` refuses a call of a C function whose callee is
+  another symbol, and the unit is not checked. No compiler makes
+  such a call; a text written by hand may have one, with a callee
+  that is no import (a symbol of the unit itself, bound or not, or a
+  symbol of another unit that the prefix binds). The control
+  `callee_bound_in_the_text` is such a text: its call is in an arm
+  that the run does not take, and names a symbol that the text
+  itself binds as a block. Before the refusal the C function of that
+  name was declared in front, the symbol was bound in the term, no
+  import was counted, and the line of the text given twice was
+  "validated: the same up to bound names" (run on 18 November 2026).
+  That was no wrong verdict under this reading, as the run would be
+  undefined at the call if it reached it; it was a term in which one
+  name is declared as a C function and bound as data, which nothing
+  should take.
+  WHAT A VERDICT THEN SAYS. Anything refines an undefined run
+  (`FlambdaSemanticsSpec.refines`). So of a unit whose own run
+  reaches a call of a C function, an acceptance by the validator
+  says NOTHING: nothing of what the run does after the call, and
+  nothing of what it does before it, as the run is undefined as a
+  whole. That is of the run. WHAT THE TOOL PRINTS IS OF ITS OWN
+  RUNS, WHICH HAVE A BOUND: it gives the machine 1,000,000 steps,
+  and it finds a run undefined only where the run comes, within
+  them, to a state that has no step (the entry "What the tool
+  reports", below). Of each of the two runs that it shows, where it
+  finds the run undefined at such a call, it prints a line that says
+  so and names the C function. Where it finds undefined the run of
+  the term before that an acceptance is of, it prints no verdict of
+  the unit: the line is "nothing to validate, as the term before is
+  undefined"; the acceptance is on the next line, and further down
+  is the line that the validation says nothing of the unit. That run
+  is the run shown or, where what is accepted is the unit with
+  nothing imported, a run from the empty static environment, which
+  is not shown (the line is then "nothing to validate with nothing
+  imported, as the term before is then undefined"): the line that
+  names a C function is of the runs shown, and never of that one. A
+  RUN THAT WOULD COME TO SUCH A CALL ONLY AFTER THOSE STEPS IS NOT
+  FOUND UNDEFINED: no line names that call as the stop of that run;
+  if it is one of the runs shown, its line ends "still running when
+  the fuel ran out"; and the tool can print "validated" of the unit.
+  The word is then, as of any unit, no statement that the run before
+  is defined. Of a unit whose own run
+  returns, a verdict
+  is of that run, the initialisation of the unit, as for any unit.
+  A unit that has such a call is no longer refused for it: it is
+  compared as any unit, and may be validated, not validated, or not
+  checked for another thing.
+  WHAT IS COMPARED WHERE THE CODE IS NOT RUN, AND WHAT THAT RESTS ON,
+  WHICH IS NO THEOREM. A function that calls a C function is compared
+  by the validation as a term. Where the comparison reaches two calls
+  that are left in the two terms after its rewrites,
+  `FlambdaCompareSpec.apply_eqb` asks of them the same callee, the
+  same call kind (for a C function, the same code id), the same
+  arguments, the same continuations with the same extra arguments and
+  their kinds, and the same two arities. Variables and continuations
+  are compared under the pairing of names that the comparison has
+  made, and the handlers that are left are compared as terms. That
+  says nothing of the calls of the function as it was written, of the
+  code that followed them there, or of anything after a C function
+  returns. The rewrites of the validation, AS THEY ARE WRITTEN, do
+  not use the fact that a call of code that is not bound is
+  undefined: none removes or changes what follows such a call for
+  that reason. The model itself would allow such a rewrite, as it
+  has no run past the call, so a rewrite added later could make the
+  validation accept two terms that differ after a call of a C
+  function, and every theorem would still hold. Two things are not
+  true and are not claimed. One: that each call of a C function of
+  the term before has one call in the term after, and conversely.
+  Substitution, normalisation, the removal of code that is not reached
+  and the inlining of an enclosing body can move, copy or remove a
+  call; there is no theorem about the calls of C functions of a run or
+  their order. Two: that a rewrite changes a direct call only where
+  the term binds its code. `FlambdaForwardSpec.forward_apply` changes
+  the continuation that a call returns to without looking the code
+  up. The controls of `middle_end/flambda2/tests/semantics/c_calls`
+  are pairs of terms that differ in the C function, in one of its
+  four marks, in an argument, only in what follows the return of the
+  call, only in its exception handler, or only in a later call of a C
+  function: the tool must validate none of them. Five of the terms
+  before are also given twice (`guarded`, `guarded_generative`,
+  `handled`, `two_calls`, `reached`), and the validator accepts each
+  of the five pairs. Four of them are validated. `reached` is not:
+  its run comes to the call, the tool finds it undefined, and the
+  output has "nothing to validate, as the term before is undefined"
+  with the acceptance under it, which is no verdict. No term after
+  is given twice. They are tests of the tool as it is built, and not a
+  proof about the rewrites: they show a change of the tool that makes
+  one of those comparisons accepted, and not every rewrite of what
+  follows a call. One that touches another shape of term, a function
+  body, another arity or another handler leaves them as they are.
+  And the pairs have no function body (the reader of a term after
+  numbers code apart from the term before), so a call inside a
+  function is tested only by the units from OCaml, through Simplify.
+  WHAT CHANGES IN FRONT OF A UNIT THAT IS GIVEN `.cmx` FILES. The
+  prefix binds the code of another unit whose body the file keeps and
+  the model has got. A body that calls a C function was refused by
+  the conversion, and its code was declared deleted; it is converted
+  now, so it is bound, where nothing else in it is refused. Three
+  things follow. One: a run that calls such a body is no longer
+  undefined at that call for that reason. It enters the body, and is
+  undefined where it reaches a call of a C function; it may be
+  undefined for another reason, or not end. Two: the declarations in
+  front are of the C functions that are called, by one of the two
+  terms or by a body that is bound in front of them, and of no
+  other; a body of the prefix that is converted and then not bound
+  leaves none in front (the control `tupled_body_with_a_call_named`).
+  The tool prints them under a line of their own, before the line of
+  the prefix, which counts the bindings made from the files and
+  nothing else. Three, AND IT CAN TAKE A
+  VERDICT AWAY FROM A UNIT THAT CALLS NO C FUNCTION, IN A TERM THAT
+  HAS A CALL OUTSIDE THE BODIES OF ITS CODE: each of the four
+  liftings to symbols lifts nothing in a term that fails one of two
+  tests (`FlambdaHeapFreeSpec.free_of_heap_fine`,
+  `FlambdaLiftSpec.exits_plain_fine`). A term passes one of them if
+  it passes the test as it was, which is of all the code that the
+  term binds, that of the prefix too
+  (`FlambdaHeapFreeSpec.expr_free_of_heap`,
+  `FlambdaLiftSpec.exits_plain_knowing`), or if it has no `Apply`
+  outside the bodies of its code and what is outside those bodies
+  passes that test (decision D65: yes, provisionally, by the human
+  on 18 November 2026; to be come back to). Code that is declared
+  deleted passes the tests as they were; the same code bound is
+  tested with what it has. So a lifting lifts nothing in the term
+  that it is given where that term has a call outside the bodies of
+  its code and code that it binds, that of the prefix too, has a
+  primitive of the heap or gives its exception continuation a block
+  that it makes; and a unit that was validated through that lifting
+  can lose its verdict. It need not: the validation has other ways
+  than that lifting, and a rewrite before it may have removed the
+  body, or the call if it is a call of code that the term knows. A
+  term with no call outside the bodies of its code loses nothing so:
+  the two tests then look outside those bodies only. The controls:
+  `body_with_a_call` and its two second units (a run that enters a
+  body, and reaches the call or does not), and `body_with_a_store`
+  and its two second units. `body_with_a_store_and_a_call` calls no
+  C function and has a call outside its code, in the term before and
+  in the term after, that is not a call of known code (the tool
+  counts it still once the calls of known code are inlined): it is
+  not validated, and is validated where the code of the body is
+  declared deleted (the tool as it was before this reading, run on
+  that text; no rule runs that tool).
+  `body_with_a_store_not_called` calls nothing: it was not validated
+  before decision D65, and is validated since (by its expected file,
+  before the finer tests and with them); its output carries the mark
+  of that decision (the tool's line that begins "(decision D65:",
+  under the verdict line).
+  A MEASURE, made once and outside the build: no rule of the tree
+  runs it. On 19 November 2026, before stage 134 had landed, two
+  versions of the check were run on the same inputs. One was the
+  check as it was before this reading, in the integrator's build of
+  a frozen tip of stage 134; its build of the tip that landed made
+  programs of the same bytes. The other was the check of this
+  reading as it then was, built from the commits of the reading
+  carried over that frozen tip; built again over the tip that
+  landed, its programs had the same bytes. A version is two programs
+  built from the one source of the check: the test tool, and the
+  driver of the compiler's own run (`flsemantics_ownrun`). The
+  inputs named here were given to that driver, of each version, and
+  not to the test tool: the 79 files of `stdlib/` of this repository
+  that `tests/semantics/stdlib` names, each at two settings (the
+  flags of the build, and `-O3`); and 395 units of one function
+  each, cut from 13 of those files: 228 by the stream N1 (from
+  `list.ml`, `seq.ml` and `string.ml`) and 167 by the stream X1
+  (from ten other files), for their own probes. As this is written,
+  the files of those 395 units are not in the tree and no commit of
+  its history adds a file of their names; what they hold is text of
+  the library, and the two streams keep them outside the repository
+  with the scripts that cut them. What the measure found: no output
+  of a unit that ran before changes class; ten outputs of the files
+  and two of the units change, in what is in front of the terms and
+  in the lines of the two runs (the count of imports). That no unit
+  measured lost a verdict is a fact of that run on those inputs and
+  not of the design.
+  LEFT OUT. Simplify makes a primitive of seven comparisons
+  (`caml_compare`, `caml_equal`, `caml_notequal`, `caml_lessequal`,
+  `caml_lessthan`, `caml_greaterequal`, `caml_greaterthan`) where it
+  knows both arguments to be immediates or boxed numbers
+  (`middle_end/flambda2/simplify/simplify_extcall.ml`). Where the
+  term before keeps the call and the term after has the primitive,
+  no rule of the validation relates them: the unit
+  `comparison_made_a_primitive` of the controls is such a unit and is
+  not validated. A law for them would be a new statement of the
+  model, and is no part of this reading. Nothing is claimed of what a
+  C function does: its effects, what it allocates, what it raises,
+  the callbacks that it makes.
+  WHAT THE ROUND TRIP TESTS OF IT. The printer of the model writes
+  the direct call that the conversion makes of a call of a C function
+  back as a call of a C function, with what the compiler says of the
+  function at the call (`flmodel_to_fexpr.ml`). It writes the callee
+  as a symbol of the unit of external symbols that it names after
+  the number of the symbol, so the text read back names another
+  function than the term did; the round trip takes the C function
+  read back to the one of the term printed whose callee had that
+  number and of which the compiler says the same, and fails where
+  there is none (`flroundtrip.ml`, `c_function_back`). So "round trip
+  the same" of a unit that has such a call says that the call is
+  converted to a call of one C function with the callee, the
+  arguments, the arities, the continuations and the four things said
+  of the function that the text read back has. IT DOES NOT SAY that
+  the function has its name in the table of the conversion: the name
+  is not in the text printed. A rule of the controls runs the round
+  trip on the sixteen texts of `c_calls` that are units by
+  themselves; the rules of `tests/semantics/roundtrip/` do not take
+  that directory. With a printer changed to write the opposite of
+  what the term says of whether the function is called through
+  `caml_c_call`, the round trip of a unit of the controls fails with
+  "names not read back: the call of a C function at the callee x4 is
+  not, read back, a call of the C function that was printed" (tried
+  on 18 November 2026; no rule runs that printer). And nothing in the
+  tree checks, of the units of the controls, that their text is the
+  compiler's term, or runs the compiler's own pair on them.
 - **The conversion of primitives**, in the same file (the section
   "Primitives"): one function for each arity of primitive that the model
   has (`convert_unary_primitive`, `convert_binary_primitive` and, once
@@ -1408,10 +1864,10 @@ it gave back.
   primitives that allocate or load, that is: a block that is not of
   values, and a field of a block that is not of kind value. The
   subkinds of the fields of a `Make_block` at block kind `Values`, and
-  whether a field may be null, are another matter: the model has no
-  subkinds, and the check of the kinds of the fields drops that much
-  of the kind of a field, as the conversion does of a parameter, where
-  it refused a block one of whose fields said more than `any_value`.
+  whether a field may be null, are another matter: the block kind of
+  the model's `Make_block` has no subkinds, and the check of the kinds
+  of the fields drops that much of the kind of a field, where it
+  refused a block one of whose fields said more than `any_value`.
   It is the check of the kinds only, beside the other conditions
   under which a block is converted. That is a claim of the term that
   is dropped, and no renaming: Simplify takes an argument that is a
@@ -1426,13 +1882,14 @@ it gave back.
   the kind of a field, with its subkind, to a parameter that it adds
   where it removes a block (`simplify/flow/mutable_unboxing.ml`), and
   the backend reads the subkind of a parameter (discrepancy C2-10);
-  the conversion drops the subkinds of parameters as well. The
-  subkinds of the two terms are not compared. A term read from a text
-  that does not write these kinds had lost them before the conversion
-  (discrepancy V2-2). The tool reads every field of a `Make_block` at
-  block kind `Values` as any value; this is provisional; decision D25
-  is open and is the human's: whether they are dropped or come into
-  the model. A `Make_array` that is marked
+  the conversion keeps the subkinds of parameters (the entry on them,
+  above). The subkinds of the fields of the two terms are not
+  compared. A term read from a text that does not write these kinds
+  had lost them before the conversion (discrepancy V2-2). The tool
+  reads every field of a `Make_block` at block kind `Values` as any
+  value; this is provisional; decision D25 is open for the fields of
+  a made block and is the human's: whether they are dropped or come
+  into the model. A `Make_array` that is marked
   `Immutable` and is of one of the three array kinds of values is
   converted to the model's
   `Make_immutable_array` at that kind, which is not the primitive of
@@ -1565,16 +2022,19 @@ it gave back.
   model has not got, that of an import or a C function, raises a
   block: that is so where a handler around the call raises again what
   it is given, which the test of the exits of a lifting accepts
-  (`FlambdaLiftSpec.exits_plain_knowing`; the header of that file,
-  "What neither check says"), as where no handler is around the call.
+  (`FlambdaLiftSpec.exits_plain_fine`, by `exits_plain_knowing`,
+  which it asks first; the header of that file, "What neither check
+  says"), as where no handler is around the call.
 - **What the `.cmx` files of other units say**, in the same file
   (`make_prefix`, `units_read`, `prefix_fault`, `with_prefix`, and
-  `check`, which puts the prefix in front of the two units). This
-  entry awaits the human's confirmation (decision 1 of
+  `check`, which puts the prefix in front of the two units). The
+  human accepted on 18 November 2026, for now, that a verdict may
+  rest on what these files say (decision D75, which is decision 1 of
   `middle_end/flambda2/rocq/requests/C5-imports-with-contents.md`).
-  Until it is given, a verdict that rests on a prefix is counted
-  apart, and is not a verdict of the kind that the lines "validated"
-  and "validated with its imports" give.
+  "For now" is his word: he may come back to it. A verdict that
+  rests on a prefix is still counted apart, and is not a verdict of
+  the kind that the lines "validated" and "validated with its
+  imports" give.
   Where the tool is given directories of `.cmx` files and its run of
   Simplify read the file of another unit, the two units of a check
   are given one prefix of static bindings, the same in front of
@@ -1672,22 +2132,44 @@ it gave back.
     field, and the one answer that a run gets which the file does
     not give is a value that says nothing.
     One block with such a field is still not bound: a block one of
-    whose fields of that sort is loaded, by either unit or by a body
-    that the prefix binds, from something that the making of the
-    prefix sees to stand for the block; the prefix is made again
+    whose fields of that sort is loaded, in the body of code of
+    either unit, in a body that the prefix binds or in the handler
+    of a recursive continuation, from something that the making of
+    the prefix sees to stand for the block; the prefix is made again
     without it until no such block is left, and one prefix goes in
-    front of both units. That test decides only which blocks are
-    bound, and is trusted for nothing: binding fewer blocks is the
-    prefix saying less, and a load that the test misses leaves a
-    block bound with what the file says of it and no more. Which
-    blocks are bound can change whether a unit is validated, one
-    way or the other; a load that is missed adds no fact to what
-    the file says, and nothing is claimed of the linked program on
-    the strength of the test. It is there because the term
-    after is not read with what the unit binds its symbols to inside
-    code: the normalisation of the term before reads the load as the
-    symbol of the field, the term after keeps the load, and the two
-    are then not the same.
+    front of both units. A load of such a field anywhere else leaves
+    the block bound, and reads the symbol of the field. That test
+    decides only which blocks are bound, and is trusted for nothing:
+    binding fewer blocks is the prefix saying less, and a load that
+    the test misses leaves a block bound with what the file says of
+    it and no more. Which blocks are bound can change whether a unit
+    is validated, one way or the other; a load that is missed adds
+    no fact to what the file says, and nothing is claimed of the
+    linked program on the strength of the test. It is there because
+    the term after is not read with what the unit binds its symbols
+    to inside code or inside the handler of a recursive
+    continuation: the normalisation of the term before can read a
+    load there as the symbol of the field where the term after keeps
+    the load, and the two are then not the same. Outside those
+    places the term after is read as the term before is, where the
+    load is one that it reads
+    (`FlambdaReadsAfterSpec.load_known_blocks_surely`), and the test
+    does not look there.
+    What is trusted of a block that is bound and one of whose fields
+    of that sort a unit loads is what was trusted of one whose load
+    the test missed, and no more: that the field holds one value of
+    kind `Value`, which the other unit put there before this unit
+    runs and which is the same at every load; and that a run of the
+    model which only carries the symbol of the field says what the
+    program does with that value. No statement is of an import of
+    that class with a value in its place. A run that inspects the
+    symbol is undefined, and of a unit whose run before Simplify is
+    undefined no line of the tool is a validation: the tool prints
+    a line that begins "nothing to validate", and where the validator
+    accepted the pair its answer is on the next line, which begins
+    "the validation accepts the pair", with a line further down that
+    says that the validation says nothing of the unit (the entry
+    "What the tool reports").
     A block with a field that is an approximation given in place of
     a symbol, or a constant that the model has not got, is not
     bound. Neither is a block bound that has a field which is a
@@ -1695,11 +2177,28 @@ it gave back.
     Simplify puts that symbol or constant where the load was, and a
     symbol of which nothing is known in the field would make the two
     runs differ where Simplify is right.
-    `pairs/hidden_known_read.ml` is a unit that the rule turns,
-    `pairs/hidden_read.ml` one whose block stays unbound, and
-    `pairs/partly_tested.ml` one in which a function inspects such a
-    field through its argument, which the test does not see as a
-    load of the block: the block is bound and the run has no value.
+    `pairs/hidden_known_read.ml` is a unit that the rule turns.
+    `pairs/hidden_included.ml`, `pairs/hidden_kept.ml` and
+    `pairs/several_included.ml` load such a field outside code and
+    pass it on: both runs return the unit's own module block, which
+    has the symbol of the field in it (as a field for the first, in
+    a block that the unit makes for the second, and four such
+    symbols as its fields for the third), and the units are
+    validated with those symbols imports left.
+    `pairs/hidden_in_function.ml` and `pairs/hidden_in_loop.ml` are
+    units whose block stays unbound, for a load in the body of code
+    and for one in the handler of a recursive continuation. The run
+    before Simplify is undefined of each unit whose run inspects
+    such a field: `pairs/hidden_read.ml`, `pairs/hidden_tested.ml`,
+    `pairs/hidden_same.ml`, `pairs/hidden_joined.ml`,
+    `pairs/several_compared.ml`, `pairs/several_loaded.ml`,
+    `pairs/several_called.ml` and `pairs/cycle_read.ml`, which load
+    it outside code, and `pairs/partly_tested.ml`, in which a
+    function loads such a field from its argument, which the
+    test does not see as a load of the block: the block is bound,
+    the call tests it, with its fields, against what the parameter
+    of the function states, which it is not, and the run has no
+    value.
     Measured outside this tree, on units that use another unit, at
     the default settings and at `-O3` (190 runs): seven runs come to
     "validated with its imports, given the .cmx", two of them from a
@@ -1707,7 +2206,21 @@ it gave back.
     to "DIFFERENT"; and no expected file of this tree moves. Every
     field that is given a symbol there is one of which the file says
     nothing; the measure has no field of the other sorts, so nothing
-    is known from it of how often a block stays unbound for them;
+    is known from it of how often a block stays unbound for them.
+    That measure was of the test as it was first, which looked at a
+    load wherever it was. With the test as it is now, of the bodies
+    of code and the handlers of recursive continuations only: two
+    expected files of this tree move, `pairs/hidden_read.expected`
+    and `pairs/cycle_read.expected`, each to a prefix that binds the
+    block and a run before that is undefined as it was; and,
+    measured outside this tree on the 79 units of the standard
+    library, each compiled as the build of the library compiles it
+    and with `-O3` besides (158 runs of the compiler's own two
+    terms), one unit moves, at both settings: `BytesLabels`
+    (`stdlib/bytesLabels.ml`, which includes `Bytes`, one of whose
+    fields is computed when `Bytes` is initialised), from a run
+    before that is undefined to "validated with its imports, given
+    the .cmx"; the 156 other outputs are the same bytes;
   - a symbol of which the file says nothing stays an import;
   - a symbol that is asked for (one that either unit names, that a
     body which the prefix binds names, or that is at a field which
@@ -1755,11 +2268,22 @@ it gave back.
 - **The extraction**: Rocq's extraction to OCaml, by
   `middle_end/flambda2/rocq/validation/checks/FlambdaExtract.v`. It has no directive that
   realises a definition of the model by hand-written OCaml. The extracted
-  modules are in `middle_end/flambda2/tests/semantics/extracted/`.
+  modules are in `middle_end/flambda2/tests/semantics/extracted/`; those
+  of Rocq's own library that they use are generated with them and are in
+  `middle_end/flambda2/tests/semantics/extracted_rocq_library/`.
 - **What the tool reports**, in the same file (`check`, `run`,
   `observe`): that it calls `validate_unit` on the two terms converted
   or, where that does not validate them, `validate_unit_knowing` on the
-  same two terms, and prints the answer as it is. Where neither
+  same two terms, and prints the answer as it is. "The same" in an
+  answer is by the comparison at which the validation accepted the
+  pair (`FlambdaCompareOrderSpec.expr_says_at_least`; decision D25, at
+  parameters). That comparison is of a term made from the term before
+  with a term made from the term after, by the rewrites that come
+  before it in the validation; the two need not be the two terms
+  converted. The two terms compared at that step are the same up to
+  bound names but for what handlers and code state of their
+  parameters, and code of its results, of which the second states no
+  more than the first. Where neither
   validates them for any of the lists of calls that the tool
   tries, it calls
   `FlambdaValidateReadingSpec.validate_unit_reading` on the same
@@ -1841,12 +2365,55 @@ it gave back.
   terms of the reading and of the inlining are: a closure that a
   `Let` makes holds its code ids, so the two runs differ in the
   closures of the `Let`s copied, and a copy is made only of a term
-  that exits with symbols and constants only and has no primitive
-  of the heap, which are two of its tests. The liftings and the
+  that passes the two tests of a lifting
+  (`FlambdaLiftSpec.exits_plain_fine`,
+  `FlambdaHeapFreeSpec.free_of_heap_fine`; decision D65), which are
+  two of its tests: such a term, run on its own, if it exits, exits
+  with symbols and constants only and with an empty heap. The
+  liftings and the
   copies are the tool's guess, and nothing that is proved rests on
   them. The line says which asking validated the unit, and not
   that a copy was made: a copy whose tests fail is not made, and
   the function then answers of the term without it.
+  Where none of the functions above validates them, and
+  `FlambdaValidateDemotedSpec.after_demoted` changes the term after
+  (it makes ordinary continuations of the exception handlers of
+  that term that no call can raise to, by
+  `FlambdaDemoteSpec.demote_handlers` with no name in scope, as the
+  validation does to the term before), the tool makes every asking
+  above again, in the same order, of the term before converted and
+  of the term that `after_demoted` gives, with guesses made again
+  from those two terms. Where the function asked above was
+  `validate_unit`, `validate_unit_knowing` or one of the two of
+  `FlambdaValidateReadingSpec.v`, it calls the function of
+  `FlambdaValidateDemotedSpec.v` that asks it of that term
+  (`validate_unit_demoted`, `validate_unit_knowing_demoted`,
+  `validate_unit_reading_demoted`,
+  `validate_unit_knowing_reading_demoted`) on the two terms
+  converted; what is proved of each is of the two terms that it is
+  given (`validate_unit_demoted_sound_statement` and the three
+  beside it). Where it was a function of
+  `FlambdaValidateInliningSpec.v` or of
+  `FlambdaValidateCopyingSpec.v`, it calls that function on the
+  term before converted and on the term that `after_demoted`
+  gives; what is proved of that function is of those two terms,
+  and `demoted_program_refines_statement` says that a refinement
+  of the term before by the term that `after_demoted` gives is one
+  by the term after as it is given. Where one of them validates
+  them, the tool prints that answer as it is, with the lines of
+  that asking under it and one line more: "(asked of the term
+  after with the exception handlers that no call can raise to made
+  ordinary continuations)". What is proved is of the term after as
+  converted, with its handlers in place, on the machine that goes
+  by names, which executes no trap action; it says nothing of
+  backtraces. Trusted of those calls: that the term which the tool
+  gives a function of the last two files for the term after is
+  `after_demoted`, as it is extracted, of the term after
+  converted. The guesses are the tool's, and nothing that is
+  proved rests on them. Where these askings refuse them too, the
+  tool prints nothing of them, and what it prints is what it
+  prints of the askings above. The second check, below, is never
+  asked of the term that `after_demoted` gives.
   The comparison of the
   two runs that it also prints is a test of one run, and no theorem is
   about it.
@@ -1899,10 +2466,13 @@ it gave back.
   nothing. Where a lifting asks for what `my_closure` is known to be
   from its code to be used after each of those rounds, the test of
   such a round is again that of the round that there was, asked of
-  the term that the round is given (`known_own_free_in`); that step
-  asks nothing, its law from the imports
-  (`FlambdaClosureOfCodeSpec.know_own_closures_refines_imports_statement`)
-  having no premise. The test computes
+  the term that the round is given (`known_own_free_in`); the step
+  that ends such a round, which is that use and then the read of the
+  value slots that the body of code reads through another closure
+  (`FlambdaSlotsThroughSpec.know_own_closures_through`), asks
+  nothing, its law from the imports
+  (`know_own_closures_through_refines_imports_statement`) having no
+  premise. The test computes
   those terms a second time, as the validation does; it is
   sufficient, not necessary. The rounds that follow the demotion
   are those of `FlambdaValidateSpec.demote_and_tidy_known`, and
@@ -2008,6 +2578,25 @@ it gave back.
   that the tool computes by `before_copied` with nothing lifted,
   for the search of the liftings of the asking, are not trusted:
   the theorem holds whatever is guessed.
+  For a verdict of one of the four functions of
+  `FlambdaValidateDemotedSpec.v` the theorem from the imports
+  (`validate_unit_demoted_imports_statement` and the three beside
+  it) has the applicable test, `verdict_holds_from` or
+  `verdict_knowing_holds_from`, asked of the term that
+  `after_demoted` gives for the term after, and of the term before
+  converted or, for the two of the reading, of the term that
+  `before_read` gives for it; and not of the term after as
+  converted. For a verdict of a function of
+  `FlambdaValidateInliningSpec.v` or of
+  `FlambdaValidateCopyingSpec.v` that was asked of the term that
+  `after_demoted` gives, the theorem from the imports of that
+  function is of that term, with the tests that it has above, and
+  `demoted_unit_refines_statement` brings its conclusion to the
+  term after as it is given. The tool computes the term by
+  `after_demoted` as it is extracted, and gives it to the tests
+  with the verdict that it reports. Trusted of that call besides:
+  that the term which the tool gives the tests for the term after
+  is the one that the asking whose verdict it reports was of.
   Where the test accepts the verdict, the
   line
   begins "validated with its imports", and the verdict is of the two
@@ -2020,6 +2609,42 @@ it gave back.
   compared, not a validated verdict. In that case the tool also runs
   the unit before from the empty static environment, to say where
   the validation with nothing imported is vacuous.
+  A term before that is undefined is refined by anything, so where
+  the validator accepts a pair and the run of the term before that
+  the acceptance is of is undefined, the acceptance says nothing of
+  the unit. That run is the one that the tool shows, where the
+  acceptance is of the two runs shown, and the run of the unit
+  before from the empty static environment, where what is accepted
+  is the unit run with nothing imported. Where the tool's run finds
+  it undefined, the tool does not print the acceptance as a verdict,
+  and no line of the unit begins "validated". Where that line
+  would stand there are two. The first is "nothing to validate, as
+  the term before is undefined" or, for the unit run with nothing
+  imported, "nothing to validate with nothing imported, as the term
+  before is then undefined". The second, the next line, begins "the
+  validation accepts the pair" and has after those words what the
+  line would have had after "validated". That second line is the
+  validator's answer, printed as it is: it is no verdict of the
+  unit, and the unit is not one that is validated. Every other line
+  of the unit's output is what it would be under a verdict: the
+  line that begins "not validated with its imports" among them, and
+  the line further down that says that the validation says nothing
+  of the unit. The first of the two lines is also printed, where
+  "not validated" would stand, for a unit that the validator does
+  not accept and whose run before is undefined; no line of an
+  acceptance is under it there. So each account in this ledger of
+  a line that the tool as it is prints, and that begins
+  "validated", is of a unit whose run before, the one that the
+  acceptance is of, the tool did not find undefined. The lines
+  that the ledger quotes from the outputs of earlier measures are
+  as the tool of the measure printed them: this is not said of
+  them.
+  That is less than a run that is defined: a run that the bound of
+  steps ends is not found undefined, and a unit that the validator
+  accepts has then a line that begins "validated". The two lines
+  rest on the tool's run of the term before, as the lines of the
+  two runs do, and on its test of how that run ended, which is
+  OCaml: no theorem is of them.
   The refinement that a verdict concludes does not by itself say
   that a symbol which the term after exits with is bound: the
   statement of each asking concludes a refinement
@@ -2239,8 +2864,20 @@ it gave back.
   an answer is left out but what the conversion of types drops; and
   that an array to lift is refused.
 - **The tests of types**, in the same directory (`model_type.ml`,
-  `type_generator.ml`, `types_difftest.ml`). No theorem rests on them;
-  what a reader of their output trusts:
+  `type_generator.ml`, `types_difftest.ml`). No theorem rests on them.
+  The functions of the model's meet and join are the transcription of
+  the compiler's n-way pair; no function of its binary pair is
+  transcribed and no theorem is proved of one (decisions D27 and
+  D61). These tests run both pairs of the compiler, each called by
+  its own module or under the flag that chooses it: the two are
+  compared with each other, the checks against the meaning of types
+  and of well-formedness are made of each, the examples of the meet
+  are run with each, and the provers are asked in an environment made
+  with each meet. So for the binary pair the tests use the model's
+  meaning of types and its predicates, which are not about one pair,
+  and compare the answers to the examples; that neither transcribes
+  the binary pair nor proves a theorem of it. What a reader of their
+  output trusts:
   - `Model_type.normalise` and `same`: that two types of the model are
     identified only up to how maps and sets are written;
   - the comparison of what two joins give (the binary and the n-way; one
@@ -2814,7 +3451,45 @@ checked by an extracted function, and `validate_unit_sound` and
   (`know_own_closures_program_refines_statement`,
   `know_own_closures_refines_imports_statement`,
   `know_own_closures_refines_observed_statement`), and not under
-  every environment. With the field unset the normalisation is the
+  every environment. The round then reads, in the term that those
+  rewrites give, the value slots that the body of code reads through
+  another closure (`FlambdaSlotsThroughSpec.read_slots_through`;
+  `know_own_closures_through` is the two in that order, and is what
+  the round applies). Here too nothing is guessed. In the body of
+  code that is no stub and whose `my_closure` is not also a
+  parameter, the projection of a value slot from a variable that a
+  `Let` of that body bound to the projection of a value slot from
+  another variable becomes the projection of a value slot of that
+  other variable, only where the other is known to be a closure of
+  a code, as the rewrites above know it, neither variable has been
+  bound again, and a test of the unit passes, asked of the term that
+  those rewrites give: the unit makes a set of closures with that
+  code at the function slot that the first projection names, and
+  every such set gives the first value slot a variable in sight that
+  a `Let` bound to a closure which that `Let` made, and that `Let`
+  gave the value slot read through it the very simple that the set
+  gives the value slot put in its place (`sets_through_give`, of the
+  sets as `sets_through` sees them; what a `Let` gave a value slot
+  is forgotten where a variable that it names is bound again). The
+  function slot that the projection replaced names is not looked
+  at. This rewrite too is the identity of a unit one of whose groups
+  does not bind its static sets whole. In a run that comes to the
+  projection replaced, where that projection has a value, the one
+  put in its place has that value (`projection_through_statement`);
+  if a run comes to such a projection and it has no value, the run
+  goes wrong there, and the run of the unit rewritten may end
+  (`read_slots_through_other_function_slot_run_statement`): the
+  rewrite refines and is no equivalence, and of a unit whose run
+  goes wrong nothing is said. It refines the unit run on its own, from
+  its imports, and followed by the same observers run from the
+  imports (`read_slots_through_program_refines_statement`,
+  `read_slots_through_refines_imports_statement`,
+  `read_slots_through_refines_observed_statement`), and not under
+  every environment. The laws of the two in that order are
+  `know_own_closures_through_program_refines_statement`,
+  `know_own_closures_through_refines_imports_statement` and
+  `know_own_closures_through_refines_observed_statement`, of the
+  same three runs. With the field unset the normalisation is the
   one that there was
   (`FlambdaValidateSpec.normalise_lifted_own_unset_statement`).
 - Which value slots Simplify removed from the static sets of closures

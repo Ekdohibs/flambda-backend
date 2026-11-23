@@ -128,6 +128,8 @@ Proof.
   revert Hrelated. simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
     [ | intros _; exact I ].
+  destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+    [ | intros _; exact I ].
   destruct (bind_params params vs vars) as [handler_vars | ] eqn:Hbind;
     [ | intros _; exact I ].
   destruct result as [s' | k0 vs0 hp0 rd0 | ]; simpl; try contradiction.

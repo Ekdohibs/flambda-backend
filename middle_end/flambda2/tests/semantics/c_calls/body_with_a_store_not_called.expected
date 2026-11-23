@@ -1,0 +1,28 @@
+body_with_a_store_not_called.fl:
+  in front of the two terms, the declaration of 1 C function:
+    c_work (a C function), declared with no code
+  given the .cmx of Body_with_a_store, a prefix of 3 static bindings:
+    camlBody_with_a_store__store_0_1_code (v1,
+      v2) v3 -> k1 * k2 =
+      let_cont k3 (v4) =
+        let v5 = Block_set 0 (v1, v4) in
+        cont k1 (0)
+      in
+      apply direct(c_work (a C function)) c_work (v2) -> k3 * k2
+    camlBody_with_a_store__store_0_1 = closure Body_with_a_store.store_0 of
+      {Body_with_a_store.store_0 = camlBody_with_a_store__store_0_1_code}
+      at {Body_with_a_store.store_0 = camlBody_with_a_store__store_0_1} {}
+    camlBody_with_a_store = Block 0 (camlBody_with_a_store__store_0_1)
+  before Simplify, after the prefix, with its import (11 steps): returns
+                                                                   [0: <fun>;
+                                                                    <fun>]
+  after Simplify, after the prefix, with its import (5 steps): returns
+                                                                 [0: <fun>;
+                                                                  <fun>]
+  the check of kinds: passes before, passes after
+  the check of static names: passes before, passes after, each with the prefix in front of it
+  calls outside code: 0 before, 0 after
+  the same
+  calls outside code once those of known code are inlined: 0
+  validated with its imports, given the .cmx of 1 of them: the same once closures and blocks are lifted to symbols and the terms normalised
+  (decision D65: the guards of the liftings pass by the finer tests alone)

@@ -1152,6 +1152,8 @@ Proof.
   - cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
     simpl in Hkinds.
@@ -1767,6 +1769,8 @@ Proof.
   simpl.
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
     eqn:Hkinds; [ | discriminate ].
+  destruct
+    (values_of_subkinds _ vs (hm_params_subkinds metadata)); [ | discriminate ].
   destruct (bind_params params vs def_vars) as [handler_vars | ];
     [ | discriminate ].
   intros [= <-]. apply kinds_eqb_eq in Hkinds. eauto.

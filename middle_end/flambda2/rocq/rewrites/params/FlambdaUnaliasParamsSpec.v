@@ -73,9 +73,11 @@
    where a handler is applied, and the parameters that it removes go
    with their tests. A rewrite of the term after Simplify has to be
    refined by the term that it rewrites, so those two are for the term
-   before only. [unalias_params] keeps the test, in the [Let], where
-   the machine tests the kind in the same way; so it is an
-   equivalence, and may be applied to either term. It also asks less
+   before only. [unalias_params] keeps the test of the kind, in the
+   [Let], where the machine tests the kind in the same way, and takes
+   a parameter away only where the test of what the handler states of
+   it could not fail; so it is an equivalence, and may be applied to
+   either term. It also asks less
    of the variable: that no binder on the way from the [Let_cont] to
    an application binds it, where [bind_aliased_params] asks that
    nothing in the scope of the continuation binds it.
@@ -96,6 +98,13 @@
    of a non-recursive [Let_cont] of [k] ([unalias_param]):
    - that the handler is not an exception handler, and has a kind for
      the parameter;
+   - that the variable given is known to be of what the handler
+     states of the parameter (FlambdaStatedScopeSpec.is_stated_at, from
+     what is known of the variables bound around the [Let_cont]): the
+     machine tests what is stated where the handler is applied, and
+     the [Let] tests the kind only. A handler that states nothing of
+     the parameter beyond its kind asks nothing of the variable
+     (decision D25, at parameters);
    - that every mention of [k] in the body of the [Let_cont] is an
      application of [k] ([all_give_var]): no call returns or raises to
      [k], no trap action names it, and no [Let_cont] inside binds [k]
@@ -112,11 +121,17 @@
      parameter is not at another position of the handler too.
    The positions are tried from the last to the first ([unalias_from]),
    in every non-recursive [Let_cont] of the term, the innermost first
-   ([unalias_params], which is FlambdaSpineWalkSpec.walk_spine of the
-   rewrite of one [Let_cont], [unalias_node]). The handlers of
-   recursive continuations and the bodies of code are not gone into:
-   FlambdaNormaliseSpec.rewrite_code and [rewrite_rec_handlers] take a
-   pass there.
+   ([unalias_params_under], which makes the rewrite of one [Let_cont],
+   [unalias_node], on the way back up the term). It goes down the term
+   with what is known of the variables bound around each node
+   (FlambdaStatedScopeSpec.stated_in_scope): under a [Let] the
+   variable is known as what its defining expression makes, and in
+   the handler of a non-recursive continuation the parameters are
+   known as what the handler states of them. [unalias_params] is that
+   from nothing known. The handlers of recursive continuations and
+   the bodies of code are not gone into by the pass: the validation
+   takes a pass there, and FlambdaValidateSpec.v says what is known
+   where each begins.
 
    The result is equivalent to the term
    ([unalias_params_equivalent_statement]), under all environments.
@@ -136,12 +151,21 @@
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
-  FlambdaMapSpec FlambdaSemanticsSpec FlambdaSpineWalkSpec.
+  FlambdaMapSpec FlambdaSemanticsSpec FlambdaStatedScopeSpec.
 Import ListNotations.
 
 (* A list without its element at a position. *)
 Definition drop_nth {A : Type} (i : nat) (l : list A) : list A :=
   firstn i l ++ skipn (S i) l.
+
+(* What is stated of the parameters of a handler says nothing at a
+   position: every value of the kind passes the test there. A list
+   that is too short states nothing. *)
+Definition says_nothing_at (sks : list param_subkind) (i : nat) : bool :=
+  match nth_error sks i with
+  | Some ps => says_nothing (fst ps) (snd ps)
+  | None => true
+  end.
 
 (* The first answer that a function gives of an element of a list. *)
 Fixpoint first_answer {A B : Type} (f : A -> option B) (l : list A)
@@ -285,10 +309,13 @@ with drop_arg_in_handler (k : continuation) (i : nat)
    the application binds, and that is not a parameter of [h]. The new
    handler begins with a [Let] of the parameter to that variable, with
    the kind that [h] had for the parameter: the machine tests the kind
-   at the [Let] as it did where [h] was applied. The parameter is at no
-   other position of [h], where the [Let] would hide it. An exception
-   handler is left as it is. *)
-Definition unalias_param (i : nat) (k : continuation)
+   at the [Let] as it did where [h] was applied, and the variable is
+   known to be of what [h] states of that parameter, which the [Let]
+   does not test ([S]: what is known of the variables bound around
+   the [Let_cont]). The parameter is at no other position of [h],
+   where the [Let] would hide it. An exception handler is left as it
+   is. *)
+Definition unalias_param (S : stated_in_scope) (i : nat) (k : continuation)
     (h : continuation_handler) (body : expr)
     : option (continuation_handler * expr) :=
   match h with
@@ -301,10 +328,13 @@ Definition unalias_param (i : nat) (k : continuation)
            && all_give_var k i x true body
            && negb (among x params)
            && negb (among p (drop_nth i params))
+           && is_stated_at S (hm_params_subkinds metadata) i (Var x)
         then
           Some
             (Handler (drop_nth i params)
                {| hm_params_kinds := drop_nth i (hm_params_kinds metadata);
+                  hm_params_subkinds :=
+                    drop_nth i (hm_params_subkinds metadata);
                   hm_is_exn_handler := false |}
                (Let p kind (Simple (Var x)) handler),
              drop_arg k i body)
@@ -316,36 +346,58 @@ Definition unalias_param (i : nat) (k : continuation)
   end.
 
 (* The same for every position below [i], the last first. *)
-Fixpoint unalias_from (i : nat) (k : continuation)
+Fixpoint unalias_from (S : stated_in_scope) (i : nat) (k : continuation)
     (h : continuation_handler) (body : expr)
     : continuation_handler * expr :=
   match i with
   | O => (h, body)
-  | S i =>
-    match unalias_param i k h body with
-    | Some (h', body') => unalias_from i k h' body'
-    | None => unalias_from i k h body
+  | Datatypes.S i =>
+    match unalias_param S i k h body with
+    | Some (h', body') => unalias_from S i k h' body'
+    | None => unalias_from S i k h body
     end
   end.
 
 (* The pass at one node: the parameters of a non-recursive [Let_cont],
    the last first. Any other term is left as it is. *)
-Definition unalias_node (e : expr) : expr :=
+Definition unalias_node (S : stated_in_scope) (e : expr) : expr :=
   match e with
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     let '(h, body) :=
-      unalias_from (length params) k (Handler params metadata handler) body
+      unalias_from S (length params) k (Handler params metadata handler)
+        body
     in
     Let_cont_non_recursive k h body
   | Let _ _ _ _ | Let_static _ _ | Let_cont_recursive _ _ | Apply _
   | Apply_cont _ | Switch _ _ | Invalid => e
   end.
 
-(* The pass: that step at every non-recursive [Let_cont] of a term, its
-   handler and its body first (FlambdaSpineWalkSpec.walk_spine). The
-   handlers of recursive continuations and the bodies of code are left
-   as they are. *)
-Definition unalias_params (e : expr) : expr := walk_spine unalias_node e.
+(* That step at every non-recursive [Let_cont] of a term, its handler
+   and its body first, with what is known of the variables bound around
+   each (FlambdaStatedScopeSpec.v). *)
+Fixpoint unalias_params_under (S : stated_in_scope) (e : expr) {struct e}
+    : expr :=
+  unalias_node S
+    match e with
+    | Let x kind d body =>
+      Let x kind d (unalias_params_under ((x, stated_of_named S d) :: S) body)
+    | Let_static bindings body =>
+      Let_static bindings (unalias_params_under S body)
+    | Let_cont_non_recursive k (Handler params metadata handler) body =>
+      Let_cont_non_recursive k
+        (Handler params metadata
+           (unalias_params_under
+              (params_stated params (hm_params_subkinds metadata) S)
+              handler))
+        (unalias_params_under S body)
+    | Let_cont_recursive handlers body =>
+      Let_cont_recursive handlers (unalias_params_under S body)
+    | Apply _ | Apply_cont _ | Switch _ _ | Invalid => e
+    end.
+
+(* The pass: the same from nothing known. The handlers of recursive
+   continuations and the bodies of code are left as they are. *)
+Definition unalias_params (e : expr) : expr := unalias_params_under [] e.
 
 (* The result behaves as the term does, under all environments. *)
 Definition unalias_params_equivalent_statement : Prop :=

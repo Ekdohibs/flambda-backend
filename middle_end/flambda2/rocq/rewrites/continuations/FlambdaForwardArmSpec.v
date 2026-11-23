@@ -28,7 +28,8 @@
 (* An application that gives a number to the parameter that the handler
    of its continuation tests goes where the arm of that number goes: a
    normalisation that refines, and an equivalence where the arguments
-   are known to have the kinds of the parameters.
+   are known to have the kinds of the parameters and to be of what
+   the handler states of them.
 
    This file is to be reviewed: [forward_to_arms],
    [forward_to_arms_kinded] and [forward_to_arms_in_code] with what
@@ -133,32 +134,47 @@
    environments, and is not equivalent to it as the statement is
    made: an application of the first term evaluates its arguments,
    tests their kinds against those that the handler gives its
-   parameters and binds them
+   parameters, tests that they are of what the handler states of its
+   parameters, and binds them
    (FlambdaSemanticsSpec.apply_cont_value), and the [Apply_cont] put
    in its place does none of that, so the first term is undefined
-   where an argument that the arm does not read has no value or not
-   the kind of its parameter, and the second need not be. It is for
-   the term before Simplify.
+   where an argument that the arm does not read has no value, has not
+   the kind of its parameter or is not of what the handler states of
+   it, and the second need not be. It is for the term before
+   Simplify.
 
    [forward_to_arms_kinded] is for the term after, where an
    equivalence is needed
    ([forward_to_arms_kinded_equivalent_statement]). It forwards an
-   application only where the three things that the application does
+   application only where the four things that the application does
    cannot fail, as FlambdaForwardKindedSpec.forward_kinded does and
    by the same means: going down the term it keeps the kinds of the
    variables bound around the point
    (FlambdaNormaliseSpec.kinds_in_scope), and asks that each
    argument have, by them, the kind that the handler gives the
    parameter it is given to (FlambdaForwardKindedSpec.have_kinds);
-   and it keeps no entry for a handler that does not give as many
-   kinds as it has parameters, which never runs. The [Switch] of the
-   handler cannot fail either: the parameter tested is bound to the
-   naked immediate given, and the arm of that number has been found.
+   it keeps, beside the kinds, what is known of the value of each
+   variable bound around the point
+   (FlambdaStatedScopeSpec.stated_in_scope: what the handler or the
+   code that binds a parameter states of it, and what the defining
+   expression of a [Let] makes), and asks that each argument be
+   known, by that, to be of what the handler states of the parameter
+   it is given to (FlambdaStatedScopeSpec.are_stated), so that the
+   test which the machine makes of the values where the handler is
+   applied (FlambdaSubkindSpec.values_of_subkinds; decision D25, at
+   parameters) cannot fail; and it keeps no entry for a handler that
+   does not give as many kinds as it has parameters, which never
+   runs. That an argument is known to be of what is stated is a
+   sufficient reason to take the test away with the application; it
+   is not said to be the weakest. The [Switch] of the handler cannot
+   fail either: the parameter tested is bound to the naked immediate
+   given, and the arm of that number has been found.
 
    [forward_to_arms_in_code] applies the kinded pass to the body of
    every piece of code that a term binds, started with the kinds of
    the variables that a call binds
-   (FlambdaCodeLetsSpec.code_in_scope), as
+   (FlambdaCodeLetsSpec.code_in_scope) and with what the code states
+   of its parameters (FlambdaStatedScopeSpec.code_stated), as
    FlambdaForwardKindedSpec.forward_kinded_in_code does; its result
    is equivalent to the term
    ([forward_to_arms_in_code_equivalent_statement]).
@@ -186,7 +202,8 @@ From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
 From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaValueSpec FlambdaSemanticsSpec FlambdaNormaliseSpec
-  FlambdaCodeLetsSpec FlambdaForwardSpec FlambdaForwardKindedSpec.
+  FlambdaCodeLetsSpec FlambdaForwardSpec FlambdaForwardKindedSpec
+  FlambdaStatedScopeSpec.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -238,13 +255,15 @@ Definition arm_entry_of (kinded : bool) (params : list variable)
   end.
 
 (* The arm that an application goes to, with the parameters of its
-   continuation and their kinds: the continuation has an entry, the
-   argument at the position of the parameter tested is a naked
-   immediate, an arm has that number, and the arm passes the tests of
-   FlambdaForwardSpec.forwarding, those of a handler that would be that
-   arm alone. *)
+   continuation, their kinds and what the handler states of them: the
+   continuation has an entry, the argument at the position of the
+   parameter tested is a naked immediate, an arm has that number, and
+   the arm passes the tests of FlambdaForwardSpec.forwarding, those of
+   a handler that would be that arm alone. *)
 Definition arm_of_apply_cont (F : arm_forwards) (ac : apply_cont)
-    : option (list variable * list flambda_kind * apply_cont) :=
+    : option
+        (list variable * (list flambda_kind * list param_subkind)
+         * apply_cont) :=
   match lookup (ac_continuation ac) F with
   | Some (Some (params, metadata, i, arms, body)) =>
     match nth_error (ac_args ac) i with
@@ -256,7 +275,9 @@ Definition arm_of_apply_cont (F : arm_forwards) (ac : apply_cont)
             body
         with
         | Some (params, target) =>
-          Some (params, hm_params_kinds metadata, target)
+          Some
+            (params, (hm_params_kinds metadata, hm_params_subkinds metadata),
+             target)
         | None => None
         end
       | None => None
@@ -269,15 +290,18 @@ Definition arm_of_apply_cont (F : arm_forwards) (ac : apply_cont)
 (* An [Apply_cont] made to go where the arm goes, if it has as many
    arguments as the continuation has parameters, neither it nor the arm
    has a trap action, and, where [kinded], the arguments have the kinds
-   of the parameters. *)
+   of the parameters and are known to be of what the handler states of
+   them. *)
 Definition forward_to_arm_apply_cont (kinded : bool) (G : kinds_in_scope)
-    (F : arm_forwards) (ac : apply_cont) : apply_cont :=
+    (S : stated_in_scope) (F : arm_forwards) (ac : apply_cont) : apply_cont :=
   match arm_of_apply_cont F ac with
-  | Some (params, kinds, target) =>
+  | Some (params, (kinds, sks), target) =>
     if
       Nat.eqb (length (ac_args ac)) (length params)
       && no_trap_action ac && no_trap_action target
-      && (negb kinded || have_kinds G (ac_args ac) kinds)
+      && (negb kinded
+          || (have_kinds G (ac_args ac) kinds
+              && are_stated S (ac_args ac) sks))
     then forwarded params (ac_args ac) target
     else ac
   | None => ac
@@ -287,54 +311,61 @@ Definition forward_to_arm_apply_cont (kinded : bool) (G : kinds_in_scope)
 (* The pass                                                                 *)
 (* ======================================================================== *)
 
-(* [G]: the kinds of the variables bound around the point, which only
-   the kinded pass reads. *)
+(* [G]: the kinds of the variables bound around the point, and [S]:
+   what is known of their values (FlambdaStatedScopeSpec.v). Only the
+   kinded pass reads them. *)
 Fixpoint forward_to_arms_under (kinded : bool) (G : kinds_in_scope)
-    (F : arm_forwards) (e : expr) : expr :=
+    (S : stated_in_scope) (F : arm_forwards) (e : expr) : expr :=
   match e with
   | Let x kind d body =>
-    Let x kind d (forward_to_arms_under kinded ((x, kind) :: G) F body)
+    Let x kind d
+      (forward_to_arms_under kinded ((x, kind) :: G)
+         ((x, stated_of_named S d) :: S) F body)
   | Let_static bindings body =>
-    Let_static bindings (forward_to_arms_under kinded G F body)
+    Let_static bindings (forward_to_arms_under kinded G S F body)
   | Let_cont_non_recursive k (Handler params metadata handler) body =>
     let handler :=
       forward_to_arms_under kinded
-        (params_in_scope params (hm_params_kinds metadata) G) F handler
+        (params_in_scope params (hm_params_kinds metadata) G)
+        (params_stated params (hm_params_subkinds metadata) S) F handler
     in
     Let_cont_non_recursive k (Handler params metadata handler)
-      (forward_to_arms_under kinded G
+      (forward_to_arms_under kinded G S
          ((k, arm_entry_of kinded params metadata handler body) :: F) body)
   | Let_cont_recursive handlers body =>
     let F := map (fun '(k, _) => (k, None)) handlers ++ F in
     Let_cont_recursive
-      (map (fun '(k, h) => (k, forward_to_arms_in_handler kinded G F h))
+      (map (fun '(k, h) => (k, forward_to_arms_in_handler kinded G S F h))
          handlers)
-      (forward_to_arms_under kinded G F body)
+      (forward_to_arms_under kinded G S F body)
   | Apply _ | Invalid => e
-  | Apply_cont ac => Apply_cont (forward_to_arm_apply_cont kinded G F ac)
+  | Apply_cont ac => Apply_cont (forward_to_arm_apply_cont kinded G S F ac)
   | Switch scrutinee arms =>
     Switch scrutinee
       (map
-         (fun arm => (fst arm, forward_to_arm_apply_cont kinded G F (snd arm)))
+         (fun arm =>
+            (fst arm, forward_to_arm_apply_cont kinded G S F (snd arm)))
          arms)
   end
 with forward_to_arms_in_handler (kinded : bool) (G : kinds_in_scope)
-    (F : arm_forwards) (h : continuation_handler) : continuation_handler :=
+    (S : stated_in_scope) (F : arm_forwards) (h : continuation_handler)
+    : continuation_handler :=
   match h with
   | Handler params metadata handler =>
     Handler params metadata
       (forward_to_arms_under kinded
-         (params_in_scope params (hm_params_kinds metadata) G) F handler)
+         (params_in_scope params (hm_params_kinds metadata) G)
+         (params_stated params (hm_params_subkinds metadata) S) F handler)
   end.
 
 (* For the term before: nothing is asked of the kinds. *)
 Definition forward_to_arms (e : expr) : expr :=
-  forward_to_arms_under false [] [] e.
+  forward_to_arms_under false [] [] [] e.
 
 (* For the term after: the arguments are known to have the kinds of the
-   parameters. *)
+   parameters and to be of what the handler states of them. *)
 Definition forward_to_arms_kinded (e : expr) : expr :=
-  forward_to_arms_under true [] [] e.
+  forward_to_arms_under true [] [] [] e.
 
 Definition forward_to_arms_refines_statement : Prop :=
   ∀ e : expr, expr_refines e (forward_to_arms e).
@@ -347,7 +378,9 @@ Definition forward_to_arms_kinded_equivalent_statement : Prop :=
 (* ======================================================================== *)
 
 (* The kinded pass in the body of a piece of code, with the kinds of
-   what a call binds (FlambdaCodeLetsSpec.code_in_scope). *)
+   what a call binds (FlambdaCodeLetsSpec.code_in_scope) and with what
+   the code states of its parameters
+   (FlambdaStatedScopeSpec.code_stated). *)
 Definition forward_to_arms_in_binding (binding : static_binding)
     : static_binding :=
   match binding with
@@ -355,7 +388,7 @@ Definition forward_to_arms_in_binding (binding : static_binding)
     Bind_code id
       (Code params my_closure ret exn metadata
          (forward_to_arms_under true (code_in_scope params my_closure metadata)
-            [] body))
+            (code_stated params my_closure metadata) [] body))
   | Bind_deleted_code _ | Bind_symbol _ _ => binding
   end.
 

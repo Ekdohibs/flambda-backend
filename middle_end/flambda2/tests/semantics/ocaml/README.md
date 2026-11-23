@@ -42,6 +42,12 @@ status 0 of a unit, and the status 1, and no other, of a unit that
 way. The list names a unit only with the reason for which the tool
 fails on it.
 
+In the context main the rules also compile each `X.ml` with the driver
+of the compiler's own run, and compare what that prints with
+`X.expected` too, or with `X.own_expected` for a unit that has that
+file ("The compiler's own run", at the end of this file, has the rule
+and its two exceptions).
+
 - `-drawfexpr` prints the unit after the conversion from Lambda (closure
   conversion) and before Simplify. The tool runs Simplify itself, with
   the default flags, on what the parser reads back.
@@ -61,18 +67,21 @@ fails on it.
   that.
 - A function whose inlining an example is about has `[@inline]`: with
   the default flags Simplify inlines only the smallest functions.
-- `from_ocaml.sh` refuses a unit of whose term the text loses
-  something that the tool cannot give back. It compiles the unit once
-  more, for what `-drawflambda` prints of the term before Simplify,
-  and fails on two things. The test of being an integer that is for
-  any value (`Is_int_generic`), which the text writes as the test for
-  variants (label C2-26), unless `generic_is_int.txt` names the unit.
-  A call that is a probe: the text does not say that it is one, and
-  the program runs the handler of a probe only while the probe is
-  enabled (label C2-17). `script/` has a unit that is refused for a
-  probe and the same unit without the probe, with what the script
-  says of each, and two more for the refusal that is of `library/`
-  only. It has seven more: six of an unboxed product among the arguments
+- `from_ocaml.sh` refuses no unit of this directory for what its term
+  has. It refused a unit for two things while the text of a term lost
+  them: the test of being an integer that is for any value, which the
+  text wrote as the test for variants (label C2-26), and a call that
+  is a probe, of which the text did not say that it is one (label
+  C2-17). The text writes both now, and the reader takes both. No
+  unit of this directory has either. Of a unit that has a call that
+  is a probe the tool says that it is not checked: the program runs
+  the handler of a probe only while the probe is enabled, the model
+  has nothing of that, and the conversion refuses the call
+  (`pairs/probed.ml`).
+  `script/` has a unit with a probe and the same unit without the
+  probe, with what the script says of each, and two more for the
+  refusal that is of `library/` only. It has seven more: six of an
+  unboxed product among the arguments
   of a call or the parameters of code, the product of nothing included,
   and one that is one of the six with two ordinary parameters in the
   place of the product. The script refused four of the six, those that
@@ -94,12 +103,65 @@ fails on it.
   the sources, here, in `script/` and in `library/`, that have an
   unboxed tuple, an unboxed number, a parameter marked `local_` or
   the literal of an immutable array.
+- A source identified as following lines of a file of `stdlib/`, as
+  reduced from one, or as written after functions of one, is given
+  the notice of that file at its head, byte for byte, and the notices
+  of two files, one after the other, where that is so of two; its own
+  comment, under the notice, names the file and the lines, and says
+  what matches them and what differs. Absence of
+  such a notice is not a finding that the source contains no text from
+  the library: many sources declare primitives in the same form as the
+  library (`external ( + ) : int -> int -> int = "%addint"`), and a
+  match alone does not establish where the text came from.
+- `X.fl` is written by the compiler from `X.ml` ("How a term is made",
+  above) and is kept as the compiler wrote it. It has no notice of its
+  own: it stands under the notice of its source, where the source has
+  one, and under the credits that the comment of its source gives. The
+  sources of this directory that begin with a notice are these, each
+  with the text made from it: `bool_kept_across_call.ml` and
+  `bool_kept_across_call.fl`; `bool_tested_at_once.ml` and
+  `bool_tested_at_once.fl`; `boxed_number_in_slot.ml` and
+  `boxed_number_in_slot.fl`; `boxed_number_in_slot_kept.ml` and
+  `boxed_number_in_slot_kept.fl`; `boxed_number_in_slot_not_known.ml`
+  and `boxed_number_in_slot_not_known.fl`;
+  `boxed_number_in_two_slots.ml` and `boxed_number_in_two_slots.fl`;
+  `chain_of_eighteen_in_functor.ml` and
+  `chain_of_eighteen_in_functor.fl`;
+  `chain_of_five_closures_then_argument.ml` and
+  `chain_of_five_closures_then_argument.fl`;
+  `chain_of_five_in_function.ml` and `chain_of_five_in_function.fl`;
+  `chain_of_five_in_functor.ml` and `chain_of_five_in_functor.fl`;
+  `chain_of_four_closures_then_argument.ml` and
+  `chain_of_four_closures_then_argument.fl`;
+  `chain_of_four_in_function.ml` and `chain_of_four_in_function.fl`;
+  `chain_of_four_in_functor.ml` and `chain_of_four_in_functor.fl`;
+  `copy_local.ml` and `copy_local.fl`; `fst_snd.ml` and `fst_snd.fl`;
+  `lifted_block_in_two_bodies.ml` and `lifted_block_in_two_bodies.fl`;
+  `lifted_closure_in_two_bodies.ml` and
+  `lifted_closure_in_two_bodies.fl`;
+  `raise_constant_inlined_in_function.ml` and
+  `raise_constant_inlined_in_function.fl`; `raise_made_block_inlined.ml`
+  and `raise_made_block_inlined.fl`; `raise_made_block_inlined_twice.ml`
+  and `raise_made_block_inlined_twice.fl`; `raise_made_block_written.ml`
+  and `raise_made_block_written.fl`; `slot_through_held.ml` and
+  `slot_through_held.fl`; `slot_through_held_functor.ml` and
+  `slot_through_held_functor.fl`; `string_get16_be.ml` and
+  `string_get16_be.fl`; `string_get16_checked.ml` and
+  `string_get16_checked.fl`. Each begins with the notice of a file of
+  `stdlib/` that its comment names; three of them,
+  `raise_made_block_inlined.ml`, `raise_made_block_inlined_twice.ml` and
+  `raise_made_block_written.ml`, with the notices of two files. Each
+  notice says that the file is distributed under the terms of the GNU
+  Lesser General Public License version 2.1, with the special exception
+  on linking described in the file LICENSE. No notice passes from a
+  source to what the test tool prints of the unit (`X.expected`), nor to
+  an interface that only declares what the unit exports (`X.mli`).
 
 ## What the conversion does to a unit
 
 The test tool converts the compiler's term to a term of the model
 (`../../tools/flsemantics.ml`; it is trusted, and
-`rocq/TRUST-LEDGER.md` lists it). Four things it does matter to a
+`rocq/TRUST-LEDGER.md` lists it). Five things it does matter to a
 unit made from OCaml.
 
 - **Regions.** Where a block, a boxed number or a closure does not
@@ -131,7 +193,7 @@ unit made from OCaml.
   of regions: passes before, passes after", or what failed or was
   not run. No verdict depends on that line; `rocq/TRUST-LEDGER.md`, "The
   check of regions", says what it rests on and what it does not say. The
-  tool prints the line of 109 of the 553 units of this directory, and it
+  tool prints the line of 109 of the 591 units of this directory, and it
   says "passes before, passes after" of each. Where that line says
   what the two runs came to, the tool prints one more, "the ends of
   regions ...": of each term, the answer of the model's `ends_check`
@@ -185,6 +247,36 @@ unit made from OCaml.
   tupled code: the code that `nested_tuple.ml` makes takes one
   parameter, the pair, which the call allocates.
 
+- **Calls of C functions.** What such a call is in the model is
+  decision D50, ruled on 18 November 2026: a run is undefined at a
+  call of a C function of which the model says nothing, and it says
+  nothing of any yet. The tool converts one as a direct call of code
+  that the term declares and does not bind (the reading called (U) in
+  `rocq/requests/P1-c-calls.md`): a run that reaches it is undefined
+  there. So a unit whose functions call C functions, and
+  whose own run reaches no such call, is checked as any unit. The C
+  functions that the compiler's term of a unit calls are among its
+  imports, so where such a unit is validated its line is that of a
+  unit that has imports: "validated with its imports" where the
+  verdict passes the test of the imports. Of a unit whose own run
+  reaches such a call an acceptance by the validator says nothing,
+  of what comes before the call either. What the tool prints is of
+  its own runs, which have 1,000,000 steps: where it finds undefined
+  the run of the term before that an acceptance is of, it prints no
+  verdict; and of each run that it shows and finds undefined at a
+  call of a C function, a line says so and names the function. A
+  call that a run would reach only after those steps is not found,
+  and the unit can then have the word "validated" ("What the
+  verdicts mean", below).
+  `../c_calls/` has units of both kinds and the controls, which are in
+  none of the tables and counts of this file. `rocq/TRUST-LEDGER.md`,
+  "Calls of C functions", says what is kept of a call, and what a
+  verdict of a function that calls one rests on: the rewrites of the
+  validation as they are written, and no theorem.
+  A file of `../c_calls/` identified as having items taken or adapted
+  from files of `stdlib/` begins with their notice, and its own
+  comment says which item is from which file and which lines.
+
 ## What the verdicts mean
 
 - **validated**: the extracted `validate_unit` accepted the pair. By
@@ -196,6 +288,23 @@ unit made from OCaml.
   `-drawfexpr` and the fexpr parser: what is validated is the term the
   parser reads back, which is the term the compiler simplifies only as
   far as printing and parsing lose nothing.
+  The tool prints the word where the validator accepted and the run
+  of the term before that the acceptance is of did not end undefined
+  within the 1,000,000 steps that the tool gives the machine: that
+  run reached an exit, or it was still running when the steps ran
+  out (where it is one of the runs shown, its line ends "still
+  running when the fuel ran out"). A run that goes on past those
+  steps is not shown to be defined, and the word is no statement that
+  the run before is defined. Under "validated with nothing imported"
+  that run is one from the empty static environment, which the tool
+  does not print: the runs shown are those from the imports, and the
+  output does not say how that one ended, only that it was not found
+  undefined. No expected file of this directory has a line of a run
+  that was still running.
+  The rules of this directory check each unit in a second way too, in
+  which the same check is given the two terms of the compiler's own
+  run, and what it prints is compared with `X.expected`, with two
+  exceptions ("The compiler's own run", "The rule").
   What the theorem observes at the exit is the continuation, its
   arguments, here the symbol of the unit, and the heap, which has
   the cells that the run has made; the contents of the module block
@@ -205,8 +314,15 @@ unit made from OCaml.
   conditions of a lifting hold, that step makes static bindings, in
   the term before, of `Let`s that Simplify lifted (for one of its
   four liftings, `FlambdaLiftSpec.lift_unit`, two of the conditions
-  are that the term it is given exits with constants and symbols
-  only and has no primitive of the heap). The words name the step,
+  are tests of the term that it is given: that it exits with
+  constants and symbols only (`FlambdaLiftSpec.exits_plain_fine`),
+  and the test of the heap
+  (`FlambdaHeapFreeSpec.free_of_heap_fine`). By decision D65, which
+  is provisional, each test also passes a term that has no call
+  outside the bodies of its code and that passes with those bodies
+  left out: the items on the line that names a primitive of the heap
+  and on the line of the mark of that decision, below). The words
+  name the step,
   and not what it lifted: where a condition of a lifting fails, that
   lifting leaves the term that it was given as it is, and the step
   may still apply its other liftings and rewrites (see the item on
@@ -260,10 +376,14 @@ unit made from OCaml.
   rewrites from the types; the first phase is as it was. The attempts
   of the term before with copies of code for the sets of closures
   that a `Let` makes (below) are made with such rounds from the
-  first, where the term before has such a closure. Four units of this
+  first, where the term before has such a closure. Nine units of this
   directory have the line: `captured_closure_given_to_inlined.ml`,
-  `maker_of_mutual_inlined.ml`, `maker_of_two_inlined_twice.ml` and,
-  under the line of the copies, `local_rec_inlined_twice.ml`.
+  `functor_member_kept_before_copy.ml`,
+  `functor_member_kept_before_copy_control.ml`,
+  `maker_of_mutual_inlined.ml`, `maker_of_two_inlined_twice.ml`,
+  `slot_through_held.ml`, `slot_through_held_functor.ml`,
+  `slot_through_plain.ml` and, under the line of the copies,
+  `local_rec_inlined_twice.ml`.
   Where it has the line "(with what my_closure is known to be from its
   code used in the rounds after each lifting)", the liftings of the
   attempt that accepted the pair asked that too; the line records what
@@ -307,12 +427,17 @@ unit made from OCaml.
   `FlambdaValidateSpec.normalise_lifted_own`). The theorem keeps the
   text of its statement here too. The attempts of the term before
   with copies of code for the sets of closures that a `Let` makes
-  (below) are made with these rounds from the first. Three units of this
+  (below) are made with these rounds from the first. Eight units of this
   directory have the line: `captured_closure_given_to_inlined.ml`,
-  `maker_of_mutual_inlined.ml` and, under the line of the copies,
-  `local_rec_inlined_twice.ml`.
+  `functor_member_kept_before_copy.ml`,
+  `functor_member_kept_before_copy_control.ml`,
+  `maker_of_mutual_inlined.ml`, `slot_through_held.ml`,
+  `slot_through_held_functor.ml`, `slot_through_plain.ml` and, under the
+  line of the copies, `local_rec_inlined_twice.ml`.
 - **validated with its imports**: the unit names a symbol of another
-  unit, here always a predefined exception, and the tool runs both
+  unit, here always a predefined exception (the C function of a call
+  is such a symbol too: "Calls of C functions" above), and the tool
+  runs both
   terms from the static environment of their imports
   (`FlambdaImportsSpec.imports_statics`), where such a symbol is
   bound to an imported value whose contents are unknown; the two
@@ -544,11 +669,11 @@ unit made from OCaml.
   after each lifting and, where the term before has a closure of the
   sort that those rounds know, with the calls of the closures that a
   `Let` makes made direct there: the lines of those rounds stand
-  under this one. For these attempts the lists of the code not to
-  inline have, beside the code that the term after calls directly,
-  the code that it is a newer version of, and what that is a newer
-  version of, eight times at most: the term before may call the
-  older code where the term after calls the newer.
+  under this one. As in every kind of attempt of the validation
+  ("What a check costs"), a list of the code not to inline that has
+  the code which the term after calls directly has also the code
+  that it is a newer version of, and what that is a newer version
+  of, eight times at most.
   What is proved of a pair that either function accepts is of the
   term before as the tool converted it, each unit run on its own from
   empty environments: the unit after refines the unit before
@@ -572,6 +697,85 @@ unit made from OCaml.
   the inlining. One unit of this directory has the line in its
   expected file, which is made at the default flags,
   `local_rec_inlined_twice.ml`.
+- **(asked of the term after with the exception handlers that no call
+  can raise to made ordinary continuations)**, a line under a verdict,
+  or under the line "the validation accepts the pair" of a unit whose
+  term before is undefined ("nothing to validate", below): the
+  validation that accepted the pair was asked of another term than
+  the term after. The validation makes ordinary continuations of the
+  exception handlers of the term before that no call can raise to
+  (`FlambdaDemoteSpec.demote_handlers`; "Exceptions", below), and
+  does not do so to the term after. Given `-g`, Simplify keeps such
+  a handler where a raise that reaches it is of a kind that it takes
+  for a use that escapes, and the two terms can then differ by the
+  handler at every attempt. Such a handler can also be in the code
+  that the tool puts in front of both terms from the `.cmx` of
+  another unit, where that unit was compiled with `-g`, whatever the
+  flags of the unit that is checked (`../stdlib/README.md`,
+  `stringLabels.ml`). So where every attempt that the tool
+  makes of the two terms as it converted them refuses the pair, the
+  attempts of the three lines above and the second asking included,
+  and that rewrite changes the term after
+  (`FlambdaValidateDemotedSpec.after_demoted`), the tool makes all
+  its attempts again, in the same order, of the term before and of
+  the term after so rewritten: every guess, every asking and every
+  test of the verdict from the imports is made again of those two
+  terms, and nothing that the first attempts found is used. Where
+  the function asked was `validate_unit`, `validate_unit_knowing` or
+  one of the two of the reading, the function asked now is the one
+  of `FlambdaValidateDemotedSpec.v` that asks it of the rewritten
+  term (`validate_unit_demoted`, `validate_unit_knowing_demoted`,
+  `validate_unit_reading_demoted`,
+  `validate_unit_knowing_reading_demoted`), and it is given the
+  term after as converted; an attempt with calls inlined first, or
+  with copies of code, asks the function that it asked, of the
+  rewritten term. Where these attempts accept the pair, what the
+  tool prints of the acceptance is theirs, and is printed as of any
+  acceptance: a verdict and its lines, or, where the run of the term
+  before that the acceptance is of is undefined, the line "nothing
+  to validate" with the line "the validation accepts the pair" under
+  it; this line stands under them. Where they refuse it too they
+  print nothing, and the tool prints what it prints of the attempts
+  of the two terms as converted: "not validated", the lines under it
+  and the second check, or, where the run of the term before that is
+  shown is undefined, "nothing to validate" and no second check.
+  What is proved of a pair accepted so is of the term after as the
+  tool converted it, with its handlers in place, and not of the
+  rewritten term. The rewrite is an equivalence in the model, under
+  all environments
+  (`FlambdaDemoteSpec.demote_handlers_equivalent_statement`), so
+  the term after as converted refines the rewritten term
+  (`after_demoted_refines_statement`), and a refinement of the term
+  before by the rewritten term is one by the term after as converted
+  (`demoted_program_refines_statement`, of the unit run on its own
+  from empty environments; `demoted_unit_refines_statement`, of the
+  unit run from its imports). So the unit after refines the unit
+  before, each run on its own from empty environments
+  (`validate_unit_demoted_sound_statement` and the three beside
+  it), and, where the tests of the verdict from the imports that the
+  attempt has pass, made of the rewritten term for the term after,
+  each run from its imports
+  (`validate_unit_demoted_imports_statement` and the three beside
+  it). Those eight statements are of the four functions of that
+  file. For an attempt with calls inlined first, or with copies of
+  code, the same is concluded by the statements of its entry above,
+  at the rewritten term, and then by
+  `demoted_program_refines_statement` or
+  `demoted_unit_refines_statement`.
+  The statements are of the machine of the model, which goes by
+  names and executes no trap action: they say nothing of backtraces.
+  The tests that the tool makes before the validation (that the term
+  after is well-formed and mentions static names where they are in
+  scope, the two runs, the check of kinds) are of the term after as
+  converted.
+  No expected file of this directory has the line, and the tables
+  below have no class for it. Two units of `pairs/` whose first line
+  gives `-g` have it (`pairs/README.md`, "Units that are here for
+  their first line"); so have two controls of `../debug_info/`,
+  whose rules give the tool `-g` on two texts of this directory
+  (`try_catch_all.fl`, `try_reraise.fl`); and so has one stored
+  file of the compiler's own run of the standard library
+  (`../stdlib/README.md`).
 - **the same, not validated**: the two runs came to the same result,
   which is a test of one run and no proof. The validator could not make
   the two terms the same; the table says what it is missing.
@@ -593,36 +797,132 @@ unit made from OCaml.
   (`rocq/TRUST-LEDGER.md`, "The conversion of terms", has this in
   full). The verdict of the validation does not rest on what is
   observed; that line does.
-- **(the term before and the term after have a primitive of the heap:
-  each of the four liftings to symbols of the validation lifts nothing
-  in a term that has one)**, a line under "not validated", and under a
-  verdict that names a lifting. Each of the four liftings of the
-  validation lifts nothing in the term that it is given where that term
-  has a primitive of the heap (`FlambdaHeapFreeSpec.expr_free_of_heap`;
-  a limit pending decision D40, and not a property that a unit is meant
-  to have). The line says which of the two terms as converted, the
-  prefix in front where there is one, has such a primitive: both, as
-  above; or "the term before has a primitive of the heap, and the term
-  after none"; or "the term after has a primitive of the heap, and the
-  term before none". There is no line where neither has one. It is a
-  fact of those two terms. It is not a fact of what each lifting was
-  given, as a rewrite before a lifting may have removed the primitive;
-  and under "not validated" it does not say why the unit is not
+- **(the term before and the term after have a primitive of the heap
+  and do not pass the liftings' test of the heap: each of the four
+  liftings to symbols of the validation lifts nothing in a term that
+  does not pass it, which is one that has such a primitive outside the
+  bodies of its code, or has one in them and a call outside them)**, a
+  line under "not validated", and under the line of an acceptance that
+  names a lifting. Each of the four liftings of the validation lifts
+  nothing in the term that it is given where that term does not pass
+  the test (`FlambdaHeapFreeSpec.free_of_heap_fine`; a limit pending
+  decision D40, and not a property that a unit is meant to have). The
+  test is the finer one of decision D65, which is provisional: before
+  it, a term passed only where it had no primitive of the heap at all
+  (`FlambdaHeapFreeSpec.expr_free_of_heap`). The line says which of
+  the two terms as converted, the prefix in front where there is one,
+  does not pass: both, as above; or "the term before has a primitive
+  of the heap and does not pass the liftings' test of the heap, and
+  the term after passes it"; or "the term after has a primitive of the
+  heap and does not pass the liftings' test of the heap, and the term
+  before passes it". There is no line where both pass. It is a fact of
+  those two terms. It is not a fact of what each lifting was given, as
+  a rewrite before a lifting may have removed the primitive or the
+  call; and under "not validated" it does not say why the unit is not
   validated, as the validation may refuse a unit for another reason.
-  Under "not validated" it is printed where the run before that is shown
-  is not undefined. Under a verdict "the same once closures and blocks
-  are lifted to symbols", by whichever asking gave it and whatever the
-  run before is, the line ends "; the line above names the step at which
-  the validation accepted": that verdict is the step of the validation
-  that accepted, which has other rewrites than its liftings, and a unit
-  that has a primitive of the heap in both terms may be validated at it
-  with nothing lifted. A unit that has a primitive of the heap and is
-  validated at another step has no such line (`array_literal.ml`,
-  `ref_counter.ml`): the theorem is the same one as for any unit
-  validated at that step. Two units of this directory have the line in
-  their expected files, under "not validated":
-  `made_array_checked_store_in_loop.ml` and
-  `pair_of_unknowns_after_inlined_pair.ml`.
+  Under "not validated" it is printed where the run before that is
+  shown is not undefined. Under the line of an acceptance "the same
+  once closures and blocks are lifted to symbols", whether that line
+  begins "validated" or "the validation accepts the pair" and by
+  whichever asking gave it, the line ends "; the line above names the
+  step at which the validation accepted": the line of the acceptance
+  names the step of the validation that accepted, which has other
+  rewrites than its liftings, and a unit neither of whose terms passes
+  the test may be validated at it with nothing lifted. A unit that has
+  a primitive of the heap and is validated at another step has no such
+  line (`array_literal.ml`, `ref_counter.ml`): the theorem is the same
+  one as for any unit validated at that step.
+  Three units of this directory have the line in their expected files,
+  under "not validated": `pair_of_unknowns_after_inlined_pair.ml`,
+  `recursion_through_given_closure_one_call.ml` and
+  `recursion_through_given_closure_two_calls.ml`.
+- **(decision D65: the guards of the liftings pass by the finer tests
+  alone)**, or **(decision D65: the term before as given passes
+  neither the liftings' tests as they were nor the finer ones)**: the
+  line of the mark of decision D65, the last of the lines in brackets
+  under the line of an acceptance that names a lifting. A lifting asks
+  two tests of the term that it is given, of its exits and of its
+  primitives of the heap. They were
+  `FlambdaLiftSpec.exits_plain_knowing` and
+  `FlambdaHeapFreeSpec.expr_free_of_heap`, which read the bodies of
+  the code of the unit; they are the finer
+  `FlambdaLiftSpec.exits_plain_fine` and
+  `FlambdaHeapFreeSpec.free_of_heap_fine`, each of which passes
+  whatever the test before it passed, and also a term that has no
+  call outside the bodies of its code and that passes the test before
+  it with those bodies left out (decision D65: yes, provisionally, by
+  the human on 18 November 2026; to be come back to). The line says
+  how the term before, as the validation was given it (the prefix in
+  front where there is one), answers the two pairs of tests. There is
+  no line where it passes the tests as they were; the first line
+  where it passes the finer tests and not those; the second where it
+  passes neither. A unit whose expected file has the line carries the
+  mark of the decision.
+  The mark is a sign. It is neither necessary nor sufficient for the
+  acceptance to rest on the finer tests, and `rocq/TRUST-LEDGER.md`
+  says why ("The mark of decision D65"): a count of the units that
+  carry it is not a count of the units whose acceptance rests on the
+  finer tests, and bounds it on neither side. Where the line of the
+  acceptance begins "the validation accepts the pair", the unit is not
+  a validated unit, with the line of the mark or without it.
+  Of the 387 units of this directory whose expected file has a line that
+  begins "validated" and names a lifting, 3 carry the mark of D65: 3
+  with the first line and 0 with the second. Of the 2 whose line of that
+  kind begins "the validation accepts the pair", 1:
+  `undefined_beside_raise.ml`, the control of that case, which is
+  `iarray_phys_equal.ml` beside a function that raises its parameter and
+  is not called; `iarray_phys_equal.ml` has no line of the mark.
+  Set against the expected files of the commit before the tool was given
+  the finer tests, three units of this directory gained a verdict with
+  them and none lost one: `raise_made_block_inlined.ml`,
+  `raise_made_block_inlined_twice.ml` and `raise_parameter.ml`. They are
+  the three that carry the mark under a line that begins "validated".
+- **(more liftings in a chain than the tool tries: a search for what
+  Simplify lifted stopped at 16 liftings in turn with another to
+  make)**, a line under "not validated". The tool guesses what Simplify
+  lifted as a sequence of liftings, each from the term that those
+  before it give, and a lifting takes only a value whose parts are
+  symbols or constants already: closures of which each holds the one
+  before take one lifting each. A sequence ends where a lifting after
+  the first proposes nothing, where it gives the term back, where the
+  rounds after it give back the term that it was given (the two
+  compared as terms) unless the tool, guessing the sequence again,
+  has excluded a `Let` for a symbol at a later place of it, and at
+  sixteen liftings. The line is printed
+  where the sixteen ended a search of the validation and there was
+  another lifting to make: one that the guess proposes, that changes
+  the term, and after which the rounds give another term. It is a fact
+  of the tool's search. It does not say that more liftings would
+  validate the unit, and the number is no part of what is proved: the
+  liftings guessed are given to `validate_unit`, whose statement is of
+  every list of them. The same line with "a search of the second
+  check" in the place of "a search for what Simplify lifted" is
+  printed where the second check refuses the unit and the sixteen
+  ended one of its searches so. `chain_of_eighteen_in_functor.ml` has
+  both.
+- **(the term after has a function slot named partial_app_closure and
+  the term before has none of that name: Simplify gives that name to
+  the wrapper that it makes of a partial application, and no rewrite of
+  the validation makes such a wrapper; the tool goes by the name
+  alone)**, a line under "not validated". Where Simplify comes to
+  know the code of a function that is given fewer arguments than it
+  has parameters, once a call is inlined or from the `.cmx` of another
+  unit, it makes new code, marked as a stub, that takes the arguments
+  given from its own closure and calls the function, and a closure of
+  that code (`middle_end/flambda2/simplify/simplify_apply_expr.ml`,
+  `simplify_direct_partial_application`). The term before has a call
+  with fewer arguments than the code has parameters, and the
+  validation has no rewrite that makes the wrapper of it. The tool
+  knows the wrapper by the name that Simplify gives its function slot
+  and by nothing else: it does not look at the code of the closure,
+  and a function of the source that had that name in the term after
+  and not in the term before would be taken for one. The wrapper that
+  the front end makes where it knows the function has another name, is
+  in both terms, and is validated (`partial_exported.ml`). The line is
+  a fact of the names of the function slots of the two terms. It does
+  not say that nothing else stops the unit. Two units of this
+  directory have it: `partial_seen_once_inlined.ml` and
+  `partial_of_inlined_result.ml`.
 - **related once lifted**, a line under "not validated" (it awaits
   the human's choice, decision D43): the validator refused the
   pair for every list of calls that the tool tries, and the tool
@@ -631,15 +931,16 @@ unit made from OCaml.
   makes each lifting without two tests that a lifting of the
   validation makes of the term that it is given: that it exits
   with symbols and constants only
-  (`FlambdaLiftSpec.exits_plain_knowing`), and that it has no
-  primitive of the heap (`FlambdaHeapFreeSpec.expr_free_of_heap`).
+  (`FlambdaLiftSpec.exits_plain_fine`), and their test of the heap
+  (`FlambdaHeapFreeSpec.free_of_heap_fine`); both are the finer
+  tests of decision D65.
   It keeps every other condition of a lifting
   (`FlambdaLiftObservedSpec.with_lifting_observed`), and then
   compares the two terms as the validator compares two lifted
   terms. The line of the tool names the first test, "without the
   liftings' symbols-and-constants-only exit test", and where either
-  of the two terms has a primitive of the heap it names the second
-  too, "and without their test of the heap". The line is printed
+  of the two terms does not pass the test of the heap it names the
+  second too, "and without their test of the heap". The line is printed
   for a unit that stores as for another, where the check accepts
   the pair; it is not printed of every unit that stores.
   What is proved of a pair that it accepts
@@ -739,9 +1040,23 @@ unit made from OCaml.
   has no step somewhere in the run of the term before, so anything
   refines it and a validation would say nothing. The compiler runs
   these programs: the model is what lacks something, and the table
-  says what. Such a unit is not counted as validated; where the
-  validator accepts one all the same, the tool says so on a line of its
-  own.
+  says what. Such a unit is not counted as validated. That is said
+  of a run that the tool found undefined within its steps, and not
+  of one still running when they ran out ("validated", above). Where
+  the validator accepts the pair all the same, the line under this one
+  begins "the validation accepts the pair" and goes on with the words
+  that a verdict has after "validated": it is no verdict, no line of
+  such a unit begins "validated", and the line "the term before is
+  undefined in the model, so the validation says nothing of this unit"
+  follows. (Where the acceptance is of the unit with nothing imported,
+  the first line is "nothing to validate with nothing imported, as the
+  term before is then undefined".) The three units of the table
+  "Undefined in the model" have the two lines. One of them,
+  `undefined_beside_raise.ml`, has one line more, the line of the mark
+  of decision D65 (its item is above): it is under the line that
+  begins "the validation accepts the pair" and above the line "the
+  term before is undefined in the model, so the validation says
+  nothing of this unit", which stays the last.
 - **not checked**: the conversion refused the unit, as it has something
   the model has not got, or something that the conversion does not
   make though the model has it. The line of the tool says "the model
@@ -806,35 +1121,41 @@ Simplify does to it. Steps are those of the machine, before and after
 Simplify. The names in brackets are the streams whose work in progress
 is the rewrite that is missing.
 
-553 sources: 476 validated; 2 validated when asked of the term before
+591 sources: 503 validated; 2 validated when asked of the term before
 with its known immutable arrays read, which is another function than the
 others are asked of; 4 validated when asked of the term before with
 chosen calls inlined first, which is another function again; 1 validated
 when asked of the term before with copies of code for the sets of
-closures that a `Let` makes, which is another again; 59 validated with
+closures that a `Let` makes, which is another again; 65 validated with
 their imports; none validated with nothing imported and not with its
-imports; 6 compared on one run and not validated, 3 of them with the
-line of the second check (1 of those with imports); 2 undefined in the
+imports; 10 compared on one run and not validated, 4 of them with the
+line of the second check (1 of those with imports); 3 undefined in the
 model; 3 not checked.
 
 ### Validated
 
 | Source | Steps | Source | Steps |
 |--------|-------|--------|-------|
-| `add3_exported.ml` | 9, 6 | `labelled_optional.ml` | 38, 6 |
-| `add_zero.ml` | 8, 2 | `late_three_values_interleaved.ml` | 430, 382 |
-| `alias_kept_or_rebuilt.ml` | 49, 28 | `least_join_table.ml` | 30, 35 |
-| `apply_exported.ml` | 8, 4 | `len_compare_two.ml` | 41, 33 |
-| `array_literal.ml` | 8, 3 | `len_of_constants.ml` | 32, 1 |
-| `attr_inlined_never_at_call.ml` | 27, 20 | `len_of_unknown_twice.ml` | 18, 12 |
-| `attr_local_in_match.ml` | 87, 58 | `length_exported.ml` | 8, 3 |
-| `attr_local_two_uses.ml` | 41, 27 | `let_polymorphism.ml` | 27, 1 |
-| `bitwise_unknown.ml` | 14, 7 | `list_constant.ml` | 39, 25 |
-| `block_in_arm_of_unknown.ml` | 19, 7 | `list_head.ml` | 41, 3 |
-| `bool_not_unknown.ml` | 8, 3 | `list_heap.ml` | 54, 33 |
-| `bool_ops.ml` | 47, 1 | `list_last.ml` | 76, 41 |
-| `boxed_constant_made.ml` | 12, 4 | `list_length.ml` | 64, 44 |
-| `boxed_constant_twice.ml` | 16, 2 | `list_map.ml` | 132, 95 |
+| `add3_exported.ml` | 9, 6 | `labelled_arguments.ml` | 13, 3 |
+| `add_zero.ml` | 8, 2 | `labelled_in_every_order.ml` | 108, 94 |
+| `alias_kept_or_rebuilt.ml` | 49, 28 | `labelled_optional.ml` | 38, 6 |
+| `apply_exported.ml` | 8, 4 | `late_three_values_interleaved.ml` | 430, 382 |
+| `array_literal.ml` | 8, 3 | `least_join_table.ml` | 30, 35 |
+| `attr_inlined_never_at_call.ml` | 27, 20 | `len_compare_two.ml` | 41, 33 |
+| `attr_local_in_match.ml` | 87, 58 | `len_of_constants.ml` | 32, 1 |
+| `attr_local_two_uses.ml` | 41, 27 | `len_of_unknown_twice.ml` | 18, 12 |
+| `bitwise_unknown.ml` | 14, 7 | `length_exported.ml` | 8, 3 |
+| `block_in_arm_of_unknown.ml` | 19, 7 | `let_polymorphism.ml` | 27, 1 |
+| `bool_kept_across_call.ml` | 8, 3 | `lifted_block_in_two_bodies.ml` | 13, 12 |
+| `bool_not_unknown.ml` | 8, 3 | `lifted_closure_in_two_bodies.ml` | 14, 12 |
+| `bool_ops.ml` | 47, 1 | `list_constant.ml` | 39, 25 |
+| `bool_tested_at_once.ml` | 8, 3 | `list_head.ml` | 41, 3 |
+| `boxed_constant_made.ml` | 12, 4 | `list_heap.ml` | 54, 33 |
+| `boxed_constant_twice.ml` | 16, 2 | `list_last.ml` | 76, 41 |
+| `boxed_number_in_slot.ml` | 13, 4 | `list_length.ml` | 64, 44 |
+| `boxed_number_in_slot_kept.ml` | 12, 5 | `list_map.ml` | 132, 95 |
+| `boxed_number_in_slot_not_known.ml` | 14, 7 | `list_of_pair_made_by_call.ml` | 63, 42 |
+| `boxed_number_in_two_slots.ml` | 14, 7 | `list_of_pair_made_by_call_pick_kept.ml` | 63, 43 |
 | `bswap_constants.ml` | 29, 2 | `list_rev.ml` | 70, 47 |
 | `call_of_call_tested.ml` | 39, 42 | `list_sum.ml` | 61, 42 |
 | `call_result_passed_on.ml` | 79, 31 | `load_through_join.ml` | 68, 37 |
@@ -845,220 +1166,228 @@ model; 3 not checked.
 | `capture_rec_self.ml` | 9, 6 | `local_call_used.ml` | 10, 3 |
 | `capture_two_funs.ml` | 15, 12 | `local_closure_applied_mutual.ml` | 158, 82 |
 | `captured_closure_given_to_inlined.ml` | 104, 59 | `local_closure_given_partially.ml` | 58, 40 |
-| `char_code.ml` | 13, 3 | `local_function.ml` | 29, 5 |
-| `char_comparisons.ml` | 56, 36 | `local_loop_inlined.ml` | 66, 41 |
-| `char_count_in_string.ml` | 654, 304 | `local_rec_below_a_let_and_in_an_arm.ml` | 58, 37 |
-| `char_digit_value.ml` | 87, 60 | `local_rec_in_tail_loop.ml` | 173, 108 |
-| `char_hex_digit_value.ml` | 144, 80 | `loop_exit_inlined.ml` | 82, 36 |
-| `char_match.ml` | 48, 1 | `loop_for_local_pair_each_turn.ml` | 1749, 1336 |
-| `char_of_int_in_loop.ml` | 269, 184 | `loop_function_in_kept.ml` | 85, 50 |
-| `char_parse_number.ml` | 111, 92 | `loop_function_twice.ml` | 149, 85 |
-| `char_ranges.ml` | 183, 94 | `loop_local_mutual_both_in_loop.ml` | 261, 165 |
-| `char_ranges_inlined_constants.ml` | 112, 4 | `loop_result_passed_round.ml` | 190, 110 |
-| `char_uppercase.ml` | 63, 38 | `made_array_length.ml` | 15, 8 |
-| `clamp.ml` | 49, 1 | `made_array_length_in_two_calls.ml` | 57, 38 |
-| `clos_partial_local.ml` | 186, 160 | `made_array_store_of_integer.ml` | 16, 9 |
-| `closed_mutual_recursion.ml` | 66, 35 | `maker_inlined_and_exported.ml` | 21, 10 |
-| `closure_argument_exported.ml` | 12, 7 | `maker_of_mutual_inlined.ml` | 70, 40 |
-| `closure_argument_used.ml` | 14, 3 | `maker_of_two_inlined_twice.ml` | 311, 186 |
-| `closure_capture.ml` | 31, 4 | `match_constant_table.ml` | 28, 22 |
-| `closure_captures_argument_inlined.ml` | 27, 21 | `match_guard.ml` | 52, 1 |
-| `closure_captures_field_once.ml` | 24, 19 | `match_int_dense.ml` | 74, 50 |
-| `closure_from_pair_called.ml` | 44, 15 | `match_int_intervals.ml` | 235, 90 |
-| `closure_from_pair_exported.ml` | 9, 4 | `match_local_mutual_both_in_arm.ml` | 132, 85 |
-| `closure_from_pair_used.ml` | 16, 3 | `match_of_inlined_match.ml` | 68, 38 |
-| `closure_in_arm_of_unknown.ml` | 23, 11 | `match_of_match.ml` | 86, 54 |
-| `closure_in_tuple.ml` | 33, 5 | `match_pair_option_built.ml` | 65, 32 |
-| `closure_pair_shares_capture.ml` | 45, 40 | `match_tuple_of_variants.ml` | 102, 71 |
-| `closure_uses_unit_function_only.ml` | 39, 30 | `match_unknown.ml` | 18, 10 |
-| `compare_ints.ml` | 113, 1 | `match_variant.ml` | 66, 7 |
-| `compare_order.ml` | 60, 35 | `match_variant_local.ml` | 72, 7 |
-| `compare_signed.ml` | 31, 1 | `max_exported.ml` | 8, 4 |
-| `compare_tested.ml` | 15, 6 | `min_max.ml` | 25, 1 |
-| `compare_unknown.ml` | 9, 4 | `module_alias.ml` | 34, 5 |
-| `compose.ml` | 29, 4 | `module_function_in_code.ml` | 58, 31 |
-| `compose_chains.ml` | 142, 115 | `mom_three_levels.ml` | 126, 77 |
-| `compose_exported.ml` | 8, 4 | `mom_variant_to_variant.ml` | 50, 24 |
-| `constant_exported.ml` | 8, 4 | `mutual_alias_exported.ml` | 78, 40 |
-| `constant_folding.ml` | 31, 1 | `mutual_capture_exported.ml` | 123, 72 |
-| `conv_truncate.ml` | 45, 1 | `mutual_recursion.ml` | 130, 70 |
-| `count_after_flag.ml` | 275, 152 | `nativeint_arith.ml` | 25, 8 |
-| `curry.ml` | 36, 3 | `negate.ml` | 10, 5 |
-| `data_closure_captures_string.ml` | 38, 33 | `nest_list_of_options.ml` | 177, 108 |
-| `data_list_of_strings.ml` | 82, 61 | `nest_matrix_three_columns.ml` | 108, 81 |
-| `data_option_of_string.ml` | 56, 41 | `nested_heap.ml` | 50, 29 |
-| `data_string_in_module_and_functor.ml` | 37, 18 | `nested_ignored_tests.ml` | 37, 28 |
-| `data_string_returned_through_join.ml` | 32, 28 | `nested_record.ml` | 23, 3 |
-| `data_variant_argument.ml` | 89, 65 | `nested_tuple.ml` | 24, 4 |
-| `either_heap.ml` | 58, 37 | `nomark_local_mutual.ml` | 145, 97 |
-| `empty_array_in_record.ml` | 14, 8 | `not_inlined.ml` | 21, 17 |
-| `empty_array_length.ml` | 9, 5 | `num_conversions.ml` | 27, 19 |
-| `empty_array_tested.ml` | 14, 8 | `option_bind.ml` | 89, 1 |
-| `empty_arrays_of_two_types.ml` | 12, 8 | `option_constant.ml` | 39, 25 |
-| `empty_immutable_array.ml` | 9, 5 | `option_constant_loop.ml` | 175, 114 |
-| `empty_type_refuted.ml` | 21, 6 | `option_constant_loop_fun.ml` | 379, 258 |
-| `enum_to_int.ml` | 19, 1 | `option_default.ml` | 32, 3 |
-| `exclave_after_local_work.ml` | 201, 177 | `option_heap.ml` | 47, 29 |
-| `exclave_pair.ml` | 177, 157 | `option_in_pair.ml` | 67, 31 |
-| `exported_after_effect.ml` | 15, 6 | `option_inlined.ml` | 36, 12 |
-| `exported_and_used.ml` | 14, 6 | `option_join.ml` | 55, 29 |
-| `exported_apply.ml` | 18, 9 | `option_map.ml` | 70, 4 |
-| `exported_arms_after_let.ml` | 26, 21 | `option_map_exported.ml` | 8, 4 |
-| `exported_bool.ml` | 11, 7 | `option_matched_twice.ml` | 82, 43 |
-| `exported_branch_calls_twice.ml` | 17, 11 | `optional_between_positional.ml` | 258, 178 |
-| `exported_branch_fun_const.ml` | 17, 12 | `optional_default_uses_earlier_argument.ml` | 200, 123 |
-| `exported_branch_option.ml` | 14, 9 | `optional_erased_for_higher_order.ml` | 172, 118 |
-| `exported_branch_pair.ml` | 15, 10 | `optional_given_omitted_none_some.ml` | 98, 69 |
-| `exported_branch_then_const.ml` | 14, 9 | `or_in_list_positions.ml` | 113, 69 |
-| `exported_branch_then_fun.ml` | 14, 8 | `or_null_known.ml` | 23, 1 |
-| `exported_branch_two_funs.ml` | 17, 11 | `or_null_unknown.ml` | 16, 6 |
-| `exported_capture.ml` | 16, 5 | `or_pattern.ml` | 49, 1 |
-| `exported_chain.ml` | 14, 10 | `or_two_variables_swapped.ml` | 61, 46 |
-| `exported_compose_kept.ml` | 17, 13 | `over_application.ml` | 19, 3 |
-| `exported_const_list.ml` | 10, 7 | `over_application_three_stages.ml` | 101, 92 |
-| `exported_curried.ml` | 14, 6 | `over_application_unknown_function.ml` | 61, 58 |
-| `exported_fun_branch_fun.ml` | 17, 11 | `over_inlined_maker_run.ml` | 23, 3 |
-| `exported_fun_given.ml` | 9, 7 | `over_rec.ml` | 84, 52 |
-| `exported_fun_in_arms.ml` | 20, 12 | `overflow_wrap.ml` | 19, 1 |
-| `exported_fun_in_one_arm.ml` | 17, 12 | `pair_built.ml` | 43, 21 |
-| `exported_fun_in_option.ml` | 9, 8 | `pair_computed.ml` | 45, 29 |
-| `exported_fun_returned.ml` | 9, 7 | `pair_constant_arm.ml` | 53, 23 |
-| `exported_fun_to_map.ml` | 12, 9 | `pair_constant_arm_toplevel.ml` | 31, 12 |
-| `exported_function.ml` | 14, 6 | `pair_constants.ml` | 32, 23 |
-| `exported_funs_given.ml` | 10, 10 | `pair_join.ml` | 31, 28 |
-| `exported_funs_in_arms_used.ml` | 23, 14 | `pair_loop_in_loop.ml` | 333, 173 |
-| `exported_funs_in_pair.ml` | 14, 11 | `pair_read_one_call_inlined.ml` | 31, 23 |
-| `exported_length.ml` | 8, 3 | `pair_turned_in_loop.ml` | 192, 65 |
-| `exported_list.ml` | 9, 5 | `pair_two_constants.ml` | 25, 9 |
-| `exported_local_fun.ml` | 8, 4 | `pairs_for_a_suit.ml` | 20, 9 |
-| `exported_local_never.ml` | 9, 7 | `param_copy_to_heap.ml` | 193, 171 |
-| `exported_made.ml` | 14, 6 | `partial_across_join.ml` | 148, 105 |
-| `exported_match_pair_then_fun.ml` | 13, 7 | `partial_application.ml` | 23, 3 |
-| `exported_match_then_fun.ml` | 21, 12 | `partial_exported.ml` | 13, 6 |
-| `exported_match_three_funs.ml` | 33, 19 | `partial_in_a_pair.ml` | 90, 26 |
-| `exported_nested_branch.ml` | 21, 13 | `partial_one_argument_at_a_time.ml` | 116, 57 |
-| `exported_nested_pair.ml` | 10, 7 | `partial_two_to_six_parameters.ml` | 156, 112 |
-| `exported_option_fun_in_arm.ml` | 18, 10 | `phys_equal_unknown.ml` | 9, 4 |
-| `exported_option_library.ml` | 14, 10 | `physical_equality.ml` | 32, 1 |
-| `exported_pair_fun_in_arms.ml` | 21, 14 | `pipeline.ml` | 23, 5 |
-| `exported_record.ml` | 23, 9 | `poly_abbreviation_patterns.ml` | 117, 68 |
-| `exported_record_of_funs.ml` | 14, 11 | `polymorphic_variant.ml` | 77, 4 |
-| `exported_record_update.ml` | 14, 6 | `power.ml` | 147, 99 |
-| `exported_records_in_arms.ml` | 21, 14 | `project_record_two_levels.ml` | 43, 17 |
-| `exported_some_again.ml` | 26, 6 | `project_variant_argument.ml` | 27, 11 |
-| `exported_string_length.ml` | 8, 5 | `projections_exported.ml` | 11, 7 |
-| `exported_submodule.ml` | 14, 8 | `rec_helper_among_three.ml` | 29, 10 |
-| `exported_table.ml` | 13, 8 | `rec_helper_called_outside.ml` | 27, 13 |
-| `exported_twice_kept.ml` | 14, 10 | `record_exported.ml` | 11, 7 |
-| `exported_two_branches.ml` | 23, 15 | `record_of_functions.ml` | 51, 10 |
-| `exported_two_functions.ml` | 22, 10 | `record_project.ml` | 37, 8 |
-| `exported_two_somes.ml` | 11, 5 | `record_update.ml` | 27, 4 |
-| `exported_two_tests.ml` | 26, 17 | `ref_counter.ml` | 23, 23 |
-| `exported_two_values.ml` | 18, 1 | `ref_local.ml` | 132, 79 |
-| `exported_variant.ml` | 17, 6 | `ref_local_in_for_loop.ml` | 296, 180 |
-| `fact_exported.ml` | 8, 3 | `ref_straight.ml` | 13, 4 |
-| `factorial.ml` | 70, 46 | `reraise_in_kept_function.ml` | 47, 35 |
-| `fct_applied_twice_same_argument.ml` | 92, 34 | `result_join.ml` | 64, 33 |
-| `fct_local_mutual_both_to_inlined.ml` | 139, 96 | `result_map.ml` | 44, 3 |
-| `fct_of_functor.ml` | 97, 29 | `returned_closure_of_pair.ml` | 71, 50 |
-| `fib.ml` | 2041, 1417 | `same_constant_after_loop.ml` | 15, 7 |
-| `field_twice_inlined.ml` | 27, 20 | `same_field_chain_twice.ml` | 29, 17 |
-| `first_class_module.ml` | 22, 4 | `same_int64_sum_twice.ml` | 29, 14 |
-| `flag_and_count_in_loop.ml` | 156, 90 | `same_projection_across_call.ml` | 25, 13 |
-| `flag_and_test_in_loop.ml` | 157, 99 | `self_through_closure.ml` | 189, 98 |
-| `flag_cleared_once_in_while.ml` | 217, 133 | `seq_unit.ml` | 13, 2 |
-| `flag_guards_update.ml` | 240, 130 | `shape2_heap.ml` | 61, 36 |
-| `flag_or_test_in_loop.ml` | 142, 87 | `shape_constant.ml` | 24, 11 |
-| `flag_or_test_then_count.ml` | 291, 177 | `shape_heap.ml` | 54, 30 |
-| `flag_read_twice_in_loop.ml` | 441, 269 | `shared_read_slot_and_field.ml` | 15, 8 |
-| `flag_set_in_loop.ml` | 153, 78 | `shared_read_two_closures.ml` | 15, 9 |
-| `flag_set_in_loop_first.ml` | 153, 78 | `shift_edges.ml` | 23, 1 |
-| `flag_tested_in_loop.ml` | 237, 134 | `shift_unknown.ml` | 17, 7 |
-| `flip_applied_in_full_and_in_part.ml` | 101, 53 | `shifts.ml` | 22, 8 |
-| `float_const.ml` | 15, 4 | `sibling_given_as_value.ml` | 75, 38 |
-| `fold_passes_function_on.ml` | 67, 37 | `sibling_through_alias.ml` | 74, 38 |
-| `for_down.ml` | 79, 40 | `sign.ml` | 27, 1 |
-| `for_if.ml` | 165, 96 | `stack_argument_result_returned.ml` | 27, 20 |
-| `for_nested.ml` | 171, 95 | `stack_pair.ml` | 167, 146 |
-| `for_sum.ml` | 135, 81 | `string_const.ml` | 21, 2 |
-| `for_two_refs.ml` | 90, 52 | `string_get16.ml` | 10, 5 |
-| `fst_snd.ml` | 16, 3 | `string_get16_be.ml` | 16, 6 |
-| `fun_local_mutual_to_inlined.ml` | 145, 97 | `string_get32.ml` | 23, 11 |
-| `fun_local_three_mutual_to_inlined.ml` | 219, 137 | `string_get_const.ml` | 9, 4 |
-| `function_passed_on_by_loop.ml` | 78, 39 | `string_length_const.ml` | 8, 1 |
-| `functions_in_record_called.ml` | 23, 17 | `string_length_unknown.ml` | 9, 5 |
-| `functor_apply.ml` | 23, 1 | `string_sum.ml` | 100, 82 |
-| `functor_argument_block_in_slot.ml` | 50, 14 | `submodule.ml` | 27, 1 |
-| `gadt_equal_indices_pair.ml` | 53, 40 | `succ_pred.ml` | 12, 5 |
-| `gadt_existential_match.ml` | 38, 8 | `sums_of_two_sorts.ml` | 341, 182 |
-| `gadt_known.ml` | 35, 4 | `swap_exported.ml` | 8, 4 |
-| `gadt_refutation_clause.ml` | 67, 50 | `table_and_array_alike.ml` | 24, 20 |
-| `get_after_own_bounds_test.ml` | 56, 37 | `tag_known_in_arm.ml` | 91, 52 |
-| `guard_falls_to_later_case.ml` | 151, 91 | `tail_call_after_region.ml` | 171, 153 |
-| `guard_on_or_pattern.ml` | 132, 83 | `tail_loop.ml` | 128, 83 |
-| `helper_called_through_slot.ml` | 33, 12 | `tail_nontail_annot.ml` | 175, 157 |
-| `helper_inlined_in_closure.ml` | 28, 17 | `test_boolean_twice.ml` | 39, 18 |
-| `hidden_helper_inlined_twice.ml` | 46, 22 | `three_arms_same_sum.ml` | 24, 5 |
-| `higher_order.ml` | 32, 5 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
-| `hof_closure_in_record.ml` | 49, 22 | `tree_root.ml` | 90, 4 |
-| `hof_option_of_closure.ml` | 125, 47 | `try_no_raise.ml` | 14, 5 |
-| `hof_two_closures_through_join.ml` | 65, 54 | `try_returned_exported.ml` | 11, 9 |
-| `iarray_element_read_twice.ml` | 25, 19 | `tuple_match.ml` | 75, 1 |
-| `iarray_in_function.ml` | 21, 14 | `tuple_return.ml` | 20, 5 |
-| `iarray_length_of_any_not_inlined.ml` | 19, 14 | `tuple_swap.ml` | 19, 4 |
-| `iarray_literal.ml` | 11, 5 | `tuple_through_kept_identity.ml` | 19, 12 |
-| `iarray_literal_measured_one_call_inlined.ml` | 27, 18 | `tupled_function.ml` | 21, 2 |
-| `iarray_measured_one_call_inlined.ml` | 31, 23 | `tupled_partial_application.ml` | 91, 67 |
-| `iarray_of_variable_measured_one_call_inlined.ml` | 32, 24 | `twice_inlined.ml` | 19, 6 |
-| `iarray_of_variable_read_one_call_inlined.ml` | 32, 24 | `twice_nested_same_scrutinee.ml` | 60, 24 |
-| `iarray_read_in_function.ml` | 18, 13 | `two_flags_and_or_in_loop.ml` | 319, 213 |
-| `iarray_read_one_call_inlined.ml` | 31, 23 | `two_flags_set_in_loop.ml` | 179, 81 |
-| `id_exported.ml` | 8, 4 | `two_ignored_tests.ml` | 40, 34 |
-| `identity.ml` | 22, 3 | `two_local_mutual_both_in_inner_function.ml` | 93, 63 |
-| `if_unknown.ml` | 13, 6 | `two_options_matched.ml` | 180, 83 |
-| `ignore_value.ml` | 11, 2 | `two_parameters_beside_unknown_call.ml` | 23, 18 |
-| `ignored_call_of_three.ml` | 28, 24 | `two_tables_of_one_match.ml` | 50, 30 |
-| `ignored_call_or_constant.ml` | 28, 22 | `two_tags_shared_field.ml` | 69, 49 |
-| `ignored_second_of_pair.ml` | 30, 22 | `unboxed_float_argument.ml` | 18, 13 |
-| `ignored_two_calls.ml` | 34, 26 | `unboxed_float_argument_unknown.ml` | 13, 9 |
-| `include_functor_result.ml` | 41, 23 | `unboxed_float_over_application.ml` | 19, 13 |
-| `indirect_call.ml` | 13, 9 | `unboxed_pair.ml` | 13, 4 |
-| `inl_callee_region_twice.ml` | 477, 392 | `unboxed_pair_argument.ml` | 10, 3 |
-| `inline_function.ml` | 20, 4 | `unboxed_pair_argument_unknown.ml` | 15, 10 |
-| `inline_record.ml` | 45, 7 | `unboxed_pair_parameter_beside_unknown_call.ml` | 23, 18 |
-| `inlined_at_one_call.ml` | 21, 14 | `unboxed_pair_parameter_partial.ml` | 74, 43 |
-| `inlined_test_join.ml` | 34, 7 | `unboxed_pair_then_integer_argument.ml` | 15, 10 |
-| `int32_arith.ml` | 27, 8 | `unboxed_pair_with_float_argument.ml` | 16, 11 |
-| `int32_boxed_once_for_two_results.ml` | 18, 5 | `unit_argument.ml` | 18, 1 |
-| `int32_overflow.ml` | 40, 1 | `unsafe_get_const_and_unknown.ml` | 20, 14 |
-| `int32_unknown.ml` | 17, 7 | `var_twelve_mixed.ml` | 191, 105 |
-| `int64_boxed.ml` | 22, 8 | `variant_blocks_join.ml` | 20, 8 |
-| `int64_built.ml` | 61, 43 | `variant_constants.ml` | 44, 30 |
-| `int64_clamp.ml` | 50, 33 | `variant_match_exported.ml` | 8, 4 |
-| `int64_compare.ml` | 48, 1 | `variant_nested_match.ml` | 213, 151 |
-| `int64_compare_tested.ml` | 18, 8 | `variant_two_blocks.ml` | 44, 30 |
-| `int64_join.ml` | 26, 1 | `void_argument_known.ml` | 13, 8 |
-| `int64_max.ml` | 51, 37 | `void_argument_unknown.ml` | 17, 13 |
-| `int64_of_int.ml` | 25, 7 | `void_parameter_partial.ml` | 12, 7 |
-| `int64_option_heap.ml` | 63, 38 | `while_const_after.ml` | 70, 45 |
-| `int64_overflow.ml` | 33, 1 | `while_countdown.ml` | 61, 34 |
-| `int64_passed_on.ml` | 40, 26 | `while_flag.ml` | 150, 75 |
-| `int64_shift.ml` | 21, 8 | `while_flag_and_two_tests.ml` | 208, 130 |
-| `int64_sum_in_loop.ml` | 204, 89 | `while_flag_chooses_test.ml` | 250, 130 |
-| `int64_sum_on_some_turns.ml` | 269, 154 | `while_flag_comparison_or_constant.ml` | 123, 67 |
-| `int64_to_int32.ml` | 10, 6 | `while_flag_is_comparison.ml` | 111, 57 |
-| `int_extreme_literals.ml` | 130, 79 | `while_flag_or_two_tests.ml` | 214, 147 |
-| `int_of_char.ml` | 8, 3 | `while_flag_starts_as_comparison.ml` | 96, 51 |
-| `int_split_intervals.ml` | 94, 63 | `while_flag_then_test.ml` | 160, 83 |
-| `int_switch.ml` | 31, 1 | `while_flag_toplevel.ml` | 156, 79 |
-| `is_even.ml` | 29, 1 | `while_if_inside.ml` | 161, 106 |
-| `join_pair_equal_fields.ml` | 50, 28 | `while_loop.ml` | 78, 45 |
-| `join_phys_equal_arms.ml` | 25, 17 | `while_nested.ml` | 188, 127 |
-| `join_tags_then_shared_field.ml` | 69, 46 | `while_stop_flag.ml` | 170, 121 |
-| `join_two_names_of_symbol.ml` | 24, 8 | `while_sum_down.ml` | 133, 80 |
-| `kept_local_mutual_to_inlined.ml` | 145, 97 | `while_two_loops.ml` | 126, 81 |
-| `labelled_arguments.ml` | 13, 3 | `while_two_tests.ml` | 180, 123 |
-| `labelled_in_every_order.ml` | 108, 94 | `while_unused_counter.ml` | 78, 40 |
+| `chain_of_five_closures_then_argument.ml` | 14, 21 | `local_function.ml` | 29, 5 |
+| `chain_of_five_in_function.ml` | 12, 17 | `local_loop_inlined.ml` | 66, 41 |
+| `chain_of_five_in_functor.ml` | 12, 17 | `local_rec_below_a_let_and_in_an_arm.ml` | 58, 37 |
+| `chain_of_four_closures_then_argument.ml` | 13, 18 | `local_rec_in_tail_loop.ml` | 173, 108 |
+| `chain_of_four_in_function.ml` | 11, 14 | `loop_exit_inlined.ml` | 82, 36 |
+| `chain_of_four_in_functor.ml` | 11, 14 | `loop_for_local_pair_each_turn.ml` | 1749, 1336 |
+| `char_code.ml` | 13, 3 | `loop_function_in_kept.ml` | 85, 50 |
+| `char_comparisons.ml` | 56, 36 | `loop_function_twice.ml` | 149, 85 |
+| `char_count_in_string.ml` | 654, 304 | `loop_local_mutual_both_in_loop.ml` | 261, 165 |
+| `char_digit_value.ml` | 87, 60 | `loop_result_passed_round.ml` | 190, 110 |
+| `char_hex_digit_value.ml` | 144, 80 | `made_array_length.ml` | 15, 8 |
+| `char_match.ml` | 48, 1 | `made_array_length_in_two_calls.ml` | 57, 38 |
+| `char_of_int_in_loop.ml` | 269, 184 | `made_array_store_of_integer.ml` | 16, 9 |
+| `char_parse_number.ml` | 111, 92 | `maker_inlined_and_exported.ml` | 21, 10 |
+| `char_ranges.ml` | 183, 94 | `maker_of_mutual_inlined.ml` | 70, 40 |
+| `char_ranges_inlined_constants.ml` | 112, 4 | `maker_of_two_inlined_twice.ml` | 311, 186 |
+| `char_uppercase.ml` | 63, 38 | `match_constant_table.ml` | 28, 22 |
+| `clamp.ml` | 49, 1 | `match_guard.ml` | 52, 1 |
+| `clos_partial_local.ml` | 186, 160 | `match_int_dense.ml` | 74, 50 |
+| `closed_mutual_recursion.ml` | 66, 35 | `match_int_intervals.ml` | 235, 90 |
+| `closure_argument_exported.ml` | 12, 7 | `match_local_mutual_both_in_arm.ml` | 132, 85 |
+| `closure_argument_used.ml` | 14, 3 | `match_of_inlined_match.ml` | 68, 38 |
+| `closure_capture.ml` | 31, 4 | `match_of_match.ml` | 86, 54 |
+| `closure_captures_argument_inlined.ml` | 27, 21 | `match_pair_option_built.ml` | 65, 32 |
+| `closure_captures_field_once.ml` | 24, 19 | `match_tuple_of_variants.ml` | 102, 71 |
+| `closure_from_pair_called.ml` | 44, 15 | `match_unknown.ml` | 18, 10 |
+| `closure_from_pair_exported.ml` | 9, 4 | `match_variant.ml` | 66, 7 |
+| `closure_from_pair_used.ml` | 16, 3 | `match_variant_local.ml` | 72, 7 |
+| `closure_in_arm_of_unknown.ml` | 23, 11 | `max_exported.ml` | 8, 4 |
+| `closure_in_tuple.ml` | 33, 5 | `min_max.ml` | 25, 1 |
+| `closure_pair_shares_capture.ml` | 45, 40 | `module_alias.ml` | 34, 5 |
+| `closure_uses_unit_function_only.ml` | 39, 30 | `module_function_in_code.ml` | 58, 31 |
+| `compare_ints.ml` | 113, 1 | `mom_three_levels.ml` | 126, 77 |
+| `compare_order.ml` | 60, 35 | `mom_variant_to_variant.ml` | 50, 24 |
+| `compare_signed.ml` | 31, 1 | `mutual_alias_exported.ml` | 78, 40 |
+| `compare_tested.ml` | 15, 6 | `mutual_capture_exported.ml` | 123, 72 |
+| `compare_unknown.ml` | 9, 4 | `mutual_recursion.ml` | 130, 70 |
+| `compose.ml` | 29, 4 | `nativeint_arith.ml` | 25, 8 |
+| `compose_chains.ml` | 142, 115 | `negate.ml` | 10, 5 |
+| `compose_exported.ml` | 8, 4 | `nest_list_of_options.ml` | 177, 108 |
+| `constant_exported.ml` | 8, 4 | `nest_matrix_three_columns.ml` | 108, 81 |
+| `constant_folding.ml` | 31, 1 | `nested_heap.ml` | 50, 29 |
+| `conv_truncate.ml` | 45, 1 | `nested_ignored_tests.ml` | 37, 28 |
+| `copy_heap.ml` | 8, 4 | `nested_record.ml` | 23, 3 |
+| `copy_local.ml` | 8, 4 | `nested_tuple.ml` | 24, 4 |
+| `count_after_flag.ml` | 275, 152 | `nomark_local_mutual.ml` | 145, 97 |
+| `curry.ml` | 36, 3 | `not_inlined.ml` | 21, 17 |
+| `data_closure_captures_string.ml` | 38, 33 | `num_conversions.ml` | 27, 19 |
+| `data_list_of_strings.ml` | 82, 61 | `option_bind.ml` | 89, 1 |
+| `data_option_of_string.ml` | 56, 41 | `option_constant.ml` | 39, 25 |
+| `data_string_in_module_and_functor.ml` | 37, 18 | `option_constant_loop.ml` | 175, 114 |
+| `data_string_returned_through_join.ml` | 32, 28 | `option_constant_loop_fun.ml` | 379, 258 |
+| `data_variant_argument.ml` | 89, 65 | `option_default.ml` | 32, 3 |
+| `either_heap.ml` | 58, 37 | `option_heap.ml` | 47, 29 |
+| `empty_array_in_record.ml` | 14, 8 | `option_in_pair.ml` | 67, 31 |
+| `empty_array_length.ml` | 9, 5 | `option_inlined.ml` | 36, 12 |
+| `empty_array_tested.ml` | 14, 8 | `option_join.ml` | 55, 29 |
+| `empty_arrays_of_two_types.ml` | 12, 8 | `option_map.ml` | 70, 4 |
+| `empty_immutable_array.ml` | 9, 5 | `option_map_exported.ml` | 8, 4 |
+| `empty_type_refuted.ml` | 21, 6 | `option_matched_twice.ml` | 82, 43 |
+| `enum_to_int.ml` | 19, 1 | `optional_between_positional.ml` | 258, 178 |
+| `exclave_after_local_work.ml` | 201, 177 | `optional_default_uses_earlier_argument.ml` | 200, 123 |
+| `exclave_pair.ml` | 177, 157 | `optional_erased_for_higher_order.ml` | 172, 118 |
+| `exported_after_effect.ml` | 15, 6 | `optional_given_omitted_none_some.ml` | 98, 69 |
+| `exported_and_used.ml` | 14, 6 | `or_in_list_positions.ml` | 113, 69 |
+| `exported_apply.ml` | 18, 9 | `or_null_known.ml` | 23, 1 |
+| `exported_arms_after_let.ml` | 26, 21 | `or_null_unknown.ml` | 16, 6 |
+| `exported_bool.ml` | 11, 7 | `or_pattern.ml` | 49, 1 |
+| `exported_branch_calls_twice.ml` | 17, 11 | `or_two_variables_swapped.ml` | 61, 46 |
+| `exported_branch_fun_const.ml` | 17, 12 | `over_application.ml` | 19, 3 |
+| `exported_branch_option.ml` | 14, 9 | `over_application_three_stages.ml` | 101, 92 |
+| `exported_branch_pair.ml` | 15, 10 | `over_application_unknown_function.ml` | 61, 58 |
+| `exported_branch_then_const.ml` | 14, 9 | `over_inlined_maker_run.ml` | 23, 3 |
+| `exported_branch_then_fun.ml` | 14, 8 | `over_rec.ml` | 84, 52 |
+| `exported_branch_two_funs.ml` | 17, 11 | `overflow_wrap.ml` | 19, 1 |
+| `exported_capture.ml` | 16, 5 | `pair_built.ml` | 43, 21 |
+| `exported_chain.ml` | 14, 10 | `pair_computed.ml` | 45, 29 |
+| `exported_compose_kept.ml` | 17, 13 | `pair_constant_arm.ml` | 53, 23 |
+| `exported_const_list.ml` | 10, 7 | `pair_constant_arm_toplevel.ml` | 31, 12 |
+| `exported_curried.ml` | 14, 6 | `pair_constants.ml` | 32, 23 |
+| `exported_fun_branch_fun.ml` | 17, 11 | `pair_join.ml` | 31, 28 |
+| `exported_fun_given.ml` | 9, 7 | `pair_loop_in_loop.ml` | 333, 173 |
+| `exported_fun_in_arms.ml` | 20, 12 | `pair_read_one_call_inlined.ml` | 31, 23 |
+| `exported_fun_in_one_arm.ml` | 17, 12 | `pair_turned_in_loop.ml` | 192, 65 |
+| `exported_fun_in_option.ml` | 9, 8 | `pair_two_constants.ml` | 25, 9 |
+| `exported_fun_returned.ml` | 9, 7 | `pairs_for_a_suit.ml` | 20, 9 |
+| `exported_fun_to_map.ml` | 12, 9 | `param_copy_to_heap.ml` | 193, 171 |
+| `exported_function.ml` | 14, 6 | `partial_across_join.ml` | 148, 105 |
+| `exported_funs_given.ml` | 10, 10 | `partial_application.ml` | 23, 3 |
+| `exported_funs_in_arms_used.ml` | 23, 14 | `partial_exported.ml` | 13, 6 |
+| `exported_funs_in_pair.ml` | 14, 11 | `partial_in_a_pair.ml` | 90, 26 |
+| `exported_length.ml` | 8, 3 | `partial_of_kept_result.ml` | 14, 10 |
+| `exported_list.ml` | 9, 5 | `partial_one_argument_at_a_time.ml` | 116, 57 |
+| `exported_local_fun.ml` | 8, 4 | `partial_seen_by_front_end.ml` | 12, 8 |
+| `exported_local_never.ml` | 9, 7 | `partial_two_to_six_parameters.ml` | 156, 112 |
+| `exported_made.ml` | 14, 6 | `phys_equal_unknown.ml` | 9, 4 |
+| `exported_match_pair_then_fun.ml` | 13, 7 | `physical_equality.ml` | 32, 1 |
+| `exported_match_then_fun.ml` | 21, 12 | `pipeline.ml` | 23, 5 |
+| `exported_match_three_funs.ml` | 33, 19 | `poly_abbreviation_patterns.ml` | 117, 68 |
+| `exported_nested_branch.ml` | 21, 13 | `polymorphic_variant.ml` | 77, 4 |
+| `exported_nested_pair.ml` | 10, 7 | `power.ml` | 147, 99 |
+| `exported_option_fun_in_arm.ml` | 18, 10 | `project_record_two_levels.ml` | 43, 17 |
+| `exported_option_library.ml` | 14, 10 | `project_variant_argument.ml` | 27, 11 |
+| `exported_pair_fun_in_arms.ml` | 21, 14 | `projections_exported.ml` | 11, 7 |
+| `exported_record.ml` | 23, 9 | `raise_parameter.ml` | 11, 7 |
+| `exported_record_of_funs.ml` | 14, 11 | `rec_helper_among_three.ml` | 29, 10 |
+| `exported_record_update.ml` | 14, 6 | `rec_helper_called_outside.ml` | 27, 13 |
+| `exported_records_in_arms.ml` | 21, 14 | `record_exported.ml` | 11, 7 |
+| `exported_some_again.ml` | 26, 6 | `record_of_functions.ml` | 51, 10 |
+| `exported_string_length.ml` | 8, 5 | `record_project.ml` | 37, 8 |
+| `exported_submodule.ml` | 14, 8 | `record_update.ml` | 27, 4 |
+| `exported_table.ml` | 13, 8 | `recursion_through_given_closure_no_heap.ml` | 2572, 1593 |
+| `exported_twice_kept.ml` | 14, 10 | `ref_counter.ml` | 23, 23 |
+| `exported_two_branches.ml` | 23, 15 | `ref_local.ml` | 132, 79 |
+| `exported_two_functions.ml` | 22, 10 | `ref_local_in_for_loop.ml` | 296, 180 |
+| `exported_two_somes.ml` | 11, 5 | `ref_straight.ml` | 13, 4 |
+| `exported_two_tests.ml` | 26, 17 | `reraise_in_kept_function.ml` | 47, 35 |
+| `exported_two_values.ml` | 18, 1 | `result_join.ml` | 64, 33 |
+| `exported_variant.ml` | 17, 6 | `result_map.ml` | 44, 3 |
+| `fact_exported.ml` | 8, 3 | `returned_closure_of_pair.ml` | 71, 50 |
+| `factorial.ml` | 70, 46 | `same_constant_after_loop.ml` | 15, 7 |
+| `fct_applied_twice_same_argument.ml` | 92, 34 | `same_field_chain_twice.ml` | 29, 17 |
+| `fct_local_mutual_both_to_inlined.ml` | 139, 96 | `same_int64_sum_twice.ml` | 29, 14 |
+| `fct_of_functor.ml` | 97, 29 | `same_projection_across_call.ml` | 25, 13 |
+| `fib.ml` | 2041, 1417 | `self_through_closure.ml` | 189, 98 |
+| `field_twice_inlined.ml` | 27, 20 | `seq_unit.ml` | 13, 2 |
+| `first_class_module.ml` | 22, 4 | `shape2_heap.ml` | 61, 36 |
+| `flag_and_count_in_loop.ml` | 156, 90 | `shape_constant.ml` | 24, 11 |
+| `flag_and_test_in_loop.ml` | 157, 99 | `shape_heap.ml` | 54, 30 |
+| `flag_cleared_once_in_while.ml` | 217, 133 | `shared_read_slot_and_field.ml` | 15, 8 |
+| `flag_guards_update.ml` | 240, 130 | `shared_read_two_closures.ml` | 15, 9 |
+| `flag_or_test_in_loop.ml` | 142, 87 | `shift_edges.ml` | 23, 1 |
+| `flag_or_test_then_count.ml` | 291, 177 | `shift_unknown.ml` | 17, 7 |
+| `flag_read_twice_in_loop.ml` | 441, 269 | `shifts.ml` | 22, 8 |
+| `flag_set_in_loop.ml` | 153, 78 | `sibling_given_as_value.ml` | 75, 38 |
+| `flag_set_in_loop_first.ml` | 153, 78 | `sibling_through_alias.ml` | 74, 38 |
+| `flag_tested_in_loop.ml` | 237, 134 | `sign.ml` | 27, 1 |
+| `flip_applied_in_full_and_in_part.ml` | 101, 53 | `slot_through_held.ml` | 70, 47 |
+| `float_const.ml` | 15, 4 | `slot_through_held_functor.ml` | 11, 10 |
+| `fold_passes_function_on.ml` | 67, 37 | `slot_through_plain.ml` | 37, 29 |
+| `for_down.ml` | 79, 40 | `stack_argument_result_returned.ml` | 27, 20 |
+| `for_if.ml` | 165, 96 | `stack_pair.ml` | 167, 146 |
+| `for_nested.ml` | 171, 95 | `string_const.ml` | 21, 2 |
+| `for_sum.ml` | 135, 81 | `string_get16.ml` | 10, 5 |
+| `for_two_refs.ml` | 90, 52 | `string_get16_be.ml` | 16, 6 |
+| `fst_snd.ml` | 16, 3 | `string_get32.ml` | 23, 11 |
+| `fun_local_mutual_to_inlined.ml` | 145, 97 | `string_get_const.ml` | 9, 4 |
+| `fun_local_three_mutual_to_inlined.ml` | 219, 137 | `string_length_const.ml` | 8, 1 |
+| `function_passed_on_by_loop.ml` | 78, 39 | `string_length_unknown.ml` | 9, 5 |
+| `functions_in_record_called.ml` | 23, 17 | `string_sum.ml` | 100, 82 |
+| `functor_apply.ml` | 23, 1 | `submodule.ml` | 27, 1 |
+| `functor_argument_block_in_slot.ml` | 50, 14 | `succ_pred.ml` | 12, 5 |
+| `functor_member_kept_before_copy.ml` | 86, 60 | `sums_of_two_sorts.ml` | 341, 182 |
+| `functor_member_kept_before_copy_control.ml` | 71, 49 | `swap_exported.ml` | 8, 4 |
+| `gadt_equal_indices_pair.ml` | 53, 40 | `table_and_array_alike.ml` | 24, 20 |
+| `gadt_existential_match.ml` | 38, 8 | `tag_known_in_arm.ml` | 91, 52 |
+| `gadt_known.ml` | 35, 4 | `tail_call_after_region.ml` | 171, 153 |
+| `gadt_refutation_clause.ml` | 67, 50 | `tail_loop.ml` | 128, 83 |
+| `get_after_own_bounds_test.ml` | 56, 37 | `tail_nontail_annot.ml` | 175, 157 |
+| `guard_falls_to_later_case.ml` | 151, 91 | `test_boolean_twice.ml` | 39, 18 |
+| `guard_on_or_pattern.ml` | 132, 83 | `three_arms_same_sum.ml` | 24, 5 |
+| `helper_called_through_slot.ml` | 33, 12 | `toplevel_closure_applied_mutual.ml` | 84, 40 |
+| `helper_inlined_in_closure.ml` | 28, 17 | `tree_root.ml` | 90, 4 |
+| `hidden_helper_inlined_twice.ml` | 46, 22 | `try_no_raise.ml` | 14, 5 |
+| `higher_order.ml` | 32, 5 | `try_returned_exported.ml` | 11, 9 |
+| `hof_closure_in_record.ml` | 49, 22 | `tuple_match.ml` | 75, 1 |
+| `hof_option_of_closure.ml` | 125, 47 | `tuple_return.ml` | 20, 5 |
+| `hof_two_closures_through_join.ml` | 65, 54 | `tuple_swap.ml` | 19, 4 |
+| `iarray_element_read_twice.ml` | 25, 19 | `tuple_through_kept_identity.ml` | 19, 12 |
+| `iarray_in_function.ml` | 21, 14 | `tupled_function.ml` | 21, 2 |
+| `iarray_length_of_any_not_inlined.ml` | 19, 14 | `tupled_partial_application.ml` | 91, 67 |
+| `iarray_literal.ml` | 11, 5 | `twice_inlined.ml` | 19, 6 |
+| `iarray_literal_measured_one_call_inlined.ml` | 27, 18 | `twice_nested_same_scrutinee.ml` | 60, 24 |
+| `iarray_measured_one_call_inlined.ml` | 31, 23 | `two_flags_and_or_in_loop.ml` | 319, 213 |
+| `iarray_of_variable_measured_one_call_inlined.ml` | 32, 24 | `two_flags_set_in_loop.ml` | 179, 81 |
+| `iarray_of_variable_read_one_call_inlined.ml` | 32, 24 | `two_ignored_tests.ml` | 40, 34 |
+| `iarray_read_in_function.ml` | 18, 13 | `two_local_mutual_both_in_inner_function.ml` | 93, 63 |
+| `iarray_read_one_call_inlined.ml` | 31, 23 | `two_options_matched.ml` | 180, 83 |
+| `id_exported.ml` | 8, 4 | `two_parameters_beside_unknown_call.ml` | 23, 18 |
+| `identity.ml` | 22, 3 | `two_tables_of_one_match.ml` | 50, 30 |
+| `if_unknown.ml` | 13, 6 | `two_tags_shared_field.ml` | 69, 49 |
+| `ignore_value.ml` | 11, 2 | `unboxed_float_argument.ml` | 18, 13 |
+| `ignored_call_of_three.ml` | 28, 24 | `unboxed_float_argument_unknown.ml` | 13, 9 |
+| `ignored_call_or_constant.ml` | 28, 22 | `unboxed_float_over_application.ml` | 19, 13 |
+| `ignored_second_of_pair.ml` | 30, 22 | `unboxed_pair.ml` | 13, 4 |
+| `ignored_two_calls.ml` | 34, 26 | `unboxed_pair_argument.ml` | 10, 3 |
+| `include_functor_result.ml` | 41, 23 | `unboxed_pair_argument_unknown.ml` | 15, 10 |
+| `indirect_call.ml` | 13, 9 | `unboxed_pair_parameter_beside_unknown_call.ml` | 23, 18 |
+| `inl_callee_region_twice.ml` | 477, 392 | `unboxed_pair_parameter_partial.ml` | 74, 43 |
+| `inline_function.ml` | 20, 4 | `unboxed_pair_then_integer_argument.ml` | 15, 10 |
+| `inline_record.ml` | 45, 7 | `unboxed_pair_with_float_argument.ml` | 16, 11 |
+| `inlined_at_one_call.ml` | 21, 14 | `unit_argument.ml` | 18, 1 |
+| `inlined_test_join.ml` | 34, 7 | `unsafe_get_const_and_unknown.ml` | 20, 14 |
+| `int32_arith.ml` | 27, 8 | `var_twelve_mixed.ml` | 191, 105 |
+| `int32_boxed_once_for_two_results.ml` | 18, 5 | `variant_blocks_join.ml` | 20, 8 |
+| `int32_overflow.ml` | 40, 1 | `variant_constants.ml` | 44, 30 |
+| `int32_unknown.ml` | 17, 7 | `variant_match_exported.ml` | 8, 4 |
+| `int64_boxed.ml` | 22, 8 | `variant_nested_match.ml` | 213, 151 |
+| `int64_built.ml` | 61, 43 | `variant_two_blocks.ml` | 44, 30 |
+| `int64_clamp.ml` | 50, 33 | `void_argument_known.ml` | 13, 8 |
+| `int64_compare.ml` | 48, 1 | `void_argument_unknown.ml` | 17, 13 |
+| `int64_compare_tested.ml` | 18, 8 | `void_parameter_partial.ml` | 12, 7 |
+| `int64_join.ml` | 26, 1 | `while_const_after.ml` | 70, 45 |
+| `int64_max.ml` | 51, 37 | `while_countdown.ml` | 61, 34 |
+| `int64_of_int.ml` | 25, 7 | `while_flag.ml` | 150, 75 |
+| `int64_option_heap.ml` | 63, 38 | `while_flag_and_two_tests.ml` | 208, 130 |
+| `int64_overflow.ml` | 33, 1 | `while_flag_chooses_test.ml` | 250, 130 |
+| `int64_passed_on.ml` | 40, 26 | `while_flag_comparison_or_constant.ml` | 123, 67 |
+| `int64_shift.ml` | 21, 8 | `while_flag_is_comparison.ml` | 111, 57 |
+| `int64_sum_in_loop.ml` | 204, 89 | `while_flag_or_two_tests.ml` | 214, 147 |
+| `int64_sum_on_some_turns.ml` | 269, 154 | `while_flag_starts_as_comparison.ml` | 96, 51 |
+| `int64_to_int32.ml` | 10, 6 | `while_flag_then_test.ml` | 160, 83 |
+| `int_extreme_literals.ml` | 130, 79 | `while_flag_toplevel.ml` | 156, 79 |
+| `int_of_char.ml` | 8, 3 | `while_if_inside.ml` | 161, 106 |
+| `int_split_intervals.ml` | 94, 63 | `while_loop.ml` | 78, 45 |
+| `int_switch.ml` | 31, 1 | `while_nested.ml` | 188, 127 |
+| `is_even.ml` | 29, 1 | `while_stop_flag.ml` | 170, 121 |
+| `join_pair_equal_fields.ml` | 50, 28 | `while_sum_down.ml` | 133, 80 |
+| `join_phys_equal_arms.ml` | 25, 17 | `while_two_loops.ml` | 126, 81 |
+| `join_tags_then_shared_field.ml` | 69, 46 | `while_two_tests.ml` | 180, 123 |
+| `join_two_names_of_symbol.ml` | 24, 8 | `while_unused_counter.ml` | 78, 40 |
+| `kept_local_mutual_to_inlined.ml` | 145, 97 | | |
 
 ### Validated when asked of the term before with its known arrays read
 
@@ -1086,36 +1415,39 @@ model; 3 not checked.
 
 | Source | Steps | Source | Steps |
 |--------|-------|--------|-------|
-| `a_captured_after_the_loop.ml` | 350, 177 | `raise_division_inlined.ml` | 83, 29 |
-| `a_for_body_direct_around.ml` | 338, 167 | `raise_handler_raises_again_inlined.ml` | 90, 31 |
-| `a_for_notrace_direct_value.ml` | 332, 169 | `raise_in_function.ml` | 24, 11 |
-| `a_for_prim_direct_around.ml` | 346, 193 | `raise_inlined.ml` | 27, 11 |
-| `a_for_rethrow_direct_around.ml` | 420, 219 | `raise_notrace.ml` | 22, 10 |
-| `a_known_on_one_path.ml` | 188, 81 | `raise_unused_bucket.ml` | 23, 10 |
-| `a_while_body_direct_around.ml` | 324, 167 | `raise_unused_exn.ml` | 22, 10 |
-| `a_while_notrace_closure_two_around.ml` | 396, 215 | `string_get16_checked.ml` | 29, 18 |
-| `array_length_twice.ml` | 21, 18 | `string_get_checked.ml` | 21, 4 |
-| `collatz_local_refs.ml` | 3218, 1827 | `string_get_in_branch.ml` | 33, 25 |
-| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get_twice.ml` | 39, 26 |
-| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_two_indices.ml` | 47, 36 |
-| `div_const.ml` | 26, 5 | `string_get_unknown.ml` | 28, 16 |
-| `div_unknown.ml` | 16, 9 | `string_length_after_join.ml` | 40, 29 |
-| `divisor_tested_twice.ml` | 31, 17 | `try_catch_all.ml` | 22, 10 |
-| `empty_array_read_caught.ml` | 32, 13 | `try_div_zero.ml` | 23, 12 |
-| `exn_with_argument.ml` | 37, 10 | `try_exported.ml` | 8, 4 |
-| `exported_function_raises.ml` | 40, 23 | `try_in_each_turn.ml` | 179, 107 |
-| `handler_arm_never_taken.ml` | 38, 10 | `try_in_function.ml` | 25, 10 |
-| `imp_head_closure_uses_unit_function_only.ml` | 39, 30 | `try_nested.ml` | 30, 14 |
-| `imp_head_include_functor_result.ml` | 41, 23 | `try_not_found.ml` | 28, 10 |
-| `imp_head_inlined_at_one_call.ml` | 21, 14 | `try_reraise.ml` | 29, 14 |
-| `imp_knowing_local_mutual.ml` | 148, 100 | `try_result_matched.ml` | 81, 52 |
-| `made_array_checked_store.ml` | 23, 7 | `try_result_unused.ml` | 13, 3 |
-| `mod_zero.ml` | 22, 6 | `try_test_outside.ml` | 22, 10 |
-| `name_then_wildcard.ml` | 26, 11 | `uncaught_raise.ml` | 10, 4 |
-| `never_returns_in_function.ml` | 44, 37 | `value_arm_constant.ml` | 54, 37 |
-| `never_returns_twice.ml` | 23, 16 | `while_for_with_raise.ml` | 203, 106 |
-| `none_raises_after_inlining.ml` | 13, 10 | `wrong_name_uncaught.ml` | 25, 8 |
-| `partial_uncaught.ml` | 20, 17 |  |  |
+| `a_captured_after_the_loop.ml` | 350, 177 | `raise_handler_raises_again_inlined.ml` | 90, 31 |
+| `a_for_body_direct_around.ml` | 338, 167 | `raise_in_function.ml` | 24, 11 |
+| `a_for_notrace_direct_value.ml` | 332, 169 | `raise_inlined.ml` | 27, 11 |
+| `a_for_prim_direct_around.ml` | 346, 193 | `raise_made_block_inlined.ml` | 10, 6 |
+| `a_for_rethrow_direct_around.ml` | 420, 219 | `raise_made_block_inlined_twice.ml` | 14, 11 |
+| `a_known_on_one_path.ml` | 188, 81 | `raise_made_block_written.ml` | 9, 6 |
+| `a_while_body_direct_around.ml` | 324, 167 | `raise_notrace.ml` | 22, 10 |
+| `a_while_notrace_closure_two_around.ml` | 396, 215 | `raise_unused_bucket.ml` | 23, 10 |
+| `array_length_twice.ml` | 21, 18 | `raise_unused_exn.ml` | 22, 10 |
+| `collatz_local_refs.ml` | 3218, 1827 | `string_count_to_length.ml` | 228, 152 |
+| `dead_division_in_dead_arm.ml` | 57, 9 | `string_get16_checked.ml` | 29, 18 |
+| `dead_raise_in_dead_arm.ml` | 84, 27 | `string_get_checked.ml` | 21, 4 |
+| `div_const.ml` | 26, 5 | `string_get_in_branch.ml` | 33, 25 |
+| `div_unknown.ml` | 16, 9 | `string_get_twice.ml` | 39, 26 |
+| `divisor_tested_twice.ml` | 31, 17 | `string_get_two_indices.ml` | 47, 36 |
+| `empty_array_read_caught.ml` | 32, 13 | `string_get_unknown.ml` | 28, 16 |
+| `exn_with_argument.ml` | 37, 10 | `string_length_after_join.ml` | 40, 29 |
+| `exported_function_raises.ml` | 40, 23 | `try_catch_all.ml` | 22, 10 |
+| `handler_arm_never_taken.ml` | 38, 10 | `try_div_zero.ml` | 23, 12 |
+| `imp_head_closure_uses_unit_function_only.ml` | 39, 30 | `try_exported.ml` | 8, 4 |
+| `imp_head_include_functor_result.ml` | 41, 23 | `try_in_each_turn.ml` | 179, 107 |
+| `imp_head_inlined_at_one_call.ml` | 21, 14 | `try_in_function.ml` | 25, 10 |
+| `imp_knowing_local_mutual.ml` | 148, 100 | `try_nested.ml` | 30, 14 |
+| `made_array_checked_store.ml` | 23, 7 | `try_not_found.ml` | 28, 10 |
+| `made_array_checked_store_in_loop.ml` | 92, 53 | `try_reraise.ml` | 29, 14 |
+| `mod_zero.ml` | 22, 6 | `try_result_matched.ml` | 81, 52 |
+| `name_then_wildcard.ml` | 26, 11 | `try_result_unused.ml` | 13, 3 |
+| `never_returns_in_function.ml` | 44, 37 | `try_test_outside.ml` | 22, 10 |
+| `never_returns_twice.ml` | 23, 16 | `uncaught_raise.ml` | 10, 4 |
+| `none_raises_after_inlining.ml` | 13, 10 | `value_arm_constant.ml` | 54, 37 |
+| `partial_uncaught.ml` | 20, 17 | `while_for_with_raise.ml` | 203, 106 |
+| `raise_constant_inlined_in_function.ml` | 10, 4 | `wrong_name_uncaught.ml` | 25, 8 |
+| `raise_division_inlined.ml` | 83, 29 | | |
 
 ### Validated with nothing imported, and not with its imports
 
@@ -1160,6 +1492,7 @@ before. What each shows, and what its validation uses besides:
 | `exported_branch_pair.ml` | one of two constant pairs chosen by a test, then a function that reads it: the pairs become symbols, and the closure a symbol that holds the one chosen | the closure lifted to a symbol in the term before and the code of the term after bound first |
 | `exported_branch_calls_twice.ml` | as `exported_branch_two_funs.ml`, the second function calling the first twice: inlines both calls, and reads the value slot of the first closure once | as `exported_branch_two_funs.ml`; with the two calls inlined in the term before, the value slot is projected twice, and the second projection is made the variable of the first (`FlambdaShareProjectionsSpec.share_known_projections`) |
 | `exported_some_again.ml` | a value that is not known until the module runs, put in an option that a function which is always inlined takes apart, and kept in another option: the first option is gone, and the second is a symbol | the closure and the second option lifted to symbols: the test tool gives the symbol to the first block of its shape, which is the first option, finds it unused in the end, and guesses again without it |
+| `list_of_pair_made_by_call.ml` | a list of one pair, the pair made by a call, read by a recursive function into which a function marked to be inlined is inlined: inlines the call that makes the pair; the pair and the cell of the list are symbols | the closures, the pair and the cell lifted to symbols: where the first lifting is guessed the pair is still the result of the call, and the test tool gives its symbol to the cell of the list, a block of the same tag and size whose first field is a variable; in the term that the liftings and the rounds give it finds that symbol bound to a block that cannot be the pair, and guesses again with the cell excluded for it (`list_of_pair_made_by_call_pick_kept.ml` is the same with the call of the function kept) |
 | `exported_fun_given.ml` | a function that gives, to the function it is given, a function which needs nothing from around it: the closure given is a symbol, bound beside the code of the function that gives it | the closure lifted out of the code of the function in the term before (`FlambdaLiftFromCodeSpec.lift_from_code_unit`) |
 | `exported_fun_returned.ml` | a function that returns a function of its own which needs nothing from around it: the closure returned is a symbol | as the one before |
 | `exported_funs_given.ml` | a function that gives two such functions: both closures are symbols | the two closures lifted out of the code; they are bound in the order of their `Let`s, which is not the order in which Simplify binds them, and the static bindings of a group are compared whatever their order |
@@ -1191,12 +1524,16 @@ before. What each shows, and what its validation uses besides:
 
 | Source | Steps | What the validator lacks |
 |--------|-------|--------------------------|
-| `made_array_checked_store_in_loop.ml` | 92, 53 | the length of an array that a `Let` makes before a loop, taken at each turn of the loop for the check of an index: Simplify has the number from the allocation, and the two passes of the validation that know the length of an array made by a `Let` do not carry what they know into the handler of a recursive continuation, which the loop is (P1) |
-| `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has no subkinds (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
+| `chain_of_eighteen_in_functor.ml` | 25, 56 | more than sixteen liftings in turn: seventeen closures, each after the first calling the one before, and the block that holds them are eighteen values, each after the first made of the one before, and Simplify makes all eighteen symbols; the tool guesses sixteen liftings in turn at most, and says under the verdict that a search stopped there with another lifting to make, for the validation and for the second check. A bound of the tool's search, not of the model (item 3 of the list below; V3) |
+| `pair_kept.ml` | 35, 33 | one branch gives a parameter of the function, and Simplify loads its fields at that use, which only the subkind of the parameter justifies; the model has the subkinds of parameters (decision D25), and the unboxing of the validation goes by what the term shows, not by what a parameter states (T6-7). Item 2 of the list below says what the comparison of the two terms with the two calls inlined is left with |
 | `pair_loop.ml` | 192, 85 | the same loads of the fields of a parameter of the function, which only its subkind justifies, at the entry of a loop, whose parameter Simplify unboxes from its subkind without looking at the uses (T6-7) |
-| `pair_of_unknowns_after_inlined_pair.ml` | 22, 10 | not validated; both terms have a primitive of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that has one (a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below), with the second search of the liftings |
-| `raise_parameter.ml` | 11, 7 | code raises a variable that is not known to hold a symbol or a constant (a parameter of the code), and a lifting is made only where the unit gives symbols, constants and variables known to hold one to the continuations that it may leave through (`FlambdaLiftSpec.exits_plain_knowing`, and the CR at `exits_plain`); related once lifted (the tables below) |
-| `throw_variable_kept.ml` | 49, 31 | as `raise_parameter.ml` |
+| `pair_of_unknowns_after_inlined_pair.ml` | 22, 10 | not validated; neither term passes the liftings' test of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that does not pass it (`FlambdaHeapFreeSpec.free_of_heap_fine`; a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below), with the second search of the liftings |
+| `partial_of_inlined_result.ml` | 14, 11 | as `partial_seen_once_inlined.ml`: the function given one argument is what an inlined call returns (item 4 of the list below) |
+| `partial_seen_once_inlined.ml` | 14, 11 | the wrapper that Simplify makes of a partial application which it finds once a call is inlined: new code that is a stub, and its closure with the argument in a value slot, where the term before has a call with one argument of code that takes two; no rewrite of the validation makes the wrapper, and the tool says so under the verdict (item 4 of the list below) |
+| `recursion_through_given_closure_one_call.ml` | 192, 130 | a recursive function gives another function of the unit a closure that calls it back, and that other function writes a mutable field before it calls the closure: neither term passes the liftings' test of the heap, and each of the four liftings of the validation lifts nothing in a term given to it that does not pass it (`FlambdaHeapFreeSpec.free_of_heap_fine`; a limit pending decision D40; "What the verdicts mean", the line that names the primitive); related once lifted (the tables below; T3's unit) |
+| `recursion_through_given_closure_two_calls.ml` | 2925, 2037 | as `recursion_through_given_closure_one_call.ml`, with two calls of the function in the closure |
+| `slot_through_other_function.ml` | 72, 49 | a control of the rounds that read a value slot through another closure (C3): two functions are defined together, and one of them calls an inlined function that reads a variable which that one does not mention. Simplify makes the read in the copy a read of the value slot of the set that holds the variable, at the head of the body; the rounds of the validation make the same read (`FlambdaSlotsThroughSpec.read_slots_through`) where the read through the other closure was, in a branch, and do not move it to the head of the code: the two terms differ by the place of that projection |
+| `throw_variable_kept.ml` | 49, 31 | code raises a variable that is not known to hold a symbol or a constant (a parameter of the code), in a unit that calls that code outside the bodies of its code: a lifting is made only where the unit passes the liftings' test of the exits (`FlambdaLiftSpec.exits_plain_fine`, and the CRs at `exits_plain` and at it), which asks, of a unit that has a call outside the bodies of its code, that it give symbols, constants and variables known to hold one to the continuations that it may leave through, those of its code too (decision D65 made the test finer for a unit that has no such call); related once lifted (the tables below) |
 
 ### Related once lifted, and not validated
 
@@ -1209,7 +1546,8 @@ The check given no import:
 | Source | What it is | The line |
 |--------|------------|----------|
 | `pair_of_unknowns_after_inlined_pair.ml` | a function that is always inlined, which counts its calls in a reference and returns a pair, called once with a constant; then a pair of two values that are not known | related once lifted; no value slots removed |
-| `raise_parameter.ml` | a function that raises its parameter, and one that catches whatever the first raises; neither is called | related once lifted; unused value slots removed |
+| `recursion_through_given_closure_one_call.ml` | a recursive function that gives another function of the unit a closure which calls it back once; the other function writes a mutable field and calls the closure (source by T3) | related once lifted; unused value slots removed |
+| `recursion_through_given_closure_two_calls.ml` | the same with two calls in the closure (source by T3) | related once lifted; unused value slots removed |
 
 The check given imports:
 
@@ -1232,14 +1570,17 @@ in the tree, and that term written by hand. The import was a
 predefined exception or, in a unit that uses another unit, an
 exception or another symbol of that unit. A declaration of a fresh
 exception uses the runtime call `caml_fresh_oo_id`. A term in which
-that call remains has no verdict: the tool does not convert C calls.
+that call remained had no verdict: that tool did not convert C calls.
 Those examples exercised the line with no import. That measure is
 not one of the tool of this tree, whose conversion makes the
 primitives of the heap. A unit that stores or makes a cell can have
 the line with no import: each lifting of the validation lifts
-nothing in a term given to it that has such a primitive, and the
-second check may relate the two terms all the same.
-`pair_of_unknowns_after_inlined_pair.ml` has it so; so has a
+nothing in a term given to it that does not pass the liftings' test
+of the heap ("What the verdicts mean"), and the second check may
+relate the two terms all the same.
+`pair_of_unknowns_after_inlined_pair.ml` has it so, and so have
+`recursion_through_given_closure_one_call.ml` and
+`recursion_through_given_closure_two_calls.ml`; so has a
 generated unit of `census/` (`loops`, seed 19), and so have two
 terms written by hand in the directory above
 (`../heap_store_stops_lifting.fl`, `../heap_store_stops_guess_again.fl`;
@@ -1252,6 +1593,7 @@ here.
 |--------|------------------------------------|
 | `empty_array_phys_equal.ml` | two empty arrays compared by `==`: the front end makes one symbol of the two, so the comparison is of an allocated value with itself, to which the model gives no value (C4) |
 | `iarray_phys_equal.ml` | an immutable array compared with itself by `==`: the model gives the comparison of an allocated value with itself no value (C4) |
+| `undefined_beside_raise.ml` | as `iarray_phys_equal.ml`, beside a function that raises its parameter and is not called: the comparison is the same one, and the unit is the control of the line of the mark of decision D65 under the acceptance of a pair whose run before is undefined (C3) |
 
 ### Not checked
 
@@ -1261,29 +1603,79 @@ here.
 | `tupled_recursive.ml` | after Simplify the unit calls tupled code directly, giving it the components; the model has not got that call (C3) |
 | `tupled_unknown_pair.ml` | as `tupled_recursive.ml` |
 
-## What stops a unit from validating, most common first
+## What stops a unit from validating
 
 1. Code that raises a variable that is not known to hold a symbol
-   or a constant (two units: `raise_parameter.ml`,
-   `throw_variable_kept.ml`; in each the code raises its parameter).
+   or a constant, in a unit that calls that code outside the bodies
+   of its code (one unit; the items keep the numbers that other
+   texts name them by, and this one had four units before decision
+   D65). In `throw_variable_kept.ml` the code raises its parameter,
+   and the unit calls it twice where the module runs.
    Simplify makes the closures of such a unit symbols, and the
-   validation makes a lifting only where the unit gives symbols,
+   validation makes a lifting only where the unit passes the
+   liftings' test of the exits (`FlambdaLiftSpec.exits_plain_fine`,
+   and the CRs at `exits_plain` and at it): it gives symbols,
    constants and variables known to hold one to the continuations
-   that it may leave through (`FlambdaLiftSpec.exits_plain_knowing`,
-   and the CR at `exits_plain`). A handler that raises again what
-   it caught passes that test where everything that can reach it is
-   a symbol or a constant (`exported_function_raises.ml` and
-   `reraise_in_kept_function.ml`, which were here, are validated).
-   The second check answers of each of the two ("Related once
-   lifted, and not validated", above); they are counted as not
-   validated.
+   that it may leave through, or it has no call outside the bodies
+   of its code and gives only those to the continuations that it may
+   leave through outside them. A handler that raises again what it
+   caught passes the first of the two where everything that can
+   reach it is a symbol or a constant (`exported_function_raises.ml`
+   and `reraise_in_kept_function.ml`, sources by T5b, which were
+   here, are validated). The second check answers of the unit
+   ("Related once lifted, and not validated", above); it is counted
+   as not validated.
+   Three units were here with it, whose code raises a variable and
+   which call nothing outside the bodies of their code:
+   `raise_parameter.ml`, whose code raises its parameter, and
+   `raise_made_block_inlined.ml` and
+   `raise_made_block_inlined_twice.ml` (sources by T5b, written after
+   an account of V3's, which is not in this tree, of functions of
+   the standard library that call `invalid_arg`: `Option.get`, and
+   `get_left` and `get_right` of `Either`; each begins with the
+   notices of the files of the library that its comment names),
+   whose code raises a variable
+   that holds a block made of its parameter, as a function that
+   makes an exception of a message does (there the function is
+   always inlined and is called with constant strings: Simplify
+   makes the blocks symbols, the code of each caller raises a
+   symbol, and the code that raised a variable is deleted, so that
+   the term before has it and the term after has not). They pass the
+   second of the two, which decision D65 added, and are validated,
+   each with the first line of the mark of that decision (the last
+   entry of the list below).
+   The two units that make a block have two controls, validated
+   with their imports (sources by T5b too, written with the first
+   of the two; each begins with the notice, or the notices, of the
+   files of the library that its comment names).
+   In `raise_made_block_written.ml` the same
+   exception is made where it is raised, with no function to
+   inline, and the front end makes its block a symbol. In
+   `raise_constant_inlined_in_function.ml` the function that is
+   inlined raises an exception that has no argument, so its code
+   raises a symbol.
+   What may change for the unit is one of two things, which are
+   not the same. If the human chooses, in decision D43, which is
+   open, to count the relation that the second check establishes,
+   the unit is counted with that line. That choice changes what is
+   counted. It does not change what `refines` means, nor what the
+   theorem of that check proves: the values of two exits may
+   differ, and what observes them names no import. Its expected
+   file need not change for it. Or a test of the exits of a lifting
+   that is finer still, with a statement of its own, which would
+   change what the validation accepts.
 2. A pair that is a parameter of the function, unboxed where two
    branches meet (two units). One branch gives the parameter, and
    Simplify loads its fields at that use, which only the subkind of
-   the parameter justifies; the model has no subkinds, so the code
-   of the term after is less defined than that of the term before
-   and no rewrite of it can be proved (`pair_kept.ml`; discrepancy
-   T6-7). `pair_loop.ml` is the same at the entry of a loop, whose
+   the parameter justifies. The model has the subkinds of parameters
+   (decision D25, which is decided for them): a run is undefined
+   where the code is entered with a value that is not of what the
+   parameter states. The validation makes no such load: where it
+   unboxes the parameter of a continuation that branches meet at, it
+   goes by what the term shows and not by what a parameter states
+   (`FlambdaUnboxVariantsSpec.unbox_variant_params`), and the unit is
+   not validated (`pair_kept.ml`; discrepancy T6-7). `pair_loop.ml`
+   is the same at the entry of a loop, whose
    parameter Simplify unboxes from its subkind without looking at
    the uses. In `pair_kept.ml` the function is not recursive, so
    the validation also compares the two terms with its two calls
@@ -1296,6 +1688,68 @@ here.
    (`FlambdaReadsAfterSpec.remove_constant_allocations`).
    `pair_join.ml`, which was the third unit, is validated by that
    comparison: its entry in the list below.
+3. More than sixteen liftings in turn (one unit:
+   `chain_of_eighteen_in_functor.ml`; V3's). Seventeen closures,
+   each after the first calling the one before, and the block that
+   holds the seventeen, in a functor that does not use its
+   argument: eighteen values, each after the first made of the one
+   before, and Simplify makes all eighteen symbols. The tool
+   guesses what Simplify lifted as liftings in turn, sixteen at
+   most ("What a check costs"), and its guess lifts a value once
+   its parts are symbols: after sixteen liftings the term before
+   has sixteen of the closures as symbols and still makes the last
+   closure and the block by `Let`s, where the term after has their
+   symbols. The tool says under the verdict that a search stopped
+   at sixteen liftings with another to make, for the validation and
+   for the second check ("What the verdicts mean"). The bound is of
+   the tool's search and not of the model, whose function takes any
+   list of liftings (`FlambdaValidateSpec.lifted_in_turn`). The
+   controls are the chains of four and of five values, which are
+   validated: T4's six units, of which the three of five values
+   were here while the bound was four (the list below).
+4. The wrapper that Simplify makes of a partial application (two
+   units: `partial_seen_once_inlined.ml`,
+   `partial_of_inlined_result.ml`). A function of two parameters is
+   given one argument where the front end does not see which
+   function it is: through a function that applies what it is
+   given, or as the result of a call. Once that call is inlined
+   Simplify sees a partial application of code that it knows, and
+   makes a wrapper of it: new code, marked as a stub, which reads
+   the argument from its own closure and calls the function with
+   both, and the closure of that code with the argument in a value
+   slot (`simplify_direct_partial_application` in
+   `middle_end/flambda2/simplify/simplify_apply_expr.ml`). The term
+   before, with the call inlined, has a direct call with one
+   argument of code that takes two, and no rewrite of the
+   validation makes the wrapper; the tool says so under the verdict
+   ("What the verdicts mean"). Where that call runs, in the code
+   of the exported function, the model gives the term before a
+   value that is not a closure (`Value_partial_application`), and
+   the term after the closure of the wrapper: two representations
+   of the partial application. The runs of the two units do not
+   make that call: each returns its module block, and what the tool
+   observes of the two runs is the same. The second check does not
+   accept the pair either. In the controls no wrapper is made by
+   Simplify, and they
+   are validated: in `partial_seen_by_front_end.ml` the partial
+   application is written, and the front end makes the wrapper,
+   which both terms have; in `partial_of_kept_result.ml` the first
+   call is never inlined, and the call of its result stays a call
+   of unknown arity. V3 met the case first with the `.cmx` of the
+   standard library.
+   What may turn the two is a proposal, which is not in this tree:
+   a rewrite of the term before that makes the wrapper, with a
+   statement that relates those two representations and does not
+   ask that the values be equal (C3; not shown to be enough for
+   these two units).
+
+The expected files of the three units that items 3 and 4 are about,
+and of the two that item 1 gained with them, say "not validated" as
+the tool of this tree prints it of them. None is a finding about
+the compiler: in each the two runs are the same, and what stops the
+validation is a limit of the validation, or of the tool's search,
+which the item names. Each is here with a control, so that its
+expected file changes when the limit goes.
 
 What the model has not got, and the conversion refuses: floating-point
 arithmetic (`float_add.ml`), and a direct call of tupled code,
@@ -1319,8 +1773,8 @@ elements are values (`iarray_in_function.ml` and
 the arguments of a function that is not inlined); it is a value with no
 identity, where a mutable one is a cell.
 The conversion refuses a call that is a probe as well; no unit of
-this directory has one (`pairs/README.md`), and `from_ocaml.sh`
-refuses a unit that has one.
+this directory has one, and of `pairs/probed.ml`, which has one, the
+tool says that it is not checked (`pairs/README.md`).
 
 What was on this list and is not any more, with the rewrite that
 removed it:
@@ -1397,6 +1851,11 @@ removed it:
   (`FlambdaDemoteSpec.demote_handlers`,
   `FlambdaValidateSpec.demote_and_tidy`). The conversion keeps, for
   that, the `Let` by which a handler ends its region (see above).
+  The validator does not do the same to the term after. Where every
+  attempt refuses a pair and the rewrite changes the term after, the
+  tool makes its attempts again of the term after so rewritten, and
+  says so under what it prints of a pair that they accept ("What the
+  verdicts mean", the line "(asked of the term after ...)").
 - A continuation whose handler is one jump, bound above a `Let` and
   applied by an arm of a `Switch`, once a call is inlined
   (`option_inlined.ml`): the rounds of the first phase, which send
@@ -2060,6 +2519,30 @@ removed it:
   after makes no block of that tag and number of fields by a `Let`
   (the term after may still bind a symbol to a block of that
   shape). It is a guess, which the validation checks.
+- A boxed number that a closure holds in a value slot
+  (`boxed_number_in_slot.ml`, `boxed_number_in_two_slots.ml`; V3's).
+  A unit computes a 64-bit integer once, of a constant, and a function
+  reads it from its closure; Simplify puts the constant in the code of
+  the function, the closure has no such value slot any more, and no
+  symbol is bound to the boxed number. `int64.ml` and `nativeint.ml`
+  of the standard library have the case: the driver validates both
+  with the change and did not without it (the table of
+  `../stdlib/README.md` has their rows). The tool's guess of what was
+  lifted gave a `Let` that boxes a number a symbol only where the term
+  after binds one to that boxed number. Where it has none left to
+  take, it now gives a symbol that neither term has to a boxed number,
+  on three tests: its contents are a constant, or a variable that
+  stands for one; a closure of the term before holds it in a value
+  slot; and no `Let` of the term after boxes, at that kind, contents
+  written as that constant. It is a guess, which the validation
+  checks.
+  `boxed_number_in_slot_not_known.ml` and `boxed_number_in_slot_kept.ml`
+  are controls: validated without the change and with it, with the
+  same output. The last of the three tests has a control of its own, a
+  pair of texts written by hand (`../lifting_guess/`): with the test
+  the pair is validated at the first asking, and without it, measured
+  with a build of the tool that is not in the tree, at the second. No
+  test shows it deciding a verdict.
 - A flag tested with other tests, or read twice in a loop
   (`while_flag_and_two_tests.ml`, `while_flag_or_two_tests.ml`,
   `flag_read_twice_in_loop.ml`, `while_flag_chooses_test.ml`;
@@ -2315,8 +2798,10 @@ removed it:
   variable (a call that returns to the handler makes its parameters
   unknown; what a call raises to it is not looked at where the call
   stands, the test asks it of the code of the unit that is called). The
-  test is `FlambdaLiftSpec.exits_plain_knowing`, which accepts whatever
-  `exits_plain` accepts. The two units are validated with their imports
+  test was `FlambdaLiftSpec.exits_plain_knowing`, which accepts whatever
+  `exits_plain` accepts; it is now the first of the two ways of
+  passing the finer test of decision D65 (the last entry of this
+  list). The two units are validated with their imports
   by the comparison of the lifted terms. `exported_function_raises.ml`
   and `reraise_in_kept_function.ml`, which were not validated, are
   validated by that comparison too, the first with its imports (item 1
@@ -2597,11 +3082,12 @@ removed it:
   is that of the function asked. No definition and no statement
   changes for this, and the tool prints no new line. At the default
   flags, which are those of the tests of this directory, the first
-  unit is validated. The second is not validated. Both its terms have
-  a primitive of the heap, and a lifting of the validation lifts
-  nothing in a term given to it that has one ("What the verdicts
-  mean"). The second check, which printed no line of it, now prints
-  "related once lifted", which is no validation of the unit.
+  unit is validated. The second is not validated. Neither of its terms
+  passes the liftings' test of the heap, and a lifting of the
+  validation lifts nothing in a term given to it that does not pass
+  it ("What the verdicts mean"). The second check, which printed no
+  line of it, now prints "related once lifted", which is no validation
+  of the unit.
 - A closure that a recursive function captures and gives to a function
   that is inlined (`captured_closure_given_to_inlined.ml`; C3's). A
   function that the unit exports makes a closure that holds its
@@ -2650,12 +3136,90 @@ removed it:
   at the default flags, which are those of the tests of this directory:
   it is here so that the rule stays in the rounds of both terms; with
   `-O3` the tool of 4ba710c501 does not validate it, and the tool of
-  this tree does. `made_array_checked_store_in_loop.ml` is not
-  validated: the array is made before a loop and the check of the index
-  is in the loop, and neither pass carries what it knows of the
-  allocation into the handler of a recursive continuation, so the term
-  before keeps the length in its loop where the term after has the
-  number.
+  this tree does. `made_array_checked_store_in_loop.ml` was not
+  validated when it entered: the array is made before a loop and the
+  check of the index is in the loop, and neither pass carried what it
+  knows of the allocation into the handler of a recursive continuation,
+  so the term before kept the length in its loop where the term after
+  has the number. The sharing of primitives now carries it there, and
+  the unit is validated: the next entry.
+- A primitive computed before a loop and again in the loop
+  (`string_count_to_length.ml`, T1's;
+  `made_array_checked_store_in_loop.ml`). In the first unit a `for`
+  loop counts the characters of a string that are a given one. Its
+  bound is the length of the string, and the read in the loop checks
+  its index, which takes the length again. Simplify has the length
+  once: when it simplifies the handler of a recursive continuation,
+  which a loop is, it does so under an environment made from the one
+  where the continuation is defined, with the parameters of the
+  handler unknown (`simplify_single_recursive_handler` in
+  `middle_end/flambda2/simplify/simplify_let_cont_expr.ml`), and that
+  environment has the applications that Simplify has seen of the
+  primitives that it may share, the length of a string among them (the
+  field `cse` of `middle_end/flambda2/simplify/env/downwards_env.ml`).
+  The sharing of primitives of the validation took what it knew into
+  the handler of a non-recursive continuation and not into those of
+  recursive ones: a round gives it each of those apart, with nothing
+  known (`FlambdaRecHandlersSpec.rewrite_rec_handlers`). It now goes
+  into each of them with what is known where the `Let_cont` is, less
+  what mentions the parameters of the handler
+  (`FlambdaCseSpec.share_primitives_knowing`): the handler can run
+  many times, each time under the variables in sight where it is
+  defined, which hold what they held, and what the pass knows of them
+  holds at any heap that the heap of the `Let` has evolved to. What it
+  knows of an array that a `Let` has made goes into the handler with
+  the rest, so the length taken in the loop of the second unit becomes
+  the number. Both units are validated with their imports by the tool
+  of this tree, at the default flags and with `-O3`, and neither is by
+  the tool of 7d82a601ae at either. What is known where a handler is
+  entered is what was known before the loop: nothing that one turn
+  computes is known in the next. The pass leaves the bodies of code as
+  they are, as before.
+- More than four liftings in turn (`chain_of_five_in_functor.ml`,
+  `chain_of_five_in_function.ml`,
+  `chain_of_five_closures_then_argument.ml`; T4's). In the first two:
+  four closures, each after the first calling the one before, and the
+  block that holds the four, in a functor that does not use its
+  argument or in a function: five values, each after the first made
+  of the one before, and Simplify makes all five symbols. In the
+  third the five values are all closures, in a functor whose sixth
+  function calls the fifth and uses the argument. The tool guessed
+  what Simplify lifted in four liftings at most, and after four the
+  term before still made the fifth value by a `Let`. No rewrite
+  removed it: the tool now guesses liftings in turn, sixteen at most
+  ("What the verdicts mean" says where a sequence ends before), and
+  the three units are validated. T4 found
+  the chain in the functor `Make` of the standard library's `Map`,
+  which has a longer one. A chain of eighteen values is item 3 of the
+  list above.
+- Code that raises a variable that is not known to hold a symbol or a
+  constant, in a unit that calls nothing outside the bodies of its
+  code (`raise_parameter.ml`, `raise_made_block_inlined.ml`,
+  `raise_made_block_inlined_twice.ml`, the last two sources by T5b;
+  the change is C3's, decision D65: yes,
+  provisionally, by the human on 18 November 2026; to be come back
+  to). A lifting asked, of the unit that it was given, that it give
+  symbols, constants and variables known to hold one to every
+  continuation that the unit or its code may leave through
+  (`FlambdaLiftSpec.exits_plain_knowing`), and that it have no
+  primitive of the heap (`FlambdaHeapFreeSpec.expr_free_of_heap`). It
+  now asks two finer tests (`FlambdaLiftSpec.exits_plain_fine`,
+  `FlambdaHeapFreeSpec.free_of_heap_fine`): each passes what the test
+  before it passed, and also a unit that has no call outside the
+  bodies of its code and that passes the test before it with those
+  bodies left out. The run of such a unit on its own enters no code,
+  so what its code gives its exception continuation reaches no exit
+  of that run, and no primitive of the heap of its code is executed.
+  What the finer tests give away is said at their definitions (the
+  CRs at `exits_plain_fine` and at `free_of_heap_fine`): the
+  statements of the liftings are of the unit's own run and say
+  nothing of the bodies of functions that the run does not enter,
+  and a verdict may now rest on a lifting made in a unit whose
+  functions raise a variable or store in cells. The three units are
+  validated, the second and the third with their imports, each with
+  the first line of the mark of the decision ("What the verdicts
+  mean"). Item 1 of the list above has the unit that stays, which
+  calls its function where the module runs.
 
 A count over 600 units made at random is in `census/README.md`, with
 one over 240 more that have exceptions, loops and recursive functions.
@@ -2697,13 +3261,34 @@ term that the validation normalises: the direct calls of its stubs
 made indirect, its calls of code that never returns cut, its loops
 made (V4's: code whose self tail calls have all become jumps is not
 recursive there, and Simplify inlines it like any other code;
-`local_loop_inlined.ml`). Without such a list
+`local_loop_inlined.ml`). The recursive code of the three lists, and
+of the choices of `inlining_choices` ("What the verdicts mean"), is
+the code that calls itself by direct calls, with the code that the
+compiler marks recursive and that no direct call shows to be so: for
+instance a function whose recursion goes through a closure that it
+gives to another function of the unit, and, by the mark that Simplify
+gives the code whose body uses its depth variable, a function of a
+recursive definition that calls another one of them and never itself
+(C3's; without the mark the term before of a unit of the first shape
+grew at every round where the first list had failed, as it does where
+the test of the heap stops the liftings, until the tool had no
+stack or no time left). Without such a list
 each round unrolled a recursive function once more on both sides, and
 `fib.ml` did not end. With such a list a round inlines only code that
 is not recursive in the term that it is given, so the terms stop
 growing.
-Each attempt may go on to guess what Simplify lifted, in four
-liftings at most, and which value slots it removed, and where one of
+In the first and the third list of the validation the code that the
+term after calls directly comes with the code that it is a newer
+version of, and what that is a newer version of, eight times at most:
+the term before may call the older code where the term after calls
+the newer, as where Simplify inlines a functor and gives the closures
+of the inlined body new code (`functor_member_kept_before_copy.ml`;
+V3's). The second list, the recursive code alone, is not extended in
+this way, nor are the lists of the second check.
+Each attempt may go on to guess what Simplify lifted, in liftings
+that follow one another, sixteen at most ("What the verdicts mean"
+says where a sequence ends before), and which value slots it removed,
+and where one of
 the first two fails it is made again at the second asking. The third
 is asked once: a second asking normalises the term before as it is
 given, before its loops are made, and each of its rounds would inline
@@ -2729,14 +3314,20 @@ Where the search of an asking that asks something ends in a refusal
 after that, the search is made once more with two choices of the guess
 changed (the entry of `local_rec_below_a_let_and_in_an_arm.ml`, in the
 list above).
-The 553 units here were checked in 11.4 seconds of processor time
-together in one run (5.5 user, 5.9 system), and in 11.5 in a second run
-of the same tool (5.7 and 5.9): more than half of each is the system's
-part. Other builds ran on the machine during both. Between the two, the
+The 554 units that this directory had at 5ca6914eab were checked in
+11.4 seconds of processor time
+together in one run (5.7 user, 5.7 system), and in 11.7 in a second run
+of the same tool (5.9 and 5.8): about half of each is the system's
+part. Other runs were on the machine during both. Between the two, the
+tool of 7d82a601ae took 11.6 seconds on the 553 units that the directory
+had at that commit. On the 553 units that the directory had at
+07e7de4bae, in two such runs, the tool of that commit took 11.4 seconds
+(5.5 user, 5.9 system) and 11.5 (5.7 and 5.9), and between the two the
 tool of 6c3afd7c55 took 11.4 seconds on the 546 units that the directory
-had at that commit, with their texts as they were there: the texts of
-this tree say more, so the two tools were not given the same inputs. At
-the closing a4b5adff05, which counted 546 units, in two runs made one
+had at that commit, with their texts as they were there: the texts at
+07e7de4bae said more than those at 6c3afd7c55, so the two tools were
+not given the same inputs.
+At the closing a4b5adff05, which counted 546 units, in two runs made one
 after the other with the same inputs and flags, the tool of 4ba710c501
 took 11.9 seconds and the tool of a4b5adff05 11.8. That time, and those
 that `census/README.md` gives for the tool of a4b5adff05 where it says
@@ -2860,7 +3451,7 @@ directory sets the variable; one of `../regions/` does.
   statements of `FlambdaExitBoundSpec.v` no longer take it as a
   premise, and no unit is refused by the guard for it (the hoisting
   of static bindings of the validation still tests it). The tool
-  prints the line of 550 of the 553 units of this
+  prints the line of 588 of the 591 units of this
   directory (not of the 3 that are not checked), and it says "passes
   before, passes after" of each. The controls of the guard are in
   `../guard/` and among the texts of the directory above.
@@ -2904,14 +3495,14 @@ directory sets the variable; one of `../regions/` does.
   to Simplify, reads the text back and asks the comparison of the
   compiler (`middle_end/flambda2/compare/compare.ml`) whether the term
   in memory and the term read are the same up to the names that they
-  bind. Of each of the 553 units of this directory it answers "the text
+  bind. Of each of the 591 units of this directory it answers "the text
   is the term" (measured with the driver of this tree, at the default
   flags; the rules of that directory run it on its own controls and on
   one unit of this one, and no rule runs it on the others). That is the
   answer of that comparison, which does not look at everything that a
   term has: it does not compare the modes of the parameters of code,
   which the text has not and which are not heap in the compiler's term
-  of 52 of these units (below), nor debugging information
+  of 53 of these units (below), nor debugging information
   (`rocq/HACKING.md`, "Changes to the compiler made on this branch").
   And it is an answer of these units and of no other: that entry of
   `rocq/HACKING.md` does not say that every text is the term that was
@@ -2948,8 +3539,8 @@ directory sets the variable; one of `../regions/` does.
     writes the arities of a call where they are not those that the
     reader gives a call of which none is written (`identity.ml`, whose
     call of unknown arity has its arities written). It writes them
-    beside the callee: a call that has no callee written has no place
-    for them (`func_name_with_optional_arities` in
+    beside the callee, and with a blank in the place of the callee of a
+    call that has none (`func_name_with_optional_arities` in
     `middle_end/flambda2/parser/print_fexpr.ml`). That the arities are
     kept is said here of the texts of this directory, which are made at
     the default flags, by the driver's answer above, and of no other
@@ -2971,15 +3562,22 @@ directory sets the variable; one of `../regions/` does.
     `nest_list_of_options.ml`, `or_two_variables_swapped.ml`,
     `project_record_two_levels.ml`, `same_field_chain_twice.ml`,
     `twice_nested_same_scrutinee.ml` and `var_twelve_mixed.ml`). What
-    the tool then makes of those kinds is provisional. The model has no
-    subkinds. For a `Make_block` at the block kind `Values`, the check
-    of the kind of a field in the conversion now requires the kind of
-    values, and drops the subkind of the field and whether it may be
-    null; the other checks of the conversion are unchanged (the two
-    notes at such a block in `convert_variadic_primitive` and
-    `convert_prim` of `../../tools/flsemantics.ml`). Whether the
-    subkinds of fields are dropped so or come into the model is decision
-    D25 (`middle_end/flambda2/rocq/DECISIONS.md`), which is open.
+    the tool then makes of those kinds is provisional. The model has
+    subkinds where a parameter of a continuation or of code states one:
+    a run is undefined where a handler is applied, or the body of code
+    is entered, with a value that is not of what the parameter states
+    (`FlambdaSubkindSpec.values_of_subkinds`; decision D25, which is
+    decided for parameters). The block kind of a `Make_block` has no
+    subkinds in the model. For a `Make_block` at the block kind
+    `Values`, the check of the kind of a field in the conversion now
+    requires the kind of values, and drops the subkind of the field and
+    whether it may be null; the other checks of the conversion are
+    unchanged (the two notes at such a block in
+    `convert_variadic_primitive` and `convert_prim` of
+    `../../tools/flsemantics.ml`). Whether the subkinds of the fields
+    of a block that is made are dropped so or come into the model is
+    the part of decision D25 (`middle_end/flambda2/rocq/DECISIONS.md`)
+    that is open.
     Nothing proves that the subkind of a field has no bearing on what
     the program computes: Simplify takes an argument that is a variable
     to be of the subkind of its field and makes the primitive `Invalid`
@@ -2991,9 +3589,10 @@ directory sets the variable; one of `../regions/` does.
     `middle_end/flambda2/simplify/simplify_let_cont_expr.ml`). The text
     now writes `cold` after the name of such a continuation, and the
     reader takes it (`string_get_checked.ml`). 22 units of this
-    directory have one. With the mark, at the default flags, the run of
-    the term after of eight of them takes more steps, and their verdicts
-    are what they were: `divisor_tested_twice.ml` (17 steps where it
+    directory had one when the text came to write it, and 23 have one
+    now. With the mark, at the default flags, the run of the term after
+    of eight of the 22 took more steps, and their verdicts were what
+    they had been: `divisor_tested_twice.ml` (17 steps where it
     took 16), `made_array_checked_store_in_loop.ml` (53 for 50),
     `string_get_in_branch.ml` (25 for 24), `string_get_two_indices.ml`
     (36 for 34), `string_length_after_join.ml` (29 for 28),
@@ -3003,9 +3602,9 @@ directory sets the variable; one of `../regions/` does.
     that Simplify's own check of the place of a static binding would
     refuse, and that the rule of the model takes (discrepancy X5-9,
     decision D60; the measure of the distance below). Of the other 14
-    the tool prints what it printed. The mark is of a continuation: the
-    mark `[@cold]` of code is one of those that the text still has not
-    (above).
+    the tool printed what it had printed. The mark is of a
+    continuation: the mark `[@cold]` of code is one of those that the
+    text still has not (above).
 
   One more loss is of something that Simplify does not read: whether
   a value slot always holds an immediate, which the parser reads as
@@ -3061,11 +3660,11 @@ directory sets the variable; one of `../regions/` does.
   `option_bind`, `option_map`, `polymorphic_variant`,
   `project_record_two_levels`, `record_update`, `result_map`,
   `same_field_chain_twice` and `tree_root`.
-  Of the 222 units that have entered since, 32 have:
+  Of the 260 units that have entered since, 33 have:
   `stack_argument_result_returned`, whose source says `local_` of a
-  parameter, the first source of this directory that does, and 31 that
+  parameter, the first source of this directory that does, and 32 that
   entered after it: `attr_local_in_match`, `clos_partial_local`,
-  `exclave_after_local_work`, `exclave_pair`,
+  `copy_local`, `exclave_after_local_work`, `exclave_pair`,
   `flip_applied_in_full_and_in_part`, `guard_falls_to_later_case`,
   `guard_on_or_pattern`, `hof_option_of_closure`,
   `inl_callee_region_twice`, `late_three_values_interleaved`,
@@ -3080,9 +3679,9 @@ directory sets the variable; one of `../regions/` does.
   `stack_pair`, `tail_call_after_region`, `tail_nontail_annot`,
   `try_in_each_turn`, `try_returned_exported`,
   `tupled_partial_application`, `twice_nested_same_scrutinee` and
-  `var_twelve_mixed`. Twelve of the 31 say `local_` in the source. Each
+  `var_twelve_mixed`. Thirteen of the 32 say `local_` in the source. Each
   unit is looked at so before it enters. By the same print, the term
-  before Simplify of 64 of the 553 units of this directory has an
+  before Simplify of 64 of the 591 units of this directory has an
   allocation mode that names a region, on
   an allocation or on a call ("What the conversion does to a unit" says
   what is made of regions). What was run for the
@@ -3099,13 +3698,20 @@ directory sets the variable; one of `../regions/` does.
   discrepancy V2-3): equal outcomes of the two runs, or a
   validation, whether plain or counted apart, do not establish that
   a block which is returned is still alive.
-- Of a primitive the text loses two more things. It does not write
-  the kind of an `Opaque_identity`, and the reader gives every one
-  the kind of values. The tool gives each the kind of its argument,
-  as the reader has it, before anything else is done with a unit
-  read from a text (`with_lost_kinds` in
-  `middle_end/flambda2/tests/tools/flsemantics.ml`; discrepancy
-  C2-27). That is the kind which the compiler's term had on two
+- Of a primitive the text lost two more things, and writes both now.
+  It did not write the kind of an `Opaque_identity`, and the reader
+  gave every one the kind of values (discrepancy C2-27). The text now
+  writes the kind unless it is the kind of values, and whether the
+  primitive is for the middle end only, and the reader takes both.
+  The step that the tool has for it stays: before anything else is
+  done with a unit read from a text, the tool gives each
+  `Opaque_identity` whose kind as read is the kind of values, which
+  is what the reader gives where the text writes none, and whose
+  argument is of another kind the kind of its argument, as the
+  reader has it; any other kind as read was written by the text,
+  and is kept (`with_lost_kinds` in
+  `middle_end/flambda2/tests/tools/flsemantics.ml`). Where the text
+  wrote none, that is the kind which the compiler's term had on two
   conditions: the kind that the reader has for the argument is the
   kind of that argument in the compiler's term, and the primitive
   there had the kind of its argument. Nothing checks either;
@@ -3114,16 +3720,18 @@ directory sets the variable; one of `../regions/` does.
   `-drawflambda` prints, which nothing in the tree makes, every
   `Opaque_identity` of the 347 units that the directory had at
   87cdbf3e01 is of a value; the tool with this step prints of each
-  of them what it printed without it. And the text writes the two
+  of them what it printed without it. And the text wrote the two
   tests of being an integer
   alike, the one that is for variants and the one that is for any
   value (`Is_int_generic` in what `-drawflambda` prints); the reader
-  gives the one for variants. On a value that is not a variant, a
-  closure for one, the term read is then undefined in the model
-  where the program answers 0 (discrepancy C2-26). The tool does
-  not put that right. No unit of this directory has the test that
-  is for any value, and `from_ocaml.sh` fails on a unit that has it
-  and that `generic_is_int.txt` does not name; that list is empty.
+  gave the one for variants. On a value that is not a variant, a
+  closure for one, the term read was then undefined in the model
+  where the program answers 0 (discrepancy C2-26). The tool did
+  not put that right, and has no step for it. The text now writes
+  the test that is for any value apart (`%is_int.generic`), and the
+  reader takes it. No unit of this directory has that test;
+  `from_ocaml.sh` failed on a unit that had it while the text wrote
+  the two alike, and no longer does.
 - Of a call the text lost the arity of its arguments, where the
   call is direct or of unknown arity, and the reader gave such a
   call one value for each argument: a unit that gives a function an
@@ -3173,9 +3781,11 @@ directory sets the variable; one of `../regions/` does.
   `script/`, and in this directory under other names). A group that is
   read is kept: an arity with a
   group is not one value for each argument, and the step of the tool
-  leaves such a call alone. The text does not say that a call is a
-  probe (discrepancy C2-17), and `from_ocaml.sh` fails on a unit
-  that has one.
+  leaves such a call alone. The text did not say that a call is a
+  probe (discrepancy C2-17); it says so now, and the reader takes
+  it. The conversion refuses such a call, so the tool does not check
+  a unit that has one (`pairs/probed.ml`); `from_ocaml.sh` failed on
+  such a unit while the text did not say so, and no longer does.
 - Two things that the tool refuses, to stay clear of two ways in
   which the term of the model may not be the program. Neither
   refusal shows that it is not: each refuses more than it need. A
@@ -3195,89 +3805,45 @@ directory sets the variable; one of `../regions/` does.
   form of the term: a unit that gives the continuation its own
   symbol through a variable, or from a call, fails it. No unit of
   this directory fails it.
-- That distance has been measured for the units of this directory
-  (by X5, with the tool and the 259 units as they are at ba85db2822;
-  nothing in the tree makes the measure). The check of the tool was
-  given the two terms of the compiler's own run as they are in its
-  memory: the term given to Simplify and the term that the compiler's
-  Simplify returned, taken through the two hooks of
-  `driver/compiler_hooks.mli` (`Raw_flambda2`, `Flambda2`), with no
-  text written or read and no second run of Simplify. The conversion was
-  the tool's of that commit with one change: the kinds of the fields of
-  a `Make_block` were dropped, as the text then dropped them. (The tool
-  of that commit took only fields of any value, in
-  `convert_variadic_primitive` of
-  `middle_end/flambda2/tests/tools/flsemantics.ml`; of the terms in
-  memory it refused 58 of the 259 units, for a subkind in 51 and for a
-  field that is only never null in 7; 57 of the 58 were converted with
-  the change.) What follows is what the check answered with that changed
-  conversion, which was in no tree. It is no proof that dropping those
-  kinds is faithful: Simplify takes an argument that is a variable to be
-  of the subkind of its field, and makes the primitive `Invalid` where
-  it cannot be. What the tool of this tree checks of the kind of a field
-  is said above, with the kinds of the fields of a `Make_block`; it is
-  provisional (decision D25, which is open), and the figures below have
-  not been taken again with it. At the default flags, of the 259 units:
-  - 252 were converted in both ways, and for each of them the tool
-    printed of the compiler's pair the lines that it printed of its own:
-    the verdict, the comparison that succeeded, the steps of the two
-    runs, the check of kinds. 242 were validated, 8 were not, 2 were
-    undefined before Simplify.
-  - 5 were refused by the conversion in both ways.
-  - 2 were validated of the tool's pair, and of the compiler's pair the
-    term after Simplify was not well-formed: `div_unknown.ml` and
-    `string_get16_checked.ml`. The compiler's Simplify keeps the
-    handler of the raise, which the front end marks `[cold]`, as a
-    handler of its own (`add_non_inlinable_continuation` in
-    `middle_end/flambda2/simplify/env/upwards_env.ml` keeps the
-    handler of a cold continuation unknown to its uses). The binding
-    of the module block is then in a handler whose body can leave
-    through another continuation, which
-    `FlambdaWellFormedSpec.statics_at_unit_toplevel` refuses, and
-    which Simplify refuses too when it is given its own output
-    (discrepancy X5-9, a second shape of C5-11); `well_formed_unit`
-    asked that rule then. The tool's Simplify, to which the handler was
-    not cold while the text had not the mark, put the raise in the arm
-    of the `Switch`, and the tool validated that term. The text has the
-    mark now (above), and `well_formed_unit` asks another rule, which
-    takes a static binding under such a handler (decision D60). Of each
-    of the two, and of `string_get_twice.ml`, the tool of this tree
-    validates its own pair with its imports, at the default flags and
-    with `-O3`; and the program of "The compiler's own run", built from
-    this tree and run by hand at the default flags, prints of the
-    compiler's pair of each of the three what the tool prints of its
-    own, byte for byte. That is said of what each printed; the two
-    terms after have not been compared.
-
-  With `-O3`: 228 validated, 22 not, 2 undefined before, the same 5
-  and the same 2, and again the same lines for all 252.
-
-  The two terms after Simplify, as `-dfexpr-to` writes them, compared
-  as texts up to names, are the same for 253 of the 259 units (252
-  with `-O3`). The others are the two above and units in which only a
-  kind that is written differs (`call_result_tested.ml`,
-  `partial_exported.ml`, `tupled_recursive.ml`,
-  `tupled_unknown_pair.ml`; with `-O3`,
-  `exported_funs_in_arms_used.ml` and `returned_closure_of_pair.ml`
-  in place of the first).
-
-  For the 13 units of T4-13 that the directory had then, with both
-  sets of flags, the two terms
-  after Simplify as printed are the same up to names, and with the
-  changed conversion the check prints the same lines of the
-  compiler's pair as of the tool's. The comparison of the terms is
-  of texts: it does not compare the kinds and the marks that the
-  text does not write. Nothing is claimed of dropping the kinds of
-  fields. In that measure the 13 remained counted apart. They are no
-  longer counted apart in this directory, since the text marks a kind
-  that may be null and the reader takes the mark ("What the verdicts
-  mean"). The figures above remain those of the older measure. The
-  fourteenth unit of T4-13 is not among the 259.
+- That distance is looked at for every unit of this directory by a
+  rule. The check of the tool is given the two terms of the compiler's
+  own run as they are in its memory: the term given to Simplify and the
+  term that the compiler's Simplify returned, taken through the two
+  hooks of `driver/compiler_hooks.mli` (`Raw_flambda2`, `Flambda2`),
+  with no text written or read and no second run of Simplify. What it
+  prints of the unit must be what the tool prints of the text. There
+  are two exceptions: one unit whose two lines are compared up to the
+  numbers of its variables, and a unit that is given an expected file
+  of its own for this way, of which the rule then shows no agreement
+  of the two ways ("The compiler's own run", below, which says what
+  the rule compares and what it does not cover).
+  Three units show what the mark `[cold]` of a handler does there:
+  `div_unknown.ml`, `string_get16_checked.ml` and
+  `string_get_twice.ml`. The compiler's Simplify keeps the handler of
+  the raise, which the front end marks `[cold]`, as a handler of its
+  own (`add_non_inlinable_continuation` in
+  `middle_end/flambda2/simplify/env/upwards_env.ml` keeps the handler
+  of a cold continuation unknown to its uses). The binding of the
+  module block is then in a handler whose body can leave through
+  another continuation, which
+  `FlambdaWellFormedSpec.statics_at_unit_toplevel` refuses, and which
+  Simplify refuses too when it is given its own output (discrepancy
+  X5-9, a second shape of C5-11). `well_formed_unit` asked that rule
+  until decision D60, and both ways then said that the term after of
+  each of the three was not well-formed. It asks another rule now,
+  which takes a static binding under such a handler, and both ways
+  validate each of the three with its imports. The text has the mark,
+  and the printed terms after of the two ways agree up to names in the
+  measure of "The compiler's own run", below; what is not printed was
+  not compared.
 
 What no example here validates, because the model has not got it:
-arithmetic on floats, calls of C functions (polymorphic comparison among
-them), an exception that the unit declares (it is made by a call of a C
-function), objects, laziness. And no example here has one of the cases
+arithmetic on floats, a call of a C function that the run of the unit
+reaches (the model does not run one; `../c_calls/` has units whose
+functions call C functions and whose run does not, and a comparison of
+which Simplify makes a primitive, which is not validated), an exception
+that the unit declares (it is made by a call of a C function), objects,
+laziness. And no example here has one of the cases
 of the primitives of the heap that the conversion refuses though the
 model has the primitive: a store marked `Initialization`, a block of
 floats or a mixed block that is written, an array that is not of
@@ -3292,8 +3858,10 @@ change.)
 ## The compiler's own run
 
 `../../tools/ownrun/flsemantics_ownrun.ml` is a second way to check a
-unit, beside the first and not in its place: every count in this file,
-but those of this section, is of the first.
+unit, beside the first and not in its place. Every count in this file
+is of the first way. The rules of this directory ask the second way of
+each unit of this directory too, and ask that it print what the first
+prints, with the two exceptions that "The rule", below, gives.
 
     sh own_run.sh <flsemantics_ownrun.exe> X.ml
 
@@ -3459,60 +4027,215 @@ translation to Cmm, the back end and the link are not looked at. Of a
 unit on which the compiler does not run Simplify (`-Oclassic`, or an
 attribute of the unit) the program says "not checked".
 
-What it finds of the 347 units of this directory at 87cdbf3e01. It
-was measured with the program of this section on the tree at that
-commit, at the default flags; no `X.own_expected` is in the tree, so
-no rule of the tree makes the measure again. The program was then as
-it was before it was mended (above): what follows is of compilations
-in which the names that Simplify made had later numbers than in the
-compiler's, and it has not been measured again with the program as
-it is. The units of `pairs/` are not run: `own_run.sh` does not give
-the program the `.cmx` file of a first unit.
+### The rule
 
-- Of the 325 units that the first way validated at that commit (283, the
-  14 counted apart for T4-13 and 28 with their imports, by the tables
-  that this file had there), this one validated 241 and said "not
-  checked" of 78, for one clause of the conversion. Of a `Make_block`
-  the tool of that commit took only fields of any value (in
-  `convert_variadic_primitive` of `../../tools/flsemantics.ml`, the test
-  that the kind of each field is `Flambda_kind.With_subkind.any_value`),
-  and the term in memory has the kinds of the fields, which the text
-  then had not. With that clause changed to ask only that each field is
-  a value, a change that was in no tree and of which nothing is proved,
-  it validated 319 of the 325, and no unit that the first way did not.
-  What the tool of this tree checks of the kind of a field is said under
-  "What a validation does not say", with the kinds of the fields of a
-  `Make_block`: it is provisional (decision D25, which is open), and
-  this measure has not been made again with it.
-  `empty_array_phys_equal.ml`, whose run is undefined in the model in
-  both ways, was not among the 325, and printed in this way what it
-  printed in the first.
-- The 6 others have the handler of a failed check (of a divisor, of an
-  index), which the front end marks `[cold]`; the text did not carry the
-  mark then. The compiler's Simplify keeps a cold handler as a handler
-  of its own; the tool's, to which it was not cold, put the raise in the
-  arm of the `Switch`. Of `div_unknown.ml`, `string_get16_checked.ml`
-  and `string_get_twice.ml` the compiler's term after then bound the
-  module block in a handler whose body can leave through another
-  continuation, and was not well-formed by the rule that the model
-  asked then (discrepancy X5-9, above): the program exited 1, as the
-  tool does of such a term. Of `string_get_in_branch.ml`,
-  `string_get_two_indices.ml` and `string_length_after_join.ml` the
-  two runs agreed, and the validator of that commit did not accept the
-  pair in which the handler is kept: "not validated". The text carries
-  the mark now, and the model asks another rule of the place of a
-  static binding (decision D60). In the first way, at the default
-  flags, the tool of this tree validates each of the six with its
-  imports. Of these six alone this way was run again, by hand, with
-  the program as it is now, built from this tree, at the default
-  flags: of each it prints what the first way prints, byte for byte.
-  Nothing is said here of whether the two ways have the same term
-  after of any of the six.
+In the context main, where the program is built, the rules of this
+directory run `own_run.sh` on each unit of this directory, and compare
+what the program prints of the unit in one of three ways.
 
-A unit that has `X.own_expected` beside it is checked in this way by
-the rules of this directory, which compare what the program prints
-with that file; a unit that has none is checked in the first way
-only.
+The ordinary way is that of every unit that the two others do not
+name: at this commit, of every unit but `copy_heap.ml`. `own_same.sh`
+compares what the program prints with `X.expected`, the file that what
+the tool prints of the text is compared with, and the two must be the
+same bytes: the same verdict, the same line of the comparison that
+succeeded, the same steps and results of the two runs, the same lines
+of the other checks. The row of such a unit in the tables under "The
+examples" is then, at the default flags, a row of the pair that the
+compiler made as well as of the pair that the tool makes from the
+text. It is the same check, given another pair: what a verdict rests
+on, and what it does not say, are as said above for either way. A
+unit that `tool_fails.txt` names is compared in this way too: the rule
+takes the status 1 of the program, and no other, of such a unit, as
+the rule of the tool does. No unit is named there at this commit.
+
+The two other ways:
+
+- A unit that `own_run_numbers.txt` names. None is named at this
+  commit. The way is for a unit of which both ways say "not checked" in
+  one line that shows the primitive that the model has not got, where
+  the line shows the variables of the primitive as the compiler prints
+  them: the name, a slash, the number that the process gave the
+  variable, and `UV` if it is user-visible or `N` if it is not. The
+  numbers are each process's, and the text does not say which variables
+  are user-visible, so the reader makes all of them so (`fresh_var` in
+  `middle_end/flambda2/parser/fexpr_to_flambda_commons.ml`): such a
+  line may differ in the two ways. The tool and the program
+  show a variable of that line by its name alone
+  (`print_refused_primitive` in
+  `middle_end/flambda2/tests/tools/flsemantics.ml`), and keep the
+  compiler's print, numbers and all, only where a check that they make
+  of the names fails. `float_add.ml`, which the list named while its
+  line had the numbers, is compared in the ordinary way. A line "not
+  checked" that shows another term than a primitive (a call, a
+  binding, a static constant) has the numbers too, and the list is not
+  for it; no unit of this directory has such a line at this commit. Of
+  a unit that the list names, `own_same.sh` asks that each of the two
+  files be
+  one line of the form `X.fl: not checked: the model has not got
+  primitive (...)`, with no byte after the newline of that line, no
+  null byte and no `/#`. In each line, a word between a space or a
+  parenthesis and a space or a parenthesis that is a name (letters,
+  digits, underscores and quotes, of which the first is a letter or an
+  underscore), a slash, digits, and `UV` or `N` has `/#` put in the
+  place of its slash, its digits and those letters. Nothing else of a
+  line is changed, and the two lines must then be the same bytes. That
+  is a substitution in the text of the line and no parser: the script
+  takes such a word for a variable with its number, and does not know
+  that it is one. The script fails if the two
+  files are the same bytes before the substitution, so that the list
+  names only units that need it. This was chosen over a second expected
+  file for such a unit: that file would have the numbers that the
+  program gives, which change with anything that makes the compiler
+  make one name more or one fewer before those of the line. Of such a
+  unit the rule shows that the two ways print the same line up to that
+  substitution, and no more.
+- A unit that has `X.own_expected` is compared with that file, by
+  dune's `diff`, in the place of `X.expected`. It is for a unit of
+  which the two ways are known not to print the same, which this file
+  names, with the reason. Such a file is an expectation of its own. Of
+  a unit that has one the rule shows that the program prints what
+  that file has, and nothing of an agreement of the two ways: the row
+  of the unit in the tables is then of the first way only. One unit
+  has one, `copy_heap.ml` (T3's source). Its function builds a pair
+  from the two fields of its parameter, an immutable pair whose mode
+  is heap. The compiler's Simplify puts the parameter in the place of
+  the new pair. The tool's Simplify, to which the text gives no modes
+  of parameters, keeps the two loads and the new pair (discrepancy
+  X5-11). The tool validates the pair of terms that it makes, which
+  is `copy_heap.expected`. Of the compiler's own pair the program
+  says "not validated", which is `copy_heap.own_expected`: the
+  validation has no rewrite that puts a block in the place of one
+  built again from its fields. `copy_local.ml` is the same function
+  with its parameter marked `local_`; of it the two ways print the
+  same.
+
+Where the two files still differ after the comparison that is the
+unit's (byte for byte, or, for a unit of `own_run_numbers.txt`, after
+the substitution above), `own_same.sh` prints the lines that differ. It
+also fails, and says why, for a unit of `own_run_numbers.txt` whose two
+files are the same bytes as they are (the name is then to be taken out
+of the list), or are not each the one line described above. A program
+that exits with a status that the rule does not take fails the rule
+that runs it, and nothing is compared.
+
+What a failure means, and what `dune promote` does, is not the same
+in the three ways. In the ordinary way: if the rule that compares what
+the tool prints with `X.expected` fails for the unit too, by the same
+lines, the two ways agree with each other and differ from
+`X.expected`: that change is to be looked at before it is promoted;
+`dune promote` then takes what the tool prints, and this rule passes
+again. If the two ways no longer print the same, the terms, the
+conversion, the options and the load path of the two compilations
+(`OCAMLPARAM` among them) and what each program prints are to be looked
+at, and the difference reported. By itself it does not show that the
+two terms differ: a line that shows a term with the numbers of its
+names can differ just by how names are printed. "What a validation does not
+say" has the losses of the text
+that are known. `dune promote` offers nothing for a comparison that
+`own_same.sh` makes. Of a unit of `own_run_numbers.txt`, to promote
+what the tool prints is not enough where the two files are then the
+same bytes: the rule fails until the name is taken out of the list. Of
+a unit that has `X.own_expected` the comparison is dune's, and
+`dune promote` offers what the program prints for that file: to take
+it is to say what the program prints now, and says nothing of the
+first way.
+
+### What was measured besides
+
+Outside the tree, of the 554 units that this directory has at
+69ac334cba, with the compiler built at 7d82a601ae (no file of the
+compiler differs at those two commits) and with a tool and a program
+that were linked before 69ac334cba was cut: from their sources at
+7d82a601ae, of which no commit up to 69ac334cba changes any but the
+extracted files, and from the extracted files that `make -C rocq all`
+had then made of the definition that 155d15c93a brings. Those
+extracted files are byte for byte the ones that `make -C rocq all`
+makes at 155d15c93a and that the tree has at 69ac334cba; the two
+programs were not linked again there. No rule makes these measures
+again.
+
+- With `-O3` given to the tool on the text and to the program, the two
+  print the same bytes of 553 of the 554 units, and of `float_add.ml`
+  the same line but for the numbers and the marks of its two variables.
+  With `-O3` the compiler prints, of each of the 554 units, the text of
+  the term given to Simplify that it prints without it.
+- The two terms after Simplify, each written as a text (`-dfexpr-to`
+  given to the tool and to the program) and compared as the tokens of
+  the syntax: the same up to a one-to-one renaming of variables,
+  continuations, code identifiers, symbols and slots, for each of the
+  554 units, at the default flags and with `-O3`. That comparison is of
+  texts: it does not see what the text does not write.
+- What `-drawflambda -dflambda` print in the program and in the
+  compiler, of each of the 554 units, at the default flags and with
+  `-O3`: the term given to Simplify is the same bytes, and so is the
+  term that Simplify returns. (In the program as it was before it was
+  mended the second had other numbers in its names.)
+
+### What the rule does not cover
+
+- Units that are not in this directory. The rule is of the units that
+  are here, and says nothing of any other. On a list of 2,689 units
+  that the testers keep outside the tree, T3 set what the program says
+  of each unit beside what the tool says of its text, with the tool,
+  the program and the compiler built at d17aee7309, and of the text
+  that that compiler prints of each unit. That count is T3's: it is
+  no measure of the rules of this directory, nothing in the tree
+  makes it, and it is the count made with the tool and the program of
+  that commit. The lines of the two
+  verdicts differ of 35 units at the default flags and of 34 with
+  `-O3`, and none of those units has the name of a unit of this
+  directory. A line that differs is not always another verdict: of 10
+  and 6 of those units both ways say that the term before is undefined
+  in the model, and the two lines differ in what they say besides. By
+  cause, at the default flags and with `-O3`:
+  - Of 19 and 18, the tool's Simplify does not make the term that the
+    compiler's makes. In 18 and 16 a block is built again from the
+    fields of an immutable block: the compiler's Simplify puts that
+    block in its place, and the tool's, to which the text gives no
+    modes of parameters, does not (discrepancy X5-11). Of 4 and 4 of
+    those the term before is undefined in both ways, and the two
+    differ in whether the two terms were then found the same. In 1 and
+    2 the tool's Simplify shares equal constants that the compiler's
+    does not (discrepancy X5-10). `copy_heap.ml` and `copy_local.ml`
+    of this directory are T3's two controls of the block built again,
+    and are not on that list: the two ways do not print the same of
+    `copy_heap.ml`, which has `copy_heap.own_expected` ("The rule").
+  - Of 16 and 16, the unit uses another unit. In that measure the tool
+    was given no directory in which to look for a `.cmx` file, where
+    the program reads those that the compilation reads; given the
+    same files, the tool has the program's verdict of each.
+
+  The causes are those that T3 found by controls and readings in an
+  earlier count, made with a tool and a program of before the text of
+  a term was mended; in this one the units of each cause were counted
+  again and are the same units, and the readings were not made again.
+  The earlier count had 12 and 12 units more, of which the reader did
+  not read the text that the printer wrote (discrepancies T4-15 and
+  T4-14). Of the text that the compiler of d17aee7309 prints of those
+  units the tool prints what the program prints, of 8 and 8 byte for
+  byte; of 4 and 4 both say "not checked" of the same primitive, and
+  the two lines differ in the name of its argument.
+- `pairs/`. The second unit of a pair needs the `.cmx` file of the
+  first. `own_run.sh` compiles one unit in a directory that has nothing
+  else, and the program checks one unit in a process; the rules of
+  `pairs/` give the tool the directory of the first unit with `-I`,
+  where the program would look on the compiler's load path. No rule
+  runs the program on a pair, and the pairs were not in the measure
+  reported here.
+- `library/`. Its units are compiled with the standard library, and
+  `own_run.sh` gives `-nostdlib`. The program would have the library on
+  the compiler's load path, where the tool is given no directory. No
+  rule runs the program on these units, and they were not in the
+  measure reported here.
+- `census/`. Its units are generated and counted by a script, in the
+  first way; nothing there is run by the tests.
+- Flags other than the default ones.
+
+The files of the standard library are not units of this directory
+either. `../stdlib/` has rules that give each of them to the program as
+the build of the tree compiles it, with the build's flags, and its
+`README.md` says what those rules compare and what a verdict means
+there.
 
 The program checks one unit in a process, as the tool does. Given a
 second, it says of it "not checked: a second unit in one process",

@@ -1,4 +1,5 @@
 open Datatypes
+open FlambdaCompareOrderSpec
 open FlambdaCompareSpec
 open FlambdaFloatCodeSpec
 open FlambdaGuardScopeSpec

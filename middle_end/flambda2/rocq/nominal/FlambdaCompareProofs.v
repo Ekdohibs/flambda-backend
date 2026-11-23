@@ -998,6 +998,9 @@ Proof.
              (unarize_per_parameter (cm_params_arity metadata))
         && arity_eqb return_arity (cm_result_arity metadata)));
     [ exact I | ].
+  rewrite <- (values_of_subkinds_same_values statics statics' vs _
+    (proj2 Hstatics)).
+  destruct (negb (values_of_subkinds statics vs _)); [ exact I | ].
   pose proof (bind_params_match params params' vs _ vm
     [(my_closure, closure)] [(my_closure', closure)] (fun _ => True)
     (fun x => var_free_in_expr x body) (fun x _ => or_intror I) Hbind
@@ -1097,6 +1100,10 @@ Proof.
     apply andb_true_iff in Hh as [Hmetadata Hh].
     apply handler_metadata_eqb_eq in Hmetadata. subst metadata'.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    rewrite <- (values_of_subkinds_same_values statics statics' vs _
+      (proj2 Hstatics)).
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
       [ | exact I ].
     pose proof (bind_params_match params params' vs vm vm' vars vars' _
       (fun x => var_free_in_expr x handler)
