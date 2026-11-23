@@ -45,6 +45,8 @@ unbox_kept_result.fl:
     the model's rebuild against the input: DIFFERENT
     the compiler's output (19 steps): undefined
     the compiler's output against the input: DIFFERENT
+    the compiler's output with no subkind (19 steps): undefined
+    the compiler's output with no subkind against the input: DIFFERENT
   with unboxing and the fix:
     p/v1 to unbox: without the fix yes, with it no (a seed of the fix)
     the table of to_unbox: FAILS the check of the rules without the fix, as expected, passes that of the rules with it

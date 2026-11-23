@@ -14,6 +14,8 @@ value_slot_newer_version.fl:
   the model's rebuild against the input: the same
   the compiler's output (9 steps): undefined
   the compiler's output against the input: DIFFERENT
+  the compiler's output with no subkind (9 steps): undefined
+  the compiler's output with no subkind against the input: DIFFERENT
   with changes of calling convention:
     the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
     the two tables on the 3 code ids of the unit: the same
@@ -25,6 +27,8 @@ value_slot_newer_version.fl:
     the model's rebuild against the input: the same
     the compiler's output (9 steps): undefined
     the compiler's output against the input: DIFFERENT
+    the compiler's output with no subkind (9 steps): undefined
+    the compiler's output with no subkind against the input: DIFFERENT
   with unboxing:
     the compiler changes the representation of 3 names that its traversal made, which are not in the term
     the table of dominated_by_allocation_point: the model's passes the check, the compiler's, with its graph, passes it
@@ -50,3 +54,5 @@ value_slot_newer_version.fl:
     the model's rebuild against the input: the same
     the compiler's output (9 steps): undefined
     the compiler's output against the input: DIFFERENT
+    the compiler's output with no subkind (9 steps): undefined
+    the compiler's output with no subkind against the input: DIFFERENT

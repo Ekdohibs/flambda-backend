@@ -1459,18 +1459,23 @@ let verdict (first : Flsemantics.outcome) (second : Flsemantics.outcome) =
   | _, _ -> if first = second then "the same" else "DIFFERENT"
 
 (* [e] with [named x d] for the defining expression [d] of each [Let] of a
-   variable [x], and [static c] for each static constant [c] bound to a
-   symbol. *)
-let rec map_term ~named ~static (e : Rocq_model.expr) : Rocq_model.expr =
-  let map = map_term ~named ~static in
+   variable [x], [static c] for each static constant [c] bound to a symbol, and
+   [code_metadata m] and [handler_metadata m] for the metadata [m] of each code
+   and each handler. *)
+let rec map_term ?(code_metadata = Fun.id) ?(handler_metadata = Fun.id) ~named
+    ~static (e : Rocq_model.expr) : Rocq_model.expr =
+  let map = map_term ~code_metadata ~handler_metadata ~named ~static in
   let handler (Rocq_model.Handler (params, metadata, handler)) =
-    Rocq_model.Handler (params, metadata, map handler)
+    Rocq_model.Handler (params, handler_metadata metadata, map handler)
   in
   let binding (binding : Rocq_model.static_binding) : Rocq_model.static_binding
       =
     match binding with
     | Bind_code (id, Code (params, my_closure, k, k_exn, metadata, body)) ->
-      Bind_code (id, Code (params, my_closure, k, k_exn, metadata, map body))
+      Bind_code
+        ( id,
+          Code (params, my_closure, k, k_exn, code_metadata metadata, map body)
+        )
     | Bind_symbol (symbol, const) -> Bind_symbol (symbol, static const)
     | Bind_deleted_code _ -> binding
   in
@@ -1550,6 +1555,21 @@ let slots_in_order =
         Static_const_closure_of_set (slot, symbols, decls, sort slots)
       | _ -> const)
 
+(* [e] with no subkind stated, of the parameters or the results of its code or
+   of the parameters of its handlers. The rebuilds of the model are the reaper
+   without types, with every subkind erased (FlambdaReaperRebuild.v), where the
+   compiler's keeps [Anything] and [Tagged_immediate] and whether a value may be
+   null, as its poison is a tagged immediate. The core's machine accepts poison
+   only where nothing is stated, so it finds the compiler's output undefined
+   where the compiler gives poison to a parameter whose subkind it keeps. *)
+let subkinds_erased =
+  map_term ~static:Fun.id
+    ~named:(fun _ named -> named)
+    ~code_metadata:(fun (metadata : Rocq_model.code_metadata) ->
+      { metadata with cm_params_subkinds = []; cm_result_subkinds = [] })
+    ~handler_metadata:(fun (metadata : Rocq_model.handler_metadata) ->
+      { metadata with hm_params_subkinds = [] })
+
 (* The rebuild of the model ([FlambdaReaperRebuild.rebuild_unit_from_tables],
    extracted) of [input], the term of the model that the reaper is given, with
    the graph of the model and its solution, which have passed the checks; beside
@@ -1570,7 +1590,9 @@ let slots_in_order =
    given the number of the first, as [Flsemantics.convert_both] does. The ends
    of regions of [input] and of the model's rebuild, the variables [ends], are
    given back the unit value ([ends_as_converted]), and the value slots of the
-   two terms put in one order ([slots_in_order]). A difference of the two terms,
+   two terms put in one order ([slots_in_order]). Two terms that differ only in
+   their subkinds are said so ([subkinds_erased]), and a compiler's output whose
+   run is undefined is run again with no subkind. A difference of the two terms,
    or of a run, is printed and is not a failure of the tool. Setting
    FLREAPER_PRINT_TERMS prints the three terms. *)
 let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
@@ -1603,11 +1625,15 @@ let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
   | None, _ | _, None -> ()
   | Some rebuilt, Some output ->
     Format.printf "%sthe model's rebuild and the compiler's output: %s@." indent
-      (if
-         timed "the comparison of the terms" (fun () ->
-             Model_compare.expr_eqb [] [] rebuilt.body output.body)
-       then "the same up to bound names"
-       else "DIFFERENT terms"));
+      (timed "the comparison of the terms" (fun () ->
+           if Model_compare.expr_eqb [] [] rebuilt.body output.body
+           then "the same up to bound names"
+           else if
+             Model_compare.expr_eqb [] []
+               (subkinds_erased rebuilt.body)
+               (subkinds_erased output.body)
+           then "the same up to bound names and subkinds"
+           else "DIFFERENT terms")));
   if print_terms ()
   then (
     print_term ~title:"the reaper's input" input.body;
@@ -1639,10 +1665,21 @@ let compare_rebuild ~indent ~ends ~(input : Flsemantics.converted)
         (verdict outcome_input outcome_rebuilt))
     rebuilt;
   Option.iter
-    (fun output ->
+    (fun (output : Flsemantics.converted) ->
       let outcome_output = run ~title:"the compiler's output" output in
       Format.printf "%sthe compiler's output against the input: %s@." indent
-        (verdict outcome_input outcome_output))
+        (verdict outcome_input outcome_output);
+      match outcome_output with
+      | Flsemantics.Undefined ->
+        let outcome_erased =
+          run ~title:"the compiler's output with no subkind"
+            { output with body = subkinds_erased output.body }
+        in
+        Format.printf
+          "%sthe compiler's output with no subkind against the input: %s@."
+          indent
+          (verdict outcome_input outcome_erased)
+      | Returns _ | Raises _ | Exits_elsewhere | Still_running -> ())
     output
 
 (* ---- Changes of calling convention ------------------------------------ *)

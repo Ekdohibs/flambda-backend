@@ -40,3 +40,5 @@ lambda_lifting_dead_callee.fl:
     the model's rebuild against the input: DIFFERENT
     the compiler's output (5 steps): undefined
     the compiler's output against the input: DIFFERENT
+    the compiler's output with no subkind (5 steps): undefined
+    the compiler's output with no subkind against the input: DIFFERENT

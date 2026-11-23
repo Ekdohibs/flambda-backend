@@ -4,7 +4,7 @@ fix_tail_call.fl:
   the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
   the facts of the two graphs on the names of the unit: the same (27)
   the two solutions on the 20 names of the unit: the same
-  the model's rebuild and the compiler's output: the same up to bound names
+  the model's rebuild and the compiler's output: the same up to bound names and subkinds
   the reaper's input (34 steps): returns [0: 1]
   the model's rebuild (36 steps): returns [0: 1]
   the model's rebuild against the input: the same
@@ -14,7 +14,7 @@ fix_tail_call.fl:
     the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
     the two tables on the 4 code ids of the unit: the same
     the decisions on the 2 code ids of the unit: the same, 0 changing
-    the model's rebuild and the compiler's output: the same up to bound names
+    the model's rebuild and the compiler's output: the same up to bound names and subkinds
     the reaper's input (34 steps): returns [0: 1]
     the model's rebuild (36 steps): returns [0: 1]
     the model's rebuild against the input: the same
@@ -35,7 +35,7 @@ fix_tail_call.fl:
     $camlFix_tail_call__pong_0_1: representation {}, with function slot pong, function slot ping, at function slot pong
     the decisions on the 2 code ids of the unit: the same, 0 changing
     the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
-    the model's rebuild and the compiler's output: the same up to bound names
+    the model's rebuild and the compiler's output: the same up to bound names and subkinds
     the reaper's input (34 steps): returns [0: 1]
     the model's rebuild (36 steps): returns [0: 1]
     the model's rebuild against the input: the same
