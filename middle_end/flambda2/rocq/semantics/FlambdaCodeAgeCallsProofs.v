@@ -574,7 +574,7 @@ Theorem direct_call_runs_code_named : direct_call_runs_code_named_statement.
 Proof. cbv zeta. split; vm_compute; reflexivity. Qed.
 
 (* ======================================================================== *)
-(* The statements of the tree are of [step]                                 *)
+(* Three statements of FlambdaStubCallsSpec.v, on the second machine        *)
 (* ======================================================================== *)
 
 Theorem demote_call_step_aged_fails : demote_call_step_aged_fails_statement.

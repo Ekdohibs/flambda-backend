@@ -37,13 +37,15 @@
    it are FlambdaCodeAgeRelation.v and FlambdaCodeAgeRelationSpec.v.
 
    THIS IS A SECOND MACHINE. The machine of the tree is
-   FlambdaSemanticsSpec.step, and every other statement of the tree is
-   of [step]: the rewrites, the validation and what the tests run.
-   This file changes nothing of the tree, and it does not say of any
-   statement of the tree that it holds on [step_aged]. Until the tree is
-   moved to this machine, the statements here compose with no statement
-   of the validation: they say what holds of a direct call on this
-   machine, and no more.
+   FlambdaSemanticsSpec.step: the validation and the rewrites that it
+   uses are of [step]. The tree has other machines beside it, with
+   statements of their own (FlambdaTrapSpec.stack_step,
+   FlambdaHeapMachineSpec.heap_step); this is one more, and no statement
+   outside this file is of it. This file changes nothing of the tree,
+   and it does not say of any statement of the tree that it holds on
+   [step_aged]. Until the tree is moved to this machine, the statements
+   here compose with no statement of the validation: they say what
+   holds of a direct call on this machine, and no more.
 
    Why a second machine. On [step] a direct call is undefined unless
    its callee is a closure of the code that the call names
@@ -57,10 +59,10 @@
    replacement with content, the direct call of a closure of a newer
    version of the code named must mean something. This machine gives
    it a meaning, and the replacement then needs the relation to be
-   sound. The call is not given a meaning in [step]: the statements of
-   the tree are of every static environment and of every term, and
-   with such a meaning some of them do not hold as they stand (the
-   last part of this comment).
+   sound. The call is not given a meaning in [step]: there are
+   statements of the tree that are of every static environment and of
+   every term, and with such a meaning some of them do not hold as they
+   stand (the last part of this comment).
 
    What the machine is given. [age_of] gives each static environment a
    code age relation. It is a parameter of the machine and of every
@@ -706,7 +708,7 @@ Definition direct_call_runs_code_named_statement : Prop :=
 End Examples.
 
 (* ======================================================================== *)
-(* The statements of the tree are of [step]                                 *)
+(* Three statements of FlambdaStubCallsSpec.v, on the second machine        *)
 (* ======================================================================== *)
 
 (* Three statements of FlambdaStubCallsSpec.v, with the machine for
