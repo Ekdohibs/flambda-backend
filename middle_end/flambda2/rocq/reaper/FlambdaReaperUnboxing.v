@@ -47,13 +47,14 @@
      checks [check_unboxing_closed], [check_to_unbox] and
      [check_to_change_representation], [derive_to_unbox] and
      [derive_to_change_representation]); [has_to_be_unboxed],
-     [mk_unboxed_fields] and the unboxed fields of [perform_analysis0]
-     ([unboxed_fields_of_names]); the [changed_representation] of
-     [perform_analysis0] for closures ([Closure_representation]:
-     [changed_representations]); [param_decision] with [Unbox],
-     [my_closure_param_decision] ([my_closure_decision_u]),
-     [arity_of_decisions], [get_arity_and_modes] and
-     [compute_code_changes] ([code_change_u]);
+     [mk_unboxed_fields] ([mk_unboxed_fields_with], run to a depth by
+     [mk_unboxed_fields_full]) and the unboxed fields of
+     [perform_analysis0] ([unboxed_fields_of_names]); the
+     [changed_representation] of [perform_analysis0] for closures
+     ([Closure_representation]: [changed_representations]);
+     [param_decision] with [Unbox], [my_closure_param_decision]
+     ([my_closure_decision_u]), [arity_of_decisions],
+     [get_arity_and_modes] and [compute_code_changes] ([code_change_u]);
    - rebuild.ml: [rewrite_simple] of an unboxed name ([poison]),
      [rewrite_simple_opt] of an unboxed callee, [get_args],
      [get_args_with_kinds], [bind_fields], [bind_field_to_simple],
@@ -242,9 +243,12 @@
      may come from several allocations or is read into names of which
      some are to be unboxed and some not is a variable
      ([mk_unboxed_fields]); a field of an unexpected kind is left out of
-     the unboxing; the nesting of an unboxing is bounded by the number of
-     allocations to unbox; a parameter of code that the code dep unboxes
-     and the parameter does not keeps the fields of the code dep.
+     the unboxing; a parameter of code that the code dep unboxes and the
+     parameter does not keeps the fields of the code dep.
+   - Where the recursion of [mk_unboxed_fields] does not end, the
+     model's is cut at a depth, where the field is a variable
+     ([mk_unboxed_fields_full]); where it ends, the model's goes as
+     deep.
    - A load of a mutable field that the unboxed value has not is the
      primitive [Invalid] in the OCaml; the model has no such primitive,
      and the [Let] is [Invalid].
@@ -1553,9 +1557,64 @@ Definition get_single_field_source (block : node) (f : field)
    in the order of the fields. The OCaml stops with a fatal error where
    such a field may come from several allocations, or is read into names
    of which some are to be unboxed and some not; the model makes it a
-   variable. [fuel] bounds the depth of the unboxing, which a chain of
-   allocations to unbox, each in a field of the one before, cannot
-   exceed: where it runs out, the field is a variable. *)
+   variable. The recursive call is [nest]: the unboxed fields of the
+   allocation [source], read from the uses of the names that the field
+   is read into, or [None] where the model cuts the unboxing, which makes
+   the field a variable. The OCaml's recursion has no bound, and may not
+   end ([mk_unboxed_fields_full] below). *)
+Definition mk_unboxed_fields_with
+    (nest : node -> list (field * field_use) -> positive
+            -> option (unboxed_fields * positive))
+    (block : node) (fields : list (field * field_use)) (next : positive)
+    : unboxed_fields * positive :=
+  (fix go (fields : list (field * field_use)) (next : positive)
+       : unboxed_fields * positive :=
+     match fields with
+     | [] => ([], next)
+     | (f, use) :: fields =>
+       let '(u, next) :=
+         if negb (is_data_field f)
+         then (None, next)
+         else
+           match get_single_field_source block f with
+           | No_source => (None, next)
+           | field_source =>
+             let default := (Some (Not_unboxed next), Pos.succ next) in
+             match use with
+             | Use_unknown => default
+             | Use_known flow_to =>
+               if forallb has_to_be_unboxed flow_to
+               then
+                 match field_source with
+                 | One_source source =>
+                   match
+                     nest source
+                       (get_fields
+                          (add_usages_through_function_slots true
+                             (get_direct_usages flow_to)))
+                       next
+                   with
+                   | Some (nested, next) => (Some (Unboxed nested), next)
+                   | None => default
+                   end
+                 | _ => default
+                 end
+               else default
+             end
+           end
+       in
+       let '(rest, next) := go fields next in
+       (match u with
+        | Some u => (f, u) :: rest
+        | None => rest
+        end,
+        next)
+     end) fields next.
+
+(* [mk_unboxed_fields_with] to the depth [fuel]: a field that would be
+   unboxed deeper is a variable. The proofs read the model's unboxing,
+   [mk_unboxed_fields_full] below, as this one at a depth that it does
+   not compute. *)
 Fixpoint mk_unboxed_fields (fuel : nat) (block : node)
     (fields : list (field * field_use)) (next : positive) {struct fuel}
     : unboxed_fields * positive :=
@@ -1601,12 +1660,57 @@ Fixpoint mk_unboxed_fields (fuel : nat) (block : node)
         next)
      end) fields next.
 
+(* How deep the model's unboxing goes. A recursive call depends only on
+   the allocation [source], which is a source of [t_sources T], and on
+   the names that the field is read into through their uses
+   ([get_direct_usages]), which are the second of the pairs of
+   [t_usages T] whose first is one of those names: at most
+   [length (t_sources T) * 2 ^ length (t_usages T)] calls differ. A
+   chain of nested calls in which one comes back never ends, nor does the
+   compiler's recursion; so where the compiler's recursion ends no chain
+   is longer, and that depth cuts nothing. Where it does not end, the
+   model cuts it at that depth. FlambdaReaperUnboxingFuelSpec.v states
+   both, with a unit of the second kind.
+
+   The depth is not computed: the levels are made as the recursion goes
+   down, [2 ^ length l] of them by [nest_levels l], and [unboxing_nest]
+   that many for each pair of [t_sources T]. A level that the recursion
+   does not reach costs nothing, and the extracted OCaml builds no
+   number. *)
+
+(* [mk_unboxed_fields_with] nested [2 ^ length l] levels deep, then
+   [nest]. *)
+Fixpoint nest_levels (l : list (node * node))
+    (nest : node -> list (field * field_use) -> positive
+            -> option (unboxed_fields * positive))
+    (block : node) (fields : list (field * field_use)) (next : positive)
+    {struct l} : option (unboxed_fields * positive) :=
+  match l with
+  | [] => Some (mk_unboxed_fields_with nest block fields next)
+  | _ :: l => nest_levels l (nest_levels l nest) block fields next
+  end.
+
+(* [length k * 2 ^ length (t_usages T)] levels, then the cut. *)
+Fixpoint unboxing_nest (k : list (node * node)) (block : node)
+    (fields : list (field * field_use)) (next : positive) {struct k}
+    : option (unboxed_fields * positive) :=
+  match k with
+  | [] => None
+  | _ :: k => nest_levels (t_usages T) (unboxing_nest k) block fields next
+  end.
+
+(* The model's [mk_unboxed_fields]. *)
+Definition mk_unboxed_fields_full (block : node)
+    (fields : list (field * field_use)) (next : positive)
+    : unboxed_fields * positive :=
+  mk_unboxed_fields_with (unboxing_nest (t_sources T)) block fields next.
+
 (* The unboxed fields of [x], dominated by the allocation [a] to unbox
    ([query_to_unbox] of [perform_analysis0]): the fields of [a] read from
    the uses of [x]. *)
 Definition name_unboxed_fields (a x : node) (next : positive)
     : unboxed_fields * positive :=
-  mk_unboxed_fields (S (length to_unbox)) a
+  mk_unboxed_fields_full a
     (get_fields
        (add_usages_through_function_slots true (get_direct_usages [x])))
     next.
@@ -1767,7 +1871,7 @@ Definition changed_representations (tcr : list node) (next : positive)
            | [] => (acc, seen, next)
            | l =>
              let '(fields, next) :=
-               mk_unboxed_fields (S (length to_unbox)) x
+               mk_unboxed_fields_full x
                  (get_fields_of_constructors (map snd l)) next
              in
              let '(fss, next) := rename_slots (map fst l) next in

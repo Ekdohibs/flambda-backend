@@ -40,7 +40,10 @@ From OxCamlFlambda2 Require FlambdaReaperFlowProofs FlambdaReaperTypesProofs
   FlambdaReaperTypesTraversalSpec FlambdaReaperTypesTraversalProofs
   FlambdaReaperTypesTraversalUnaliasedProofs
   FlambdaReaperClosuresTablesProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxingFuelProofs.
 Import ListNotations.
+
+Module UFP := FlambdaReaperUnboxingFuelProofs.
 
 Module TP := FlambdaReaperTypesProofs.
 Module TTP := FlambdaReaperTypesTraversalProofs.
@@ -141,7 +144,7 @@ Lemma cinv_fold (F : facts) (T : tables) (cm : finite_map variable)
   cinv
     (fst (changed_representations F T cm dominated to_unbox is_local tcr n0)).
 Proof.
-  unfold changed_representations.
+  rewrite UFP.changed_representations_depth.
   match goal with
   | |- context [List.fold_left ?h tcr _] => set (step := h)
   end.

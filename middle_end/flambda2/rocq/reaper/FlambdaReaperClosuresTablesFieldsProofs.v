@@ -56,7 +56,12 @@ From OxCamlFlambda2 Require FlambdaReaperFlowProofs FlambdaReaperTypesProofs
   FlambdaReaperRebuildProofs FlambdaReaperLeastProofs
   FlambdaReaperClosuresTablesProofs.
 From OxCamlFlambda2 Require Import FlambdaReaperSolutionProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxingFuelSpec
+  FlambdaReaperUnboxingFuelProofs.
 Import ListNotations.
+
+Module UF := FlambdaReaperUnboxingFuelSpec.
+Module UFP := FlambdaReaperUnboxingFuelProofs.
 
 Module TP := FlambdaReaperTypesProofs.
 Module TTP := FlambdaReaperTypesTraversalProofs.
@@ -163,12 +168,12 @@ Lemma reprs_in (F : facts) (T : tables) (cm : finite_map variable)
     x ∈ tcr ∧ (g, f0) ∈ set_function_slots F x ∧ (f0, c) ∈ dominated
     ∧ cr_fields r
       = fst (mk_unboxed_fields F T cm dominated to_unbox
-               (S (length to_unbox)) x
+               (UF.unboxing_depth T) x
                (get_fields_of_constructors F T is_local
                   (map snd (set_function_slots F x)))
                next').
 Proof.
-  unfold changed_representations.
+  rewrite UFP.changed_representations_depth.
   match goal with
   | |- context [List.fold_left ?h tcr _] => set (step := h)
   end.
@@ -177,7 +182,7 @@ Proof.
       x ∈ tcr ∧ (g, f0) ∈ set_function_slots F x ∧ (f0, fst p) ∈ dominated
       ∧ cr_fields (snd p)
         = fst (mk_unboxed_fields F T cm dominated to_unbox
-                 (S (length to_unbox)) x
+                 (UF.unboxing_depth T) x
                  (get_fields_of_constructors F T is_local
                     (map snd (set_function_slots F x)))
                  next')).
@@ -198,7 +203,7 @@ Proof.
     destruct (set_function_slots F x) as [ | [fs0 f00] l0] eqn:Hl0;
       [ injection Hstep as <- _ _; exact (Hacc p Hp) | ].
     destruct (mk_unboxed_fields F T cm dominated to_unbox
-                (S (length to_unbox)) x
+                (UF.unboxing_depth T) x
                 (get_fields_of_constructors F T is_local
                    (map snd ((fs0, f00) :: l0)))
                 n)
@@ -765,7 +770,7 @@ Proof.
 Qed.
 
 (* ======================================================================== *)
-(* The counterexample                                                       *)
+(* The examples                                                             *)
 (* ======================================================================== *)
 
 Theorem changed_in_slot_counterexample :
@@ -782,8 +787,7 @@ Proof.
   split; vm_compute; reflexivity.
 Qed.
 
-Theorem cyclic_in_slot_counterexample :
-  cyclic_in_slot_counterexample_statement.
+Theorem cyclic_in_slot_alike : cyclic_in_slot_alike_statement.
 Proof.
   split; [ vm_compute; reflexivity | ].
   split; [ vm_compute; reflexivity | ].
@@ -791,5 +795,7 @@ Proof.
   split.
   { apply (FlambdaReaperLeastProofs.check_least_sound _ _ 200).
     vm_compute. reflexivity. }
-  repeat split; vm_compute; reflexivity.
+  do 5 (split; [ vm_compute; reflexivity | ]).
+  split; [ vm_compute; discriminate | ].
+  vm_compute. reflexivity.
 Qed.

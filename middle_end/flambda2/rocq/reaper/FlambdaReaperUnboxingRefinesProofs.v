@@ -94,7 +94,12 @@ From OxCamlFlambda2 Require FlambdaReaperFlowProofs
   FlambdaReaperCallingConventionsProofs FlambdaFreshQuantifierSpec
   FlambdaPrimitiveProofs FlambdaNameAbstractionSpec FlambdaRenameApartSpec
   FlambdaHeapProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxingFuelSpec
+  FlambdaReaperUnboxingFuelProofs.
 Import ListNotations.
+
+Module UF := FlambdaReaperUnboxingFuelSpec.
+Module UFP := FlambdaReaperUnboxingFuelProofs.
 
 (* ======================================================================== *)
 (* The fragment, with the names of the fields fresh                         *)
@@ -2384,7 +2389,7 @@ Lemma unboxed_fields_of_names_in (next : positive) (x : node)
   ∃ (a : node) (next' : positive),
     fields
     = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
-             (S (length to_unbox)) a
+             (UF.unboxing_depth T) a
              (get_fields F T
                 (add_usages_through_function_slots F T code_my_closures true
                    (get_direct_usages T [x])))
@@ -2396,7 +2401,7 @@ Proof.
     (∀ y fs, (y, fs) ∈ acc ->
        ∃ a next',
          fs = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
-                     (S (length to_unbox)) a
+                     (UF.unboxing_depth T) a
                      (get_fields F T
                         (add_usages_through_function_slots F T
                            code_my_closures true (get_direct_usages T [y])))
@@ -2417,14 +2422,14 @@ Proof.
                        l (acc, n)) ->
       ∃ a next',
         fs = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
-                    (S (length to_unbox)) a
+                    (UF.unboxing_depth T) a
                     (get_fields F T
                        (add_usages_through_function_slots F T
                           code_my_closures true (get_direct_usages T [y])))
                     next')).
   { induction l as [ | [a x'] l IH]; intros acc n Hacc; [ exact Hacc | ].
     simpl. destruct (mem_node a to_unbox && _); [ | apply IH, Hacc ].
-    unfold name_unboxed_fields.
+    rewrite UFP.name_unboxed_fields_depth.
     destruct (mk_unboxed_fields _ _ _ _ _ _ _ _ n) as [fs0 n0] eqn:Hmk.
     apply IH. intros y fs Hin. apply in_app_or in Hin as [Hin | [Heq | []]].
     - exact (Hacc y fs Hin).
@@ -2613,7 +2618,7 @@ Lemma unboxed_fields_of_names_dom (next : positive) (x : node)
     (a, x) ∈ dominated ∧ mem_node a to_unbox = true
     ∧ fields
       = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
-               (S (length to_unbox)) a
+               (UF.unboxing_depth T) a
                (get_fields F T
                   (add_usages_through_function_slots F T code_my_closures true
                      (get_direct_usages T [x])))
@@ -2627,7 +2632,7 @@ Proof.
        ∃ a next',
          (a, y) ∈ dominated ∧ mem_node a to_unbox = true
          ∧ fs = fst (mk_unboxed_fields F T code_my_closures dominated
-                       to_unbox (S (length to_unbox)) a
+                       to_unbox (UF.unboxing_depth T) a
                        (get_fields F T
                           (add_usages_through_function_slots F T
                              code_my_closures true (get_direct_usages T [y])))
@@ -2649,7 +2654,7 @@ Proof.
       ∃ a next',
         (a, y) ∈ dominated ∧ mem_node a to_unbox = true
         ∧ fs = fst (mk_unboxed_fields F T code_my_closures dominated to_unbox
-                      (S (length to_unbox)) a
+                      (UF.unboxing_depth T) a
                       (get_fields F T
                          (add_usages_through_function_slots F T
                             code_my_closures true (get_direct_usages T [y])))
@@ -2660,7 +2665,7 @@ Proof.
     destruct (negb _); [ | apply IH;
                            [ intros p Hp; apply Hl; right; exact Hp
                            | exact Hacc ] ].
-    unfold name_unboxed_fields.
+    rewrite UFP.name_unboxed_fields_depth.
     destruct (mk_unboxed_fields _ _ _ _ _ _ _ _ n) as [fs0 n0] eqn:Hmk.
     apply IH; [ intros p Hp; apply Hl; right; exact Hp | ].
     intros y fs Hin. apply in_app_or in Hin as [Hin | [Heq | []]].
@@ -2701,7 +2706,7 @@ Proof.
     destruct (mem_node a' to_unbox
               && negb (existsb (fun '(y, _) => node_eqb x' y) acc))
       eqn:Htest.
-    - unfold name_unboxed_fields.
+    - rewrite UFP.name_unboxed_fields_depth.
       destruct (mk_unboxed_fields _ _ _ _ _ _ _ _ n) as [fs0 n0].
       apply IH. rewrite map_app.
       destruct H as [H | [[= -> ->] | H]];
@@ -2920,14 +2925,14 @@ Proof.
   { induction l as [ | [a x] l IH]; intros acc n Hn Hnd Hin;
       [ split; [ exact Hn | split; [ exact Hnd | exact Hin ] ] | ].
     simpl. destruct (mem_node a to_unbox && _); [ | apply IH; assumption ].
-    unfold name_unboxed_fields.
-    pose proof (mk_unboxed_fields_fresh (S (length to_unbox)) a
+    rewrite UFP.name_unboxed_fields_depth.
+    pose proof (mk_unboxed_fields_fresh (UF.unboxing_depth T) a
                   (get_fields F T
                      (add_usages_through_function_slots F T code_my_closures
                         true (get_direct_usages T [x])))
                   n) as Hfresh.
     cbv zeta in Hfresh.
-    destruct (mk_unboxed_fields _ _ _ _ _ (S (length to_unbox)) a _ n)
+    destruct (mk_unboxed_fields _ _ _ _ _ (UF.unboxing_depth T) a _ n)
       as [fields n'].
     destruct Hfresh as (Hnn' & Hnd' & Hrange). cbn [fst snd] in *.
     apply IH.

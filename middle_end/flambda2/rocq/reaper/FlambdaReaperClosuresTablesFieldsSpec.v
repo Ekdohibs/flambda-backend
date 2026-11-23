@@ -80,18 +80,17 @@
      the conjunct (its relation has no changed closure in a slot). The
      unit is not of the fragment for that reason too: the variable that
      reads the slot is changed and bound to no set.
-   - [cyclic_in_slot_counterexample_statement]: a field unboxed may not
-     be unboxed as the variable it holds is, so [unboxed_field_pairs] of
-     the two is not derived. The model bounds the depth of an unboxing by
-     [S (length to_unbox)] (FlambdaReaperUnboxing.mk_unboxed_fields), as
-     a chain of allocations to unbox, each in a field of the one before,
-     was taken not to exceed it; in [CyclicInSlot] a block made by a loop
-     holds the block of the iteration before, a chain of one allocation.
-     The slot, unboxed from the closure, is cut one level before the
-     block, unboxed from itself. The compiler has no bound: both are
-     unboxed as deep as the reads go, and the fields of the slot are
-     among those of the block (by hand, not run). A fault of the bound of
-     the model, not of the compiler.
+   - [cyclic_in_slot_alike_statement]: in [CyclicInSlot] a block made by
+     a loop holds the block of the iteration before, a chain of one
+     allocation to unbox that is three fields deep, and is in a slot of
+     a closure. The model bounded the depth of an unboxing by
+     [S (length to_unbox)] = 2, so that the slot, unboxed from the
+     closure, was cut one level before the block, unboxed from itself,
+     and the two were not unboxed alike, as [unboxed_field_pairs] asks:
+     a fault of the bound of the model, not of the compiler. The model
+     now goes as deep as the compiler's recursion where it ends
+     (FlambdaReaperUnboxingFuelSpec.v): the fields of the slot are among
+     those of the block, and the slot passes [repr_field_frag_ok].
 
    What is left as checks ([repr_field_frag_ok]): that [vs] has the slot
    of the field, holding a plain simple ([plain_c]) for a field not
@@ -101,8 +100,16 @@
    (FlambdaReaperClosuresExactProofs.sg_ok does not keep them). That the
    simple is not unboxed would need the inversion of the rules of a least
    solution (the reads of the slot of an unboxed name would be dominated
-   by its allocation, and the field unboxed). Above, [plain_c] and
-   [unboxed_field_pairs] are each false of the construction.
+   by its allocation, and the field unboxed). Above, [plain_c] is false
+   of the construction. That the variable is unboxed alike would need,
+   besides that inversion (the variable dominated by the one source of
+   the slot, which is to unbox), that the compiler's recursion end
+   (where it does not, the slot and the variable are cut at two depths:
+   FlambdaReaperUnboxingFuelSpec.v, [loop_field_statement]), that the
+   uses of the reads of the slot be among those of the variable, and
+   that no field of the block be read into names some to be unboxed and
+   some not (a fatal error of the compiler, which the rules do not rule
+   out: FlambdaReaperUnboxingSpec.v, [mixed_mutable_field]).
 
    [repr_unboxing_frag2_sound_statement]: for such a unit and tables,
    [repr_unboxing_frag2_nr] implies
@@ -402,11 +409,12 @@ End ChangedInSlot.
    which only [x10] is given (the loop is entered from the handler 20,
    never applied, whose parameter has no source), is in the slot 80 of the
    closure [x61]. The code 51 reads the slot, field 0 of it, field 0 of
-   that and field 1 of that. [x10] is the one allocation to unbox, so that
-   the unboxing has [S (length to_unbox)] = 2 levels: the slot, unboxed
-   from the closure, has one for [x10], and [x10], unboxed from itself,
-   two; the field 0 of field 0 is a variable in the first and unboxed in
-   the second. *)
+   that and field 1 of that. [x10] is the one allocation to unbox. The
+   slot, unboxed from the closure, is unboxed three levels deep, field 1
+   of field 0 of field 0; [x10], unboxed from itself, two levels deep,
+   and its field 0 holds the fields of the slot. With a bound of
+   [S (length to_unbox)] = 2 levels, the field 0 of field 0 of the slot
+   was a variable. *)
 Module CyclicInSlot.
 
 Import FlambdaReaperUnboxing.Examples.
@@ -473,7 +481,10 @@ Definition reprs : list (node * closure_repr) :=
 (* The slot 80 in the representation of [x61], and [x10]. *)
 Definition slot_80 : unboxed_field :=
   Unboxed
-    [(Field_block 0 Value, Unboxed [(Field_block 0 Value, Not_unboxed 81)])].
+    [(Field_block 0 Value,
+      Unboxed
+        [(Field_block 0 Value,
+          Unboxed [(Field_block 1 Value, Not_unboxed 81)])])].
 
 Definition fields_10 : unboxed_fields :=
   [(Field_block 0 Value,
@@ -577,8 +588,9 @@ Definition changed_in_slot_counterexample_statement : Prop :=
 
 (* The unit is of the premises of the statements above, [x10] is the one
    allocation to unbox, and the slot 80 of the representation of [x61],
-   which holds [x10], is not unboxed as [x10] is. *)
-Definition cyclic_in_slot_counterexample_statement : Prop :=
+   which holds [x10], is unboxed as [x10] is, and passes
+   [repr_field_frag_ok]. *)
+Definition cyclic_in_slot_alike_statement : Prop :=
   in_flow_fragment CyclicInSlot.unit_expr = true
   ∧ well_formed_unit FlambdaReaperUnboxing.Examples.interface
       CyclicInSlot.unit_expr
@@ -599,7 +611,11 @@ Definition cyclic_in_slot_counterexample_statement : Prop :=
   ∧ fields_of CyclicInSlot.unboxed 10%positive = Some CyclicInSlot.fields_10
   ∧ unboxed_field_pairs Value CyclicInSlot.slot_80
       (Unboxed CyclicInSlot.fields_10)
-    = None.
+    <> None
+  ∧ repr_field_frag_ok CyclicInSlot.unboxed CyclicInSlot.reprs
+      [(80%positive, Var 10%positive)]
+      (Field_value_slot 80%positive, CyclicInSlot.slot_80)
+    = true.
 
 Definition repr_unboxing_frag2_sound_statement : Prop :=
   ∀ (nr : code_id -> bool) (is_local : field -> bool) (u : unit_interface)

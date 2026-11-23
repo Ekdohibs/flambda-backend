@@ -61,7 +61,12 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
 From OxCamlFlambda2 Require FlambdaReaperUnboxing FlambdaReaperUnboxingSpec
   FlambdaReaperUnboxingProofs FlambdaReaperTypesProofs
   FlambdaReaperClosuresExactProofs FlambdaReaperFlowProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxingFuelSpec
+  FlambdaReaperUnboxingFuelProofs.
 Import ListNotations.
+
+Module UF := FlambdaReaperUnboxingFuelSpec.
+Module UFP := FlambdaReaperUnboxingFuelProofs.
 
 Module U := FlambdaReaperUnboxing.
 Module US := FlambdaReaperUnboxingSpec.
@@ -308,7 +313,7 @@ Lemma rinv_fold :
                    is_local tcr next))
         seen.
 Proof.
-  intros next. unfold U.changed_representations.
+  intros next. rewrite UFP.changed_representations_depth.
   match goal with
   | |- context [List.fold_left ?h tcr _] => set (step := h)
   end.
@@ -329,7 +334,7 @@ Proof.
     destruct (U.set_function_slots F x) as [ | [fs0 f00] l0] eqn:Hsx;
       [ injection Hstep as <- <- _; exact Hinv | ].
     destruct (U.mk_unboxed_fields F T cm dominated to_unbox
-                (S (length to_unbox)) x
+                (UF.unboxing_depth T) x
                 (U.get_fields_of_constructors F T is_local
                    (map snd ((fs0, f00) :: l0)))
                 n)

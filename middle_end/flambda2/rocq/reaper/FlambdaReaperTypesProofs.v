@@ -148,7 +148,12 @@ From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
 From OxCamlFlambda2 Require FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperUnboxingRefinesProofs
   FlambdaReaperUnboxingRefinesCallsSimProofs.
+From OxCamlFlambda2 Require FlambdaReaperUnboxingFuelSpec
+  FlambdaReaperUnboxingFuelProofs.
 Import ListNotations.
+
+Module UF := FlambdaReaperUnboxingFuelSpec.
+Module UFP := FlambdaReaperUnboxingFuelProofs.
 
 (* ======================================================================== *)
 (* Sets of nodes                                                            *)
@@ -5885,7 +5890,7 @@ Proof.
   - destruct (URP.unboxed_fields_of_names_in F T cm dominated to_unbox _
                 (Node_variable code_var) fields Hlk)
       as (a & next' & Hf).
-    exists (S (length to_unbox)), a, next'. rewrite Hf.
+    exists (UF.unboxing_depth T), a, next'. rewrite Hf.
     rewrite (add_usages_of_unboxed F T cm unboxed true _ Huses).
     + rewrite (get_fields_ext F T
                  (U.get_direct_usages T [Node_variable code_var]) usages);
@@ -10089,7 +10094,7 @@ Lemma changed_representations_in (F : facts) (T : tables)
                   (map snd (U.set_function_slots F x)))
                next').
 Proof.
-  unfold U.changed_representations.
+  rewrite UFP.changed_representations_depth.
   match goal with
   | |- context [List.fold_left ?h tcr _] =>
     set (step := h)
@@ -10127,7 +10132,7 @@ Proof.
     destruct (U.set_function_slots F x) as [ | [fs0 f00] l0] eqn:Hl;
       [ injection Hstep as <- _ _; exact (Hacc p Hp) | ].
     destruct (U.mk_unboxed_fields F T cm dominated to_unbox
-                (S (length to_unbox)) x
+                (UF.unboxing_depth T) x
                 (U.get_fields_of_constructors F T is_local
                    (map snd ((fs0, f00) :: l0)))
                 n)
@@ -10151,7 +10156,7 @@ Proof.
     apply in_flat_map in Hp as ([a c'] & Hd & Hp3).
     destruct (node_eqb a f) eqn:Haf; [ | destruct Hp3 ].
     destruct Hp3 as [<- | []]. apply node_eqb_eq in Haf. subst a.
-    exists x, f, (S (length to_unbox)), n.
+    exists x, f, (UF.unboxing_depth T), n.
     cbn [fst snd U.cr_current U.cr_fields].
     rewrite Hl.
     split; [ exact Hfs | split; [ exact Hd | rewrite Hmk; reflexivity ] ]. }
