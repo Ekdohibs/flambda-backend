@@ -52,7 +52,9 @@
    ([closure_under], [rebuilt_ext]): so is the closure of another slot
    of the set, under the metadata of that slot, whose closure type need
    not be an alias in the fragment of [loose]. The counterexamples and
-   the example of a change of representation are computed.
+   the example of a change of representation are computed. The subkinds
+   that the reaper with types keeps are proved last, by induction on the
+   subkind ([rewrite_kind_with_subkind_sound]).
 
    Of a least solution, the proofs read that it is closed, has no stale
    tuple, and two facts of its derivations ([usages_carry_sources],
@@ -10422,4 +10424,473 @@ Theorem exported_types_sound_end_to_end_landed :
   exported_types_sound_end_to_end_landed_statement.
 Proof.
   exact (exported_types_sound_end_to_end_gen landed_fixes landed_fixes_sound).
+Qed.
+
+(* ======================================================================== *)
+(* Subkinds                                                                 *)
+(* ======================================================================== *)
+
+(* What the reaper with types keeps of subkinds
+   ([rewrite_kind_with_subkind_sound]), by induction on the subkind, its
+   shapes and their fields together ([subkind_comb]). Under a metadata
+   that erases, and at [Anything] under one of a single source or of
+   usages, nothing is stated ([erase_sound]). At [Anything] under one of
+   any usage, every allocation that the value may come from has any
+   usage, so that a boxed number keeps its contents and no value is made
+   poison ([any_usage_not_poison]). Otherwise, a field that the
+   allocation does not use is poison and [follow_field] erases what is
+   stated of it ([field_metadata], from [follow_field_unused]), and one
+   that it uses is rebuilt under the metadata that [follow_field] gives
+   it ([follow_field_at]); a boxed number whose contents have no use is
+   poison, and [rewrite_boxed_number_kind] erases what is stated of it;
+   a kept [Tagged_immediate] is of a constant, which the rebuild keeps.
+   A symbol is itself, bound in the second run as [statics_rebuilt]
+   says. *)
+
+Scheme subkind_mind := Induction for subkind Sort Prop
+  with constructor_shapes_mind := Induction for constructor_shapes Sort Prop
+  with field_subkinds_mind := Induction for field_subkinds Sort Prop.
+Combined Scheme subkind_comb from subkind_mind, constructor_shapes_mind,
+  field_subkinds_mind.
+
+(* The test of a field is [value_at] of what is stated of it. *)
+Lemma fields_of_subkinds_at (statics : static_env) (nb : bool) (sk : subkind)
+    (sks : field_subkinds) (v : value) (fields : list value) :
+  fields_of_subkinds statics (Fields_cons nb sk sks) (v :: fields)
+  = kind_eqb (kind_of_value v) Value && value_at statics (nb, sk) v
+    && fields_of_subkinds statics sks fields.
+Proof. reflexivity. Qed.
+
+(* A value of what is stated is of [Anything], nullable as stated. *)
+Lemma value_at_anything (statics : static_env) (nb : bool) (sk : subkind)
+    (v : value) :
+  value_at statics (nb, sk) v = true ->
+  value_at statics (nb, Subkind_anything) v = true.
+Proof.
+  intros H. destruct v as [c | | | | | | | | ]; try reflexivity.
+  destruct c; try reflexivity; try exact H.
+  cbn in H |- *. apply andb_true_iff in H as [-> _]. reflexivity.
+Qed.
+
+(* A tagged immediate is a constant. *)
+Lemma tagged_immediate_const (v : value) :
+  is_tagged_immediate v = true -> ∃ c : const, v = Value_const c.
+Proof. destruct v; try discriminate; eauto. Qed.
+
+
+Lemma is_number_of_kind_boxable (bn : boxable_number) (c : const) :
+  is_number_of_kind bn c = true -> boxable_number_of_const c = Some bn.
+Proof. destruct bn, c; try discriminate; reflexivity. Qed.
+
+(* Whether a metadata erases what is stated, in [rewrite_subkind]. *)
+Definition erasing (m : rewrite_metadata) : bool :=
+  match m with
+  | No_source | At_least_one_source_no_usages => true
+  | Single_source _ | Many_sources_any_usage | Many_sources_usages _ => false
+  end.
+
+Section Subkinds_sound.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Variable sets : list set_of_closures.
+Variables statics statics' : static_env.
+
+Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hlocal : is_local_slots_only is_local.
+Hypothesis Halloc : statics_allocated (solution_of_tables T) statics.
+Hypothesis Hst :
+  statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics statics'.
+
+Local Abbreviation G := (graph_of_facts F).
+Local Abbreviation sol := (solution_of_tables T).
+Local Abbreviation ctx := (plain_context is_local F T sets).
+
+Lemma subkinds_closed : closed is_local G sol.
+Proof. exact (least_closed_tables is_local F T (or_introl Hleast)). Qed.
+
+Lemma block_not_local (i : nat) (k : flambda_kind) :
+  is_local (Field_block i k) = false.
+Proof.
+  destruct (is_local (Field_block i k)) eqn:E; [ | reflexivity ].
+  destruct (Hlocal _ E) as [(w & Hw) | (g & Hg)]; discriminate.
+Qed.
+
+Lemma boxed_not_local (bn : boxable_number) :
+  is_local (Field_boxed_number bn) = false.
+Proof.
+  destruct (is_local (Field_boxed_number bn)) eqn:E; [ | reflexivity ].
+  destruct (Hlocal _ E) as [(w & Hw) | (g & Hg)]; discriminate.
+Qed.
+
+Lemma rebuilt_null (v : value) (n : node) (v' : value) :
+  rebuilt_value G sol v n v' -> v' = Value_const Null ->
+  v = Value_const Null.
+Proof.
+  intros Hv Heq. subst v'.
+  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
+  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
+  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
+  - destruct Hv as [Heq _]. discriminate Heq.
+  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
+  - destruct Hv as (elements' & Heq). discriminate Heq.
+  - destruct Hv as (a & bn & from & _ & _ & _ & _ & Heq).
+    destruct (s_field_used sol a (Field_boxed_number bn)); discriminate Heq.
+  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
+Qed.
+
+Lemma rebuilt_const (c : const) (n : node) (v' : value) :
+  rebuilt_value G sol (Value_const c) n v' -> v' = Value_const c.
+Proof. intros [_ ->]. reflexivity. Qed.
+
+(* What is kept at [Anything] and at [Tagged_immediate]. *)
+(* Under a metadata of any usage, the rebuild makes poison of no value:
+   the contents of a boxed number have a use. *)
+Lemma any_usage_not_poison (v : value) (n : node) (v' : value)
+    (k : flambda_kind) :
+  metadata_at sol Many_sources_any_usage n -> rebuilt_value G sol v n v' ->
+  v' = Value_const (Poison k) -> v = Value_const (Poison k).
+Proof.
+  intros Hmd Hv Heq0. subst v'.
+  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
+  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
+  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
+  - destruct Hv as [Heq _]. discriminate Heq.
+  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
+  - destruct Hv as (elements' & Heq). discriminate Heq.
+  - destruct Hv as (a & bn & from & Hmay & Hhs & _ & Hcons & Heq).
+    pose proof (Hmd a Hmay Hhs) as Hau. cbn [describes] in Hau.
+    rewrite (field_used_any_usage _ _ _ subkinds_closed a _ from Hcons Hau
+               (boxed_not_local bn))
+      in Heq.
+    discriminate Heq.
+  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
+Qed.
+
+(* What is kept at [Anything], under a metadata of any usage. *)
+Lemma anything_sound (nb : bool) (v : value) (n : node) (v' : value) :
+  metadata_at sol Many_sources_any_usage n -> rebuilt_value G sol v n v' ->
+  value_at statics (nb, Subkind_anything) v = true ->
+  value_at statics' (nb, Subkind_anything) v' = true.
+Proof.
+  intros Hmd Hv Hat. destruct v' as [c' | | | | | | | | ]; try reflexivity.
+  destruct c'; try reflexivity.
+  - rewrite (rebuilt_null v n _ Hv eq_refl) in Hat. exact Hat.
+  - match goal with
+    | |- value_at _ _ (Value_const (Poison ?k)) = true =>
+      rewrite (any_usage_not_poison v n _ k Hmd Hv eq_refl) in Hat
+    end.
+    exact Hat.
+Qed.
+
+Lemma tagged_sound (nb : bool) (v : value) (n : node) (v' : value) :
+  rebuilt_value G sol v n v' ->
+  value_at statics (nb, Subkind_tagged_immediate) v = true ->
+  value_at statics' (nb, Subkind_tagged_immediate) v' = true.
+Proof.
+  intros Hv Hat. destruct v as [c | | | | | | | | ];
+    try (cbn in Hat; discriminate Hat).
+  rewrite (rebuilt_const c n v' Hv). destruct c; exact Hat.
+Qed.
+
+(* What is erased. *)
+Lemma erase_sound (nb : bool) (sk : subkind) (v : value) (n : node)
+    (v' : value) :
+  rebuilt_value G sol v n v' -> value_at statics (nb, sk) v = true ->
+  value_at statics' (erase_subkind (nb, sk)) v' = true.
+Proof. intros _ _. apply FlambdaSubkindProofs.value_at_any_value. Qed.
+
+Lemma rewrite_subkind_erasing (m : rewrite_metadata) (nb : bool)
+    (sk : subkind) :
+  erasing m = true ->
+  rewrite_subkind ctx m nb sk = erase_subkind (nb, sk).
+Proof. destruct m, sk; try discriminate; reflexivity. Qed.
+
+Lemma rewrite_field_subkinds_any (sks : field_subkinds) :
+  ∀ i : nat,
+    rewrite_field_subkinds ctx Many_sources_any_usage i sks = sks.
+Proof.
+  induction sks as [ | nb sk rest IH]; intros i; [ reflexivity | ].
+  cbn [rewrite_field_subkinds].
+  change (follow_field ctx Many_sources_any_usage (Field_block i Value))
+    with Many_sources_any_usage.
+  rewrite IH. destruct sk; reflexivity.
+Qed.
+
+Lemma rewrite_shapes_any (shapes : constructor_shapes) :
+  rewrite_shapes ctx Many_sources_any_usage shapes = shapes.
+Proof.
+  induction shapes as [ | tag rest IH | tag sks rest IH]; cbn [rewrite_shapes];
+    [ reflexivity | rewrite IH; reflexivity | ].
+  rewrite IH, rewrite_field_subkinds_any. reflexivity.
+Qed.
+
+(* Under a metadata that does not erase, [rewrite_subkind] at the head. *)
+Definition head_rewrite (m : rewrite_metadata) (nb : bool) (sk : subkind)
+    : param_subkind :=
+  match sk with
+  | Subkind_anything =>
+    match m with
+    | Many_sources_any_usage => (nb, sk)
+    | No_source | At_least_one_source_no_usages | Single_source _
+    | Many_sources_usages _ =>
+      erase_subkind (nb, sk)
+    end
+  | Subkind_tagged_immediate => (nb, sk)
+  | Subkind_boxed_number bn => rewrite_boxed_number_kind ctx m (nb, sk) bn
+  | Subkind_variant consts shapes =>
+    (nb, Subkind_variant consts (rewrite_shapes ctx m shapes))
+  end.
+
+Lemma rewrite_subkind_head (m : rewrite_metadata) (nb : bool)
+    (sk : subkind) :
+  erasing m = false -> rewrite_subkind ctx m nb sk = head_rewrite m nb sk.
+Proof.
+  intros Hm. destruct m; try discriminate Hm; destruct sk; try reflexivity.
+  cbn [rewrite_subkind head_rewrite]. rewrite rewrite_shapes_any.
+  reflexivity.
+Qed.
+
+(* The metadata of a field of a block whose allocation the metadata
+   describes: [At_least_one_source_no_usages] where the allocation does not
+   use it, and one that holds where the field is held otherwise. *)
+Lemma field_metadata (m : rewrite_metadata) (a from : node) (f : field) :
+  erasing m = false -> describes sol m a -> g_constructor G a f from ->
+  is_local f = false ->
+  (s_field_used sol a f = false ->
+   follow_field ctx m f = At_least_one_source_no_usages)
+  ∧ (s_field_used sol a f = true ->
+     erasing (follow_field ctx m f) = true
+     ∨ metadata_at sol (follow_field ctx m f) from).
+Proof.
+  intros Hm Hd Hcons Hloc.
+  destruct (forgets m) eqn:Hf.
+  - destruct m as [ | source | | [ | u us] | ]; try discriminate Hm;
+      try discriminate Hf.
+    split; intros _; [ reflexivity | left; reflexivity ].
+  - split; intros Hfu.
+    + exact (follow_field_unused ctx is_local subkinds_closed m a from f Hd
+               Hf Hcons Hloc Hfu).
+    + right.
+      exact (follow_field_at ctx is_local subkinds_closed m a from f Hd Hf
+               Hcons Hloc Hfu).
+Qed.
+
+Definition sk_sound (sk : subkind) : Prop :=
+  ∀ (m : rewrite_metadata) (nb : bool) (v : value) (n : node) (v' : value),
+    erasing m = false -> metadata_at sol m n -> s_has_usage sol n = true ->
+    rebuilt_value G sol v n v' -> value_at statics (nb, sk) v = true ->
+    value_at statics' (rewrite_subkind ctx m nb sk) v' = true.
+
+Definition shapes_sound (shapes : constructor_shapes) : Prop :=
+  ∀ (m : rewrite_metadata) (a : node) (tag : Z) (fields fields' : list value),
+    erasing m = false -> describes sol m a ->
+    fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
+      fields' ->
+    block_of_shapes statics shapes tag fields = true ->
+    block_of_shapes statics' (rewrite_shapes ctx m shapes) tag
+      fields'
+    = true.
+
+Definition field_subkinds_sound (sks : field_subkinds) : Prop :=
+  ∀ (m : rewrite_metadata) (a : node) (i : nat)
+    (fields fields' : list value),
+    erasing m = false -> describes sol m a ->
+    fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) i fields
+      fields' ->
+    fields_of_subkinds statics sks fields = true ->
+    fields_of_subkinds statics' (rewrite_field_subkinds ctx m i sks)
+      fields'
+    = true.
+
+(* The allocation that a value at [n] comes from, described. *)
+Lemma describes_at (m : rewrite_metadata) (a n : node) :
+  metadata_at sol m n -> may_come_from sol a n -> s_has_source sol a = true ->
+  describes sol m a.
+Proof. intros Hmd Ha Hhs. exact (Hmd a Ha Hhs). Qed.
+
+(* A name whose metadata is of its usages has a use. *)
+Lemma metadata_usages_used (x : node) (us : list node) :
+  metadata_for_name ctx x = Many_sources_usages us -> s_has_usage sol x = true.
+Proof.
+  unfold metadata_for_name. intros H.
+  destruct (get_single_source ctx x);
+    try (destruct (has_use ctx x); discriminate H).
+  unfold get_usages in H.
+  destruct (has_use ctx x) eqn:Hh; [ exact Hh | discriminate H ].
+Qed.
+
+Lemma boxed_number_contents (S : static_env) (nb : bool)
+    (bn bn' : boxable_number) (c : const) :
+  is_number_of_kind bn' c = true ->
+  value_at S (nb, Subkind_boxed_number bn) (Value_boxed_number c) = true ->
+  bn' = bn.
+Proof.
+  intros Hk Hat. pose proof (is_number_of_kind_boxable bn' c Hk) as Hb.
+  unfold value_at in Hat. cbn [snd value_of_subkind boxed_number_of] in Hat.
+  unfold boxable_contents in Hat.
+  repeat (rewrite Hb in Hat; cbv beta iota in Hat).
+  unfold boxable_number_eqb in Hat.
+  destruct (boxable_number_eq_dec bn bn') as [-> | ]; [ reflexivity | ].
+  discriminate Hat.
+Qed.
+
+Lemma subkinds_sound_all :
+  (∀ sk : subkind, sk_sound sk)
+  ∧ (∀ shapes : constructor_shapes, shapes_sound shapes)
+  ∧ (∀ sks : field_subkinds, field_subkinds_sound sks).
+Proof.
+  apply subkind_comb.
+  - (* Anything *)
+    intros m nb v n v' Hm Hmd _ Hv Hat.
+    rewrite rewrite_subkind_head by exact Hm. cbn [head_rewrite].
+    destruct m; try apply FlambdaSubkindProofs.value_at_any_value.
+    exact (anything_sound nb v n v' Hmd Hv Hat).
+  - (* Tagged_immediate *)
+    intros m nb v n v' Hm _ _ Hv Hat. rewrite rewrite_subkind_head by exact Hm.
+    exact (tagged_sound nb v n v' Hv Hat).
+  - (* A boxed number *)
+    intros bn m nb v n v' Hm Hmd Hhu Hv Hat.
+    rewrite rewrite_subkind_head by exact Hm. cbn [head_rewrite].
+    unfold rewrite_boxed_number_kind.
+    destruct (follow_field ctx m (Field_boxed_number bn)) eqn:Hff;
+      try exact (erase_sound nb _ v n v' Hv Hat).
+    all: destruct v as [c | | | s | tag fields | | c | | ];
+      try (cbn in Hat; discriminate Hat).
+    all: first
+      [ (* A constant. *)
+        solve
+          [ rewrite (rebuilt_const c n v' Hv);
+            destruct c; try exact Hat; cbn in Hat; unfold says_nothing in Hat;
+            rewrite andb_false_r in Hat; discriminate Hat ]
+      | (* A symbol bound to a boxed number. *)
+        solve
+          [ destruct Hv as (-> & Hmay & Hsu);
+            cbn [value_at fst snd value_of_subkind boxed_number_of] in Hat;
+            cbn [value_at fst snd value_of_subkind
+                 boxed_number_of];
+            destruct (lookup s (static_values statics)) as [allocated | ]
+              eqn:Hl; [ | discriminate Hat ];
+            pose proof (Hst s allocated Hl (Hsu Hhu)) as Hs;
+            destruct allocated as [ | | | contents | | | ];
+              try discriminate Hat;
+            cbn [static_rebuilt] in Hs; rewrite Hs; exact Hat ]
+      | (* A boxed number. *)
+        solve
+          [ destruct Hv as (a & bn' & from & Hmay & Hhs & Hk & Hcons & ->);
+            rewrite (boxed_number_contents statics nb bn bn' c Hk Hat)
+              in Hcons |- *;
+            destruct (field_metadata m a from (Field_boxed_number bn) Hm
+                        (Hmd a Hmay Hhs) Hcons (boxed_not_local bn))
+              as [Hun _];
+            destruct (s_field_used sol a (Field_boxed_number bn)) eqn:Hfu;
+              [ exact Hat
+              | rewrite (Hun eq_refl) in Hff; discriminate Hff ] ] ].
+  - (* A variant *)
+    intros consts shapes IH m nb v n v' Hm Hmd Hhu Hv Hat.
+    rewrite rewrite_subkind_head by exact Hm. cbn [head_rewrite].
+    destruct v as [c | | | s | tag fields | | c | | ];
+      try (cbn in Hat; discriminate Hat).
+    + rewrite (rebuilt_const c n v' Hv).
+      destruct c; try exact Hat; cbn in Hat; unfold says_nothing in Hat;
+        rewrite andb_false_r in Hat; discriminate Hat.
+    + destruct Hv as (-> & Hmay & Hsu).
+      cbn [value_at fst snd value_of_subkind block_of] in Hat.
+      cbn [value_at fst snd value_of_subkind block_of].
+      destruct (lookup s (static_values statics)) as [allocated | ] eqn:Hl;
+        [ | discriminate Hat ].
+      pose proof (Hst s allocated Hl (Hsu Hhu)) as Hs.
+      destruct allocated as [ | | tag fields | | | | ]; try discriminate Hat.
+      cbn [static_rebuilt] in Hs. destruct Hs as (fields' & Hfound & Hfr).
+      rewrite Hfound.
+      apply (IH m (Node_symbol s) tag fields fields' Hm);
+        [ | exact Hfr | exact Hat ].
+      apply (Hmd (Node_symbol s) Hmay).
+      destruct (Halloc s _ Hl) as [Hhs _]. exact Hhs.
+    + destruct Hv as (a & fields' & Hmay & Hhs & -> & Hfr).
+      exact (IH m a tag fields fields' Hm (Hmd a Hmay Hhs) Hfr Hat).
+  - (* No shape *)
+    intros m a tag fields fields' _ _ _ Hat. discriminate Hat.
+  - (* An undetermined shape *)
+    intros tag' rest IH m a tag fields fields' Hm Hd Hfr Hat.
+    cbn [rewrite_shapes block_of_shapes block_of_shapes] in Hat |- *.
+    destruct (Z.eqb tag tag'); [ reflexivity | ].
+    exact (IH m a tag fields fields' Hm Hd Hfr Hat).
+  - (* A determined shape *)
+    intros tag' sks IHsks rest IH m a tag fields fields' Hm Hd Hfr Hat.
+    cbn [rewrite_shapes block_of_shapes block_of_shapes] in Hat |- *.
+    destruct (Z.eqb tag tag').
+    + exact (IHsks m a 0 fields fields' Hm Hd Hfr Hat).
+    + exact (IH m a tag fields fields' Hm Hd Hfr Hat).
+  - (* No field *)
+    intros m a i fields fields' _ _ Hfr Hat.
+    destruct fields as [ | field fields]; [ | discriminate Hat ].
+    destruct fields' as [ | field' fields']; [ reflexivity | contradiction ].
+  - (* A field *)
+    intros nb sk IHsk rest IH m a i fields fields' Hm Hd Hfr Hat.
+    destruct fields as [ | field fields]; [ discriminate Hat | ].
+    destruct fields' as [ | field' fields']; [ contradiction | ].
+    destruct Hfr as [Hfield Hfr].
+    rewrite fields_of_subkinds_at in Hat.
+    apply andb_true_iff in Hat as [Hat Hrest].
+    apply andb_true_iff in Hat as [Hk Hat].
+    cbn [rewrite_field_subkinds]. rewrite fields_of_subkinds_at.
+    rewrite (IH m a (S i) fields fields' Hm Hd Hfr Hrest), andb_true_r.
+    pose proof (field_rebuilt_kind G sol a i field field' Hfield) as Hk'.
+    apply FlambdaPrimitiveProofs.kind_eqb_eq in Hk.
+    rewrite Hk', Hk, FlambdaPrimitiveProofs.kind_eqb_refl. cbn [andb].
+    destruct Hfield as (from & Hcons & Hused & Hunused).
+    rewrite Hk in Hcons, Hused, Hunused.
+    destruct (field_metadata m a from (Field_block i Value) Hm Hd Hcons
+                (block_not_local i Value))
+      as [Hun Hus].
+    set (ps := rewrite_subkind ctx (follow_field ctx m (Field_block i Value))
+                 nb sk).
+    enough (Hps : value_at statics' ps field' = true)
+      by (destruct ps; exact Hps).
+    unfold ps.
+    destruct (s_field_used sol a (Field_block i Value)) eqn:Hfu.
+    + destruct (Hused eq_refl) as [Hhu Hv].
+      destruct (erasing (follow_field ctx m (Field_block i Value))) eqn:He.
+      * rewrite (rewrite_subkind_erasing _ nb sk He).
+        exact (erase_sound nb sk field from field' Hv Hat).
+      * destruct (Hus eq_refl) as [He' | Hmd]; [ congruence | ].
+        exact (IHsk _ nb field from field' He Hmd Hhu Hv Hat).
+    + rewrite (Hunused eq_refl), (Hun eq_refl),
+        (rewrite_subkind_erasing At_least_one_source_no_usages nb sk eq_refl).
+      apply FlambdaSubkindProofs.value_at_any_value.
+Qed.
+
+(* The statement, at the node of the name. *)
+Lemma subkind_sound_at (x : node) (nb : bool) (sk : subkind) (v v' : value) :
+  rebuilt_value G sol v x v' -> value_at statics (nb, sk) v = true ->
+  value_at statics'
+    (rewrite_kind_with_subkind ctx x (nb, sk)) v'
+  = true.
+Proof.
+  intros Hv Hat. unfold rewrite_kind_with_subkind. cbn [fst snd].
+  destruct (metadata_for_name_at ctx x)
+    as [Hmd Hhu].
+  destruct (erasing (metadata_for_name ctx x)) eqn:He.
+  - rewrite (rewrite_subkind_erasing _ nb sk He).
+    exact (erase_sound nb sk v x v' Hv Hat).
+  - apply (proj1 subkinds_sound_all sk _ nb v x v' He Hmd);
+      [ | exact Hv | exact Hat ].
+    destruct (forgets (metadata_for_name ctx x)) eqn:Hf;
+      [ | exact (Hhu eq_refl) ].
+    destruct (metadata_for_name ctx x) as [ | | | us | ] eqn:Hm;
+      try discriminate He; try discriminate Hf.
+    exact (metadata_usages_used x us Hm).
+Qed.
+
+End Subkinds_sound.
+
+Theorem rewrite_kind_with_subkind_sound :
+  rewrite_kind_with_subkind_sound_statement.
+Proof.
+  intros is_local F T sets statics statics' x [nb sk] v v' Hleast Hlocal
+    Halloc Hst Hv Hat.
+  exact (subkind_sound_at is_local F T sets statics statics' Hleast Hlocal
+           Halloc Hst x nb sk v v' Hv Hat).
 Qed.

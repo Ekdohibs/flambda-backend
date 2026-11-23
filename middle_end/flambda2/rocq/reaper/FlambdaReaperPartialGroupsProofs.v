@@ -143,6 +143,8 @@ Proof.
   - simpl. destruct Hc as [Hdef_vars Hdef_conts].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
       [ | exact I ].
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
+      [ | exact I ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
     apply Hstate.

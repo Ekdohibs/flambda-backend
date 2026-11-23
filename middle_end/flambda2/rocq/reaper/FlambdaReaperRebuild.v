@@ -174,11 +174,26 @@
      ([rebuild_named]), the mode of the compiler goes with the
      allocation, while the model keeps the [Local_allocation] after the
      poison, of which the machine of FlambdaRegionsSpec.v has no step.
+   - Subkinds. What is transcribed is the reaper without types
+     ([Traverse.With_types.Without_types]), for which
+     [Analysis.rewrite_kind_with_subkind] is [erase_subkind]
+     ([Flambda_kind.With_subkind.erase_subkind]: [Anything] and nullable
+     for the kind [Value], nothing stated of a naked kind): what the
+     parameters of code and its results state is erased
+     ([Unboxing_analysis.compute_code_changes], for code that keeps its
+     calling convention), and so is what a parameter of a continuation
+     that is kept states ([should_keep_param]). Every entry erased
+     states nothing, so the rebuilt code ([erase_code_subkinds]) and
+     the rebuilt handlers ([with_params_kinds]) state nothing: the empty
+     list, as the test tool converts the compiler's term
+     ([convert_params_subkinds]). The arities of a call have no subkinds
+     in the model. The reaper with types keeps more
+     (FlambdaReaperTypes.rewrite_kind_with_subkind; what it keeps is
+     stated in FlambdaReaperTypesSpec.v).
    - The model has no phantom binding, no region of code, no
-     [Rec_info], no [Never_returns], no subkinds (so
-     [rewrite_kind_with_subkind] and [erase_subkind] change nothing), no
-     cost metrics, inlining decisions,
-     [is_my_closure_used], [only_full_applications], [is_cold],
+     [Rec_info], no [Never_returns], no cost metrics, inlining
+     decisions, [is_my_closure_used], [only_full_applications],
+     [is_cold],
      debuginfo or message of [Invalid]; and nothing of what [rebuild]
      returns but the term ([exported_code], [slot_offsets], the typing
      environment). Without phantom bindings, the rule of
@@ -276,7 +291,20 @@ Fixpoint filter_kept {A : Type} (mask : list bool) (l : list A) : list A :=
     if keep then a :: filter_kept mask l else filter_kept mask l
   end.
 
-(* The metadata of a handler with other kinds of parameters. *)
+(* The metadata of code with what its parameters and its results state
+   erased ([compute_code_changes], for code that keeps its calling
+   convention, without types): nothing is stated. *)
+Definition erase_code_subkinds (metadata : code_metadata) : code_metadata :=
+  {| cm_params_arity := cm_params_arity metadata;
+     cm_params_subkinds := [];
+     cm_result_arity := cm_result_arity metadata;
+     cm_result_subkinds := [];
+     cm_is_tupled := cm_is_tupled metadata;
+     cm_is_stub := cm_is_stub metadata |}.
+
+(* The metadata of a handler with other kinds of parameters. It states
+   nothing of them beyond their kinds: what a parameter that is kept
+   states is erased ([should_keep_param], [erase_subkind]). *)
 Definition with_params_kinds (metadata : handler_metadata)
     (kinds : list flambda_kind) : handler_metadata :=
   if hm_is_exn_handler metadata
@@ -975,7 +1003,8 @@ with rebuild_binding (en : rebuild_env) (binding : static_binding)
     else []
   end
 (* [rebuild_code] and [rebuild_function_params_and_body]: the body is
-   [Invalid] if [my_closure] or a parameter has no source. *)
+   [Invalid] if [my_closure] or a parameter has no source, and what the
+   parameters and the results state is erased. *)
 with rebuild_code (c : code) : code :=
   match c with
   | Code params my_closure return_continuation exn_continuation metadata
@@ -984,7 +1013,8 @@ with rebuild_code (c : code) : code :=
       (my_closure, Value)
       :: with_kinds params (unarize (cm_params_arity metadata))
     in
-    Code params my_closure return_continuation exn_continuation metadata
+    Code params my_closure return_continuation exn_continuation
+      (erase_code_subkinds metadata)
       (if existsb (fun '(x, kind) => is_dead_var x kind) bound
        then Invalid
        else rebuild_expr (bind_variables empty_env bound) body)

@@ -307,6 +307,14 @@
      closure is still made. Otherwise it is as in
      FlambdaReaperRebuild.v, which says why a local set of closures is
      rebuilt without the projections of its other closures.
+   - Subkinds, as in FlambdaReaperRebuild.v: the reaper without types,
+     whose [rewrite_kind_with_subkind] is [erase_subkind], after which
+     an entry states nothing. Code that keeps its calling
+     convention has what its parameters and results state erased
+     ([erase_code_subkinds]); code that changes, and a handler, state
+     nothing of their parameters: what is kept is erased, and the
+     fields of an unboxed parameter are [With_subkind.anything]
+     ([get_parameters]).
    - The older forms [Set_of_closures] and [Static_const_set_of_closures]
      have no fact of a function slot (FlambdaReaperTraversal.v): to
      [get_set_of_closures_def] they are not sets, and they never change
@@ -1853,7 +1861,8 @@ Definition prepend_first {A : Type} (l : list A) (groups : list (list A))
 (* The metadata of code that changes its calling convention
    ([compute_code_changes]), the decision of [my_closure] being
    [my_closure_decision]: [Decided Delete] for [Keep_my_closure], whose
-   closure is not a parameter, and [Unbox] for [Unbox_my_closure]. *)
+   closure is not a parameter, and [Unbox] for [Unbox_my_closure]. It
+   states nothing of the parameters and results beyond their kinds. *)
 Definition changed_code_metadata_u (metadata : code_metadata)
     (my_closure_decision : decision)
     (params_decisions return_decisions : list decision) : code_metadata :=
@@ -1862,7 +1871,9 @@ Definition changed_code_metadata_u (metadata : code_metadata)
          (prepend_first [my_closure_decision]
             (group_by_parameter (cm_params_arity metadata)
                params_decisions));
+     cm_params_subkinds := [];
      cm_result_arity := arity_of_decisions_u return_decisions;
+     cm_result_subkinds := [];
      cm_is_tupled := false;
      cm_is_stub := cm_is_stub metadata |}.
 
@@ -3180,8 +3191,8 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
     in
     match change with
     | Not_changing_u =>
-      Code params my_closure return_continuation exn_continuation metadata
-        body
+      Code params my_closure return_continuation exn_continuation
+        (erase_code_subkinds metadata) body
     | Changing_u params_decisions return_decisions =>
       (* [Unbox_my_closure]: the fields of [my_closure] are parameters, in
          front of the others. *)
@@ -3769,7 +3780,9 @@ Proof. vm_compute. reflexivity. Qed.
 Definition code_50_unboxed : code :=
   Code [40] 41 3 4
     {| cm_params_arity := [Unboxed_product [Singleton Value]];
+       cm_params_subkinds := [];
        cm_result_arity := [Unboxed_product [Singleton Value]];
+       cm_result_subkinds := [];
        cm_is_tupled := false;
        cm_is_stub := false |}
     (Let 61 Value (Simple (Var 40)) (return_to 3 [Var 61])).
@@ -4171,7 +4184,9 @@ Example rebuild_block_in_slot :
     [Bind_code 52
        (Code [] 41 3 4
           {| cm_params_arity := [Unboxed_product []];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 62 Value (Project_value_slot_from 82 81 (Var 41))
@@ -4234,7 +4249,9 @@ Example rebuild_unboxed_closure :
     [Bind_code 53
        (Code [63] 41 3 4
           {| cm_params_arity := [Unboxed_product [Singleton Value]];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 45 Value (Simple (Var 63)) (return_to 3 [Var 45])))]
@@ -4283,7 +4300,9 @@ Example rebuild_static_set :
     [Bind_code 53
        (Code [] 41 3 4
           {| cm_params_arity := [Unboxed_product []];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 45 Value (Project_value_slot_from 82 81 (Var 41))

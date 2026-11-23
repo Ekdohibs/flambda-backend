@@ -240,11 +240,12 @@ Definition wrapper_closure (ps : list variable) (md : handler_metadata)
 (* A wrapper of the second run alone: given what the callee returns, of
    the shapes [sh_r], it gives the continuation, whose parameters are of
    the shapes [sh_k] and which takes [KS] in the first run, what the first
-   run gives it directly. *)
+   run gives it directly. It states nothing of its parameters. *)
 Definition wrap_u_ok (sh_r sh_k : list pshape) (KS : list flambda_kind)
     (wps : list variable) (wmd : handler_metadata) (wargs : list simple)
     : Prop :=
-  ∀ vs vs' : list value,
+  hm_params_subkinds wmd = []
+  ∧ ∀ vs vs' : list value,
     vrel sh_r vs vs' -> map kind_of_value vs = KS ->
     kinds_eqb (map kind_of_value vs') (hm_params_kinds wmd) = true
     ∧ ∀ wv : env,
@@ -254,11 +255,13 @@ Definition wrap_u_ok (sh_r sh_k : list pshape) (KS : list flambda_kind)
 
 (* Wrappers in both runs: given what the callee returns, of the shapes
    [sh_r], they give the continuation, whose parameters are of the shapes
-   [sh_k], related arguments. *)
+   [sh_k], related arguments. That of the second run states nothing of
+   its parameters. *)
 Definition wrap_both_ok (sh_r sh_k : list pshape) (cps : list variable)
     (cmd : handler_metadata) (cargs : list simple) (wps : list variable)
     (wmd : handler_metadata) (wargs : list simple) : Prop :=
-  ∀ vs vs' : list value,
+  hm_params_subkinds wmd = []
+  ∧ ∀ vs vs' : list value,
     vrel sh_r vs vs' ->
     kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd) = true ->
     kinds_eqb (map kind_of_value vs') (hm_params_kinds wmd) = true
@@ -569,6 +572,7 @@ Definition code_frame (id : code_id) (c c' : code) (cs : code_shape)
   ∧ code_exn_continuation c' = code_exn_continuation c
   ∧ (binds_statics (code_body c') = true ->
      binds_statics (code_body c) = true)
+  ∧ subkinds_say_nothing (code_params_subkinds c') = true
   ∧ ∃ (sh : list pshape) (pk pk' : list (variable * flambda_kind)),
       code_params c = map fst pk ∧ code_params c' = map fst pk'
       ∧ params_rel2 sh pk pk' ∧ Forall2 fits (cs_params cs) sh.
@@ -637,6 +641,7 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
     params_rel2 sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> uc K handler handler' ->
     uc ((k, Kshape sh (map snd ps) true) :: K) body body' ->
+    hm_params_subkinds metadata' = [] ->
     uc K
       (Let_cont_non_recursive k (Handler (map fst ps) metadata handler) body)
       (Let_cont_non_recursive k (Handler (map fst ps') metadata' handler')
@@ -726,7 +731,7 @@ with uc_handlers : finite_map kshape
       (S : finite_map kshape) :
     params_rel2 sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> uc K handler handler' ->
-    uc_handlers K handlers handlers' S ->
+    uc_handlers K handlers handlers' S -> hm_params_subkinds metadata' = [] ->
     uc_handlers K ((k, Handler (map fst ps) metadata handler) :: handlers)
       ((k, Handler (map fst ps') metadata' handler') :: handlers')
       ((k, Kshape sh (map snd ps) true) :: S)
@@ -775,6 +780,7 @@ Inductive cont_rel : kshape -> cont_value -> cont_value -> Prop :=
     ks_kinds ksh = map snd ps ->
     uc (S ++ K) handler handler' -> env_rel2 vars vars' ->
     conts_rel K conts conts' -> uc_handlers (S ++ K) recursive recursive' S ->
+    hm_params_subkinds metadata' = [] ->
     cont_rel ksh
       (Closure (Handler (map fst ps) metadata handler) vars conts recursive)
       (Closure (Handler (map fst ps') metadata' handler') vars' conts'
@@ -1702,6 +1708,7 @@ Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ left; reflexivity | ].
   destruct (negb _); [ left; reflexivity | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ left; reflexivity | ].
   destruct (bind_params _ _ _); [ right; eexists; reflexivity | ].
   left; reflexivity.
 Qed.
@@ -1730,12 +1737,15 @@ Proof.
   - cbn [apply_cont_value]. rewrite Hmd.
     destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
       [ | exact I ].
+    destruct (values_of_subkinds _ vs _); [ | exact I ].
     destruct (bind_params _ _ _); [ | exact I ].
     apply kinds_eqb_eq in Hk. rewrite Hk, Hks. reflexivity.
   - rewrite Hhandler in Hh. discriminate Hh.
   - exact (IH eq_refl vs S rd).
   - unfold wrapper_closure. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd)) eqn:Hk;
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds cmd));
       [ | exact I ].
     destruct (bind_params _ _ _); [ | exact I ].
     apply kinds_eqb_eq in Hk. exact Hk.
@@ -1830,10 +1840,14 @@ Proof.
   - apply cont_rel_outer; [ exact (forall2_fits_plain _ _ Hf Hplain) | ].
     exact Hhandler.
   - eapply cont_rel_wrap_u; [ exact Hin | ].
-    intros vs vs' Hv Hk. apply Hok; [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
+    split; [ exact (proj1 Hok) | ].
+    intros vs vs' Hv Hk. apply (proj2 Hok);
+      [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
     exact Hk.
   - eapply cont_rel_wrap_both; [ exact Hin | ].
-    intros vs vs' Hv Hk. apply Hok; [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
+    split; [ exact (proj1 Hok) | ].
+    intros vs vs' Hv Hk. apply (proj2 Hok);
+      [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
     exact Hk.
   - inversion Hf as [ | o1 o2 l1 l2 Ho Hnil]; subst.
     inversion Hnil; subst.
@@ -1873,6 +1887,7 @@ Lemma closure_answered (sh sh0 : list pshape)
   uc M dead CS NR RCH (S0 ++ K) h h' -> env_rel2 M dead vars vars' ->
   conts_rel M dead CS NR RCH K conts conts' ->
   uc_handlers M dead CS NR RCH (S0 ++ K) rec rec' S0 ->
+  hm_params_subkinds md' = [] ->
   vrel sh vs vs' -> statics_rel M dead CS NR RCH S S' ->
   apply_cont_value (Closure (Handler (map fst ps) md h) vars conts rec) vs S
     empty_heap rd
@@ -1883,11 +1898,12 @@ Lemma closure_answered (sh sh0 : list pshape)
     = Step t1
     ∧ related_main M dead CS NR RCH s1 t1.
 Proof.
-  intros Hps Hfits Hmd Hmd' Hh Hvars Hconts Hrec Hv Hst Ha.
+  intros Hps Hfits Hmd Hmd' Hh Hvars Hconts Hrec Hsk' Hv Hst Ha.
   cbn [apply_cont_value] in Ha. rewrite Hmd in Ha.
   destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
     [ | discriminate Ha ].
   apply kinds_eqb_eq in Hk.
+  destruct (values_of_subkinds _ vs _); [ | discriminate Ha ].
   destruct (bind_params (map fst ps) vs vars) as [hv | ] eqn:Hb;
     [ | discriminate Ha ].
   injection Ha as <-.
@@ -1897,7 +1913,7 @@ Proof.
               Hvars Hb)
     as (hv' & Hb' & Hrel).
   eexists. split.
-  - cbn [apply_cont_value]. rewrite Hmd', <- Hk', kinds_eqb_refl, Hb'.
+  - cbn [apply_cont_value]. rewrite Hmd', <- Hk', kinds_eqb_refl, Hsk', Hb'.
     reflexivity.
   - exists (S0 ++ K). cbn [state_expr state_vars state_conts state_statics
                            state_heap state_reads].
@@ -1945,9 +1961,12 @@ Proof.
     cbn [ks_shapes ks_kinds]. exact (transport_trans _ _ _ _ Hf Hfits).
   - rewrite Hhandler in Hh. discriminate Hh.
   - eapply cont_rel_wrap_u; [ exact Hin | ].
-    intros vs vs' Hv Hk. apply Hok; [ exact (Hf _ _ Hv Hk) | exact Hk ].
+    split; [ exact (proj1 Hok) | ].
+    intros vs vs' Hv Hk. apply (proj2 Hok); [ exact (Hf _ _ Hv Hk) | exact
+      Hk ].
   - eapply cont_rel_wrap_both; [ exact Hin | ].
-    intros vs vs' Hv Hk. apply Hok; [ | exact Hk ].
+    split; [ exact (proj1 Hok) | ].
+    intros vs vs' Hv Hk. apply (proj2 Hok); [ | exact Hk ].
     apply Hf; [ exact Hv | apply kinds_eqb_eq; exact Hk ].
   - discriminate Hh.
   - apply cont_rel_over; try assumption.
@@ -2100,8 +2119,8 @@ Lemma call_code_same (id : code_id) (c c' : code) (cs' : code_shape)
 Proof.
   intros Hframe Hbody Hkeeps Hppl Hr Hx Hst Hcall.
   destruct Hframe as (Hcs' & Hpa & Hra' & Hlenc & Hkeepa & Htup & Htup' & Hmc
-                      & Hmcf & Hmcv & Hret_eq & Hexn_eq' & Hbs & sh & pk & pk'
-                      & Hpk & Hpk' & Hps & Hfits).
+                      & Hmcf & Hmcv & Hret_eq & Hexn_eq' & Hbs & Hsk' & sh & pk
+                      & pk' & Hpk & Hpk' & Hps & Hfits).
   destruct (Hkeepa Hkeeps) as [Hpa1 Hra1].
   unfold call_code in Hcall |- *.
   destruct (binds_statics (code_body c)) eqn:Hbc; [ discriminate Hcall | ].
@@ -2115,6 +2134,9 @@ Proof.
     eqn:Htest; [ discriminate Hcall | ].
   apply negb_false_iff, andb_true_iff in Htest as [_ Hrta].
   apply arity_eqb_eq in Hrta.
+  destruct (negb (values_of_subkinds S vs (code_params_subkinds c)));
+    [ discriminate Hcall | ].
+  rewrite (values_of_subkinds_nothing S' _ vs Hsk'). cbn [negb].
   rewrite Hpk in Hcall. rewrite Hpk', Hmc.
   destruct (bind_params (map fst pk) vs [(code_my_closure c, cl)])
     as [hv | ] eqn:Hb; [ | discriminate Hcall ].
@@ -2746,7 +2768,7 @@ Lemma cont_answered (ksh : kshape) (c c' : cont_value) :
 Proof.
   intros Hc. induction Hc as
     [ksh sh0 ps ps' md md' h h' vars vars' K S0 conts conts' rec rec' Hps
-       Hfits Hmd Hmd' Hks Hh Hvars Hconts Hrec
+       Hfits Hmd Hmd' Hks Hh Hvars Hconts Hrec Hsk'
     | ksh k Hplain Hhandler
     | sh_r sh_k KS b c wps wmd k wargs wvars wconts Hin IH Hok
     | sh_r sh_k KS b cps cmd cargs cvars cconts wps wmd wargs wvars wconts k
@@ -2761,12 +2783,13 @@ Proof.
     + rewrite Hks in Hfits.
       destruct (closure_answered _ sh0 ps ps' md md' h h' vars vars' K S0
                   conts conts' rec rec' vs vs' S S' rd s1 Hps Hfits Hmd Hmd'
-                  Hh Hvars Hconts Hrec Hv Hst Ha)
+                  Hh Hvars Hconts Hrec Hsk' Hv Hst Ha)
         as (t1 & Ht1 & Hrel).
       exists t1, 0, t1. split; [ exact Ht1 | split; [ reflexivity | ] ].
       left. exact Hrel.
     + exfalso. cbn [apply_cont_value] in Ha.
       destruct (kinds_eqb _ _); [ | discriminate Ha ].
+      destruct (values_of_subkinds _ _ _); [ | discriminate Ha ].
       destruct (bind_params _ _ _); discriminate Ha.
   - rewrite (vrel_plain_eq _ _ _ Hv Hplain). cbn [apply_cont_value].
     exists rd. reflexivity.
@@ -2775,12 +2798,13 @@ Proof.
     destruct (apply_cont_value c vs S empty_heap rd)
       as [s1 | k0 ws hp rd1 | ] eqn:Ha; [ | contradiction | exact I ].
     cbn [ks_kinds] in Hsteps. cbn [ks_shapes] in Hv.
-    destruct (Hok vs vs' Hv Hsteps) as [Hwk Hbind].
+    destruct (proj2 Hok vs vs' Hv Hsteps) as [Hwk Hbind].
     destruct (Hbind wvars) as (hv & vs'' & Hb & Hargs & Hv'').
     specialize (IH vs vs'' S S' rd Hv'' Hst). rewrite Ha in IH.
     destruct IH as (t0 & n & t1 & Ht0 & Hn & Hrel).
     eexists _, (Datatypes.S n), t1. split.
-    + unfold wrapper_closure. cbn [apply_cont_value]. rewrite Hwk, Hb.
+    + unfold wrapper_closure. cbn [apply_cont_value].
+      rewrite Hwk, (proj1 Hok), Hb.
       reflexivity.
     + split; [ | exact Hrel ].
       rewrite run_succ, step_apply_cont. cbn [ac_args ac_continuation].
@@ -2790,12 +2814,15 @@ Proof.
   - unfold wrapper_closure at 1. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd)) eqn:Hk;
       [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds cmd));
+      [ | exact I ].
     destruct (bind_params cps vs cvars) as [hv | ] eqn:Hb; [ | exact I ].
     cbn [ks_shapes] in Hv.
-    destruct (Hok vs vs' Hv Hk) as [Hwk Hbind].
+    destruct (proj2 Hok vs vs' Hv Hk) as [Hwk Hbind].
     destruct (Hbind cvars wvars hv Hb) as (hv' & Hb' & Hargs).
     eexists _, 0, _. split.
-    + unfold wrapper_closure. cbn [apply_cont_value]. rewrite Hwk, Hb'.
+    + unfold wrapper_closure. cbn [apply_cont_value].
+      rewrite Hwk, (proj1 Hok), Hb'.
       reflexivity.
     + split; [ reflexivity | ]. right. right.
       eexists _, _, (Kshape sh_k KS true).
@@ -3007,8 +3034,8 @@ Proof.
   destruct (Hcode id c Hc) as (c' & Hc' & cs' & Hframe & Hbody).
   rewrite Hc'.
   destruct Hframe as (Hcs' & Hpa & Hra' & Hlenc & _ & Htup & Htup' & Hmc & Hmcf
-                      & Hmcv & Hret_eq & Hexn_eq' & Hbs & sh & pk & pk' & Hpk
-                      & Hpk' & Hps & Hfits).
+                      & Hmcv & Hret_eq & Hexn_eq' & Hbs & Hsk' & sh & pk & pk'
+                      & Hpk & Hpk' & Hps & Hfits).
   rewrite Hcs in Hcs'. injection Hcs' as <-.
   unfold arguments_for_code. rewrite Htup, Htup'. cbn beta iota.
   unfold shape_of_code_call.
@@ -3036,6 +3063,9 @@ Proof.
       arity_eqb_refl.
     rewrite (proj2 (kinds_per_parameter_eqb_eq _ _) eq_refl). reflexivity. }
   rewrite Htest'. cbn [negb].
+  destruct (values_of_subkinds S vs (code_params_subkinds c)); cbn [negb];
+    [ | exact I ].
+  rewrite (values_of_subkinds_nothing S' _ vs' Hsk'). cbn [negb].
   rewrite Hpk, Hmc.
   destruct (bind_params (map fst pk) vs [(code_my_closure c, callee)])
     as [hv | ] eqn:Hb; [ | exact I ].
@@ -3246,7 +3276,7 @@ Proof.
         Hs Hy Hne Hin Hl Hbody
     | K x kind d f s y v fields body body' Hx Hread Hs Hfields Hin Hbody
     | K bindings bindings' body body' Hbindings Hbody
-    | K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' Hh Hbody
+    | K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' Hh Hbody Hsk'
     | K S handlers handlers' body body' Hhandlers Hstat Hbody
     | K ac ac' Hac
     | K scrutinee arms arms' Hscrutinee Harms
@@ -3494,7 +3524,7 @@ Proof.
       ps'
              md md' h h' vars vars' K []
              conts conts' [] [] Hps (transport_refl sh _) Hmd Hmd' eq_refl Hh
-             Hvars Hconts (uc_handlers_nil M dead CS NR RCH K)).
+             Hvars Hconts (uc_handlers_nil M dead CS NR RCH K) Hsk').
   - (* A recursive [Let_cont]. *)
     rewrite step_let_cont_recursive.
     destruct (handlers_bind_statics handlers) eqn:Hb; [ exact I | ].

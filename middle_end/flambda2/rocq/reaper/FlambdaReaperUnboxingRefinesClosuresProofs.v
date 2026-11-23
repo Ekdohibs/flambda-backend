@@ -1667,6 +1667,7 @@ Proof.
       apply (plain_c_var_M' unboxed changed x);
         [ exact (proj1 (forallb_forall _ params) Hps x Hx) | exact (Hpf x Hx) ].
       }
+    split; [ | reflexivity ].
     unfold my_closure_ok. cbn [ci_my_closure].
     destruct (CH mc) as [r | ] eqn:Hr; [ reflexivity | ].
     rewrite (CHf_var unboxed changed mc Hmcf) in Hr.

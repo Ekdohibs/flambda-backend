@@ -209,7 +209,8 @@ Definition code_frame (id : code_id) (c c' : code) (ci : code_info) : Prop :=
   ∧ code_is_tupled c = false ∧ code_is_tupled c' = false
   ∧ length (code_params_arity c) = ci_nparams ci
   ∧ forallb (plain_variable M) (code_params c) = true
-  ∧ my_closure_ok ci (code_my_closure c).
+  ∧ my_closure_ok ci (code_my_closure c)
+  ∧ subkinds_say_nothing (code_params_subkinds c') = true.
 
 (* A call of the code [id] whose class is [ci]: as [rr_call]. *)
 Definition call_ok_c (ap : apply_expr) (id : code_id) (ci : code_info)
@@ -1556,6 +1557,9 @@ Proof.
     cbn [apply_cont_value]; [ | reflexivity ].
   destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds md));
     [ | exact I ].
+  destruct (values_of_subkinds S vs (hm_params_subkinds md)) eqn:Hsk;
+    [ | exact I ].
+  rewrite (values_of_subkinds_same_values S' S vs _ (proj1 Hst)), Hsk.
   destruct (bind_params ps vs vars) as [hv | ] eqn:Hb; [ | exact I ].
   destruct (bind_params_rel ps vs vars vars' hv Hps Hvars Hb)
     as (hv' & Hb' & Hrel).
@@ -1770,7 +1774,7 @@ Proof.
   destruct (proj2 (proj2 Hst) id cc Hcc)
     as (cc' & Hcc' & ci' & Hframe & Hcbody).
   destruct Hframe as (Hci' & Hps & Hmc & Hret & Hexn & Hpa & Hra & Htup
-                      & Htup' & Hlenc & Hplain & Hmcok).
+                      & Htup' & Hlenc & Hplain & Hmcok & Hsk').
   rewrite Hci in Hci'. injection Hci' as <-.
   unfold arguments_for_code. rewrite Htup. cbn beta iota.
   unfold shape_of_code_call. rewrite Hlen, <- Hlenc, Nat.eqb_refl.
@@ -1784,6 +1788,8 @@ Proof.
   | |- context [if negb ?t then Undefined else _] =>
     destruct t eqn:Htest
   end; cbn [negb]; [ | exact I ].
+  destruct (values_of_subkinds S vs (code_params_subkinds cc));
+    cbn [negb]; [ | exact I ].
   destruct (bind_params (code_params cc) vs [(code_my_closure cc, c1)])
     as [hv | ] eqn:Hb; [ | exact I ].
   destruct (bind_params_rel (code_params cc) vs [(code_my_closure cc, c1)]
@@ -1804,6 +1810,7 @@ Proof.
   unfold shape_of_code_call. rewrite Hpa, Hlen, <- Hlenc, Nat.eqb_refl.
   cbn beta iota. unfold call_code.
   rewrite Hbs', Hpa, Hra, Htest.
+  cbn [negb]. rewrite (values_of_subkinds_nothing S' _ vs Hsk').
   cbn [negb]. rewrite Hps, Hmc, Hb', Hret, Hexn. reflexivity.
 Qed.
 

@@ -152,7 +152,11 @@
      function slots); [rewrite] forgets the type in both cases. The
      compiler's rewriting is [rewrite_arbitrary_u] (below), which is not
      extracted.
-   - [rewrite_kind_with_subkind]: the model has no subkinds.
+   - [rewrite_kind_with_subkind] is transcribed ([rewrite_subkind]),
+     as the reaper with types runs it, but the rebuilds of the model are
+     those of the reaper without types (FlambdaReaperRebuild.v), and do
+     not call it; FlambdaReaperTypesSpec.v says what the subkinds it
+     keeps promise of the rebuilt values.
    - In [rewrite_result_types], the environment of the result types is
      an input, where the compiler adds the extension to the environment
      of the unit by meet, and the extension it gives back is the
@@ -600,6 +604,83 @@ Definition node_of_name (n : name) : node :=
   | Name_var x => Node_variable x
   | Name_symbol s => Node_symbol s
   end.
+
+(* ======================================================================== *)
+(* Subkinds ([rewrite_kind_with_subkind])                                   *)
+(* ======================================================================== *)
+
+(* [erase_subkind] ([Flambda_kind.With_subkind.erase_subkind]): of the
+   kind [Value], [Anything] and nullable; of a naked kind, what it is,
+   which states nothing (the model has subkinds of values only). Either
+   way, nothing is stated. *)
+Definition erase_subkind (_ : param_subkind) : param_subkind := any_value.
+
+Section Subkinds.
+
+Variable ctx : rewrite_context.
+
+(* [rewrite_boxed_number_kind]: the subkind of a boxed number whose
+   contents no use reads is erased. *)
+Definition rewrite_boxed_number_kind (m : rewrite_metadata)
+    (ps : param_subkind) (bn : boxable_number) : param_subkind :=
+  match follow_field ctx m (Field_boxed_number bn) with
+  | No_source | At_least_one_source_no_usages => erase_subkind ps
+  | Single_source _ | Many_sources_any_usage | Many_sources_usages _ => ps
+  end.
+
+(* [rewrite_kind_with_subkind] of a metadata: erased where the value may
+   be poison, kept where it is used in an uncontrolled way, and otherwise
+   rewritten at its head: [Anything] erased (the value may be a boxed
+   number whose contents no use reads, which the rebuild makes poison),
+   [Tagged_immediate] kept, a boxed number by [rewrite_boxed_number_kind],
+   and the fields of a variant rewritten under the metadata that
+   [follow_field] gives each (a field of a block of values, of kind
+   [Value]). The subkinds of arrays and of a block of floats, which the
+   compiler keeps at their head, are [Anything] in the model, with
+   whether the value may be null, and are erased here: the model states
+   less than the compiler there. *)
+Fixpoint rewrite_subkind (m : rewrite_metadata) (nullable : bool)
+    (sk : subkind) {struct sk} : param_subkind :=
+  match m with
+  | No_source | At_least_one_source_no_usages =>
+    erase_subkind (nullable, sk)
+  | Many_sources_any_usage => (nullable, sk)
+  | Single_source _ | Many_sources_usages _ =>
+    match sk with
+    | Subkind_anything => erase_subkind (nullable, sk)
+    | Subkind_tagged_immediate => (nullable, sk)
+    | Subkind_boxed_number bn => rewrite_boxed_number_kind m (nullable, sk) bn
+    | Subkind_variant consts non_consts =>
+      (nullable, Subkind_variant consts (rewrite_shapes m non_consts))
+    end
+  end
+with rewrite_shapes (m : rewrite_metadata) (shapes : constructor_shapes)
+    {struct shapes} : constructor_shapes :=
+  match shapes with
+  | Shapes_nil => Shapes_nil
+  | Shape_undetermined tag rest =>
+    Shape_undetermined tag (rewrite_shapes m rest)
+  | Shape_determined tag sks rest =>
+    Shape_determined tag (rewrite_field_subkinds m 0 sks)
+      (rewrite_shapes m rest)
+  end
+with rewrite_field_subkinds (m : rewrite_metadata) (i : nat)
+    (sks : field_subkinds) {struct sks} : field_subkinds :=
+  match sks with
+  | Fields_nil => Fields_nil
+  | Fields_cons nullable sk rest =>
+    let ps :=
+      rewrite_subkind (follow_field ctx m (Field_block i Value)) nullable sk
+    in
+    Fields_cons (fst ps) (snd ps) (rewrite_field_subkinds m (S i) rest)
+  end.
+
+(* [rewrite_kind_with_subkind] of a name. *)
+Definition rewrite_kind_with_subkind (x : node) (ps : param_subkind)
+    : param_subkind :=
+  rewrite_subkind (metadata_for_name ctx x) (fst ps) (snd ps).
+
+End Subkinds.
 
 (* ======================================================================== *)
 (* Closures (the closure case of [Rewriter.rewrite])                        *)

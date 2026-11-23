@@ -129,12 +129,18 @@
    - The callee (rebuild.ml: [rebuild_apply], [rewrite_simple_opt]). The
      callee of a call that changes its calling convention is kept, as in
      FlambdaReaperRebuild.v for every call.
+   - Subkinds, as in FlambdaReaperRebuild.v: the reaper without types,
+     whose [rewrite_kind_with_subkind] is [erase_subkind], after which
+     an entry states nothing. Code that keeps its calling convention has
+     what its parameters and results state erased
+     ([erase_code_subkinds]); code that changes states nothing of its
+     parameters and results ([changed_code_metadata]): what is kept is
+     erased ([Keep] of [compute_code_changes]).
    - What the model has not got: [only_full_applications] (rebuild.ml:
      [rewrite_set_of_closures], which sets it for code that changes),
      [first_complex_local_param], [param_modes] and [is_my_closure_used]
-     of the metadata (unboxing_analysis.ml: [compute_code_changes]),
-     subkinds ([rewrite_kind_with_subkind]) and result types
-     ([rewrite_result_types]).
+     of the metadata (unboxing_analysis.ml: [compute_code_changes]) and
+     result types ([rewrite_result_types]).
    - Where the OCaml stops with a fatal error, the model does something
      defined, which no term that the compiler accepts reaches: lists that
      [List.map2] or [List.fold_left2] would refuse for their lengths
@@ -350,7 +356,8 @@ Definition arity_of_grouped_decisions (groups : list (list param_decision))
     groups.
 
 (* The metadata of code that changes its calling convention
-   ([compute_code_changes]): the arities of what is kept, and not tupled
+   ([compute_code_changes]): the arities of what is kept, which states
+   nothing beyond its kinds (its entries are erased), and not tupled
    ([with_is_tupled false]). *)
 Definition changed_code_metadata (metadata : code_metadata)
     (params_decisions return_decisions : list param_decision)
@@ -358,7 +365,9 @@ Definition changed_code_metadata (metadata : code_metadata)
   {| cm_params_arity :=
        arity_of_grouped_decisions
          (group_by_parameter (cm_params_arity metadata) params_decisions);
+     cm_params_subkinds := [];
      cm_result_arity := arity_of_decisions return_decisions;
+     cm_result_subkinds := [];
      cm_is_tupled := false;
      cm_is_stub := cm_is_stub metadata |}.
 
@@ -722,8 +731,8 @@ with rebuild_code_cc (id : code_id) (c : code) : code :=
     in
     match change with
     | Not_changing_calling_convention =>
-      Code params my_closure return_continuation exn_continuation metadata
-        body
+      Code params my_closure return_continuation exn_continuation
+        (erase_code_subkinds metadata) body
     | Changing_calling_convention params_decisions return_decisions =>
       Code (filter_kept (map is_kept params_decisions) params) my_closure
         return_continuation exn_continuation
@@ -964,7 +973,9 @@ Definition code_50_changed : code :=
   Code [40] 41 3 4
     {| cm_params_arity :=
          [Unboxed_product [Singleton Value]; Unboxed_product []];
+       cm_params_subkinds := [];
        cm_result_arity := [Unboxed_product [Singleton Value; Singleton Value]];
+       cm_result_subkinds := [];
        cm_is_tupled := false;
        cm_is_stub := false |}
     (return_to 3 [Var 40; Var 40]).

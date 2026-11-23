@@ -648,7 +648,7 @@ Inductive ub : finite_map (list (option unboxed_fields)) -> expr -> expr
       (handler handler' body body' : expr) :
     params_rel sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> ub K handler handler' ->
-    ub ((k, sh) :: K) body body' ->
+    ub ((k, sh) :: K) body body' -> hm_params_subkinds metadata' = [] ->
     ub K
       (Let_cont_non_recursive k (Handler (map fst ps) metadata handler) body)
       (Let_cont_non_recursive k (Handler (map fst ps') metadata' handler')
@@ -688,7 +688,7 @@ with ub_handlers : finite_map (list (option unboxed_fields))
       (S : finite_map (list (option unboxed_fields))) :
     params_rel sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> ub K handler handler' ->
-    ub_handlers K handlers handlers' S ->
+    ub_handlers K handlers handlers' S -> hm_params_subkinds metadata' = [] ->
     ub_handlers K ((k, Handler (map fst ps) metadata handler) :: handlers)
       ((k, Handler (map fst ps') metadata' handler') :: handlers')
       ((k, sh) :: S).
@@ -725,6 +725,7 @@ Inductive cont_rel : list (option unboxed_fields) -> cont_value -> cont_value
     hm_params_kinds metadata' = map snd ps' -> ub (S ++ K) handler handler' ->
     env_rel vars vars' -> conts_rel K conts conts' ->
     ub_handlers (S ++ K) recursive recursive' S ->
+    hm_params_subkinds metadata' = [] ->
     cont_rel sh
       (Closure (Handler (map fst ps) metadata handler) vars conts recursive)
       (Closure (Handler (map fst ps') metadata' handler') vars' conts'
@@ -1190,7 +1191,8 @@ Proof.
   - intros K bindings body body' Hb _ IH K' Hagree.
     apply ub_static; [ exact Hb | ]. apply IH.
     intros k Hk. apply Hagree. simpl. apply in_or_app. right. exact Hk.
-  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb K'
+  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb
+    Hsk' K'
       Hagree.
     apply (ub_let_cont M K' k sh ps ps' md md' h h' body body'); try assumption.
     + apply IHh. intros k' Hk. apply Hagree. simpl. apply in_or_app.
@@ -1223,7 +1225,7 @@ Proof.
       right. exact Hin.
   - intros K K' _. apply ub_invalid.
   - intros K K' _. apply ub_handlers_nil.
-  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs K'
+  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs Hsk' K'
       Hagree.
     apply ub_handlers_cons; try assumption.
     + apply IHh. intros k' Hk. apply Hagree. simpl. apply in_or_app. left.
@@ -1867,7 +1869,7 @@ Proof.
         Hs Hy Hne Hin Hl Hbody
     | K x kind d f s y v fields body body' Hx Hread Hs Hfields Hin Hbody
     | K bindings body body' Hbindings Hbody
-    | K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' Hh Hbody
+    | K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' Hh Hbody Hsk'
     | K S handlers handlers' body body' Hhandlers Hstat Hbody
     | K ac ac' Hac
     | K scrutinee arms arms' Hscrutinee Harms
@@ -2085,7 +2087,7 @@ Proof.
     constructor; [ | exact Hconts ].
     exact (cont_rel_closure M sh ps ps' md md' h h' vars vars' K [] conts
              conts' [] [] Hps Hmd Hmd' Hh Hvars Hconts
-             (ub_handlers_nil M K)).
+             (ub_handlers_nil M K) Hsk').
   - (* A recursive [Let_cont]. *)
     rewrite step_let_cont_recursive.
     destruct (handlers_bind_statics handlers) eqn:Hb; [ exact I | ].
@@ -2115,11 +2117,13 @@ Proof.
       remember (resolve (ac_continuation ac) conts) as c eqn:Ec.
       remember (resolve (ac_continuation ac) conts') as c' eqn:Ec'.
       destruct Hc as [sh ps ps' md md' h h' cvars cvars' Kc S cconts cconts'
-                        rec rec' Hps Hmd Hmd' Hh Hcv Hcc Hrec].
+                        rec rec' Hps Hmd Hmd' Hh Hcv Hcc Hrec Hsk'].
       cbn [apply_cont_value]. rewrite Hmd.
       destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hkinds;
         [ | exact I ].
       apply FlambdaSemanticsProofs.kinds_eqb_eq in Hkinds.
+      destruct (values_of_subkinds statics vs (hm_params_subkinds md));
+        [ | exact I ].
       destruct (bind_params (map fst ps) vs cvars) as [hv | ] eqn:Hbind;
         [ | exact I ].
       destruct (bind_args_rel sh _ _ Hargs ps ps' vars vars' cvars cvars' hv vs
@@ -2128,7 +2132,8 @@ Proof.
       right. left. eexists. split.
       * rewrite step_apply_cont, Hvs'. unfold apply_continuation.
         rewrite Hk, <- Ec'. cbn [apply_cont_value]. rewrite Hmd', <- Hk'.
-        rewrite (proj2 (FlambdaSemanticsProofs.kinds_eqb_eq _ _) eq_refl), Hb'.
+        rewrite (proj2 (FlambdaSemanticsProofs.kinds_eqb_eq _ _) eq_refl),
+          Hsk', Hb'.
         reflexivity.
       * exists (S ++ Kc). split; [ exact Hh | split; [ exact Hrel | ] ].
         split; [ apply rec_closures_rel; assumption | repeat split ].
@@ -4727,6 +4732,7 @@ Lemma rebuild_ub :
                  ps ps'
              ∧ hm_params_kinds metadata = map snd ps
              ∧ hm_params_kinds metadata' = map snd ps'
+             ∧ hm_params_subkinds metadata' = []
              ∧ Forall2 decision_match
                  (combine (handler_variables h) (handler_mask sol is_exn h))
                  (handler_decisions false sol unboxed is_exn h)
@@ -4967,7 +4973,7 @@ Proof.
     destruct Hedges as [Hh_edges Hbody_edges].
     rewrite plain_rebuild_let_cont, unbox_rebuild_let_cont. cbv zeta.
     destruct (IHh en C ce (handler_is_exn_handler h) Hen HC Hh Hh_edges true)
-      as (ps & ps' & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd'
+      as (ps & ps' & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd' & Hsk'
           & Hmatch & Hlen & Hhub & Hhfc & Hhbs).
     set (is_exn := handler_is_exn_handler h) in *.
     set (mask := handler_mask sol is_exn h) in *.
@@ -5089,8 +5095,8 @@ Proof.
       destruct (IHh k h Hin (ubind_continuations en dss) C' _ false
                   (uinv_continuations en dss) HC' (Hhs' _ _ Hin)
                   (every_in _ _ (k, h) Hhs_edges Hin) false)
-        as (ps & ps' & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd' & _
-            & _ & Hhub & Hhfc & Hhbs).
+        as (ps & ps' & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd' & Hsk'
+            & _ & _ & Hhub & Hhfc & Hhbs).
       rewrite Hpen in Hp. cbv zeta. cbn [map]. rewrite Hp, Hu.
       split; [ apply ub_handlers_cons; assumption | ].
       unfold handlers_bind_statics in *. cbn [existsb flat_map map fst].
@@ -5234,6 +5240,7 @@ Proof.
     split; [ rewrite hm_with_params_kinds, <- Hsnd, filter_kept_map;
              reflexivity | ].
     split; [ apply hm_with_params_kinds | ].
+    split; [ apply with_params_kinds_subkinds | ].
     split; [ exact Hmatch | ].
     split; [ rewrite Hmlen; unfold bound; apply with_kinds_length | ].
     destruct (dead && _); [ exact (ub_result_invalid _) | ].

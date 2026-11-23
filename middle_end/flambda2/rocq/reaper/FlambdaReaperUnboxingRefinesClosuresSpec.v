@@ -845,7 +845,9 @@ Definition rebuilt : expr :=
     [Bind_code 54
        (Code [40] 41 3 4
           {| cm_params_arity := [Unboxed_product [Singleton Value]];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 62 Value (Project_value_slot_from 83 82 (Var 41))
@@ -964,7 +966,9 @@ Definition nr (id : code_id) : bool := Pos.eqb id 50.
 (* 50 deletes its parameter and its result, which have no use. *)
 Definition changed_metadata : code_metadata :=
   {| cm_params_arity := [Unboxed_product []];
+     cm_params_subkinds := [];
      cm_result_arity := [Unboxed_product []];
+     cm_result_subkinds := [];
      cm_is_tupled := false;
      cm_is_stub := false |}.
 

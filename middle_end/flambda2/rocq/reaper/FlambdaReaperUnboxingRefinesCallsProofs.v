@@ -209,7 +209,8 @@ Proof.
   - intros K bindings bindings' body body' Hb _ _ IH K' Hagree.
     apply uc_static; [ exact Hb | ]. apply IH.
     intros k Hk. apply Hagree. simpl. apply in_or_app. right. exact Hk.
-  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb K'
+  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb
+    Hsk' K'
       Hagree.
     apply (uc_let_cont M dead CS NR RCH K' k sh ps ps' md md' h h' body body');
       try assumption.
@@ -301,7 +302,7 @@ Proof.
     split; [ exact Hk | ]. intros [Heq | []]. subst k'.
     rewrite Pos.eqb_refl in E. discriminate.
   - intros K K' _. apply uc_handlers_nil.
-  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs K'
+  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs Hsk' K'
       Hagree.
     apply uc_handlers_cons; try assumption.
     + apply IHh. intros k' Hk. apply Hagree. simpl. apply in_or_app. left.
@@ -401,7 +402,8 @@ Proof.
     apply uc_static; [ exact Hb | ]. apply IH.
     eapply never_ext_incl; [ | exact H ]. intros k Hk.
     cbn [free_continuations_of_expr]. apply in_or_app. right. exact Hk.
-  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb K'
+  - intros K k sh ps ps' md md' h h' body body' Hps Hmd Hmd' _ IHh _ IHb
+    Hsk' K'
       H.
     apply (uc_let_cont M dead CS NR RCH K' k sh ps ps' md md' h h' body body');
       try assumption.
@@ -510,7 +512,7 @@ Proof.
     eapply never_ext_incl; [ | exact H ]. intros k' Hk.
     apply in_without_iff in Hk as [Hk _]. exact Hk.
   - intros K K' _. apply uc_handlers_nil.
-  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs K'
+  - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs Hsk' K'
       H.
     apply uc_handlers_cons; try assumption.
     + apply IHh. eapply never_ext_incl; [ | exact H ]. intros k' Hk.
@@ -2296,7 +2298,8 @@ Lemma cc_rebuild_code (id : code_id) (params : list variable)
       else cc_rebuild (bind_variables en bound) body
     in
     match change with
-    | Not_changing_calling_convention => Code params mc ret exn md body
+    | Not_changing_calling_convention =>
+      Code params mc ret exn (erase_code_subkinds md) body
     | Changing_calling_convention params_decisions return_decisions =>
       Code (filter_kept (map is_kept params_decisions) params) mc ret exn
         (changed_code_metadata md params_decisions return_decisions) body
@@ -2325,7 +2328,7 @@ Lemma u_rebuild_code (id : code_id) (params : list variable)
       else u_rebuild (ubind_variables en bound) body
     in
     match change with
-    | Not_changing_u => Code params mc ret exn md body
+    | Not_changing_u => Code params mc ret exn (erase_code_subkinds md) body
     | Changing_u params_decisions return_decisions =>
       let my_closure_decision :=
         match
@@ -2651,8 +2654,8 @@ Proof.
   assert (Hframe : ∀ body body' : expr,
             (binds_statics body' = true -> binds_statics body = true) ->
             code_frame unboxed dead CSf id
-              (Code params mc ret exn md body)
-              (Code params mc ret exn md body')
+              (Code params mc ret exn (erase_code_subkinds md) body)
+              (Code params mc ret exn (erase_code_subkinds md) body')
               (Code_shape
                  (flat_map pshape_of
                     (pdescs_of (map (fun k => Decided (Keep k)) kinds_p)
@@ -2669,6 +2672,7 @@ Proof.
     split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ exact Hbs | ].
+    split; [ apply erased_subkinds_say_nothing | ].
     exists sh, pk, pk'. split; [ exact Hpk | ].
     split; [ exact Hpk' | split; [ exact Hrel | exact Hfits ] ]. }
   destruct (existsb (fun '(x, kind) => is_dead_var sol x kind) bound)
@@ -2896,6 +2900,7 @@ Proof.
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split; [ intros H; exact H | ].
+        split; [ reflexivity | ].
         exists sh, pk, pk'. split; [ exact Hpk | ].
         split; [ cbn [code_params decision_params app];
                  rewrite flat_map_decision_params; exact Hpk' | ].
@@ -2929,6 +2934,7 @@ Proof.
         split; [ exact (proj1 (Hvars mc (or_introl eq_refl))) | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split; [ cbn [code_body]; exact IHbs | ].
+        split; [ reflexivity | ].
         exists sh, pk, pk'. split; [ exact Hpk | ].
         split; [ cbn [code_params decision_params app];
                  rewrite flat_map_decision_params; exact Hpk' | ].
@@ -3623,10 +3629,11 @@ Lemma seg_wrap_both (sh_r sh_k : list pshape) (KS : list flambda_kind)
     (wargs : list simple) :
   seg_ok sh_r sh_k KS cps cargs wps wargs -> NoDup cps ->
   NoDup (map fst wps) -> hm_params_kinds cmd = KS ->
-  hm_params_kinds wmd = map snd wps ->
+  hm_params_kinds wmd = map snd wps -> hm_params_subkinds wmd = [] ->
   wrap_both_ok sh_r sh_k cps cmd cargs (map fst wps) wmd wargs.
 Proof.
-  intros (Hl & Hc & H) Hnd Hnd' Hcmd Hwmd vs vs' Hv Hk.
+  intros (Hl & Hc & H) Hnd Hnd' Hcmd Hwmd Hwsk.
+  split; [ exact Hwsk | ]. intros vs vs' Hv Hk.
   rewrite Hcmd in Hk. apply kinds_eqb_eq in Hk.
   destruct (H vs vs' Hv Hk) as (Hk' & H').
   split; [ rewrite Hwmd, Hk'; apply kinds_eqb_refl | ].
@@ -3649,9 +3656,11 @@ Lemma seg_wrap_u (sh_r sh_k : list pshape) (KS : list flambda_kind)
     (wmd : handler_metadata) (wargs : list simple) :
   seg_ok sh_r sh_k KS cps (map Var cps) wps wargs -> NoDup cps ->
   NoDup (map fst wps) -> hm_params_kinds wmd = map snd wps ->
+  hm_params_subkinds wmd = [] ->
   wrap_u_ok sh_r sh_k KS (map fst wps) wmd wargs.
 Proof.
-  intros (Hl & Hc & H) Hnd Hnd' Hwmd vs vs' Hv Hk.
+  intros (Hl & Hc & H) Hnd Hnd' Hwmd Hwsk.
+  split; [ exact Hwsk | ]. intros vs vs' Hv Hk.
   destruct (H vs vs' Hv Hk) as (Hk' & H').
   split; [ rewrite Hwmd, Hk'; apply kinds_eqb_refl | ].
   intros wv.
@@ -4504,14 +4513,14 @@ Proof.
     pose proof (seg_wrap_u _ _ _ _ _
                   (make_handler_metadata (map snd (wrapper_params func))) _
                   Hseg (FlambdaReaperRebuildProofs.names_from_nodup _ _) Hnd
-                  eq_refl)
+                  eq_refl eq_refl)
       as Hwu.
     destruct (args_are_params wargs (map fst (wrapper_params func))) eqn:Hap.
     + apply (uc_result_call K ap0 ap_cc ap_u cs k _ Hcall Hexn Hk Hk' He Hk0
                HKk').
       apply args_are_params_eq in Hap.
       intros vs vs' Hv Hkv.
-      destruct (Hwu vs vs' Hv Hkv) as (_ & H).
+      destruct (proj2 Hwu vs vs' Hv Hkv) as (_ & H).
       destruct (H []) as (hv & vs'' & Hb & Hev & Hr).
       rewrite Hap, (eval_bound_vars _ vs' [] hv Hnd Hb) in Hev.
       injection Hev as <-. exact Hr.
@@ -4533,12 +4542,13 @@ Proof.
     + cbn [hm_params_kinds make_handler_metadata].
       rewrite kept_kinds_cc, Hcsk. reflexivity.
     + rewrite Hcsr.
-      apply (seg_wrap_both _ _ (flat_map kept_kind rds)); [ | | | | ].
+      apply (seg_wrap_both _ _ (flat_map kept_kind rds)); [ | | | | | ].
       * exact Hseg.
       * apply FlambdaReaperRebuildProofs.names_from_nodup.
       * exact Hnd.
       * cbn [hm_params_kinds make_handler_metadata].
         apply kept_kinds_cc.
+      * reflexivity.
       * reflexivity.
 Qed.
 
@@ -6425,6 +6435,7 @@ Lemma rebuild_uc :
                  ps ps'
              ∧ hm_params_kinds md = map snd ps
              ∧ hm_params_kinds md' = map snd ps'
+             ∧ hm_params_subkinds md' = []
              ∧ map snd ps
                = flat_map kept_kind (handler_pdescs sol unboxed is_exn h)
              ∧ map pd_decision (handler_pdescs sol unboxed is_exn h)
@@ -6751,7 +6762,7 @@ Proof.
     set (ps := handler_pdescs sol unboxed is_exn h) in *.
     destruct (IHh en enu C ctx ce is_exn Hci) with (dead_check := true)
       as (ps_c & ps_u & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd'
-          & Hkinds & Hdecs & Hmask & Hhres).
+          & Hsk' & Hkinds & Hdecs & Hmask & Hhres).
     { exact Hh. }
     { split; intros; [ apply Hvars | apply Hconts ];
         [ apply in_or_app; left | right; apply in_or_app; left ];
@@ -6961,7 +6972,7 @@ Proof.
                     Hci')
           with (dead_check := false)
           as (ps_c & ps_u & md & md' & hp & hu & Hp & Hu & Hrel & Hmd & Hmd'
-              & Hkinds & _ & _ & Hhres).
+              & Hsk' & Hkinds & _ & _ & Hhres).
         { exact (Hhs' k h Hin). }
         { split; intros; [ apply Hvars | apply Hconts ]; apply in_or_app;
             left; apply in_flat_map; exists (k, h);
@@ -7206,6 +7217,7 @@ Proof.
     split; [ rewrite hm_with_params_kinds, <- Hsnd, filter_kept_map;
              reflexivity | ].
     split; [ apply hm_with_params_kinds | ].
+    split; [ apply with_params_kinds_subkinds | ].
     split; [ exact Hkinds | ].
     split; [ exact Hdecs | ].
     split; [ exact Hkeeps | ].

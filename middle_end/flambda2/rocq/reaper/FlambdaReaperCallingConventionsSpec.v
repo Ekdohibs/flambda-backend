@@ -709,7 +709,9 @@ Definition code_51_changed : code :=
   Code [40] 45 3 4
     {| cm_params_arity :=
          [Unboxed_product [Singleton Value]; Unboxed_product []];
+       cm_params_subkinds := [];
        cm_result_arity := [Unboxed_product [Singleton Value]];
+       cm_result_subkinds := [];
        cm_is_tupled := false;
        cm_is_stub := false |}
     (return_to 3 [Var 40]).
@@ -908,7 +910,9 @@ Definition rebuilt : expr :=
        (Code [42] 46 5 6
           {| cm_params_arity :=
                [Unboxed_product [Singleton Value]; Unboxed_product []];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 47 Value (Project_function_slot 71 70 (Var 46))
@@ -1070,7 +1074,9 @@ Definition rebuilt : expr :=
        (Code [42] 46 5 6
           {| cm_params_arity :=
                [Unboxed_product [Singleton Value]; Unboxed_product []];
+             cm_params_subkinds := [];
              cm_result_arity := [Unboxed_product [Singleton Value]];
+             cm_result_subkinds := [];
              cm_is_tupled := false;
              cm_is_stub := false |}
           (Let 47 Value (Project_function_slot 71 70 (Var 46))

@@ -1464,6 +1464,7 @@ Proof.
   intros Hcode Hr He Hst Hcall. unfold call_code in Hcall.
   destruct (binds_statics (code_body c)); [ discriminate Hcall | ].
   destruct (negb _); [ discriminate Hcall | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ discriminate Hcall | ].
   destruct (bind_params _ _ _) as [vars | ]; [ | discriminate Hcall ].
   injection Hcall as <-.
   split; [ destruct c; exact Hcode | split; [ | exact Hst ] ].
@@ -1569,6 +1570,7 @@ Proof.
     intros vs statics hp rd s Hst Hstep; cbn [apply_cont_value] in Hstep.
   - destruct h as [params metadata handler].
     destruct (kinds_eqb _ _); [ | discriminate Hstep ].
+    destruct (values_of_subkinds _ _ _); [ | discriminate Hstep ].
     destruct (bind_params params vs vars) as [handler_vars | ];
       [ | discriminate Hstep ].
     injection Hstep as <-.
@@ -3325,6 +3327,7 @@ Proof.
   intros Hcb Hrt Het Hst. unfold call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ discriminate | ].
   destruct (bind_params _ _ _); [ | discriminate ].
   intros H. injection H as <-.
   split; [ destruct c; exact Hcb | split; [ | exact Hst ] ].
@@ -3368,6 +3371,7 @@ Proof.
     cbn [apply_cont_value].
   - inversion Hc as [h0 vars0 conts0 rec0 Hh Hrec Hconts | | |]; subst.
     destruct (kinds_eqb _ _); [ | discriminate ].
+    destruct (values_of_subkinds _ _ _); [ | discriminate ].
     destruct (bind_params params vs vars); [ | discriminate ].
     intros H. injection H as <-.
     split; [ exact Hh | split; [ | exact Hst ] ].
@@ -6047,6 +6051,19 @@ Proof.
   unfold with_params_kinds. destruct (hm_is_exn_handler metadata); reflexivity.
 Qed.
 
+(* A rebuilt handler states nothing of its parameters. *)
+Lemma with_params_kinds_subkinds (metadata : handler_metadata)
+    (kinds : list flambda_kind) :
+  hm_params_subkinds (with_params_kinds metadata kinds) = [].
+Proof.
+  unfold with_params_kinds. destruct (hm_is_exn_handler metadata); reflexivity.
+Qed.
+
+(* Code whose subkinds are erased states nothing of its parameters. *)
+Lemma erased_subkinds_say_nothing (md : code_metadata) :
+  subkinds_say_nothing (cm_params_subkinds (erase_code_subkinds md)) = true.
+Proof. reflexivity. Qed.
+
 (* ------------------------------------------------------------------------ *)
 (* Lookups in a recursive group                                             *)
 (* ------------------------------------------------------------------------ *)
@@ -6615,6 +6632,7 @@ Proof.
   exists hv'. split.
   - cbn [apply_cont_value]. rewrite with_params_kinds_kinds.
     rewrite <- filter_kept_map, Hkinds', Hkinds, kinds_eqb_refl.
+    rewrite with_params_kinds_subkinds. cbn [values_of_subkinds].
     rewrite Hbind'. reflexivity.
   - cbn [env_kinds bind_variables bind_variables_then].
     rewrite (with_kinds_combine params (hm_params_kinds metadata)),
@@ -9915,6 +9933,8 @@ Proof.
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Hkb; try exact I;
     apply kinds_eqb_eq in Hkb;
+    destruct (values_of_subkinds statics vs (hm_params_subkinds metadata));
+      try exact I;
     destruct (bind_params params vs vars1) as [hv | ] eqn:Hbind;
       try exact I;
     intros Hflow'; (split; [ exact Hkb | ]);
@@ -11096,6 +11116,19 @@ Proof.
   intros Hun. rewrite Hun. repeat split.
 Qed.
 
+(* The rebuilt code asks nothing of its arguments beyond their kinds:
+   what its parameters state is erased. *)
+Lemma rebuilt_code_subkinds (id : code_id) (c : code) (statics : static_env)
+    (vs : list value) :
+  values_of_subkinds statics vs (code_params_subkinds (rebuild_c id c))
+  = true.
+Proof.
+  destruct c as [params mc ret exn md body]. cbn [rebuild_code_cc].
+  destruct (code_calling_convention_change sol cannot_change code_deps
+              unit_code_ids id md);
+    apply values_of_subkinds_nil.
+Qed.
+
 (* The rebuilt code binds nothing static if the code does not. *)
 Lemma rebuilt_code_no_statics (id : code_id) (c : code) :
   checked exact codes (code_body c) = true ->
@@ -11189,6 +11222,7 @@ Proof.
       [ rewrite Et; exact Htup | rewrite Epa; exact Hfull ]. }
   unfold call_function. rewrite Hshape. cbn [run_call]. unfold call_code.
   rewrite Hbinds, Hk1, Epa, Hk2, Era, Hk3. cbn [negb andb].
+  rewrite rebuilt_code_subkinds. cbn [negb].
   rewrite Ep, Em, Hbind, Er, Ee. reflexivity.
 Qed.
 
@@ -11305,7 +11339,7 @@ Proof.
   rewrite Era. replace (arity_eqb (arity_of_decisions rd)
                           (arity_of_decisions rd)) with true
     by (symmetry; apply arity_eqb_eq; reflexivity).
-  cbn [negb andb].
+  cbn [negb andb]. rewrite rebuilt_code_subkinds. cbn [negb].
   rewrite Ep, Em, Hbind, Er, Ee. reflexivity.
 Qed.
 
@@ -12368,6 +12402,8 @@ Proof.
   destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
     [ | exact I ].
   simpl.
+  destruct (values_of_subkinds _ vs (code_params_subkinds c));
+    [ simpl | exact I ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
   exists callee, vs, extra, id, slots, c, callee_vars. auto 12.
@@ -14633,6 +14669,7 @@ Proof.
     + (* The wrapper, then the handler. *)
       right. right.
       unfold wrapper. cbn [apply_cont_value hm_params_kinds
+                           hm_params_subkinds values_of_subkinds
                            make_handler_metadata].
       rewrite Hkinds, Hkc, kinds_eqb_refl.
       assert (Hlen_w : length (names_from (length (cont_kinds c)) first_fresh)
@@ -14772,6 +14809,8 @@ Proof.
     cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value ws) (hm_params_kinds md));
       [ | discriminate ].
+    destruct (values_of_subkinds _ ws (hm_params_subkinds md));
+      [ | discriminate ].
     destruct (bind_params params ws hv); discriminate. }
   destruct Hway
     as [(k1 & -> & _ & _ & [Hlen_o Hon])
@@ -14841,6 +14880,8 @@ Proof.
   { intros [params md handler] hv hc r.
     cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds md));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds md));
       [ | discriminate ].
     destruct (bind_params params vs hv); discriminate. }
   destruct Hrr
@@ -14947,7 +14988,8 @@ Proof.
           assert (i < length rd) by (apply nth_error_Some; congruence).
           lia. }
     unfold cc_wrapper. rewrite (map_fst_combine_eq rd K Lk).
-    cbn [apply_cont_value hm_params_kinds make_handler_metadata].
+    cbn [apply_cont_value hm_params_kinds hm_params_subkinds
+         values_of_subkinds make_handler_metadata].
     assert (Hkk : kept_kinds rd
                   = map kind_of_value (filter_kept (map is_kept rd) vs')).
     { rewrite <- filter_kept_map, Hkv'.
@@ -15047,7 +15089,8 @@ Proof.
     (* The wrapper, then the handler. *)
     right. right.
     unfold cc_wrapper. rewrite (map_fst_combine_eq rd K Lk).
-    cbn [apply_cont_value hm_params_kinds make_handler_metadata].
+    cbn [apply_cont_value hm_params_kinds hm_params_subkinds
+         values_of_subkinds make_handler_metadata].
     assert (Hkk : kept_kinds rd
                   = map kind_of_value (filter_kept (map is_kept rd) vs')).
     { rewrite <- filter_kept_map, Hkv'.
@@ -15133,6 +15176,8 @@ Proof.
         cbn [apply_cont_value].
         destruct (kinds_eqb (map kind_of_value ws) (hm_params_kinds md));
           [ | discriminate ].
+        destruct (values_of_subkinds _ ws (hm_params_subkinds md));
+          [ | discriminate ].
         destruct (bind_params params ws hv); discriminate. }
       destruct Hway
         as [(k1 & -> & _ & _ & [Hlen_o Hon])
@@ -15173,7 +15218,8 @@ Proof.
           lia. }
     (* The wrapper, then the way out. *)
     unfold cc_wrapper. rewrite (map_fst_combine_eq rd K Lk).
-    cbn [apply_cont_value hm_params_kinds make_handler_metadata].
+    cbn [apply_cont_value hm_params_kinds hm_params_subkinds
+         values_of_subkinds make_handler_metadata].
     assert (Hkk : kept_kinds rd
                   = map kind_of_value (filter_kept (map is_kept rd) vs')).
     { rewrite <- filter_kept_map, Hkv'.
@@ -15316,6 +15362,7 @@ Proof.
   destruct (code_fields_rebuild id c Hun)
     as (Ep & Em & Er & Ee & Epa & Era & Et).
   unfold call_code. rewrite Hbinds, Hk1, Epa, Hk2, Era, Hk3. cbn [negb andb].
+  rewrite rebuilt_code_subkinds. cbn [negb].
   rewrite Ep, Em, Hbind, Er, Ee. reflexivity.
 Qed.
 
@@ -16768,6 +16815,7 @@ Proof.
   - apply call_code_not_exit.
   - destruct h as [params md body]. cbn [apply_cont_value].
     destruct (kinds_eqb _ _); [ | discriminate ].
+    destruct (values_of_subkinds _ _ _); [ | discriminate ].
     destruct (bind_params _ _ _); discriminate.
   - discriminate.
 Qed.
@@ -17421,7 +17469,9 @@ Proof.
         rewrite Hc0eq in Hcp. destruct h0 as [params md body].
         cbn [cont_params handler_params] in Hcp.
         destruct params as [ | x params]; [ | discriminate Hcp ].
-        cbn [apply_cont_value]. destruct (kinds_eqb _ _); reflexivity. }
+        cbn [apply_cont_value].
+        destruct (kinds_eqb _ _); [ destruct (values_of_subkinds _ _ _) | ];
+          reflexivity. }
     unfold make_apply_wrapper.
     change (ap_continuation ap') with (ap_continuation ap).
     rewrite Hm_ret.

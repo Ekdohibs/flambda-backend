@@ -1822,7 +1822,9 @@ Definition code_deps : finite_map code_dep :=
 Definition callee_rebuilt : code :=
   Code [66] 41 3 4
     {| cm_params_arity := [Unboxed_product [Singleton Value]];
+       cm_params_subkinds := [];
        cm_result_arity := [Unboxed_product [Singleton Value]];
+       cm_result_subkinds := [];
        cm_is_tupled := false;
        cm_is_stub := false |}
     (Let 43 Value (Simple (Var 66))

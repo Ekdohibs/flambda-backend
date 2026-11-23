@@ -404,6 +404,19 @@
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
      the fixes and as the compiler has it.
+   - Subkinds, as the reaper with types rewrites them
+     ([rewrite_kind_with_subkind], decision D25):
+     [rewrite_kind_with_subkind_sound_statement], what a parameter states
+     beyond its kind, rewritten under the metadata of its node, holds of
+     the value that the rebuild makes of one that the first run gives it
+     ([rebuilt_value]) and that is of what the parameter stated, by the
+     test of the machine (FlambdaSubkindSpec.value_at), which accepts
+     poison only where the value may be null and nothing is stated. A
+     value of [Anything] at a node of [Single_source] or
+     [Many_sources_usages] metadata may be a boxed number whose contents
+     no use reads, which the rebuild makes poison
+     ([BoxedCounterexample]): the compiler erases that subkind, which
+     forgets that the value is not null.
 
    What is left out:
    - Closures of a set of one function with no slot named
@@ -2936,3 +2949,26 @@ Definition exported_unaliased_types_sound_end_to_end_local_statement : Prop :=
 
 Definition exported_unaliased_types_end_to_end_local_landed_statement : Prop :=
   exported_unaliased_types_sound_end_to_end_local_with landed_fixes.
+
+(* ======================================================================== *)
+(* Subkinds                                                                 *)
+(* ======================================================================== *)
+
+(* What a parameter at the node [x] states, rewritten as the reaper with
+   types rewrites it, holds of the value that the second run has for a
+   value of the first that may be at [x] and that is of what the
+   parameter stated. *)
+Definition rewrite_kind_with_subkind_sound_statement : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (statics statics' : static_env)
+    (x : node) (ps : param_subkind) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics
+      statics' ->
+    rebuilt_value (graph_of_facts F) (solution_of_tables T) v x v' ->
+    value_at statics ps v = true ->
+    value_at statics'
+      (rewrite_kind_with_subkind (plain_context is_local F T sets) x ps) v'
+    = true.

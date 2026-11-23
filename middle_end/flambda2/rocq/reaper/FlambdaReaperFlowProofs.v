@@ -5900,6 +5900,7 @@ Lemma call_code_not_exit (closure : value) (c : code) (vs : list value)
 Proof.
   unfold call_code. destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ discriminate | ].
   destruct (bind_params _ _ _); discriminate.
 Qed.
 
@@ -5969,6 +5970,8 @@ Proof.
   destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
     [ | exact I ].
   simpl.
+  destruct (values_of_subkinds statics vs (code_params_subkinds c));
+    [ simpl | exact I ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
   exists callee, vs, extra, slots, c, callee_vars. auto 12.
@@ -6083,6 +6086,8 @@ Proof.
     destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
       [ | exact I ].
     simpl.
+    destruct (values_of_subkinds statics vs (code_params_subkinds c));
+      [ simpl | exact I ].
     destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
       as [callee_vars | ] eqn:Hbind; [ | exact I ].
     exists called, callee, vs, extra, slots, c, callee_vars.
@@ -7066,6 +7071,8 @@ Proof.
     destruct (cont_pa_closure_inv _ _ _ _ _ Hpa) as [Hvars_pa HK0_pa].
     destruct h as [params metadata handler]. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | exact I ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | exact I ].
     destruct (bind_params params vs vars) as [handler_vars | ] eqn:Hbind;
       [ | exact I ].
@@ -8261,6 +8268,7 @@ Proof.
   unfold call_code.
   destruct (binds_statics (code_body c)); [ discriminate | ].
   destruct (negb _); [ discriminate | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ discriminate | ].
   destruct (bind_params _ _ _); [ | discriminate ].
   intros [= <-]. reflexivity.
 Qed.
@@ -8298,6 +8306,8 @@ Proof.
     intros vs s'; simpl.
   - destruct handler as [params metadata handler].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata));
+      [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
       [ | discriminate ].
     destruct (bind_params params vs vars); [ | discriminate ].
     intros [= <-]. reflexivity.

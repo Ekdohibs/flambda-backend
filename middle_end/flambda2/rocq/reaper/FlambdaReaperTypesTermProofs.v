@@ -248,6 +248,7 @@ Proof.
   match goal with
   | |- (if ?test then _ else _) = _ -> _ => destruct test
   end; [ discriminate | ].
+  destruct (negb (values_of_subkinds _ _ _)); [ discriminate | ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, closure)]);
     [ | discriminate ].
   intros [= <-]. split; [ | split ]; simpl.
@@ -297,6 +298,8 @@ Proof.
     apply andb_true_iff in Hc as [Hh Hrecursive].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds metadata))
       eqn:Hkinds; [ | discriminate ].
+    destruct (values_of_subkinds _ vs (hm_params_subkinds metadata));
+      [ | discriminate ].
     destruct (bind_params params vs def_vars) as [handler_vars | ] eqn:Hbind;
       [ | discriminate ].
     intros [= <-]. split; [ | split ]; simpl.
