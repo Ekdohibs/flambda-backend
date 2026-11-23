@@ -22,7 +22,7 @@ let code loopify(never) size(6) newer_version_of(g_1)
       cont k (Pmixedfield)
 in
 let code loopify(never) size(15) newer_version_of(f_0)
-      f_0_1 (x) my_closure &my_alloc_region my_depth -> k * k1 : val =
+      f_0_1 (x) my_closure &my_alloc_region my_depth -> k * k1 =
   let g = closure g_1_1 @g &my_alloc_region with { unboxed_field_x = x } in
   cont k (g)
 in

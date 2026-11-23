@@ -39,15 +39,13 @@ let $camlArguments_for_unboxed_closure__unused_3 =
   closure unused_3_1 @unused &toplevel
 in
 let code loopify(never) size(9) newer_version_of(g_1)
-      g_1_1 (#(g_into_my_closure_field_x, h : val))
+      g_1_1 (#(g_into_my_closure_field_x, h))
         my_closure &my_alloc_region my_depth
         -> k * k1
         : #(imm tagged) =
   let x = g_into_my_closure_field_x in
   apply unknown_arity &my_alloc_region
-    (h : imm tagged -> imm tagged)
-      (poison.val."reaper_unused_argument")
-      -> k2 * k1
+    (h : _ -> imm tagged) (poison.val."reaper_unused_argument") -> k2 * k1
     where k2 (apply_result : imm tagged) =
       let int_add = %int_barith.add (x, apply_result) in
       cont k (int_add)
@@ -68,7 +66,7 @@ let code loopify(never) size(13) newer_version_of(f_0)
       -> k2 * k1
     where k2 (apply_result : imm tagged) =
       (apply direct(g_1_1 &my_alloc_region) inlined(never)
-         (_ : #(val? * val) -> #(imm tagged))
+         (_ : #(val? * val?) -> #(imm tagged))
            (g_into_g_field_x, $camlArguments_for_unboxed_closure__unused_3)
            -> k2 * k1
          where k2 (apply_result_1 : imm tagged) =

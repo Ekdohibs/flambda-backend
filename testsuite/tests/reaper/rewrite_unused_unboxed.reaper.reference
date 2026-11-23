@@ -19,20 +19,15 @@ let code inline(never) loopify(never) size(5) newer_version_of(consume_1)
         : #() =
   let Pfield = Pmakeblock_into_m_field_0 in
   apply direct(print_int_0_1 &my_alloc_region)
-    ($camlRewrite_unused_unboxed__print_int_1 : _ -> imm tagged)
-      (Pfield)
-      -> k2 * k1
-    where k2 (function_return : imm tagged) =
+    $camlRewrite_unused_unboxed__print_int_1 (Pfield) -> k2 * k1
+    where k2 (function_return) =
       cont k
 in
 let $camlRewrite_unused_unboxed__consume_2 =
   closure consume_1_1 @consume &toplevel
 in
 let code inline(never) loopify(never) size(6) newer_version_of(Make_2) functor
-      Make_2_1 (#(N : val))
-        my_closure &my_alloc_region my_depth
-        -> k * k1
-        : #() =
+      Make_2_1 (#(N)) my_closure &my_alloc_region my_depth -> k * k1 : #() =
   let x = %block_load.[`0`] (N) in
   let Pmakeblock_into_Pmakeblock_field_0 = x in
   apply direct(consume_1_1 &my_alloc_region)
@@ -44,7 +39,7 @@ let code inline(never) loopify(never) size(6) newer_version_of(Make_2) functor
 in
 let $camlRewrite_unused_unboxed__Make_3 = closure Make_2_1 @Make &toplevel in
 apply direct(Make_2_1 &toplevel)
-  ($camlRewrite_unused_unboxed__Make_3 : #(val) -> #())
+  ($camlRewrite_unused_unboxed__Make_3 : #(val?) -> #())
     ($camlRewrite_unused_unboxed__Pmakeblock_0)
     -> k1 * error
   where k1 =

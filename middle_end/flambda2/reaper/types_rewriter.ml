@@ -282,28 +282,10 @@ let metadata_for_name context name =
 
 (** Subkind rewriting *)
 
-(* Note that this depends crucially on the fact that the poison value is not
-   nullable. If it was, we could instead keep the subkind but erase the
-   nullability part instead. *)
-let[@inline] erase_subkind kind =
-  match Flambda_kind.With_subkind.non_null_value_subkind kind with
-  | Anything | Tagged_immediate ->
-    (* The poison value is an immediate, allowing us to keep tagged_immediate
-       subkinds. This is important, because there is a range of optimizations
-       that apply to tagged_immediates which we may want to preserve. *)
-    kind
-  | Boxed_float32 | Boxed_float | Boxed_int32 | Boxed_int64 | Boxed_nativeint
-  | Boxed_vec128 | Boxed_vec256 | Boxed_vec512 | Boxed_mask | Float_block _
-  | Float_array | Immediate_array | Value_array | Generic_array
-  | Unboxed_float32_array | Untagged_int_array | Untagged_int8_array
-  | Untagged_int16_array | Unboxed_int32_array | Unboxed_int64_array
-  | Unboxed_nativeint_array | Unboxed_vec128_array | Unboxed_vec256_array
-  | Unboxed_vec512_array | Unboxed_mask_array | Unboxed_product_array
-  | Variant _ ->
-    Flambda_kind.With_subkind.create
-      (Flambda_kind.With_subkind.kind kind)
-      Flambda_kind.With_subkind.Non_null_value_subkind.Anything
-      (Flambda_kind.With_subkind.nullable kind)
+(* A value whose subkind is erased may have been replaced by a poison value. The
+   erased kind states nothing about the value: neither its subkind nor that it
+   cannot be null. *)
+let[@inline] erase_subkind kind = Flambda_kind.With_subkind.erase_subkind kind
 
 let rewrite_boxed_number_kind context metadata kind bn =
   (* The contents of boxed numbers are tracked via [Boxed_number] fields. If the
@@ -345,7 +327,13 @@ let rec rewrite_kind_with_subkind context metadata kind =
     kind
   | Single_source _ | Many_sources_usages _ -> (
     match Flambda_kind.With_subkind.non_null_value_subkind kind with
-    | Anything -> kind
+    | Anything ->
+      (* The value may be a boxed number whose contents are never read, which
+         the rebuild replaces by a poison value (the [Box_number] case of
+         [Rebuild.rebuild_let_expr_singleton]); [Anything] does not say that it
+         is not, so the kind is erased, which forgets only that the value cannot
+         be null. *)
+      erase_subkind kind
     | Tagged_immediate -> kind
     | Boxed_float32 ->
       rewrite_boxed_number_kind context metadata kind Naked_float32

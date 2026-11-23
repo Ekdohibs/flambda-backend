@@ -41,7 +41,7 @@ in
      -> k1 * error
    where k1 (func) =
      (apply unknown_arity &toplevel
-        (func : [ 0 of imm tagged * imm tagged ] -> [ 0 |1 ])
+        (func : [ 0 of val? * val? ] -> [ 0 |1 ])
           ($camlUnused_tupled_function_param__const_block_0)
           -> k2 * error
         where k2 (param : [ 0 |1 ]) =

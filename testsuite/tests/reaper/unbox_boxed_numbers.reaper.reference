@@ -269,18 +269,17 @@ let $camlUnbox_boxed_numbers__test_value_slot_11 =
   closure test_value_slot_10_1 @test_value_slot &toplevel
 in
 let code inline(never) loopify(never) size(6) newer_version_of(indirect_14)
-      indirect_14_1 (#(read : val))
+      indirect_14_1 (#(read))
         my_closure &my_alloc_region my_depth
         -> k * k1
         : #(val?) =
-  apply unknown_arity &my_alloc_region
-    (read : imm tagged -> val?) (0) -> k * k1
+  apply &my_alloc_region read (0) -> k * k1
 in
 let $camlUnbox_boxed_numbers__indirect_13 =
   closure indirect_14_1 @indirect &toplevel
 in
 let code inline(never) loopify(never) size(4) newer_version_of(read_13)
-      read_13_1 (param : imm tagged)
+      read_13_1 (param)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
@@ -310,7 +309,7 @@ let code loopify(never) size(22) newer_version_of(test_value_slot_not_unboxed_12
   }
   in
   apply direct(indirect_14_1 &my_alloc_region)
-    ($camlUnbox_boxed_numbers__indirect_13 : #(val) -> #(val?))
+    ($camlUnbox_boxed_numbers__indirect_13 : #(val?) -> #(val?))
       (read)
       -> k2 * k1
     where k2 (apply_result : imm tagged) =
@@ -340,7 +339,7 @@ let $camlUnbox_boxed_numbers__pair_first_14 =
   closure pair_first_15_1 @pair_first &toplevel
 in
 let code loopify(never) size(5) newer_version_of(test_pair_16)
-      test_pair_16_1 (a : imm tagged, b : imm tagged)
+      test_pair_16_1 (a : imm tagged, b)
         my_closure &my_alloc_region my_depth
         -> k * k1
         : imm tagged =
