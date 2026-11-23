@@ -32,7 +32,8 @@
    model do not say of which code their code is a newer version
    (FlambdaModel.code_metadata has no such field), so no relation is read
    off a term. FlambdaCodeAgeRelationSpec.v has the order that a relation
-   stands for and what these functions answer in terms of it.
+   stands for and what these functions answer in terms of it, and
+   FlambdaCodeAgeCallsSpec.v a machine that is given a relation.
 
    The module has the compiler's name, so that
    [Code_age_relation.meet_set] is that function.

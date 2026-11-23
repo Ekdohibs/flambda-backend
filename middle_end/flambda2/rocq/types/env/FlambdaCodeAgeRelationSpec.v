@@ -72,7 +72,7 @@
    the order of every relation, one with a cycle too
    ([same_or_newer_b_decides_statement]): a code id that is reached is reached
    before a code id is met twice. It is the model's own function and not
-   one of the compiler's.
+   one of the compiler's; FlambdaCodeAgeCallsSpec.v uses it.
 
    What the compiler's functions answer. The statements are of the three
    functions FOR ONE COMPILATION UNIT ([has_older_version_in_unit] and

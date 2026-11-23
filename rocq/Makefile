@@ -136,6 +136,8 @@ FLAMBDA2 := $(addprefix $(FLAMBDA2_DIR)/, \
   rewrites/closures/FlambdaClosureOfCodeSpec.v \
   semantics/FlambdaClosuresProofs.v \
   semantics/FlambdaClosuresSpec.v \
+  semantics/FlambdaCodeAgeCallsProofs.v \
+  semantics/FlambdaCodeAgeCallsSpec.v \
   rewrites/closures/FlambdaCodeLetsProofs.v \
   rewrites/closures/FlambdaCodeLetsSpec.v \
   rewrites/common/FlambdaCodeStatedNamesProofs.v \

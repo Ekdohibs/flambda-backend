@@ -232,6 +232,12 @@ design out; that is the request, not the change.
     code a piece of code is a newer version; the order that it stands
     for, and what the compiler's functions on it answer for one
     compilation unit; S4's once it is staffed)
+  - `middle_end/flambda2/rocq/semantics/FlambdaCodeAgeCalls*` (a second
+    machine, which is given a code age relation and on which a direct
+    call of a closure of a newer version of the code named goes by
+    the code named; on it, a direct call may name a newer version
+    where the relation is sound for the closure called; no other
+    statement of the tree is of that machine; S4's once it is staffed)
   - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
