@@ -388,3 +388,9 @@ ocaml/primitives.new
 
 # Symlinks to nix-provided sources, created by make.
 /external/ast-dependent-libs/deps/
+
+# Rocq
+*.vo
+*.glob
+\.*.aux
+
