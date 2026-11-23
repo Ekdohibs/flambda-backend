@@ -576,6 +576,9 @@ FLAMBDA2_TYPES := $(addprefix $(FLAMBDA2_DIR)/, \
   types/naive/FlambdaAliasesProofs.v \
   types/naive/FlambdaAliasesSpec.v \
   types/env/FlambdaBindingTime.v \
+  types/env/FlambdaCodeAgeRelation.v \
+  types/env/FlambdaCodeAgeRelationProofs.v \
+  types/env/FlambdaCodeAgeRelationSpec.v \
   types/aliases/FlambdaEnvAliases.v \
   types/aliases/FlambdaEnvAliasesFollowProofs.v \
   types/aliases/FlambdaEnvAliasesFollowScopeProofs.v \
@@ -873,6 +876,7 @@ FLAMBDA2_TRANSCRIBED := \
   terms/FlambdaPrimitiveModel.v \
   types/aliases/FlambdaEnvAliases.v \
   types/env/FlambdaBindingTime.v \
+  types/env/FlambdaCodeAgeRelation.v \
   types/env/FlambdaTypingEnv.v \
   types/env/FlambdaTypingEnvExtension.v \
   types/grammar/FlambdaTypeGrammar.v \

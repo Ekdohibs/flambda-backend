@@ -227,6 +227,11 @@ design out; that is the request, not the change.
     extracted and ends a round of the validation where a lifting asks
     for it, `FlambdaValidateSpec.normalise_lifted_round_own`; S4's once
     it is staffed)
+  - `middle_end/flambda2/rocq/types/env/FlambdaCodeAgeRelation*` (the code
+    age relation, after `types/env/code_age_relation.ml`: of which
+    code a piece of code is a newer version; the order that it stands
+    for, and what the compiler's functions on it answer for one
+    compilation unit; S4's once it is staffed)
   - `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsErasedProofs.v` and
     `middle_end/flambda2/rocq/regions/erasure/FlambdaRegionsPlainStepProofs.v` (for
     C2's erasure of regions: the relation between a state of the
