@@ -35,7 +35,13 @@
    [shape_of_code_call] makes a [Partial_call] ([step_values_bound]).
    So every state of a run satisfies [pa_inv] ([pa_inv_run]), and a call
    with one group of arguments of a value of such a state, of code that
-   has a parameter, is no over-application ([one_group_no_over]). *)
+   has a parameter, is no over-application ([one_group_no_over]).
+   What a step over-applies, by a call or by what is left of an
+   over-application, a partial application that it makes going to a
+   continuation that may over-apply in turn ([step_over_ok]), and the code
+   that what is left of an over-application calls ([step_rem_ok]), are said
+   here for the simulations; FlambdaReaperFlowProofs.step_over_used and
+   step_rem_used prove them of the run of a unit. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -825,4 +831,217 @@ Proof.
       as [[_ E] | [(Hlt & _ & _ & _) | (_ & _ & _ & _ & E)]];
       try discriminate E.
     rewrite length_app in Hlt. cbn [length] in Hlt. lia.
+Qed.
+
+(* ======================================================================== *)
+(* The code that a step over-applies                                        *)
+(* ======================================================================== *)
+
+(* A call of the shape [shp] over-applies only code of [OV], and gives a
+   partial application that it makes to a continuation of which [ret]
+   holds. *)
+Definition shape_over_ok (OV : code_id -> Prop) (statics : static_env)
+    (ret : list value -> Prop) (shp : option call_shape) : Prop :=
+  match shp with
+  | Some (Over_call cl _ _ _ _ _) =>
+    ∀ (id : code_id) (slots : list (value_slot * value)),
+      closure_of statics cl = Some (id, slots) -> OV id
+  | Some (Partial_call p) => ret [p]
+  | Some (Full_call _ _ _ _) | None => True
+  end.
+
+(* A continuation given [vs] over-applies only code of [OV]: what is left
+   of an over-application calls the one value it is given with the
+   arguments that remain, and a partial application that this call makes
+   goes to the continuation of the whole call. *)
+Fixpoint cont_over_ok (OV : code_id -> Prop) (statics : static_env)
+    (c : cont_value) (vs : list value) {struct c} : Prop :=
+  match c with
+  | Over_application remaining remaining_arity return_arity return_to _ =>
+    match vs with
+    | [v] =>
+      shape_over_ok OV statics (cont_over_ok OV statics return_to)
+        (shape_of_call statics v Indirect_unknown_arity remaining
+           remaining_arity return_arity)
+    | _ => True
+    end
+  | Extra_args c extra => cont_over_ok OV statics c (vs ++ extra)
+  | Closure _ _ _ _ | Outer _ => True
+  end.
+
+(* The step of a state over-applies only code of [OV]: a call, or the
+   continuation that an [Apply_cont] applies. *)
+Definition step_over_ok (OV : code_id -> Prop) (s : state) : Prop :=
+  match state_expr s with
+  | Apply ap =>
+    ∀ (callee : value) (vs : list value),
+      eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+      eval_simples (state_vars s) (ap_args ap) = Some vs ->
+      shape_over_ok OV (state_statics s)
+        (cont_over_ok OV (state_statics s)
+           (resolve (ap_continuation ap) (state_conts s)))
+        (shape_of_call (state_statics s) callee (ap_call_kind ap) vs
+           (ap_args_arity ap) (ap_return_arity ap))
+  | Apply_cont ac =>
+    ∀ vs : list value,
+      eval_simples (state_vars s) (ac_args ac) = Some vs ->
+      cont_over_ok OV (state_statics s)
+        (resolve (ac_continuation ac) (state_conts s)) vs
+  | Let _ _ _ _ | Let_static _ _ | Let_cont_non_recursive _ _ _
+  | Let_cont_recursive _ _ | Switch _ _ | Invalid =>
+    True
+  end.
+
+(* Where [OV] holds of every code, every step is as it says. *)
+Lemma cont_over_ok_total (OV : code_id -> Prop) (statics : static_env) :
+  (∀ id : code_id, OV id) ->
+  ∀ (c : cont_value) (vs : list value), cont_over_ok OV statics c vs.
+Proof.
+  intros Hall c.
+  induction c as [h vars conts recursive | k | c IH extra
+                 | remaining remaining_arity return_arity return_to exn_to
+                     IHret _]
+    using cont_value_over_ind;
+    intros vs; cbn [cont_over_ok]; [ exact I | exact I | apply IH | ].
+  destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
+  destruct (shape_of_call statics v Indirect_unknown_arity remaining
+              remaining_arity return_arity)
+    as [[cl c vs' aa | cl c vs' rest aa ra | p] | ];
+    cbn [shape_over_ok]; [ exact I | | apply IHret | exact I ].
+  intros id slots _. exact (Hall id).
+Qed.
+
+Lemma step_over_ok_total (OV : code_id -> Prop) (s : state) :
+  (∀ id : code_id, OV id) -> step_over_ok OV s.
+Proof.
+  intros Hall. unfold step_over_ok.
+  destruct (state_expr s); try exact I.
+  - intros callee vs _ _.
+    destruct (shape_of_call _ _ _ _ _ _)
+      as [[cl c vs' aa | cl c vs' rest aa ra | p] | ];
+      cbn [shape_over_ok];
+      [ exact I | intros id slots _; exact (Hall id)
+      | apply cont_over_ok_total; exact Hall | exact I ].
+  - intros vs _. apply cont_over_ok_total. exact Hall.
+Qed.
+
+(* The exception continuation of a call, with its extra arguments. *)
+Lemma cont_over_ok_extra (OV : code_id -> Prop) (statics : static_env)
+    (c : cont_value) (extra vs : list value) :
+  cont_over_ok OV statics (with_extra_args c extra) vs ->
+  cont_over_ok OV statics c (vs ++ extra).
+Proof.
+  destruct extra as [ | x extra]; cbn [with_extra_args].
+  - rewrite app_nil_r. exact (fun H => H).
+  - exact (fun H => H).
+Qed.
+
+(* The closure that a call of a value calls: that of a partial
+   application, or the value. *)
+Definition closure_called (v : value) : value :=
+  match partial_application_of v with
+  | Some (cl, _, _) => cl
+  | None => v
+  end.
+
+(* What is left of an over-application, given [vs], calls only a closure
+   of code of [REM], and a partial application that it makes goes to a
+   continuation that does too. *)
+Fixpoint cont_rem_ok (REM : code_id -> Prop) (statics : static_env)
+    (c : cont_value) (vs : list value) {struct c} : Prop :=
+  match c with
+  | Over_application remaining remaining_arity return_arity return_to _ =>
+    match vs with
+    | [v] =>
+      (∀ (id : code_id) (slots : list (value_slot * value)),
+         closure_of statics (closure_called v) = Some (id, slots) -> REM id)
+      ∧ shape_over_ok (fun _ => True) statics
+          (cont_rem_ok REM statics return_to)
+          (shape_of_call statics v Indirect_unknown_arity remaining
+             remaining_arity return_arity)
+    | _ => True
+    end
+  | Extra_args c extra => cont_rem_ok REM statics c (vs ++ extra)
+  | Closure _ _ _ _ | Outer _ => True
+  end.
+
+(* The step of a state calls by what is left of an over-application only
+   closures of code of [REM]: a call gives a partial application that it
+   makes, and an [Apply_cont] its values, to a continuation that does. *)
+Definition step_rem_ok (REM : code_id -> Prop) (s : state) : Prop :=
+  match state_expr s with
+  | Apply ap =>
+    ∀ (callee : value) (vs : list value),
+      eval_simple (state_vars s) (ap_callee ap) = Some callee ->
+      eval_simples (state_vars s) (ap_args ap) = Some vs ->
+      shape_over_ok (fun _ => True) (state_statics s)
+        (cont_rem_ok REM (state_statics s)
+           (resolve (ap_continuation ap) (state_conts s)))
+        (shape_of_call (state_statics s) callee (ap_call_kind ap) vs
+           (ap_args_arity ap) (ap_return_arity ap))
+  | Apply_cont ac =>
+    ∀ vs : list value,
+      eval_simples (state_vars s) (ac_args ac) = Some vs ->
+      cont_rem_ok REM (state_statics s)
+        (resolve (ac_continuation ac) (state_conts s)) vs
+  | Let _ _ _ _ | Let_static _ _ | Let_cont_non_recursive _ _ _
+  | Let_cont_recursive _ _ | Switch _ _ | Invalid =>
+    True
+  end.
+
+Lemma cont_rem_ok_total (REM : code_id -> Prop) (statics : static_env) :
+  (∀ id : code_id, REM id) ->
+  ∀ (c : cont_value) (vs : list value), cont_rem_ok REM statics c vs.
+Proof.
+  intros Hall c.
+  induction c as [h vars conts recursive | k | c IH extra
+                 | remaining remaining_arity return_arity return_to exn_to
+                     IHret _]
+    using cont_value_over_ind;
+    intros vs; cbn [cont_rem_ok]; [ exact I | exact I | apply IH | ].
+  destruct vs as [ | v [ | v' vs]]; [ exact I | | exact I ].
+  split; [ intros id slots _; exact (Hall id) | ].
+  destruct (shape_of_call statics v Indirect_unknown_arity remaining
+              remaining_arity return_arity)
+    as [[cl c vs' aa | cl c vs' rest aa ra | p] | ];
+    cbn [shape_over_ok]; [ exact I | intros; exact I | apply IHret
+                         | exact I ].
+Qed.
+
+Lemma step_rem_ok_total (REM : code_id -> Prop) (s : state) :
+  (∀ id : code_id, REM id) -> step_rem_ok REM s.
+Proof.
+  intros Hall. unfold step_rem_ok.
+  destruct (state_expr s); try exact I.
+  - intros callee vs _ _.
+    destruct (shape_of_call _ _ _ _ _ _)
+      as [[cl c vs' aa | cl c vs' rest aa ra | p] | ];
+      cbn [shape_over_ok];
+      [ exact I | intros; exact I
+      | apply cont_rem_ok_total; exact Hall | exact I ].
+  - intros vs _. apply cont_rem_ok_total. exact Hall.
+Qed.
+
+Lemma cont_rem_ok_extra (REM : code_id -> Prop) (statics : static_env)
+    (c : cont_value) (extra vs : list value) :
+  cont_rem_ok REM statics (with_extra_args c extra) vs ->
+  cont_rem_ok REM statics c (vs ++ extra).
+Proof.
+  destruct extra as [ | x extra]; cbn [with_extra_args].
+  - rewrite app_nil_r. exact (fun H => H).
+  - exact (fun H => H).
+Qed.
+
+(* [shape_over_ok], for wider [OV] and [ret]. *)
+Lemma shape_over_ok_mono (OV OV' : code_id -> Prop) (statics : static_env)
+    (ret ret' : list value -> Prop) (shp : option call_shape) :
+  (∀ id : code_id, OV id -> OV' id) ->
+  (∀ ws : list value, ret ws -> ret' ws) ->
+  shape_over_ok OV statics ret shp -> shape_over_ok OV' statics ret' shp.
+Proof.
+  intros Hov Hret.
+  destruct shp as [[cl c vs aa | cl c vs rest aa ra | p] | ];
+    cbn [shape_over_ok]; [ exact (fun H => H) | | apply Hret
+                         | exact (fun H => H) ].
+  intros H id slots Hclo. exact (Hov id (H id slots Hclo)).
 Qed.
