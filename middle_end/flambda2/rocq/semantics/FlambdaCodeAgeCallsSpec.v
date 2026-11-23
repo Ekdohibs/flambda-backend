@@ -48,14 +48,19 @@
    Why a second machine. On [step] a direct call is undefined unless
    its callee is a closure of the code that the call names
    (FlambdaSemanticsSpec.shape_of_closure_call; discrepancy C0-1). So
-   on [step] a direct call and the same call naming a newer version of
-   the code are never both defined of one closure, and "the second
-   refines the first" would hold there for that reason alone. To say it
-   with content, the direct call of a closure of a newer version of the
-   code named must mean something. It is not given a meaning in [step]:
-   the statements of the tree are of every static environment and of
-   every term, and with such a meaning some of them do not hold as they
-   stand (the last part of this comment).
+   on [step], where the callee is a closure of a newer version of the
+   code that a direct call names, and that is another code, the call
+   is undefined. Anything refines it there, and that the call naming
+   the newer version does would say nothing. (Where the callee is a
+   closure of the code named itself, it is the call naming a newer
+   version that is undefined, and it need not refine.) To say the
+   replacement with content, the direct call of a closure of a newer
+   version of the code named must mean something. This machine gives
+   it a meaning, and the replacement then needs the relation to be
+   sound. The call is not given a meaning in [step]: the statements of
+   the tree are of every static environment and of every term, and
+   with such a meaning some of them do not hold as they stand (the
+   last part of this comment).
 
    What the machine is given. [age_of] gives each static environment a
    code age relation. It is a parameter of the machine and of every
@@ -158,14 +163,21 @@
    ([direct_call_meet_set_refines_statement],
    [direct_call_meet_set_bottom_statement]). Simplify meets the code id
    of the call with the code id that the type of the callee gives, as
-   two sets of one code id, names the one code id of the answer, and
-   puts [Invalid] where the answer is [Bottom]
-   (simplify/simplify_apply_expr.ml, [simplify_direct_function_call]).
-   The two statements are of [meet_set] for one compilation unit, with
-   enough steps (FlambdaCodeAgeRelationSpec.v says why), and what the
-   type says of the callee is a premise: the callee is a closure of
-   the code of the type or of a newer version of it. The first has the
-   hypotheses of the statement above for the code id answered. The
+   two sets of one code id. Where the answer is one code id whose
+   metadata it has, the call names that code id; where the answer is
+   [Bottom], it puts [Invalid] (simplify/simplify_apply_expr.ml,
+   [simplify_direct_function_call]). It has other cases, of which
+   nothing is stated here: where the answer has several code ids, or
+   one whose metadata it has not, the call names the code id of the
+   type. The two statements are of [meet_set] for one compilation
+   unit, with enough steps (FlambdaCodeAgeRelationSpec.v says why);
+   they are not of a resolver that answers. What the type says of the
+   callee is a premise of both: the callee is a closure of the code of
+   the type or of a newer version of it. The first supposes besides
+   that every code from the code id answered down to the code named is
+   bound and that the relation is sound for the callee. It does not
+   suppose that the callee is a closure of the code id answered or of
+   a newer version: where it is not, the call was undefined. The
    second says that the call is undefined on the machine: nothing of
    the kind is tested when the program runs.
 
@@ -175,11 +187,13 @@
    of the model for the older version, and a relation read off a term;
    a check of the links by the validation.
 
-   THE STATEMENTS OF THE TREE THAT DO NOT HOLD ON THE MACHINE AS THEY
-   STAND. "On the machine" is: with [step_aged age_of] in the place of
-   [step], for every [age_of]. No search of every statement of the
-   tree was made. What follows is what was found in the files of
-   rewrites/calls/ and rewrites/closures/, with how each was found.
+   THE STATEMENTS OF THE TREE, ON THE MACHINE. "On the machine" is:
+   with [step_aged age_of] in the place of [step], for every [age_of].
+   Three statements of the tree are shown here not to hold on it as
+   they stand. Of others an argument is given that they do not; Rocq
+   has not checked it, and they are not said to be shown. No search of
+   every statement of the tree was made: what follows is what was
+   found in the files of rewrites/calls/ and rewrites/closures/.
    - Shown here, by Rocq, on one unit
      ([direct_call_runs_code_named_statement]: the direct call exits
      with one value, and the same call made indirect with another):
@@ -190,7 +204,9 @@
      demote_full_call_step_statement
      ([demote_full_call_step_aged_fails_statement]). A direct call that
      is made indirect goes by the callee's own code, where the direct
-     call went by the code named.
+     call went by the code named. The unit has a relation that is not
+     sound: what is shown is that the statements do not hold of every
+     relation, and not that they fail of each.
    - By the same argument, read from the definitions and not checked by
      Rocq: the other refinements of FlambdaStubCallsSpec.v
      (demote_in_stubs_refines_statement,
@@ -205,11 +221,17 @@
      with_let_copies_program_refines_statement, and those from the
      imports and for the observers), whose rewrites make indirect the
      direct calls that name copied code.
-     What would repair them: for a statement that two steps are the
-     same, that the callee is a closure of the code named; for a
-     refinement, that, or that the relation is sound for the callee
-     with the versions bound, since the callee's own code then refines
-     the code named.
+     What one such call would need: for the two steps to be the same,
+     that the callee is a closure of the code named; for the call made
+     indirect to refine it, that, or that the relation is sound for
+     the callee with the versions bound, since the callee's own code
+     then refines the code named. These are conditions at one call,
+     and not statements of the rewrites that have been repaired. A
+     statement of a term or of a unit would need them at every such
+     call that a run comes to, in the static environment that the run
+     has there, and kept by the rewrite; and [age_of] is any function,
+     which may give two static environments relations that have
+     nothing in common. No such invariant is stated or shown here.
    - By an argument from the heads of their files, not checked by Rocq:
      the statements that rest on "the body of code runs only for
      closures of that code". On the machine it also runs for a closure
@@ -223,21 +245,32 @@
      FlambdaLiftSpec.lift_unit_program_refines_statement, which applies
      FlambdaMyClosureSpec.bind_my_closures ("It is right only if the
      closure called is the symbol whenever that code runs").
-     What would repair them: that no direct call names an older version
-     of the code of its callee, as with the empty relation. Soundness
-     does not: these rewrites put the code named, or what is known of
-     its own closures, in the place of the callee's code, which needs
-     the older code to refine the newer.
-   - And every statement that is built on those: the statements of
-     validation/checks/ that apply these rewrites.
+     What they lack on the machine is a fact of the closure that the
+     body is given: that it is one of the closures of that code, which
+     are the closures that the tests of these rewrites read. Soundness
+     of the relation does not give it, and the two codes being
+     equivalent would not either: a closure of another code need not
+     hold in its slots what the sets of this code were found to hold,
+     nor be the one closure of this code. Where no direct call names
+     an older version of the code of its callee, as with the empty
+     relation, the body of code runs only for closures of that code,
+     as on [step]; that is a condition on every call of a run, and no
+     invariant that gives it is stated or shown here.
+   - The proofs of validation/checks/ that use these statements would
+     have to be gone through again. That a statement which another
+     rests on does not hold does not show that the other does not:
+     nothing is said here of what the statements of the validation
+     conclude, on the machine.
    Read and not found to fail, by the same reading and not checked by
    Rocq: the inlining of a direct call by the code that it names
    (FlambdaApplySpec.inline_statement and what is built on it), which
-   is what the machine does at such a call. With the other meaning that
-   such a call could be given, that the callee's own code runs, the
-   statements of the first two groups would hold and the inlining
-   would not; and the statement of this file would need no sound
-   relation.
+   is what the machine does at such a call. The other meaning that
+   such a call could be given is that the callee's own code runs. A
+   direct call and the same call made indirect would then go by one
+   code, which takes away what refutes the three statements above; it
+   would be at odds with the inlining by the code named; and the
+   statement of this file would need no sound relation. That is no
+   proof of any other statement of the tree on such a machine.
 
    The proofs are in FlambdaCodeAgeCallsProofs.v, which needs no
    review. *)
@@ -326,11 +359,25 @@ Definition refines_by_step_statement : Prop :=
 (* CR mshinwell: a direct call of a closure whose code is not the code
    named, nor a newer version of it in the relation, is undefined here,
    as it is on [step] (discrepancy C0-1). The backend would run the
-   code named with that closure. Simplify takes such a call for one
-   that cannot be reached: [meet_set] of the two code ids answers
-   [Bottom], and the call is made [Invalid]
-   (simplify/simplify_apply_expr.ml, [simplify_direct_function_call]).
-   Is it undefined? And a direct call is defined here where the code of
+   code named with that closure. That test is not what Simplify
+   computes: Simplify has the code id that the type of the callee
+   gives, and not the code of the closure. Where neither that code id
+   nor the code named is a newer version of the other, and the
+   relation says so, [meet_set] of the two answers [Bottom], and
+   Simplify makes the call [Invalid] (simplify/simplify_apply_expr.ml,
+   [simplify_direct_function_call]): it takes such a call for one that
+   cannot be reached. But where the code id of the type is an older
+   version of the code named, the two are comparable: [meet_set]
+   answers the code named, and Simplify keeps the call, though the
+   type allows a closure of the older code, of which the call is
+   undefined here; and where a relation is missing [meet_set] may
+   answer both code ids. So that a direct call is undefined wherever
+   its callee is not a closure of the code named or of a newer version
+   of it is a choice of this machine, which the answer [Bottom]
+   supports in the first case only. Is that restriction the one
+   intended: in particular, is a direct call undefined where its
+   callee is a closure of an older version of the code named?
+   And a direct call is defined here where the code of
    its callee is not bound, if the code named is bound and the callee
    is a closure of a newer version of it: only the code named is
    looked up. May the code of a closure that a run holds be deleted,
@@ -514,7 +561,9 @@ Definition direct_call_newer_version_refines_statement : Prop :=
    callee gives, as two sets of one code id, and the call names the one
    code id of the answer. The relation is that of one compilation unit;
    what the type says of the callee is the premise that the callee is a
-   closure of [from_type] or of a newer version of it. *)
+   closure of [from_type] or of a newer version of it. It is the case
+   of Simplify in which the answer is one code id that it can use; of
+   its other cases nothing is stated (the head of this file). *)
 Definition direct_call_meet_set_refines_statement : Prop :=
   ∀ (age_of : static_env -> Code_age_relation.t) (steps : nat)
     (ap : apply_expr) (named from_type met : code_id) (vars : env)
