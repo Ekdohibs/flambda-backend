@@ -4,7 +4,7 @@ mixed_mutable_field.fl:
   the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
   the facts of the two graphs on the names of the unit: the same (29)
   the two solutions on the 24 names of the unit: the same
-  the model's rebuild and the compiler's output: the same up to bound names and subkinds
+  the model's rebuild and the compiler's output: the same up to bound names
   the reaper's input (36 steps): returns [0: 3]
   the model's rebuild (36 steps): returns [0: 3]
   the model's rebuild against the input: the same
@@ -16,7 +16,7 @@ mixed_mutable_field.fl:
     the decisions on the 2 code ids of the unit: the same, 2 changing
     code f_0: parameters [keep val, keep val], results [keep val]
     code g_1: parameters [keep val], results [keep val]
-    the model's rebuild and the compiler's output: the same up to bound names and subkinds
+    the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (36 steps): returns [0: 3]
     the model's rebuild (36 steps): returns [0: 3]
     the model's rebuild against the input: the same

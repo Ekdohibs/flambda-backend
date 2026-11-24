@@ -149,6 +149,7 @@ module Rebuild = Flambda2_rocq_semantics.FlambdaReaperRebuild
 module Cc = Flambda2_rocq_semantics.FlambdaReaperCallingConventions
 
 module Unboxing = Flambda2_rocq_semantics.FlambdaReaperUnboxing
+module Reaper_types = Flambda2_rocq_semantics.FlambdaReaperTypes
 module Model_compare = Flambda2_rocq_semantics.FlambdaCompareSpec
 module Imports = Flambda2_rocq_semantics.FlambdaImportsSpec
 module Rocq_model = Flambda2_rocq_semantics.FlambdaModel
@@ -1556,12 +1557,11 @@ let slots_in_order =
       | _ -> const)
 
 (* [e] with no subkind stated, of the parameters or the results of its code or
-   of the parameters of its handlers. The rebuilds of the model are the reaper
-   without types, with every subkind erased (FlambdaReaperRebuild.v), where the
-   compiler's keeps [Anything] and [Tagged_immediate] and whether a value may be
-   null, as its poison is a tagged immediate. The core's machine accepts poison
-   only where nothing is stated, so it finds the compiler's output undefined
-   where the compiler gives poison to a parameter whose subkind it keeps. *)
+   of the parameters of its handlers. The model's terms have no subkinds in the
+   arities of calls or in the fields of blocks, which the compiler's reaper with
+   types states, and the rebuilds of the model without types state nothing. The
+   core's machine accepts poison only where nothing is stated, so a compiler's
+   output whose run is undefined is run again with no subkind. *)
 let subkinds_erased =
   map_term ~static:Fun.id
     ~named:(fun _ named -> named)
@@ -1889,14 +1889,8 @@ let compare_calling_conventions ~(input : Flsemantics.converted)
     let rebuilt_body =
       within_budget "the model's rebuild" ~indent ~facts:model_facts ~input
         (fun () ->
-          let cannot_change =
-            let table = Hashtbl.create 16 in
-            List.iter (fun node -> Hashtbl.replace table node ()) model_table;
-            Hashtbl.mem table
-          in
-          Cc.rebuild_unit_cc model_facts
-            (solution_of_tables model_tables)
-            cannot_change deps preserve input.body)
+          Reaper_types.rebuild_unit_cc_with_types_from_tables is_local
+            model_facts model_tables [] model_table deps preserve input.body)
     in
     let reaped =
       unless_stopped ~indent "reaper" (fun () ->
@@ -2190,14 +2184,16 @@ type compiler_unboxing =
    and the function slot of the closure; the decisions of the code of the unit
    ([unit_calling_convention_changes_u] and [get_calling_convention_change])
    likewise, and their decisions of [my_closure] ([unit_my_closure_decisions_u],
-   [None] for [Keep_my_closure]). The model's rebuild
-   ([rebuild_unit_unbox_repr]) is compared with what [Reaper.run] returns, as
-   [compare_rebuild] does: the new slots of the compiler are given the numbers
-   of the model's ([relate_slots]), and a call with no callee, which the
-   compiler makes of a call of a closure that it unboxes, the poison that the
-   model's rebuild gives it ([Flsemantics.poison_missing_callee]). The made
-   nodes of the two graphs do not correspond, and are not compared. The machine
-   runs a call by the closure that its callee is
+   [None] for [Keep_my_closure]). The model's rebuild with types
+   ([rebuild_unit_unbox_repr_with_types], FlambdaReaperTypes.v, which states
+   the subkinds of [Types_rewriter.rewrite_kind_with_subkind], as the compiler
+   run with its typing environment does) is compared with what [Reaper.run]
+   returns, as [compare_rebuild] does: the new slots of the compiler are given
+   the numbers of the model's ([relate_slots]), and a call with no callee,
+   which the compiler makes of a call of a closure that it unboxes, the poison
+   that the model's rebuild gives it ([Flsemantics.poison_missing_callee]). The
+   made nodes of the two graphs do not correspond, and are not compared. The
+   machine runs a call by the closure that its callee is
    (FlambdaSemanticsSpec.shape_of_closure_call), so the runs of the two rebuilds
    of a unit whose code unboxes its [my_closure] are undefined at the first call
    of that code, and say nothing of it
@@ -2603,9 +2599,9 @@ let compare_unboxing ~(names : unit_names) ~(input : Flsemantics.converted)
       let rebuilt_body =
         within_budget "the model's rebuild" ~indent ~facts:model_facts ~input
           (fun () ->
-            Unboxing.rebuild_unit_unbox_repr is_local model_facts model_tables
-              cannot_change_m deps dominated_m to_unbox_m tcr_m preserve
-              input.body)
+            Reaper_types.rebuild_unit_unbox_repr_with_types is_local
+              model_facts model_tables cannot_change_m deps dominated_m
+              to_unbox_m tcr_m preserve input.body)
       in
       let reaped =
         unless_stopped ~indent "reaper" (fun () ->
@@ -3767,15 +3763,19 @@ let check ~filename ~cmx_loader (simplified : Simplify.simplify_result) : bool =
           | Auto | Always -> true
           | Never | Zero_alloc -> false
         in
+        let deps =
+          Cc.unit_code_deps (preserve_direct_calls ())
+            (Flsemantics.interface input)
+            input.body
+        in
         timed "the rebuilds and the runs" (fun () ->
             compare_rebuild ~indent:"  " ~ends:compiler.ends_of_regions ~input
               ~input_unit:unit
               ~rebuilt_body:
                 (within_budget "the model's rebuild" ~indent:"  "
                    ~facts:model_facts ~input (fun () ->
-                     Rebuild.rebuild_unit model_facts
-                       (solution_of_tables model_tables)
-                       preserve input.body))
+                     Reaper_types.rebuild_unit_with_types_from_tables is_local
+                       model_facts model_tables [] deps preserve input.body))
               ~compiler_output:reaped);
         if least_wanted ()
         then

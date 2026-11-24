@@ -4,7 +4,7 @@ unbox_kept_result_gadt.fl:
   the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
   the facts of the two graphs on the names of the unit: the same (25)
   the two solutions on the 21 names of the unit: the same
-  the model's rebuild and the compiler's output: the same up to bound names and subkinds
+  the model's rebuild and the compiler's output: the same up to bound names
   the reaper's input (28 steps): returns [0: 10]
   the model's rebuild (28 steps): returns [0: 10]
   the model's rebuild against the input: the same
@@ -15,7 +15,7 @@ unbox_kept_result_gadt.fl:
     the two tables on the 4 code ids of the unit: the same
     the decisions on the 2 code ids of the unit: the same, 1 changing
     code make_0: parameters [keep val], results [keep val]
-    the model's rebuild and the compiler's output: the same up to bound names and subkinds
+    the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (28 steps): returns [0: 10]
     the model's rebuild (28 steps): returns [0: 10]
     the model's rebuild against the input: the same
@@ -39,7 +39,7 @@ unbox_kept_result_gadt.fl:
     the decisions on the 2 code ids of the unit: the same, 1 changing
     code make_0: parameters [keep val], results [unbox {field 0 val}]
     the decisions of my_closure on the 2 code ids of the unit: the same, 0 unboxed
-    the model's rebuild and the compiler's output: the same up to bound names and subkinds
+    the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (28 steps): returns [0: 10]
     the model's rebuild (17 steps): undefined
     the model's rebuild against the input: DIFFERENT

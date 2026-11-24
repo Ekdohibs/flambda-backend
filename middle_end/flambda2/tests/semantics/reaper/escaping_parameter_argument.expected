@@ -4,7 +4,7 @@ escaping_parameter_argument.fl:
   the compiler's solution, with its graph: passes the check of closure, passes the check of field_of_constructor_is_used
   the facts of the two graphs on the names of the unit: the same (19)
   the two solutions on the 17 names of the unit: the same
-  the model's rebuild and the compiler's output: the same up to bound names and subkinds
+  the model's rebuild and the compiler's output: the same up to bound names
   the reaper's input (16 steps): returns [0: <fun>; <fun>; 0]
   the model's rebuild (16 steps): returns [0: <fun>; <fun>; 0]
   the model's rebuild against the input: the same
@@ -14,7 +14,7 @@ escaping_parameter_argument.fl:
     the table of the code that keeps its calling convention: the model's passes the check, the compiler's, with its graph, passes it
     the two tables on the 4 code ids of the unit: the same
     the decisions on the 2 code ids of the unit: the same, 0 changing
-    the model's rebuild and the compiler's output: the same up to bound names and subkinds
+    the model's rebuild and the compiler's output: the same up to bound names
     the reaper's input (16 steps): returns [0: <fun>; <fun>; 0]
     the model's rebuild (16 steps): returns [0: <fun>; <fun>; 0]
     the model's rebuild against the input: the same
