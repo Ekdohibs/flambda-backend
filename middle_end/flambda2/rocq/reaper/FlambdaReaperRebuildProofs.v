@@ -6107,7 +6107,7 @@ Qed.
    second run where the rewriting keeps the test of each value of the
    first. *)
 Lemma values_of_with_subkinds (statics statics' : static_env)
-    (rewrite : variable -> param_subkind -> param_subkind) :
+    (rewrite : node -> param_subkind -> param_subkind) :
   ∀ (params : list variable) (sks : list param_subkind)
     (vs vs' : list value),
     length vs = length params -> length vs' = length params ->
@@ -6115,9 +6115,10 @@ Lemma values_of_with_subkinds (statics statics' : static_env)
     (∀ (i : nat) (p : variable) (v v' : value) (ps : param_subkind),
        nth_error params i = Some p -> nth_error vs i = Some v ->
        nth_error vs' i = Some v' -> value_at statics ps v = true ->
-       value_at statics' (rewrite p ps) v' = true) ->
+       value_at statics' (rewrite (Node_variable p) ps) v' = true) ->
     values_of_subkinds statics' vs'
-      (map (fun '(x, ps) => rewrite x ps) (with_subkinds params sks))
+      (map (fun '(x, ps) => rewrite (Node_variable x) ps)
+         (with_subkinds params sks))
     = true.
 Proof.
   induction params as [ | p params IH];
@@ -6129,7 +6130,7 @@ Proof.
                  (ps : param_subkind),
              nth_error params i = Some p' -> nth_error vs i = Some w ->
              nth_error vs' i = Some w' -> value_at statics ps w = true ->
-             value_at statics' (rewrite p' ps) w' = true)
+             value_at statics' (rewrite (Node_variable p') ps) w' = true)
     by (intros i; exact (H (S i))).
   destruct sks as [ | ps sks].
   - cbn [with_subkinds map values_of_subkinds].
@@ -6152,7 +6153,7 @@ Qed.
 
 (* So for what a handler kept states, rewritten. *)
 Lemma values_of_rewritten (statics statics' : static_env)
-    (rewrite : variable -> param_subkind -> param_subkind) (mask : list bool)
+    (rewrite : node -> param_subkind -> param_subkind) (mask : list bool)
     (params : list variable) (sks : list param_subkind)
     (vs vs' : list value) :
   length vs = length params -> length vs' = length params ->
@@ -6160,7 +6161,7 @@ Lemma values_of_rewritten (statics statics' : static_env)
   (∀ (i : nat) (p : variable) (v v' : value) (ps : param_subkind),
      nth_error params i = Some p -> nth_error vs i = Some v ->
      nth_error vs' i = Some v' -> value_at statics ps v = true ->
-     value_at statics' (rewrite p ps) v' = true) ->
+     value_at statics' (rewrite (Node_variable p) ps) v' = true) ->
   values_of_subkinds statics' (filter_kept mask vs')
     (rewritten_subkinds rewrite mask params sks)
   = true.
@@ -6713,7 +6714,7 @@ Definition types_sound : Prop :=
       (is_var_used sol x (kind_of_value v) = true ->
        rel v (Node_variable x) v') ->
       value_at statics ps v = true ->
-      value_at statics' (rewrite x ps) v' = true
+      value_at statics' (rewrite (Node_variable x) ps) v' = true
   end.
 
 Hypothesis Htypes : types_sound.

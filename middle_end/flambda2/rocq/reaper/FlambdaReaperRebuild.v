@@ -320,7 +320,7 @@ Definition with_params_kinds (metadata : handler_metadata)
    at all, so that it states nothing ([None], the reaper without types),
    or by a function of the parameter and of what it stated ([Some]). *)
 Definition subkinds_rewriting : Type :=
-  option (variable -> param_subkind -> param_subkind).
+  option (node -> param_subkind -> param_subkind).
 
 (* Each parameter with what it states; nothing where the list is
    shorter. *)
@@ -338,12 +338,13 @@ Definition stated (sks : list param_subkind) : list param_subkind :=
 
 (* What the parameters kept by [mask] state, rewritten. *)
 Definition rewritten_subkinds
-    (rewrite : variable -> param_subkind -> param_subkind) (mask : list bool)
+    (rewrite : node -> param_subkind -> param_subkind) (mask : list bool)
     (params : list variable) (sks : list param_subkind)
     : list param_subkind :=
   stated
     (filter_kept mask
-       (map (fun '(x, ps) => rewrite x ps) (with_subkinds params sks))).
+       (map (fun '(x, ps) => rewrite (Node_variable x) ps)
+          (with_subkinds params sks))).
 
 (* The metadata of a handler that keeps the parameters [params] at a
    [true] of [mask]. *)

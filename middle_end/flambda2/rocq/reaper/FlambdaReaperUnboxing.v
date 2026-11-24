@@ -311,14 +311,25 @@
      closure is still made. Otherwise it is as in
      FlambdaReaperRebuild.v, which says why a local set of closures is
      rebuilt without the projections of its other closures.
-   - Subkinds, as in FlambdaReaperRebuild.v: the reaper without types,
-     whose [rewrite_kind_with_subkind] is [erase_subkind], after which
-     an entry states nothing. Code that keeps its calling
-     convention has what its parameters and results state erased
-     ([erase_code_subkinds]); code that changes, and a handler, state
-     nothing of their parameters: what is kept is erased, and the
-     fields of an unboxed parameter are [With_subkind.anything]
-     ([get_parameters]).
+   - Subkinds, as in FlambdaReaperRebuild.v: the rebuild takes [types].
+     Without types ([None]), [rewrite_kind_with_subkind] is
+     [erase_subkind], after which an entry states nothing. Code that
+     keeps its calling convention has what its parameters and results
+     state erased ([erase_code_subkinds]); code that changes, a handler
+     and a wrapper state nothing of their parameters: what is kept is
+     erased, and the fields of an unboxed parameter are
+     [With_subkind.anything] ([get_parameters]). With types ([Some
+     rewrite], FlambdaReaperTypes.rebuild_unit_unbox_repr_with_types), a
+     parameter of a handler kept states what [rewrite] gives at its
+     variable, a parameter or result of code kept what it gives at the
+     node of the code dep ([compute_code_changes]), the fields of one
+     unboxed nothing ([decisions_subkinds]); the parameters of a wrapper
+     state what those of the continuation of the call that it keeps
+     state ([cont_kept_subkinds], for code that keeps its calling
+     convention) or what the callee's results state
+     ([callee_results_u]). The subkinds of the arities of a call and of
+     the fields of a block, which the compiler rewrites too, are not in
+     the model.
    - The older forms [Set_of_closures] and [Static_const_set_of_closures]
      have no fact of a function slot (FlambdaReaperTraversal.v): to
      [get_set_of_closures_def] they are not sets, and they never change
@@ -2216,6 +2227,130 @@ Definition field_read (d : named) : option (field * simple) :=
   | _ => None
   end.
 
+(* ------------------------------------------------------------------------ *)
+(* What the parameters state, with types                                    *)
+(* ------------------------------------------------------------------------ *)
+
+(* Each node with what is stated of it; nothing where the list is
+   shorter. *)
+Fixpoint nodes_with_subkinds (nodes : list node) (sks : list param_subkind)
+    : list (node * param_subkind) :=
+  match nodes with
+  | [] => []
+  | n :: nodes => (n, hd any_value sks) :: nodes_with_subkinds nodes (tl sks)
+  end.
+
+(* What the parameters at nodes, with what they state, state once the
+   decisions are made ([get_parameters] of the decisions of
+   [compute_code_changes] and of [should_keep_param], as
+   [params_of_decisions] makes the parameters): one kept states what
+   [rewrite] gives at its node ([rewrite_kind_with_subkind]), the fields
+   of one unboxed nothing ([With_subkind.anything]). *)
+Fixpoint decisions_subkinds (rewrite : node -> param_subkind -> param_subkind)
+    (params : list (node * param_subkind)) (decisions : list decision)
+    : list param_subkind :=
+  match params, decisions with
+  | [], _ => []
+  | (n, ps) :: params, [] =>
+    rewrite n ps :: decisions_subkinds rewrite params []
+  | (n, ps) :: params, d :: decisions =>
+    match d with
+    | Decided (Keep _) | Keep_unused _ => [rewrite n ps]
+    | Decided Delete => []
+    | Unbox fields => map (fun _ => any_value) (fields_leaves fields)
+    end
+    ++ decisions_subkinds rewrite params decisions
+  end.
+
+(* What the parameters of the wrapper of a call of code that keeps its
+   calling convention state: the return arity of the call
+   ([rebuild_apply]), each result what the parameter of the continuation
+   of the call states if the continuation keeps it ([cont_params_to_keep],
+   rewritten), and nothing if it deletes or unboxes it. *)
+Fixpoint cont_kept_subkinds (rewrite : node -> param_subkind -> param_subkind)
+    (decisions : list decision) (params : list (node * param_subkind))
+    : list param_subkind :=
+  match params with
+  | [] => []
+  | (n, ps) :: params =>
+    match decisions with
+    | Decided Delete :: _ | Unbox _ :: _ => any_value
+    | _ => rewrite n ps
+    end
+    :: cont_kept_subkinds rewrite (tl decisions) params
+  end.
+
+(* A handler that states [sks] of its parameters of kinds [kinds]. *)
+Definition handler_metadata_with (metadata : handler_metadata)
+    (kinds : list flambda_kind) (sks : list param_subkind)
+    : handler_metadata :=
+  {| hm_params_kinds := kinds;
+     hm_params_subkinds := stated sks;
+     hm_is_exn_handler := hm_is_exn_handler metadata |}.
+
+(* Code that states [params_sks] of its parameters and [result_sks] of
+   its results. *)
+Definition with_code_subkinds (params_sks result_sks : list param_subkind)
+    (metadata : code_metadata) : code_metadata :=
+  {| cm_params_arity := cm_params_arity metadata;
+     cm_params_subkinds := stated params_sks;
+     cm_result_arity := cm_result_arity metadata;
+     cm_result_subkinds := stated result_sks;
+     cm_is_tupled := cm_is_tupled metadata;
+     cm_is_stub := cm_is_stub metadata |}.
+
+Section Conts_params.
+
+Variable code_deps : finite_map code_dep.
+
+(* The continuations of a term with the nodes of their parameters and
+   what these state ([Traverse_acc.continuation_info]): the parameters of
+   a handler; for the return continuation of code, the nodes of its
+   results in its code dep ([code_dep.return]), with what the code
+   states of them; for its exception continuation, the node of the
+   exception, of which nothing is stated. *)
+Fixpoint conts_params (e : expr) : finite_map (list (node * param_subkind)) :=
+  match e with
+  | Let _ _ _ body => conts_params body
+  | Let_static bindings body =>
+    flat_map binding_conts_params bindings ++ conts_params body
+  | Let_cont_non_recursive k h body =>
+    handler_conts_params k h ++ conts_params body
+  | Let_cont_recursive handlers body =>
+    flat_map (fun '(k, h) => handler_conts_params k h) handlers
+    ++ conts_params body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_conts_params (k : continuation) (h : continuation_handler)
+    : finite_map (list (node * param_subkind)) :=
+  match h with
+  | Handler params metadata handler =>
+    (k, nodes_with_subkinds (map Node_variable params)
+          (hm_params_subkinds metadata))
+    :: conts_params handler
+  end
+with binding_conts_params (binding : static_binding)
+    : finite_map (list (node * param_subkind)) :=
+  match binding with
+  | Bind_code id c => code_conts_params id c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with code_conts_params (id : code_id) (c : code)
+    : finite_map (list (node * param_subkind)) :=
+  match c with
+  | Code _ _ return_continuation exn_continuation metadata body =>
+    match lookup id code_deps with
+    | Some cd =>
+      [(return_continuation,
+        nodes_with_subkinds (cd_return cd) (cm_result_subkinds metadata));
+       (exn_continuation, [(cd_exn cd, any_value)])]
+    | None => []
+    end
+    ++ conts_params body
+  end.
+
+End Conts_params.
+
 Section Rebuild.
 
 (* The mode: [false] for the rebuild of the compiler on the branch,
@@ -2237,6 +2372,12 @@ Variable first_fresh : positive.
 (* The changes of representation of the names
    ([changed_representations]). *)
 Variable changed : list (node * closure_repr).
+(* How the rebuild rewrites what the parameters kept state
+   (FlambdaReaperRebuild.subkinds_rewriting: [None] without types), and,
+   for the reaper with types, the parameters of the continuations of the
+   unit ([conts_params]). *)
+Variable types : subkinds_rewriting.
+Variable cont_params : finite_map (list (node * param_subkind)).
 
 (* [Analysis.get_unboxed_fields]. *)
 Definition unboxed_of_node (n : node) : option unboxed_fields :=
@@ -2991,14 +3132,22 @@ Definition kept_arguments_u (en : unbox_env) (ap : apply_expr)
    returning to a continuation whose handler is [Invalid]: the wrapper,
    with that handler. In the mode of the fix, so is a call that
    [never_returns], whatever the decisions. *)
-Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
+Definition make_apply_wrapper_u (wrapper_subkinds : list param_subkind)
+    (en : unbox_env) (ap : apply_expr)
     (func_decisions : list (decision * flambda_kind)) (never_returns : bool)
     : expr :=
   let func := freshen_decisions func_decisions first_fresh in
   let params := wrapper_params func in
   let wrapper handler :=
     Let_cont_non_recursive first_fresh
-      (Handler (map fst params) (make_handler_metadata (map snd params))
+      (Handler (map fst params)
+         (match types with
+          | None => make_handler_metadata (map snd params)
+          | Some _ =>
+            {| hm_params_kinds := map snd params;
+               hm_params_subkinds := stated wrapper_subkinds;
+               hm_is_exn_handler := false |}
+          end)
          handler)
       (Apply (with_continuation ap first_fresh))
   in
@@ -3023,6 +3172,20 @@ Definition make_apply_wrapper_u (en : unbox_env) (ap : apply_expr)
     | None => wrapper Invalid
     end.
 
+(* For the reaper with types, the nodes of the results of the code that
+   a call is known to call, in its code dep, with what the code states of
+   them. *)
+Definition callee_results_u (ap : apply_expr) : list (node * param_subkind) :=
+  match code_id_actually_called F sol ap with
+  | Some id =>
+    match lookup id codes, lookup id code_deps with
+    | Some metadata, Some cd =>
+      nodes_with_subkinds (cd_return cd) (cm_result_subkinds metadata)
+    | _, _ => []
+    end
+  | None => []
+  end.
+
 (* [rebuild_apply]. A call whose callee does not change its calling
    convention is that of FlambdaReaperRebuild.rebuild_apply, but for an
    unboxed callee, which makes it [Invalid] (in the fix too), and, in the
@@ -3043,7 +3206,21 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
         match unboxed_of (ap_callee ap) with
         | Some _ => Invalid
         | None =>
-          make_apply_wrapper_u en
+          make_apply_wrapper_u
+            (match types with
+             | None => []
+             | Some rewrite =>
+               cont_kept_subkinds rewrite
+                 (match lookup (ap_continuation ap) (ue_decisions en) with
+                  | Some decisions => decisions
+                  | None => []
+                  end)
+                 (match lookup (ap_continuation ap) cont_params with
+                  | Some params => params
+                  | None => []
+                  end)
+             end)
+            en
             {| ap_callee := ap_callee ap;
                ap_call_kind :=
                  rewrite_call_kind F sol preserve_direct_calls unit_code_ids
@@ -3080,7 +3257,14 @@ Definition rebuild_apply_u (en : unbox_env) (ap : apply_expr) : expr :=
         | None, _ | _, None => Invalid
         | Some from_callee, Some groups =>
           let groups := prepend_first from_callee groups in
-          make_apply_wrapper_u en
+          make_apply_wrapper_u
+            (match types with
+             | None => []
+             | Some rewrite =>
+               decisions_subkinds rewrite (callee_results_u ap)
+                 return_decisions
+             end)
+            en
             {| ap_callee :=
                  match unboxed_of (ap_callee ap) with
                  | Some _ => rewrite_simple sol_u (ue_env en) (ap_callee ap)
@@ -3233,7 +3417,16 @@ with rebuild_handler_u (en : unbox_env) (dead_check : bool)
   | Handler params metadata handler =>
     let bound := with_kinds params (hm_params_kinds metadata) in
     let params := params_of_decisions bound decisions in
-    Handler (map fst params) (with_params_kinds metadata (map snd params))
+    Handler (map fst params)
+      (match types with
+       | None => with_params_kinds metadata (map snd params)
+       | Some rewrite =>
+         handler_metadata_with metadata (map snd params)
+           (decisions_subkinds rewrite
+              (nodes_with_subkinds (map (fun '(x, _) => Node_variable x) bound)
+                 (hm_params_subkinds metadata))
+              decisions)
+       end)
       (if dead_check
           && existsb (fun '(x, kind) => is_dead_var sol x kind) bound
        then Invalid
@@ -3296,7 +3489,19 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
     match change with
     | Not_changing_u =>
       Code params my_closure return_continuation exn_continuation
-        (erase_code_subkinds metadata) body
+        (match types, lookup id code_deps with
+         | Some rewrite, Some cd =>
+           with_code_subkinds
+             (map (fun '(n, ps) => rewrite n ps)
+                (nodes_with_subkinds (cd_params cd)
+                   (cm_params_subkinds metadata)))
+             (map (fun '(n, ps) => rewrite n ps)
+                (nodes_with_subkinds (cd_return cd)
+                   (cm_result_subkinds metadata)))
+             metadata
+         | _, _ => erase_code_subkinds metadata
+         end)
+        body
     | Changing_u params_decisions return_decisions =>
       (* [Unbox_my_closure]: the fields of [my_closure] are parameters, in
          front of the others. *)
@@ -3313,8 +3518,28 @@ with rebuild_code_u (id : code_id) (c : code) : code :=
                  (fun '(x, d) => decision_params x (param_decision_at x d))
                  (combine params params_decisions)))
         my_closure return_continuation exn_continuation
-        (changed_code_metadata_u metadata my_closure_decision
-           params_decisions return_decisions)
+        (match types, lookup id code_deps with
+         | Some rewrite, Some cd =>
+           with_code_subkinds
+             (match my_closure_decision with
+              | Unbox fields => map (fun _ => any_value) (fields_leaves fields)
+              | Decided _ | Keep_unused _ => []
+              end
+              ++ decisions_subkinds rewrite
+                   (nodes_with_subkinds (cd_params cd)
+                      (cm_params_subkinds metadata))
+                   (map (fun '(x, d) => param_decision_at x d)
+                      (combine params params_decisions)))
+             (decisions_subkinds rewrite
+                (nodes_with_subkinds (cd_return cd)
+                   (cm_result_subkinds metadata))
+                return_decisions)
+             (changed_code_metadata_u metadata my_closure_decision
+                params_decisions return_decisions)
+         | _, _ =>
+           changed_code_metadata_u metadata my_closure_decision
+             params_decisions return_decisions
+         end)
         body
     end
   end.
@@ -3477,7 +3702,22 @@ Definition rebuild_unit_unbox_repr_mode (fixed : bool)
     (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
     (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
-    empty_unbox_env e.
+    None [] empty_unbox_env e.
+
+(* The same, with what the parameters kept state rewritten as [types]
+   says: the reaper with types ([Some], FlambdaReaperTypes.v) or without
+   ([None], [rebuild_unit_unbox_repr_mode]). *)
+Definition rebuild_unit_unbox_repr_mode_with (types : subkinds_rewriting)
+    (fixed : bool) (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  let '(unboxed, next) := unit_unboxed_fields F T dominated to_unbox e in
+  rebuild_expr_u fixed F (solution_of_tables T)
+    (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
+    (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
+    (unit_changed_representations is_local F T dominated to_unbox tcr e)
+    types (conts_params code_deps e) empty_unbox_env e.
 
 (* The rebuild of the compiler on the branch, and that of the fix. *)
 Definition rebuild_unit_unbox_repr := rebuild_unit_unbox_repr_mode false.
@@ -3497,7 +3737,7 @@ Definition rebuild_unit_unbox_repr_fixed_fails (is_local : field -> bool)
     (fun n => mem_node n cannot_change) code_deps preserve_direct_calls
     (static_names code_ids_bound e) (bound_code_metadata e) unboxed next
     (unit_changed_representations is_local F T dominated to_unbox tcr e)
-    empty_unbox_env e.
+    None [] empty_unbox_env e.
 
 (* The rebuild with no change of representation: a set of closures that
    is not unboxed keeps its slots. *)
@@ -4045,7 +4285,7 @@ Example kept_result_unboxed_wrapper :
     (fst (unit_unboxed_fields kept_result_unboxed_facts
             kept_result_unboxed_tables kept_result_unboxed_dominated [v 42]
             kept_result_unboxed))
-    65
+    65 None []
     (ubind_continuations empty_unbox_env [(21, [Decided (Keep Value)])])
     (call_50 [int 9] 21)
   = Let_cont_non_recursive 65

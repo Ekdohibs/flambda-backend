@@ -132,13 +132,13 @@ Variable ff : positive.
 Variable changed : list (node * closure_repr).
 
 Abbreviation fails :=
-  (rebuild_fails_u true F sol cc cds pdc uci codes unboxed ff changed).
+  (rebuild_fails_u true F sol cc cds pdc uci codes unboxed ff changed None []).
 Abbreviation hfails :=
-  (handler_fails_u true F sol cc cds pdc uci codes unboxed ff changed).
+  (handler_fails_u true F sol cc cds pdc uci codes unboxed ff changed None []).
 Abbreviation cfails :=
-  (code_fails_u true F sol cc cds pdc uci codes unboxed ff changed).
+  (code_fails_u true F sol cc cds pdc uci codes unboxed ff changed None []).
 Abbreviation rcode :=
-  (rebuild_code_u true F sol cc cds pdc uci codes unboxed ff changed).
+  (rebuild_code_u true F sol cc cds pdc uci codes unboxed ff changed None []).
 Abbreviation calls := (rebuilt_calls sol cc cds uci unboxed).
 Abbreviation hcalls := (handler_rebuilt_calls sol cc cds uci unboxed).
 
@@ -181,7 +181,7 @@ Proof.
 Qed.
 
 Abbreviation bfails :=
-  (binding_fails_u true F sol cc cds pdc uci codes unboxed ff changed).
+  (binding_fails_u true F sol cc cds pdc uci codes unboxed ff changed None []).
 
 Lemma fails_static (en : unbox_env) (bindings : list static_binding)
     (body : expr) :

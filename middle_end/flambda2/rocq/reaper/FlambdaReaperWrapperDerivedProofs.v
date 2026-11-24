@@ -824,7 +824,7 @@ Qed.
 
 Lemma fc_wrapper (ff : positive) (en : unbox_env) (ap : apply_expr)
     (fds : list (decision * flambda_kind)) (nr : bool) (k : continuation) :
-  k ∈ fc (make_apply_wrapper_u true ff en ap fds nr) ->
+  k ∈ fc (make_apply_wrapper_u true ff None [] en ap fds nr) ->
   k = ap_exn_continuation ap ∨ (k = ap_continuation ap ∧ nr = false).
 Proof.
   unfold make_apply_wrapper_u. cbn [andb].
@@ -864,7 +864,8 @@ Variable ff : positive.
 Variable changed : list (node * closure_repr).
 
 Lemma fc_apply (en : unbox_env) (ap : apply_expr) (k : continuation) :
-  k ∈ fc (rebuild_apply_u true F sol cc cds pdc uci codes unboxed ff en ap) ->
+  k ∈ fc (rebuild_apply_u true F sol cc cds pdc uci codes unboxed ff None [] en
+    ap) ->
   k = ap_exn_continuation ap
   ∨ (k = ap_continuation ap ∧ apply_never_returns F sol cds codes ap = false).
 Proof.
@@ -1352,11 +1353,11 @@ Variable pdc : bool.
 Abbreviation rebuild :=
   (rebuild_expr_u true F S (fun n => mem_node n cannot_change) cds pdc
      (static_names code_ids_bound e0) (bound_code_metadata e0) unboxed ff
-     changed).
+     changed None []).
 Abbreviation rebuild_handler :=
   (rebuild_handler_u true F S (fun n => mem_node n cannot_change) cds pdc
      (static_names code_ids_bound e0) (bound_code_metadata e0) unboxed ff
-     changed).
+     changed None []).
 Abbreviation calls :=
   (rebuilt_calls S (fun n => mem_node n cannot_change) cds
      (static_names code_ids_bound e0) unboxed).

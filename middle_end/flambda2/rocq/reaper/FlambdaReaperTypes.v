@@ -691,7 +691,7 @@ End Subkinds.
    the node of each. *)
 Definition subkinds_of_context (ctx : rewrite_context)
     : FlambdaReaperRebuild.subkinds_rewriting :=
-  Some (fun x ps => rewrite_kind_with_subkind ctx (Node_variable x) ps).
+  Some (fun n ps => rewrite_kind_with_subkind ctx n ps).
 
 (* The rebuild of the reaper with types; [rebuild_unit] is that without. *)
 Definition rebuild_unit_with_types (ctx : rewrite_context) (F : facts)
@@ -724,6 +724,30 @@ Definition rebuild_unit_cc_with_types_from_tables (is_local : field -> bool)
   rebuild_unit_cc_with_types (plain_context is_local F T sets) F
     (solution_of_tables T) (fun n => mem_node n cannot_change) code_deps
     preserve_direct_calls e.
+
+(* The rebuild with unboxing and changes of representation of the reaper
+   with types (FlambdaReaperUnboxing.rebuild_unit_unbox_repr_mode_with),
+   with the arguments of [rebuild_unit_unbox_repr] and
+   [rebuild_unit_unbox_repr_fixed]: what the parameters of the code, the
+   handlers and the wrappers kept state, and what code states of its
+   results, rewritten as [rewrite_kind_with_subkind] does, which reads
+   neither the sets of closures nor the changes of representation of the
+   context. *)
+Definition rebuild_unit_unbox_repr_mode_with_types (fixed : bool)
+    (is_local : field -> bool) (F : facts) (T : tables)
+    (cannot_change : list node)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
+    (dominated : list (node * node)) (to_unbox tcr : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  FlambdaReaperUnboxing.rebuild_unit_unbox_repr_mode_with
+    (subkinds_of_context (plain_context is_local F T [])) fixed is_local F T
+    cannot_change code_deps dominated to_unbox tcr preserve_direct_calls e.
+
+Definition rebuild_unit_unbox_repr_with_types :=
+  rebuild_unit_unbox_repr_mode_with_types false.
+
+Definition rebuild_unit_unbox_repr_fixed_with_types :=
+  rebuild_unit_unbox_repr_mode_with_types true.
 
 (* ======================================================================== *)
 (* Closures (the closure case of [Rewriter.rewrite])                        *)

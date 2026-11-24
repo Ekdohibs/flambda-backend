@@ -431,5 +431,5 @@ Definition check_never_returns_auto_statement : Prop :=
                  (rebuild_code_u true F S (fun n => mem_node n cannot_change)
                     code_deps preserve_direct_calls
                     (static_names code_ids_bound e) (bound_code_metadata e)
-                    unboxed first_fresh changed id c)))
+                    unboxed first_fresh changed None [] id c)))
       = false.

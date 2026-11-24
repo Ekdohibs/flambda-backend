@@ -1006,7 +1006,7 @@ Lemma rebuild_ubh :
              = Handler (map fst ps) metadata hp
              ∧ rebuild_handler_u false F sol cannot_change code_deps
                  preserve_direct_calls unit_code_ids codes unboxed
-                 first_fresh_u [] en dead
+                 first_fresh_u [] None [] en dead
                  (handler_decisions false sol unboxed is_exn h) h
                = Handler (map fst ps') metadata' hu
              ∧ params_rel unboxed
@@ -1072,7 +1072,8 @@ Proof.
       destruct (bind_fields_pairs fields fields_y
                   (rebuild_expr_u false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
-                     first_fresh_u [] (ubind_variables en [(x, Value)]) body)
+                     first_fresh_u [] None [] (ubind_variables en [(x, Value)])
+                       body)
                   Hflat)
         as (pairs & Hentries & Hl).
       cbn [unboxed_of].
@@ -1082,7 +1083,8 @@ Proof.
       destruct (lets_free_continuations (pairs_lets pairs)
                   (rebuild_expr_u false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
-                     first_fresh_u [] (ubind_variables en [(x, Value)]) body))
+                     first_fresh_u [] None [] (ubind_variables en [(x, Value)])
+                       body))
         as [Hfc Hbs].
       split; [ exact (ubh_alias unboxed _ x y fields fields_y pairs _ _ Hx Hxf
                         Hy Hne Hentries IHub)
@@ -1111,7 +1113,8 @@ Proof.
       * destruct (bind_block_fields_lets2 (ue_env en) x tag args' fields)
           with (body := rebuild_expr_u false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
-                          first_fresh_u [] (ubind_variables en [(x, Value)])
+                          first_fresh_u [] None [] (ubind_variables en [(x,
+                            Value)])
                           body)
           as (ls & Hl & Hentries).
         { intros f u Hin.
@@ -1125,7 +1128,8 @@ Proof.
         destruct (lets_free_continuations (concat ls)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] (ubind_variables en [(x, Value)])
+                       first_fresh_u [] None [] (ubind_variables en [(x,
+                         Value)])
                        body))
           as [Hfc Hbs].
         split; [ exact (ubh_alloc unboxed _ x _ fields ls _ _ Hx Hxf Hentries
@@ -1138,7 +1142,8 @@ Proof.
                        (Prim (Unary (Box_number bn)) [c])) Hc)
           with (body := rebuild_expr_u false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
-                          first_fresh_u [] (ubind_variables en [(x, Value)])
+                          first_fresh_u [] None [] (ubind_variables en [(x,
+                            Value)])
                           body)
           as (ls & Hl & Hentries).
         { intros Hne. destruct fields as [ | [f u] fields]; [ easy | ].
@@ -1154,7 +1159,8 @@ Proof.
         destruct (lets_free_continuations (concat ls)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] (ubind_variables en [(x, Value)])
+                       first_fresh_u [] None [] (ubind_variables en [(x,
+                         Value)])
                        body))
           as [Hfc Hbs].
         split; [ refine (ubh_alloc unboxed _ x _ fields _ _ _ Hx Hxf Hentries
@@ -1173,7 +1179,8 @@ Proof.
         destruct (bind_fields_pairs fields nested
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] (ubind_variables en [(x, Value)])
+                       first_fresh_u [] None [] (ubind_variables en [(x,
+                         Value)])
                        body)
                     Halike)
           as (pairs & Hentries & Hl).
@@ -1181,7 +1188,8 @@ Proof.
         destruct (lets_free_continuations (pairs_lets pairs)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] (ubind_variables en [(x, Value)])
+                       first_fresh_u [] None [] (ubind_variables en [(x,
+                         Value)])
                        body))
           as [Hfc Hbs].
         split.
@@ -1349,7 +1357,7 @@ Proof.
              (k,
               rebuild_handler_u false F sol cannot_change code_deps
                 preserve_direct_calls unit_code_ids codes unboxed
-                first_fresh_u [] (ubind_continuations en dss) false
+                first_fresh_u [] None [] (ubind_continuations en dss) false
                 (handler_decisions false sol unboxed false h) h))
           hs
       in
