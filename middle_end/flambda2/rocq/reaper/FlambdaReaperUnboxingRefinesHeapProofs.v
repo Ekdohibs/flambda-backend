@@ -1002,7 +1002,7 @@ Lemma rebuild_ubh :
            ∃ (ps ps' : list (variable * flambda_kind))
              (metadata metadata' : handler_metadata) (hp hu : expr),
              rebuild_handler F sol preserve_direct_calls unit_code_ids
-               first_fresh (pen_of en C) dead (handler_mask sol is_exn h) h
+               first_fresh None (pen_of en C) dead (handler_mask sol is_exn h) h
              = Handler (map fst ps) metadata hp
              ∧ rebuild_handler_u false F sol cannot_change code_deps
                  preserve_direct_calls unit_code_ids codes unboxed
@@ -1339,7 +1339,7 @@ Proof.
           (fun '(k, h) =>
              (k,
               rebuild_handler F sol preserve_direct_calls unit_code_ids
-                first_fresh (bind_continuations (pen_of en C) masks) false
+                first_fresh None (bind_continuations (pen_of en C) masks) false
                 (handler_mask sol false h) h))
           hs
       in

@@ -5987,6 +5987,7 @@ Lemma call_step (ap : apply_expr) (vars : env) (K : cont_env)
       ∧ arity_eqb (ap_return_arity ap) (code_result_arity c) = true
       ∧ bind_params (code_params c) vs [(code_my_closure c, callee)]
         = Some callee_vars
+      ∧ values_of_subkinds statics vs (code_params_subkinds c) = true
       ∧ s' = State (code_body c) callee_vars
                [(code_return_continuation c, resolve (ap_continuation ap) K);
                 (code_exn_continuation c,
@@ -6032,11 +6033,11 @@ Proof.
   destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
     [ | exact I ].
   simpl.
-  destruct (values_of_subkinds statics vs (code_params_subkinds c));
+  destruct (values_of_subkinds statics vs (code_params_subkinds c)) eqn:Hsk;
     [ simpl | exact I ].
   destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
     as [callee_vars | ] eqn:Hbind; [ | exact I ].
-  exists callee, vs, extra, slots, c, callee_vars. auto 12.
+  exists callee, vs, extra, slots, c, callee_vars. auto 13.
 Qed.
 
 (* A direct call of the fragment, or a call of known arity, goes wrong,
@@ -6067,6 +6068,7 @@ Lemma full_call_step (ap : apply_expr) (vars : env) (K : cont_env)
       ∧ arity_eqb (ap_return_arity ap) (code_result_arity c) = true
       ∧ bind_params (code_params c) vs [(code_my_closure c, callee)]
         = Some callee_vars
+      ∧ values_of_subkinds statics vs (code_params_subkinds c) = true
       ∧ s' = State (code_body c) callee_vars
                [(code_return_continuation c, resolve (ap_continuation ap) K);
                 (code_exn_continuation c,
@@ -6084,7 +6086,7 @@ Proof.
     destruct (step _) as [s' | | ]; [ | exact Hs | exact I ].
     destruct Hs as (callee & vs & extra & slots & c & callee_vars & Hcallee
                     & Hvs & Hextra & Hclosure & Hcode & Hk1 & Hk2 & Hk3
-                    & Hbind & ->).
+                    & Hbind & Hsk & ->).
     pose proof Hfrag as Hall. unfold apply_in_flow_fragment in Hall.
     rewrite Hkind in Hall. apply andb_true_iff in Hall as [Hall Hne].
     destruct (Hcodes id c Hcode) as [Hin _].
@@ -6096,7 +6098,7 @@ Proof.
     split; [ left; reflexivity | ].
     do 7 (split; [ assumption | ]).
     split; [ intros E; rewrite E in Hne; simpl in Hne; discriminate Hne | ].
-    auto 6.
+    auto 7.
   - rewrite step_apply.
     destruct (eval_simple vars (ap_callee ap)) as [callee | ] eqn:Hcallee;
       [ | exact I ].
@@ -6148,14 +6150,14 @@ Proof.
     destruct (arity_eqb (ap_return_arity ap) (code_result_arity c)) eqn:Hk3;
       [ | exact I ].
     simpl.
-    destruct (values_of_subkinds statics vs (code_params_subkinds c));
-      [ simpl | exact I ].
+    destruct (values_of_subkinds statics vs (code_params_subkinds c))
+      eqn:Hsk; [ simpl | exact I ].
     destruct (bind_params (code_params c) vs [(code_my_closure c, callee)])
       as [callee_vars | ] eqn:Hbind; [ | exact I ].
     exists called, callee, vs, extra, slots, c, callee_vars.
     split; [ right; exists code_ids; split; [ reflexivity | exact Hallow ]
            | ].
-    auto 14.
+    auto 15.
 Qed.
 
 (* The state that a direct call runs keeps the invariant. *)
@@ -8240,7 +8242,8 @@ Proof.
       destruct (step _) as [s' | | ]; [ | contradiction | exact I ].
       destruct Hstep as (id' & callee & vs & extra & slots & c & callee_vars
                          & _ & Hcallee & Hvs & Hextra & Hclosure & Hcode & _
-                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & ->).
+                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & _
+                         & ->).
       destruct (apply_conts ctx ce ap (state_vars s) (state_conts s)
                   (state_statics s) extra returns exn Hcount Hvars Hvars_pa
                   Hconts HK_pa Hret Hexn Hextra)
@@ -8310,7 +8313,8 @@ Proof.
       destruct (step _) as [s' | | ]; [ | contradiction | exact I ].
       destruct Hstep as (id' & callee & vs & extra & slots & c & callee_vars
                          & _ & Hcallee & Hvs & Hextra & Hclosure & Hcode & _
-                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & ->).
+                         & _ & _ & Hkinds & Hparams & Hresult & Hbind & _
+                         & ->).
       destruct (apply_conts ctx ce ap (state_vars s) (state_conts s)
                   (state_statics s) extra returns exn Hcount Hvars Hvars_pa
                   Hconts HK_pa Hret Hexn Hextra)

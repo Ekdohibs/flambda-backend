@@ -174,22 +174,27 @@
      ([rebuild_named]), the mode of the compiler goes with the
      allocation, while the model keeps the [Local_allocation] after the
      poison, of which the machine of FlambdaRegionsSpec.v has no step.
-   - Subkinds. What is transcribed is the reaper without types
-     ([Traverse.With_types.Without_types]), for which
-     [Analysis.rewrite_kind_with_subkind] is [erase_subkind]
-     ([Flambda_kind.With_subkind.erase_subkind]: [Anything] and nullable
-     for the kind [Value], nothing stated of a naked kind): what the
-     parameters of code and its results state is erased
-     ([Unboxing_analysis.compute_code_changes], for code that keeps its
-     calling convention), and so is what a parameter of a continuation
-     that is kept states ([should_keep_param]). Every entry erased
-     states nothing, so the rebuilt code ([erase_code_subkinds]) and
-     the rebuilt handlers ([with_params_kinds]) state nothing: the empty
-     list, as the test tool converts the compiler's term
-     ([convert_params_subkinds]). The arities of a call have no subkinds
-     in the model. The reaper with types keeps more
-     (FlambdaReaperTypes.rewrite_kind_with_subkind; what it keeps is
-     stated in FlambdaReaperTypesSpec.v).
+   - Subkinds. [Analysis.rewrite_kind_with_subkind] rewrites what the
+     parameters of code that keeps its calling convention state
+     ([Unboxing_analysis.compute_code_changes]), and what a parameter
+     of a continuation that is kept states ([should_keep_param]). The
+     rebuild takes it as [types] ([subkinds_rewriting]). The reaper
+     without types ([Traverse.With_types.Without_types], [None]) uses
+     [erase_subkind] ([Flambda_kind.With_subkind.erase_subkind]:
+     [Anything] and nullable for the kind [Value], nothing stated of a
+     naked kind), so that the rebuilt code ([erase_code_subkinds]) and
+     handlers ([with_params_kinds]) state nothing: the empty list, as
+     the test tool converts the compiler's term
+     ([convert_params_subkinds]). The reaper with types ([Some rewrite],
+     FlambdaReaperTypes.rebuild_unit_with_types) gives each parameter
+     kept what [rewrite] gives of it and of what it stated
+     ([kept_handler_metadata], [kept_code_metadata]); a list of which
+     nothing says anything is the empty list. Left out, with types: what
+     code states of its results, which the compiler rewrites under the
+     nodes of its code dep and the machine does not test, and what the
+     parameters of a wrapper state, which the compiler takes from the
+     parameters of the continuation that it applies; both state nothing
+     here. The arities of a call have no subkinds in the model.
    - The model has no phantom binding, no region of code, no
      [Rec_info], no [Never_returns], no cost metrics, inlining
      decisions, [is_my_closure_used], [only_full_applications],
@@ -311,6 +316,73 @@ Definition with_params_kinds (metadata : handler_metadata)
   then make_exn_handler_metadata kinds
   else make_handler_metadata kinds.
 
+(* How the rebuild rewrites what a parameter that it keeps states: not
+   at all, so that it states nothing ([None], the reaper without types),
+   or by a function of the parameter and of what it stated ([Some]). *)
+Definition subkinds_rewriting : Type :=
+  option (variable -> param_subkind -> param_subkind).
+
+(* Each parameter with what it states; nothing where the list is
+   shorter. *)
+Fixpoint with_subkinds (params : list variable) (sks : list param_subkind)
+    : list (variable * param_subkind) :=
+  match params, sks with
+  | [], _ => []
+  | x :: params, [] => (x, any_value) :: with_subkinds params []
+  | x :: params, ps :: sks => (x, ps) :: with_subkinds params sks
+  end.
+
+(* A list of which nothing says anything is the empty list. *)
+Definition stated (sks : list param_subkind) : list param_subkind :=
+  if subkinds_say_nothing sks then [] else sks.
+
+(* What the parameters kept by [mask] state, rewritten. *)
+Definition rewritten_subkinds
+    (rewrite : variable -> param_subkind -> param_subkind) (mask : list bool)
+    (params : list variable) (sks : list param_subkind)
+    : list param_subkind :=
+  stated
+    (filter_kept mask
+       (map (fun '(x, ps) => rewrite x ps) (with_subkinds params sks))).
+
+(* The metadata of a handler that keeps the parameters [params] at a
+   [true] of [mask]. *)
+Definition kept_handler_metadata (types : subkinds_rewriting)
+    (mask : list bool) (params : list variable)
+    (metadata : handler_metadata) : handler_metadata :=
+  match types with
+  | None =>
+    with_params_kinds metadata (filter_kept mask (hm_params_kinds metadata))
+  | Some rewrite =>
+    {| hm_params_kinds := filter_kept mask (hm_params_kinds metadata);
+       hm_params_subkinds :=
+         rewritten_subkinds rewrite mask params (hm_params_subkinds metadata);
+       hm_is_exn_handler := hm_is_exn_handler metadata |}
+  end.
+
+(* The same metadata, the parameters stating [sks]. *)
+Definition with_code_params_subkinds (sks : list param_subkind)
+    (metadata : code_metadata) : code_metadata :=
+  {| cm_params_arity := cm_params_arity metadata;
+     cm_params_subkinds := sks;
+     cm_result_arity := cm_result_arity metadata;
+     cm_result_subkinds := cm_result_subkinds metadata;
+     cm_is_tupled := cm_is_tupled metadata;
+     cm_is_stub := cm_is_stub metadata |}.
+
+(* The metadata of code that keeps its calling convention, whose
+   parameters are [params]: with types, what they state is rewritten,
+   and nothing is stated of the results. *)
+Definition kept_code_metadata (types : subkinds_rewriting)
+    (params : list variable) (metadata : code_metadata) : code_metadata :=
+  match types with
+  | None => erase_code_subkinds metadata
+  | Some rewrite =>
+    with_code_params_subkinds
+      (rewritten_subkinds rewrite [] params (cm_params_subkinds metadata))
+      (erase_code_subkinds metadata)
+  end.
+
 (* The continuation of a call changed. *)
 Definition with_continuation (ap : apply_expr) (k : continuation)
     : apply_expr :=
@@ -362,6 +434,8 @@ Variable preserve_direct_calls : bool.
 Variable unit_code_ids : list code_id.
 (* The first of the names that the rebuild makes. *)
 Variable first_fresh : positive.
+(* How what a parameter kept states is rewritten. *)
+Variable types : subkinds_rewriting.
 
 (* ======================================================================== *)
 (* Queries of the solution                                                  *)
@@ -981,7 +1055,7 @@ with rebuild_handler (en : rebuild_env) (dead_check : bool)
   | Handler params metadata handler =>
     let bound := with_kinds params (hm_params_kinds metadata) in
     Handler (filter_kept mask params)
-      (with_params_kinds metadata (filter_kept mask (hm_params_kinds metadata)))
+      (kept_handler_metadata types mask params metadata)
       (if dead_check && existsb (fun '(x, kind) => is_dead_var x kind) bound
        then Invalid
        else rebuild_expr (bind_variables en bound) handler)
@@ -1014,7 +1088,7 @@ with rebuild_code (c : code) : code :=
       :: with_kinds params (unarize (cm_params_arity metadata))
     in
     Code params my_closure return_continuation exn_continuation
-      (erase_code_subkinds metadata)
+      (kept_code_metadata types params metadata)
       (if existsb (fun '(x, kind) => is_dead_var x kind) bound
        then Invalid
        else rebuild_expr (bind_variables empty_env bound) body)
@@ -1023,11 +1097,18 @@ with rebuild_code (c : code) : code :=
 End Rebuild.
 
 (* [Rebuild.rebuild]: the rebuilt unit, given the facts of its graph and
-   the solution. *)
+   the solution, with what the parameters kept state rewritten as
+   [types] says. *)
+Definition rebuild_unit_with (types : subkinds_rewriting) (F : facts)
+    (sol : solution) (preserve_direct_calls : bool) (e : expr) : expr :=
+  rebuild_expr F sol preserve_direct_calls (static_names code_ids_bound e)
+    (fresh_name (names_of e)) types empty_env e.
+
+(* The reaper without types. *)
 Definition rebuild_unit (F : facts) (sol : solution)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   rebuild_expr F sol preserve_direct_calls (static_names code_ids_bound e)
-    (fresh_name (names_of e)) empty_env e.
+    (fresh_name (names_of e)) None empty_env e.
 
 (* The same, with the solution given by its tables. *)
 Definition rebuild_unit_from_tables (F : facts) (T : tables)

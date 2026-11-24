@@ -417,6 +417,20 @@
      no use reads, which the rebuild makes poison
      ([BoxedCounterexample]): the compiler erases that subkind, which
      forgets that the value is not null.
+   - The reaper with types ([rebuild_unit_with_types_from_tables],
+     [rebuild_unit_cc_with_types_from_tables]: the rebuilds where the
+     parameters of the code and handlers kept state what
+     [rewrite_kind_with_subkind] gives):
+     [rebuild_with_types_refines_local_statement],
+     [rebuild_with_types_refines_up_to_heap_local_statement] and
+     [rebuild_cc_with_types_refines_up_to_heap_local_statement], the
+     refinements of the unit that the rebuilds without types have, under
+     the least solution in addition, for any sets of closures given to
+     the rewriting. The proof runs the simulation of the rebuild with
+     what is stated of each parameter shown to hold of the value that
+     the rebuilt unit gives it, by the proof of
+     [rewrite_kind_with_subkind_sound] for the relation of the
+     simulation. No fault found.
 
    What is left out:
    - Closures of a set of one function with no slot named
@@ -469,7 +483,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperSolution FlambdaReaperRebuild FlambdaReaperFlowSpec
   FlambdaReaperLeastSpec FlambdaReaperLocalFields FlambdaReaperTypes.
 From OxCamlFlambda2 Require FlambdaReaperUnboxing
-  FlambdaReaperUnboxingRefinesCallsSpec.
+  FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperCallingConventionsSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaBindingTime FlambdaTypingEnv
   FlambdaTypingEnvSpec.
@@ -2972,3 +2986,85 @@ Definition rewrite_kind_with_subkind_sound_statement : Prop :=
     value_at statics'
       (rewrite_kind_with_subkind (plain_context is_local F T sets) x ps) v'
     = true.
+
+(* ======================================================================== *)
+(* The reaper with types                                                    *)
+(* ======================================================================== *)
+
+(* The rebuild of the reaper with types, which rewrites what the
+   parameters of the code and handlers kept state
+   ([rebuild_unit_with_types_from_tables]), refines the unit as the
+   rebuild without types does
+   (FlambdaReaperRebuildSpec.rebuild_refines_local_statement), under the
+   least solution, for any sets of closures given to the rewriting: what
+   a parameter kept states holds of the value that the rebuilt unit
+   gives it. *)
+Definition rebuild_with_types_refines_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.closure_free e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaUnusedStaticsSpec.program_refines e
+      (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
+         T sets preserve_direct_calls e).
+
+(* The same with the heap
+   (FlambdaReaperRebuildSpec.rebuild_refines_up_to_heap_local_statement).
+   *)
+Definition rebuild_with_types_refines_up_to_heap_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperRebuildSpec.program_refines_up_to_heap e
+      (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
+         T sets preserve_direct_calls e).
+
+(* The same for the rebuild with types and changes of calling convention
+   (FlambdaReaperCallingConventionsSpec.v,
+   [rebuild_cc_refines_up_to_heap_local_statement]): a code that changes
+   its calling convention states of the parameters it keeps what the
+   rewriting gives. *)
+Definition rebuild_cc_with_types_refines_up_to_heap_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) (cannot_change : list node)
+    (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperCallingConventions.check_cc_closed (traverse_unit flag u e)
+      T cannot_change
+    = true ->
+    FlambdaReaperCallingConventionsSpec.check_apply_widgets
+      (traverse_unit flag u e) T
+    = true ->
+    FlambdaReaperRebuildSpec.program_refines_up_to_heap e
+      (rebuild_unit_cc_with_types_from_tables is_local
+         (traverse_unit flag u e) T sets cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e)
+         preserve_direct_calls e).

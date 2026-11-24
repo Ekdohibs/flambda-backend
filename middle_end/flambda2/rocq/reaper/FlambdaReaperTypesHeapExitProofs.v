@@ -64,9 +64,9 @@ Definition exit_statics_rel_heap (G : graph) (sol : solution)
   ∃ (cds : finite_map code_dep) (F : facts) (b : bool)
     (ids : list code_id) (first_fresh : positive) (cc : node -> bool)
     (code_deps : finite_map code_dep)
-    (code_metadatas : finite_map code_metadata),
+    (code_metadatas : finite_map code_metadata) (types : subkinds_rewriting),
     statics_rel G sol cds keep True F b ids first_fresh false True cc
-      code_deps code_metadatas L statics statics'.
+      code_deps code_metadatas types L statics statics'.
 
 (* Where a unit of the fragment with the heap exits, whose closures are
    made where the graph has only the facts of their sets, the rebuilt unit
@@ -244,14 +244,15 @@ Proof.
   (* The rebuild where no code changes its calling convention. *)
   rewrite <- (rebuild_expr_cc_unchanged F sol (fun _ => true) [] b
                 (static_names code_ids_bound e) (bound_code_metadata e)
-                (fresh_name (names_of e)) (fun _ _ => eq_refl)).
+                (fresh_name (names_of e)) None (fun _ _ => eq_refl)).
   assert (Hx : ∃ (L : location -> option node) (m : nat) (t : state)
                  (vs' : list value) (hp' : heap) (rd' : read_record),
              run m
                (State
                   (rebuild_expr_cc F sol (fun _ => true) [] b
                      (static_names code_ids_bound e) (bound_code_metadata e)
-                     (fresh_name (names_of e)) FlambdaReaperRebuild.empty_env
+                     (fresh_name (names_of e)) None
+                     FlambdaReaperRebuild.empty_env
                      e)
                   [] [] empty_static_env empty_heap no_reads)
              = Step t
@@ -261,7 +262,7 @@ Proof.
                  (static_names symbols_of_binding e) u
                  (if true then True else False) True F b
                  (static_names code_ids_bound e) (fresh_name (names_of e))
-                 false True (fun _ => true) [] (bound_code_metadata e) L s
+                 false True (fun _ => true) [] (bound_code_metadata e) None L s
                  t).
   { assert (Hslots_read : True -> local_reads_used is_local G sol)
       by (intros _;
@@ -288,6 +289,7 @@ Proof.
   split; [ exact Hm | split; [ exact Ht | split; [ exact (proj1 HE) | ] ] ].
   destruct Hrel as [_ (ctx & en & ce & rets & _ & _ & _ & _ & Hst & _)].
   exists cds, F, b, (static_names code_ids_bound e),
-    (fresh_name (names_of e)), (fun _ => true), [], (bound_code_metadata e).
+    (fresh_name (names_of e)), (fun _ => true), [], (bound_code_metadata e),
+    None.
   exact Hst.
 Qed.

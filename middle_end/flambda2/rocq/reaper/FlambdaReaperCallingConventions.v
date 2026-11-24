@@ -371,6 +371,22 @@ Definition changed_code_metadata (metadata : code_metadata)
      cm_is_tupled := false;
      cm_is_stub := cm_is_stub metadata |}.
 
+(* The same, what the parameters kept state rewritten as [types] says
+   ([Keep] of [compute_code_changes], with types), the parameters of the
+   code being [params]. *)
+Definition changed_code_metadata_with (types : subkinds_rewriting)
+    (params : list variable) (metadata : code_metadata)
+    (params_decisions return_decisions : list param_decision)
+    : code_metadata :=
+  match types with
+  | None => changed_code_metadata metadata params_decisions return_decisions
+  | Some rewrite =>
+    with_code_params_subkinds
+      (rewritten_subkinds rewrite (map is_kept params_decisions) params
+         (cm_params_subkinds metadata))
+      (changed_code_metadata metadata params_decisions return_decisions)
+  end.
+
 Definition metadata_of_code (c : code) : code_metadata :=
   match c with Code _ _ _ _ metadata _ => metadata end.
 
@@ -524,6 +540,9 @@ Variable unit_code_ids : list code_id.
 Variable codes : finite_map code_metadata.
 (* The first of the names that the rebuild makes. *)
 Variable first_fresh : positive.
+(* How what a parameter kept states is rewritten
+   (FlambdaReaperRebuild.subkinds_rewriting). *)
+Variable types : subkinds_rewriting.
 
 (* The code that a call is known to call
    ([decide_whether_apply_needs_calling_convention_change]): the one code
@@ -680,7 +699,7 @@ with rebuild_handler_cc (en : rebuild_env) (dead_check : bool)
   | Handler params metadata handler =>
     let bound := with_kinds params (hm_params_kinds metadata) in
     Handler (filter_kept mask params)
-      (with_params_kinds metadata (filter_kept mask (hm_params_kinds metadata)))
+      (kept_handler_metadata types mask params metadata)
       (if dead_check
           && existsb (fun '(x, kind) => is_dead_var sol x kind) bound
        then Invalid
@@ -732,11 +751,12 @@ with rebuild_code_cc (id : code_id) (c : code) : code :=
     match change with
     | Not_changing_calling_convention =>
       Code params my_closure return_continuation exn_continuation
-        (erase_code_subkinds metadata) body
+        (kept_code_metadata types params metadata) body
     | Changing_calling_convention params_decisions return_decisions =>
       Code (filter_kept (map is_kept params_decisions) params) my_closure
         return_continuation exn_continuation
-        (changed_code_metadata metadata params_decisions return_decisions)
+        (changed_code_metadata_with types params metadata params_decisions
+           return_decisions)
         body
     end
   end.
@@ -747,12 +767,21 @@ End Rebuild.
    unit, given the facts of its graph, the solution, the table of
    [cannot_change_calling_convention] and the code deps of the
    traversal. *)
+Definition rebuild_unit_cc_with (types : subkinds_rewriting) (F : facts)
+    (sol : solution) (cannot_change : node -> bool)
+    (code_deps : finite_map code_dep) (preserve_direct_calls : bool)
+    (e : expr) : expr :=
+  rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
+    (static_names code_ids_bound e) (bound_code_metadata e)
+    (fresh_name (names_of e)) types empty_env e.
+
+(* The reaper without types. *)
 Definition rebuild_unit_cc (F : facts) (sol : solution)
     (cannot_change : node -> bool) (code_deps : finite_map code_dep)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
     (static_names code_ids_bound e) (bound_code_metadata e)
-    (fresh_name (names_of e)) empty_env e.
+    (fresh_name (names_of e)) None empty_env e.
 
 (* The same, with the solution and the table given by their tuples. *)
 Definition rebuild_unit_cc_from_tables (F : facts) (T : tables)

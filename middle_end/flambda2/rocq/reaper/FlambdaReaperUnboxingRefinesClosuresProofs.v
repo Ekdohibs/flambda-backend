@@ -403,7 +403,8 @@ Definition CSf (id : code_id) : option code_info :=
   end.
 
 Definition cc_rebuild (en : rebuild_env) (e : expr) : expr :=
-  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff en
+  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff None
+    en
     e.
 
 Definition u_rebuild (en : unbox_env) (e : expr) : expr :=
@@ -1408,7 +1409,7 @@ Lemma cc_let_cont (en : rebuild_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler_cc F sol cannot_change code_deps pdc unit_code_ids
-           codes ff en true mask h)
+           codes ff None en true mask h)
         body'
     else body'.
 Proof. reflexivity. Qed.
@@ -1439,7 +1440,8 @@ Lemma cc_let_cont_rec (en : rebuild_env)
       (map
          (fun '(k, h) =>
             (k, rebuild_handler_cc F sol cannot_change code_deps pdc
-                  unit_code_ids codes ff en' false (handler_mask sol false h)
+                  unit_code_ids codes ff None en' false (handler_mask sol false
+                    h)
                   h))
          handlers)
       (cc_rebuild en' body).
@@ -1469,7 +1471,7 @@ Lemma cc_let_static (en : rebuild_env) (bindings : list static_binding)
   = Let_static
       (flat_map
          (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-            codes ff en)
+            codes ff None en)
          bindings)
       (cc_rebuild (bind_variables en []) body).
 Proof. reflexivity. Qed.
@@ -1596,17 +1598,17 @@ Lemma code_rebuilt (id : code_id) (c : code) :
   ∃ ci : code_info,
     code_frame MM CH CSf id
       (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes
-         ff id c)
+         ff None id c)
       (rebuild_code_u true F sol cannot_change code_deps pdc
          unit_code_ids codes unboxed ffu changed id c)
       ci
     ∧ rr MM CH CSf
         (code_dead ci
            (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids
-              codes ff id c))
+              codes ff None id c))
         (code_body
            (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids
-              codes ff id c))
+              codes ff None id c))
         (code_body
            (rebuild_code_u true F sol cannot_change code_deps pdc
               unit_code_ids codes unboxed ffu changed id c)).
@@ -1653,8 +1655,8 @@ Proof.
   - split; [ unfold CSf; rewrite Hmd, Hmc; reflexivity | ].
     cbn [code_params code_my_closure code_return_continuation
          code_exn_continuation code_params_arity code_result_arity
-         code_is_tupled changed_code_metadata cm_params_arity
-         cm_is_tupled].
+         code_is_tupled changed_code_metadata_with changed_code_metadata
+         cm_params_arity cm_is_tupled].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ reflexivity | split; [ reflexivity | ] ].
@@ -1740,7 +1742,7 @@ Lemma bindings_rebuilt (C : finite_map (list decision * bool))
   rr_bindings MM CH CSf
     (flat_map
        (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-          codes ff en)
+          codes ff None en)
        bindings)
     (flat_map
        (rebuild_binding_u true F sol cannot_change code_deps pdc
@@ -2343,7 +2345,8 @@ Lemma rebuild_rr :
          ∀ dead_check : bool,
            ∃ (ps : list variable) (md : handler_metadata) (hp hu : expr),
              rebuild_handler_cc F sol cannot_change code_deps pdc
-               unit_code_ids codes ff en dead_check (handler_mask sol is_exn h)
+               unit_code_ids codes ff None en dead_check (handler_mask sol
+                 is_exn h)
                h
              = Handler ps md hp
              ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
@@ -2537,7 +2540,7 @@ Proof.
         rr_handlers MM CH CSf D'
           (map (fun '(k, h) =>
                   (k, rebuild_handler_cc F sol cannot_change code_deps pdc
-                        unit_code_ids codes ff en' false
+                        unit_code_ids codes ff None en' false
                         (handler_mask sol false h) h))
              hs)
           (map (fun '(k, h) =>

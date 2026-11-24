@@ -683,6 +683,49 @@ Definition rewrite_kind_with_subkind (x : node) (ps : param_subkind)
 End Subkinds.
 
 (* ======================================================================== *)
+(* The reaper with types                                                    *)
+(* ======================================================================== *)
+
+(* How the reaper with types ([With_types]) rewrites what the parameters
+   that kept code and handlers keep state: [rewrite_kind_with_subkind] at
+   the node of each. *)
+Definition subkinds_of_context (ctx : rewrite_context)
+    : FlambdaReaperRebuild.subkinds_rewriting :=
+  Some (fun x ps => rewrite_kind_with_subkind ctx (Node_variable x) ps).
+
+(* The rebuild of the reaper with types; [rebuild_unit] is that without. *)
+Definition rebuild_unit_with_types (ctx : rewrite_context) (F : facts)
+    (sol : solution) (preserve_direct_calls : bool) (e : expr) : expr :=
+  FlambdaReaperRebuild.rebuild_unit_with (subkinds_of_context ctx) F sol
+    preserve_direct_calls e.
+
+(* From the tables, under the context of the rebuild without unboxing,
+   with the sets of closures [sets] of the unit. *)
+Definition rebuild_unit_with_types_from_tables (is_local : field -> bool)
+    (F : facts) (T : tables) (sets : list set_of_closures)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  rebuild_unit_with_types (plain_context is_local F T sets) F
+    (solution_of_tables T) preserve_direct_calls e.
+
+(* The same with changes of calling convention. *)
+Definition rebuild_unit_cc_with_types (ctx : rewrite_context) (F : facts)
+    (sol : solution) (cannot_change : node -> bool)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  FlambdaReaperCallingConventions.rebuild_unit_cc_with
+    (subkinds_of_context ctx) F sol cannot_change code_deps
+    preserve_direct_calls e.
+
+Definition rebuild_unit_cc_with_types_from_tables (is_local : field -> bool)
+    (F : facts) (T : tables) (sets : list set_of_closures)
+    (cannot_change : list node)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  rebuild_unit_cc_with_types (plain_context is_local F T sets) F
+    (solution_of_tables T) (fun n => mem_node n cannot_change) code_deps
+    preserve_direct_calls e.
+
+(* ======================================================================== *)
 (* Closures (the closure case of [Rewriter.rewrite])                        *)
 (* ======================================================================== *)
 

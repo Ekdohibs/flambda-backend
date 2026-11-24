@@ -283,7 +283,7 @@ Proof.
   destruct (step _) as [s1 | | ]; [ | contradiction | exact I ].
   destruct Hfull as (id' & callee' & vs & extra & slots' & c & callee_vars
                      & _ & Hcallee' & Hvs & Hextra & Hclosure' & Hcode & _ & _
-                     & _ & Hk1 & Hk2 & Hk3 & Hbind & ->).
+                     & _ & Hk1 & Hk2 & Hk3 & Hbind & _ & ->).
   rewrite Hcallee in Hcallee'. injection Hcallee' as <-.
   rewrite Hclosure in Hclosure'. injection Hclosure' as <- <-.
   rewrite resolve_head.

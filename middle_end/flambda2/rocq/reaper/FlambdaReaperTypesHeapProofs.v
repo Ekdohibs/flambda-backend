@@ -1373,7 +1373,7 @@ Lemma statics_rel_rebuilt_heap (is_local : field -> bool) (G : graph)
   statics_of_values statics ->
   statics_rebuilt_heap G sol (RBP.kept_beta sol True L) statics statics'.
 Proof.
-  intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds
+  intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds & ty
                     & Hnone & Hblocks & Honly & _)
     Hvals s allocated Hl Hhu.
   pose proof (Hvals s allocated Hl) as Hval.
@@ -1439,7 +1439,8 @@ Lemma statics_rel_whole_heap (G : graph) (sol : solution)
   FlambdaClosuresSpec.static_sets_bound statics' ->
   static_sets_whole sol statics statics'.
 Proof.
-  intros (cds & F & b & ids & ff & cc & cdeps & cmds & _ & _ & Honly & _)
+  intros (cds & F & b & ids & ff & cc & cdeps & cmds & ty & _ & _ & Honly
+          & _)
     Hbound Hbound' s slot syms decls vs Hl Hhu.
   destruct (Hbound s slot syms decls vs Hl) as [Hslot Hset].
   split; [ exact Hslot | ].

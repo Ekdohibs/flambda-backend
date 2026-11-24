@@ -1161,7 +1161,8 @@ Proof.
   destruct (check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
   exact (FlambdaReaperRebuildProofs.exits_rel_heap _ false _ _
            (FlambdaReaperRebuildProofs.rebuild_cc_refines_checked_local true
-              false flag is_local u e T (fun n => mem_node n cannot_change) ccw b
+              false flag is_local u e T (fun n => mem_node n cannot_change) ccw
+              b
               Hlocal Hfrag
               (proj1
                  (FlambdaReaperRebuildProofs.any_kind_arguments_checked
@@ -1193,7 +1194,7 @@ Proof.
                           Hfrag))) as He.
   apply FlambdaReaperRebuildProofs.up_to_heap_free_observably;
     [ exact He | | ].
-  - exact (proj1 (FlambdaReaperRebuildProofs.rebuild_cc_free _ _ _ _ _ _ _ _)
+  - exact (proj1 (FlambdaReaperRebuildProofs.rebuild_cc_free _ _ _ _ _ _ _ _ _)
              e He _).
   - exact (HN flag is_local u e T cannot_change b Hlocal Hslots
              (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e

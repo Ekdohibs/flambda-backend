@@ -6292,7 +6292,7 @@ Lemma statics_rel_rebuilt (is_local : field -> bool) (G : graph)
   RP.statics_no_location statics -> statics_of_values statics ->
   statics_rebuilt G sol statics statics'.
 Proof.
-  intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds & located
+  intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds & ty & located
                     & Hnone & Hblocks & Honly & _)
     Hnl Hvals s allocated Hl Hhu.
   pose proof (Hvals s allocated Hl) as Hval.
@@ -6532,9 +6532,9 @@ Variable b : bool.
 Variable ids : list code_id.
 Variable ff : positive.
 
-Local Abbreviation rebuild := (rebuild_expr F sol b ids ff).
-Local Abbreviation rebuild_h := (rebuild_handler F sol b ids ff).
-Local Abbreviation rebuild_b := (rebuild_binding F sol b ids ff).
+Local Abbreviation rebuild := (rebuild_expr F sol b ids ff None).
+Local Abbreviation rebuild_h := (rebuild_handler F sol b ids ff None).
+Local Abbreviation rebuild_b := (rebuild_binding F sol b ids ff None).
 
 (* A binding rebuilt has the code ids and the symbols of the sets of the
    binding. *)
@@ -6764,7 +6764,7 @@ Lemma statics_rel_whole (G : graph) (sol : solution)
   FlambdaClosuresSpec.static_sets_bound statics' ->
   static_sets_whole sol statics statics'.
 Proof.
-  intros (cds & F & b & ids & ff & cc & cdeps & cmds & located & _ & _
+  intros (cds & F & b & ids & ff & cc & cdeps & cmds & ty & located & _ & _
           & Honly & _)
     Hbound Hbound' s slot syms decls vs Hl Hhu.
   destruct (Hbound s slot syms decls vs Hl) as [Hslot Hset].
@@ -10494,6 +10494,12 @@ Definition erasing (m : rewrite_metadata) : bool :=
   | Single_source _ | Many_sources_any_usage | Many_sources_usages _ => false
   end.
 
+(* The proof is for any relation [R] of the values of the two runs and
+   static environments that have of the values what the statement reads:
+   [rebuilt_value] and [statics_rebuilt], and the relation of the
+   simulation of the rebuild (FlambdaReaperRebuildProofs.rel and
+   [statics_rel]), with which the rebuild with types is shown to refine
+   the unit. *)
 Section Subkinds_sound.
 
 Variable is_local : field -> bool.
@@ -10504,13 +10510,76 @@ Variables statics statics' : static_env.
 
 Hypothesis Hleast : least_solution is_local F T.
 Hypothesis Hlocal : is_local_slots_only is_local.
-Hypothesis Halloc : statics_allocated (solution_of_tables T) statics.
-Hypothesis Hst :
-  statics_rebuilt (graph_of_facts F) (solution_of_tables T) statics statics'.
 
 Local Abbreviation G := (graph_of_facts F).
 Local Abbreviation sol := (solution_of_tables T).
 Local Abbreviation ctx := (plain_context is_local F T sets).
+
+Variable R : value -> node -> value -> Prop.
+
+(* The field [i] of a block of values whose allocation is [a]. *)
+Definition field_R (a : node) (i : nat) (field field' : value) : Prop :=
+  kind_of_value field = Value ->
+  ∃ from : node,
+    g_constructor G a (Field_block i Value) from
+    ∧ (s_field_used sol a (Field_block i Value) = true ->
+       s_has_usage sol from = true ∧ R field from field')
+    ∧ (s_field_used sol a (Field_block i Value) = false ->
+       field' = Value_const (Poison Value)).
+
+Hypothesis HR_kind :
+  ∀ (v : value) (n : node) (v' : value),
+    R v n v' -> kind_of_value v' = kind_of_value v.
+Hypothesis HR_null :
+  ∀ (v : value) (n : node) (v' : value),
+    R v n v' -> v' = Value_const Null -> v = Value_const Null.
+Hypothesis HR_const :
+  ∀ (c : const) (n : node) (v' : value),
+    R (Value_const c) n v' -> v' = Value_const c.
+Hypothesis HR_poison :
+  ∀ (v : value) (n : node) (v' : value) (k : flambda_kind),
+    metadata_at sol Many_sources_any_usage n -> R v n v' ->
+    v' = Value_const (Poison k) -> v = Value_const (Poison k).
+Hypothesis HR_symbol :
+  ∀ (s : symbol) (n : node) (v' : value),
+    R (Value_symbol s) n v' ->
+    v' = Value_symbol s ∧ may_come_from sol (Node_symbol s) n
+    ∧ (s_has_usage sol n = true -> s_has_usage sol (Node_symbol s) = true).
+Hypothesis HR_block :
+  ∀ (tag : Z) (fields : list value) (n : node) (v' : value),
+    R (Value_block tag fields) n v' ->
+    ∃ (a : node) (fields' : list value),
+      may_come_from sol a n ∧ s_has_source sol a = true
+      ∧ v' = Value_block tag fields'
+      ∧ fields_rebuilt (field_R a) 0 fields fields'.
+Hypothesis HR_boxed :
+  ∀ (c : const) (n : node) (v' : value),
+    R (Value_boxed_number c) n v' ->
+    ∃ (a : node) (bn : boxable_number) (from : node),
+      may_come_from sol a n ∧ s_has_source sol a = true
+      ∧ is_number_of_kind bn c = true
+      ∧ g_constructor G a (Field_boxed_number bn) from
+      ∧ v' = (if s_field_used sol a (Field_boxed_number bn)
+              then Value_boxed_number c
+              else Value_const (Poison Value)).
+Hypothesis HS_sourced :
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    s_has_source sol (Node_symbol s) = true.
+Hypothesis HS_boxed :
+  ∀ (s : symbol) (c : const),
+    lookup s (static_values statics)
+    = Some (Static_boxed_number (Value_const c)) ->
+    s_has_usage sol (Node_symbol s) = true ->
+    lookup s (static_values statics')
+    = Some (Static_boxed_number (Value_const c)).
+Hypothesis HS_block :
+  ∀ (s : symbol) (tag : Z) (fields : list value),
+    lookup s (static_values statics) = Some (Static_block tag fields) ->
+    s_has_usage sol (Node_symbol s) = true ->
+    ∃ fields' : list value,
+      lookup s (static_values statics') = Some (Static_block tag fields')
+      ∧ fields_rebuilt (field_R (Node_symbol s)) 0 fields fields'.
 
 Lemma subkinds_closed : closed is_local G sol.
 Proof. exact (least_closed_tables is_local F T (or_introl Hleast)). Qed.
@@ -10529,80 +10598,36 @@ Proof.
   destruct (Hlocal _ E) as [(w & Hw) | (g & Hg)]; discriminate.
 Qed.
 
-Lemma rebuilt_null (v : value) (n : node) (v' : value) :
-  rebuilt_value G sol v n v' -> v' = Value_const Null ->
-  v = Value_const Null.
-Proof.
-  intros Hv Heq. subst v'.
-  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
-  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
-  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
-  - destruct Hv as [Heq _]. discriminate Heq.
-  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
-  - destruct Hv as (elements' & Heq). discriminate Heq.
-  - destruct Hv as (a & bn & from & _ & _ & _ & _ & Heq).
-    destruct (s_field_used sol a (Field_boxed_number bn)); discriminate Heq.
-  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
-Qed.
-
-Lemma rebuilt_const (c : const) (n : node) (v' : value) :
-  rebuilt_value G sol (Value_const c) n v' -> v' = Value_const c.
-Proof. intros [_ ->]. reflexivity. Qed.
-
-(* What is kept at [Anything] and at [Tagged_immediate]. *)
-(* Under a metadata of any usage, the rebuild makes poison of no value:
-   the contents of a boxed number have a use. *)
-Lemma any_usage_not_poison (v : value) (n : node) (v' : value)
-    (k : flambda_kind) :
-  metadata_at sol Many_sources_any_usage n -> rebuilt_value G sol v n v' ->
-  v' = Value_const (Poison k) -> v = Value_const (Poison k).
-Proof.
-  intros Hmd Hv Heq0. subst v'.
-  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
-  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
-  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
-  - destruct Hv as [Heq _]. discriminate Heq.
-  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
-  - destruct Hv as (elements' & Heq). discriminate Heq.
-  - destruct Hv as (a & bn & from & Hmay & Hhs & _ & Hcons & Heq).
-    pose proof (Hmd a Hmay Hhs) as Hau. cbn [describes] in Hau.
-    rewrite (field_used_any_usage _ _ _ subkinds_closed a _ from Hcons Hau
-               (boxed_not_local bn))
-      in Heq.
-    discriminate Heq.
-  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
-Qed.
-
 (* What is kept at [Anything], under a metadata of any usage. *)
 Lemma anything_sound (nb : bool) (v : value) (n : node) (v' : value) :
-  metadata_at sol Many_sources_any_usage n -> rebuilt_value G sol v n v' ->
+  metadata_at sol Many_sources_any_usage n -> R v n v' ->
   value_at statics (nb, Subkind_anything) v = true ->
   value_at statics' (nb, Subkind_anything) v' = true.
 Proof.
   intros Hmd Hv Hat. destruct v' as [c' | | | | | | | | ]; try reflexivity.
   destruct c'; try reflexivity.
-  - rewrite (rebuilt_null v n _ Hv eq_refl) in Hat. exact Hat.
+  - rewrite (HR_null v n _ Hv eq_refl) in Hat. exact Hat.
   - match goal with
     | |- value_at _ _ (Value_const (Poison ?k)) = true =>
-      rewrite (any_usage_not_poison v n _ k Hmd Hv eq_refl) in Hat
+      rewrite (HR_poison v n _ k Hmd Hv eq_refl) in Hat
     end.
     exact Hat.
 Qed.
 
 Lemma tagged_sound (nb : bool) (v : value) (n : node) (v' : value) :
-  rebuilt_value G sol v n v' ->
+  R v n v' ->
   value_at statics (nb, Subkind_tagged_immediate) v = true ->
   value_at statics' (nb, Subkind_tagged_immediate) v' = true.
 Proof.
   intros Hv Hat. destruct v as [c | | | | | | | | ];
     try (cbn in Hat; discriminate Hat).
-  rewrite (rebuilt_const c n v' Hv). destruct c; exact Hat.
+  rewrite (HR_const c n v' Hv). destruct c; exact Hat.
 Qed.
 
 (* What is erased. *)
 Lemma erase_sound (nb : bool) (sk : subkind) (v : value) (n : node)
     (v' : value) :
-  rebuilt_value G sol v n v' -> value_at statics (nb, sk) v = true ->
+  R v n v' -> value_at statics (nb, sk) v = true ->
   value_at statics' (erase_subkind (nb, sk)) v' = true.
 Proof. intros _ _. apply FlambdaSubkindProofs.value_at_any_value. Qed.
 
@@ -10685,14 +10710,13 @@ Qed.
 Definition sk_sound (sk : subkind) : Prop :=
   ∀ (m : rewrite_metadata) (nb : bool) (v : value) (n : node) (v' : value),
     erasing m = false -> metadata_at sol m n -> s_has_usage sol n = true ->
-    rebuilt_value G sol v n v' -> value_at statics (nb, sk) v = true ->
+    R v n v' -> value_at statics (nb, sk) v = true ->
     value_at statics' (rewrite_subkind ctx m nb sk) v' = true.
 
 Definition shapes_sound (shapes : constructor_shapes) : Prop :=
   ∀ (m : rewrite_metadata) (a : node) (tag : Z) (fields fields' : list value),
     erasing m = false -> describes sol m a ->
-    fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) 0 fields
-      fields' ->
+    fields_rebuilt (field_R a) 0 fields fields' ->
     block_of_shapes statics shapes tag fields = true ->
     block_of_shapes statics' (rewrite_shapes ctx m shapes) tag
       fields'
@@ -10702,8 +10726,7 @@ Definition field_subkinds_sound (sks : field_subkinds) : Prop :=
   ∀ (m : rewrite_metadata) (a : node) (i : nat)
     (fields fields' : list value),
     erasing m = false -> describes sol m a ->
-    fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) i fields
-      fields' ->
+    fields_rebuilt (field_R a) i fields fields' ->
     fields_of_subkinds statics sks fields = true ->
     fields_of_subkinds statics' (rewrite_field_subkinds ctx m i sks)
       fields'
@@ -10766,24 +10789,25 @@ Proof.
     all: first
       [ (* A constant. *)
         solve
-          [ rewrite (rebuilt_const c n v' Hv);
+          [ rewrite (HR_const c n v' Hv);
             destruct c; try exact Hat; cbn in Hat; unfold says_nothing in Hat;
             rewrite andb_false_r in Hat; discriminate Hat ]
       | (* A symbol bound to a boxed number. *)
         solve
-          [ destruct Hv as (-> & Hmay & Hsu);
+          [ destruct (HR_symbol _ _ _ Hv) as (-> & Hmay & Hsu);
             cbn [value_at fst snd value_of_subkind boxed_number_of] in Hat;
             cbn [value_at fst snd value_of_subkind
                  boxed_number_of];
             destruct (lookup s (static_values statics)) as [allocated | ]
               eqn:Hl; [ | discriminate Hat ];
-            pose proof (Hst s allocated Hl (Hsu Hhu)) as Hs;
             destruct allocated as [ | | | contents | | | ];
               try discriminate Hat;
-            cbn [static_rebuilt] in Hs; rewrite Hs; exact Hat ]
+            destruct contents as [c0 | | | | | | | | ]; try discriminate Hat;
+            rewrite (HS_boxed s c0 Hl (Hsu Hhu)); exact Hat ]
       | (* A boxed number. *)
         solve
-          [ destruct Hv as (a & bn' & from & Hmay & Hhs & Hk & Hcons & ->);
+          [ destruct (HR_boxed _ _ _ Hv)
+              as (a & bn' & from & Hmay & Hhs & Hk & Hcons & ->);
             rewrite (boxed_number_contents statics nb bn bn' c Hk Hat)
               in Hcons |- *;
             destruct (field_metadata m a from (Field_boxed_number bn) Hm
@@ -10797,23 +10821,23 @@ Proof.
     rewrite rewrite_subkind_head by exact Hm. cbn [head_rewrite].
     destruct v as [c | | | s | tag fields | | c | | ];
       try (cbn in Hat; discriminate Hat).
-    + rewrite (rebuilt_const c n v' Hv).
+    + rewrite (HR_const c n v' Hv).
       destruct c; try exact Hat; cbn in Hat; unfold says_nothing in Hat;
         rewrite andb_false_r in Hat; discriminate Hat.
-    + destruct Hv as (-> & Hmay & Hsu).
+    + destruct (HR_symbol _ _ _ Hv) as (-> & Hmay & Hsu).
       cbn [value_at fst snd value_of_subkind block_of] in Hat.
       cbn [value_at fst snd value_of_subkind block_of].
       destruct (lookup s (static_values statics)) as [allocated | ] eqn:Hl;
         [ | discriminate Hat ].
-      pose proof (Hst s allocated Hl (Hsu Hhu)) as Hs.
       destruct allocated as [ | | tag fields | | | | ]; try discriminate Hat.
-      cbn [static_rebuilt] in Hs. destruct Hs as (fields' & Hfound & Hfr).
+      destruct (HS_block s tag fields Hl (Hsu Hhu))
+        as (fields' & Hfound & Hfr).
       rewrite Hfound.
       apply (IH m (Node_symbol s) tag fields fields' Hm);
         [ | exact Hfr | exact Hat ].
-      apply (Hmd (Node_symbol s) Hmay).
-      destruct (Halloc s _ Hl) as [Hhs _]. exact Hhs.
-    + destruct Hv as (a & fields' & Hmay & Hhs & -> & Hfr).
+      exact (Hmd (Node_symbol s) Hmay (HS_sourced s _ Hl)).
+    + destruct (HR_block _ _ _ _ Hv)
+        as (a & fields' & Hmay & Hhs & -> & Hfr).
       exact (IH m a tag fields fields' Hm (Hmd a Hmay Hhs) Hfr Hat).
   - (* No shape *)
     intros m a tag fields fields' _ _ _ Hat. discriminate Hat.
@@ -10842,11 +10866,13 @@ Proof.
     apply andb_true_iff in Hat as [Hk Hat].
     cbn [rewrite_field_subkinds]. rewrite fields_of_subkinds_at.
     rewrite (IH m a (S i) fields fields' Hm Hd Hfr Hrest), andb_true_r.
-    pose proof (field_rebuilt_kind G sol a i field field' Hfield) as Hk'.
     apply FlambdaPrimitiveProofs.kind_eqb_eq in Hk.
-    rewrite Hk', Hk, FlambdaPrimitiveProofs.kind_eqb_refl. cbn [andb].
-    destruct Hfield as (from & Hcons & Hused & Hunused).
-    rewrite Hk in Hcons, Hused, Hunused.
+    destruct (Hfield Hk) as (from & Hcons & Hused & Hunused).
+    assert (Hk' : kind_of_value field' = Value).
+    { destruct (s_field_used sol a (Field_block i Value)).
+      - rewrite (HR_kind _ _ _ (proj2 (Hused eq_refl))). exact Hk.
+      - rewrite (Hunused eq_refl). reflexivity. }
+    rewrite Hk', FlambdaPrimitiveProofs.kind_eqb_refl. cbn [andb].
     destruct (field_metadata m a from (Field_block i Value) Hm Hd Hcons
                 (block_not_local i Value))
       as [Hun Hus].
@@ -10869,7 +10895,7 @@ Qed.
 
 (* The statement, at the node of the name. *)
 Lemma subkind_sound_at (x : node) (nb : bool) (sk : subkind) (v v' : value) :
-  rebuilt_value G sol v x v' -> value_at statics (nb, sk) v = true ->
+  R v x v' -> value_at statics (nb, sk) v = true ->
   value_at statics'
     (rewrite_kind_with_subkind ctx x (nb, sk)) v'
   = true.
@@ -10891,11 +10917,333 @@ Qed.
 
 End Subkinds_sound.
 
+(* The relation [rebuilt_value]. *)
+Section Subkinds_rebuilt.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+
+Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hlocal : is_local_slots_only is_local.
+
+Local Abbreviation G := (graph_of_facts F).
+Local Abbreviation sol := (solution_of_tables T).
+
+Lemma rebuilt_null (v : value) (n : node) (v' : value) :
+  rebuilt_value G sol v n v' -> v' = Value_const Null ->
+  v = Value_const Null.
+Proof.
+  intros Hv Heq. subst v'.
+  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
+  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
+  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
+  - destruct Hv as [Heq _]. discriminate Heq.
+  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
+  - destruct Hv as (elements' & Heq). discriminate Heq.
+  - destruct Hv as (a & bn & from & _ & _ & _ & _ & Heq).
+    destruct (s_field_used sol a (Field_boxed_number bn)); discriminate Heq.
+  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
+Qed.
+
+Lemma rebuilt_const (c : const) (n : node) (v' : value) :
+  rebuilt_value G sol (Value_const c) n v' -> v' = Value_const c.
+Proof. intros [_ ->]. reflexivity. Qed.
+
+(* What is kept at [Anything] and at [Tagged_immediate]. *)
+(* Under a metadata of any usage, the rebuild makes poison of no value:
+   the contents of a boxed number have a use. *)
+Lemma any_usage_not_poison (v : value) (n : node) (v' : value)
+    (k : flambda_kind) :
+  metadata_at sol Many_sources_any_usage n -> rebuilt_value G sol v n v' ->
+  v' = Value_const (Poison k) -> v = Value_const (Poison k).
+Proof.
+  intros Hmd Hv Heq0. subst v'.
+  destruct v; cbn [rebuilt_value] in Hv; try contradiction.
+  - destruct Hv as [_ Heq]. exact (eq_sym Heq).
+  - destruct Hv as (sites & vs & Heq & _). discriminate Heq.
+  - destruct Hv as [Heq _]. discriminate Heq.
+  - destruct Hv as (a & fields' & _ & _ & Heq & _). discriminate Heq.
+  - destruct Hv as (elements' & Heq). discriminate Heq.
+  - destruct Hv as (a & bn & from & Hmay & Hhs & _ & Hcons & Heq).
+    pose proof (Hmd a Hmay Hhs) as Hau. cbn [describes] in Hau.
+    rewrite (field_used_any_usage _ _ _ (subkinds_closed is_local F T Hleast)
+               a _ from Hcons Hau (boxed_not_local is_local Hlocal bn))
+      in Heq.
+    discriminate Heq.
+  - destruct Hv as (closure' & args' & Heq). discriminate Heq.
+Qed.
+
+Lemma field_rebuilt_R (a : node) (i : nat) (fields fields' : list value) :
+  fields_rebuilt (field_rebuilt G sol (rebuilt_value G sol) a) i fields
+    fields' ->
+  fields_rebuilt (field_R F T (rebuilt_value G sol) a) i fields fields'.
+Proof.
+  revert i fields'.
+  induction fields as [ | field fields IH]; intros i [ | field' fields'] Hf;
+    cbn [fields_rebuilt] in Hf |- *; try contradiction; [ exact I | ].
+  destruct Hf as [Hfield Hrest]. split; [ | exact (IH (S i) fields' Hrest) ].
+  intros Hk. unfold field_rebuilt in Hfield. rewrite Hk in Hfield.
+  exact Hfield.
+Qed.
+
+End Subkinds_rebuilt.
+
 Theorem rewrite_kind_with_subkind_sound :
   rewrite_kind_with_subkind_sound_statement.
 Proof.
   intros is_local F T sets statics statics' x [nb sk] v v' Hleast Hlocal
     Halloc Hst Hv Hat.
-  exact (subkind_sound_at is_local F T sets statics statics' Hleast Hlocal
-           Halloc Hst x nb sk v v' Hv Hat).
+  apply (subkind_sound_at is_local F T sets statics statics' Hleast Hlocal
+           (rebuilt_value (graph_of_facts F) (solution_of_tables T)))
+    with (v := v);
+    [ exact (rebuilt_value_kind (graph_of_facts F) (solution_of_tables T))
+    | exact (rebuilt_null F T)
+    | exact (rebuilt_const F T)
+    | exact (any_usage_not_poison is_local F T Hleast Hlocal)
+    | intros s n v'' Hs; exact Hs
+    | | | | | | exact Hv | exact Hat ].
+  - intros tag fields n v'' (a & fields' & Hmay & Hhs & -> & Hfr).
+    exists a, fields'.
+    split; [ exact Hmay | split; [ exact Hhs | split; [ reflexivity | ] ] ].
+    exact (field_rebuilt_R F T a 0 fields fields' Hfr).
+  - intros c n v'' Hb. exact Hb.
+  - intros s allocated Hl. exact (proj1 (Halloc s allocated Hl)).
+  - intros s c Hl Hhu. exact (Hst s _ Hl Hhu).
+  - intros s tag fields Hl Hhu.
+    destruct (Hst s _ Hl Hhu) as (fields' & Hfound & Hfr).
+    exists fields'. split; [ exact Hfound | ].
+    exact (field_rebuilt_R F T _ 0 fields fields' Hfr).
+Qed.
+
+(* ======================================================================== *)
+(* The relation of the simulation of the rebuild                            *)
+(* ======================================================================== *)
+
+(* The relation of the simulation (RP.rel) and its static environments
+   (RP.statics_rel) have of the values what the proof reads, so that the
+   rebuild with types, which rewrites what the parameters kept state
+   ([subkinds_of_context]), states only what holds of the values that
+   the rebuild gives them (RP.types_sound). *)
+Section Subkinds_rel.
+
+Variable is_local : field -> bool.
+Variable F : facts.
+Variable T : tables.
+Variable sets : list set_of_closures.
+
+Hypothesis Hleast : least_solution is_local F T.
+Hypothesis Hlocal : is_local_slots_only is_local.
+Hypothesis Hexact :
+  field_used_exact is_local (graph_of_facts F) (solution_of_tables T).
+
+Local Abbreviation G := (graph_of_facts F).
+Local Abbreviation sol := (solution_of_tables T).
+Local Abbreviation ctx := (plain_context is_local F T sets).
+
+Variable kept : value_slot -> bool.
+Variable called : node -> code_id -> Prop.
+Variables exact partials : Prop.
+Variable located : location -> option node.
+Variable β : location -> location -> Prop.
+Variable sets_exact : Prop.
+
+Local Abbreviation rel :=
+  (RP.rel G sol kept called exact partials located β sets_exact).
+
+Lemma rel_null (v : value) (n : node) (v' : value) :
+  rel v n v' -> v' = Value_const Null -> v = Value_const Null.
+Proof.
+  intros Hv ->.
+  destruct v; cbn [RP.rel] in Hv; try contradiction;
+    repeat match goal with
+           | H : ∃ _, _ |- _ => destruct H
+           | H : _ ∧ _ |- _ => destruct H
+           end;
+    first
+      [ congruence
+      | match goal with
+        | H : _ = (if ?b then _ else _) |- _ => destruct b; congruence
+        end ].
+Qed.
+
+Lemma rel_poison (v : value) (n : node) (v' : value) (k : flambda_kind) :
+  metadata_at sol Many_sources_any_usage n -> rel v n v' ->
+  v' = Value_const (Poison k) -> v = Value_const (Poison k).
+Proof.
+  intros Hmd Hv ->.
+  destruct v; cbn [RP.rel] in Hv; try contradiction.
+  all: try solve
+    [ repeat match goal with
+             | H : ∃ _, _ |- _ => destruct H
+             | H : _ ∧ _ |- _ => destruct H
+             end;
+      congruence ].
+  destruct Hv as (a & bn & from & Hmay & Hhs & _ & Hcons & Heq).
+  pose proof (Hmd a Hmay Hhs) as Hau. cbn [describes] in Hau.
+  rewrite (field_used_any_usage _ _ _ (subkinds_closed is_local F T Hleast)
+             a _ from Hcons Hau (boxed_not_local is_local Hlocal bn))
+    in Heq.
+  discriminate Heq.
+Qed.
+
+(* The fields of a block related by the simulation, a field used having a
+   use where it is held. *)
+Lemma fields_rel_R (a : node) (i : nat) (fields fields' : list value) :
+  RP.fields_related
+    (fun i field field' =>
+       ∃ from : node,
+         g_constructor G a (Field_block i Value) from
+         ∧ (s_field_used sol a (Field_block i Value) = true ->
+            rel field from field')
+         ∧ (s_field_used sol a (Field_block i Value) = false ->
+            field' = Value_const (Poison Value)))
+    i fields fields' ->
+  fields_rebuilt (field_R F T rel a) i fields fields'.
+Proof.
+  revert i fields'.
+  induction fields as [ | field fields IH]; intros i [ | field' fields'] Hf;
+    cbn [RP.fields_related fields_rebuilt] in Hf |- *; try contradiction;
+    [ exact I | ].
+  destruct Hf as [(from & Hcons & Hused & Hunused) Hrest].
+  split; [ | exact (IH (S i) fields' Hrest) ].
+  intros _. exists from.
+  split; [ exact Hcons | split; [ | exact Hunused ] ].
+  intros Hu. split; [ | exact (Hused Hu) ].
+  exact (used_field_hu is_local G sol (subkinds_closed is_local F T Hleast)
+           Hexact _ _ _ Hu Hcons).
+Qed.
+
+(* What a parameter of the rebuild with types states holds of the value
+   that the rebuild gives it, related to one of the first run of what the
+   parameter stated; nothing is stated of a parameter with no use. *)
+Lemma subkinds_of_context_sound (statics statics' : static_env)
+    (x : variable) (nb : bool) (sk : subkind) (v v' : value) :
+  RP.statics_sourced sol statics ->
+  (∀ (s : symbol) (c : const),
+     lookup s (static_values statics)
+     = Some (Static_boxed_number (Value_const c)) ->
+     s_has_usage sol (Node_symbol s) = true ->
+     lookup s (static_values statics')
+     = Some (Static_boxed_number (Value_const c))) ->
+  (∀ (s : symbol) (tag : Z) (fields : list value),
+     lookup s (static_values statics) = Some (Static_block tag fields) ->
+     s_has_usage sol (Node_symbol s) = true ->
+     ∃ fields' : list value,
+       lookup s (static_values statics') = Some (Static_block tag fields')
+       ∧ fields_rebuilt (field_R F T rel (Node_symbol s)) 0 fields fields') ->
+  (is_var_used sol x (kind_of_value v) = true ->
+   rel v (Node_variable x) v') ->
+  value_at statics (nb, sk) v = true ->
+  value_at statics'
+    (rewrite_kind_with_subkind ctx (Node_variable x) (nb, sk)) v'
+  = true.
+Proof.
+  intros Hsrc Hboxed Hblocks Hrel Hat.
+  destruct (is_var_used sol x (kind_of_value v)) eqn:Hu.
+  - apply (subkind_sound_at is_local F T sets statics statics' Hleast Hlocal
+             rel) with (v := v);
+      [ intros v0 n v0' H; eapply RP.rel_kind; exact H
+      | exact rel_null
+      | intros c n v0' [_ ->]; reflexivity
+      | exact rel_poison
+      | intros s n v0' H; exact H
+      | | intros c n v0' H; exact H
+      | intros s allocated Hl; exact (proj1 (Hsrc s allocated Hl))
+      | exact Hboxed | exact Hblocks | exact (Hrel eq_refl) | exact Hat ].
+    intros tag fields n v0' (a & fields' & Hmay & -> & Hf & Hhs & _).
+    exists a, fields'.
+    split; [ exact Hmay | split; [ exact Hhs | split; [ reflexivity | ] ] ].
+    exact (fields_rel_R a 0 fields fields' Hf).
+  - assert (Hhu : s_has_usage sol (Node_variable x) = false).
+    { unfold is_var_used in Hu. destruct (kind_of_value v); try exact Hu;
+        discriminate Hu. }
+    unfold rewrite_kind_with_subkind. cbn [fst snd].
+    rewrite (rewrite_subkind_erasing is_local F T sets); [ | ].
+    + apply FlambdaSubkindProofs.value_at_any_value.
+    + unfold metadata_for_name, get_usages.
+      change (has_use ctx (Node_variable x)) with
+        (s_has_usage sol (Node_variable x)).
+      rewrite Hhu.
+      destruct (get_single_source ctx (Node_variable x)); reflexivity.
+Qed.
+
+End Subkinds_rel.
+
+(* The rebuild with types states only what holds, whatever the arguments
+   of the relation of the simulation. *)
+Lemma subkinds_of_context_sound_all (is_local : field -> bool) (F : facts)
+    (T : tables) (sets : list set_of_closures) :
+  least_solution is_local F T -> is_local_slots_only is_local ->
+  field_used_exact is_local (graph_of_facts F) (solution_of_tables T) ->
+  RP.types_sound_all (graph_of_facts F) (solution_of_tables T) F
+    (subkinds_of_context (plain_context is_local F T sets)).
+Proof.
+  intros Hleast Hlocal Hexact cds keep hp b ids ff ex se cc cdeps cmds
+    located.
+  unfold RP.types_sound, subkinds_of_context. cbv beta iota.
+  intros x [nb sk] v v' statics statics' Hst Hsrc Hrel Hat.
+  destruct Hst as (_ & Hblocks & Honly & _).
+  eapply (subkinds_of_context_sound is_local F T sets Hleast Hlocal Hexact);
+    [ exact Hsrc | | | exact Hrel | exact Hat ].
+  - intros s c Hl Hhu.
+    destruct (Honly s _ Hl)
+      as [(tag & fields & Heq) | [(slot & syms & decls & vs & Heq & _) | Ho]];
+      try discriminate Heq.
+    destruct Ho as [[Hn | (v0 & Hls' & Hv0)] Hbound];
+      [ destruct (Hbound Hhu Hn) | ].
+    rewrite Hls'. destruct Hv0 as [-> | Hsim]; [ reflexivity | ].
+    cbn [RP.sim] in Hsim. rewrite Hsim. reflexivity.
+  - intros s tag fields Hl Hhu.
+    destruct (Hblocks s tag fields Hl Hhu) as (fields' & Hl' & Hf).
+    exists fields'. split; [ exact Hl' | ].
+    exact (fields_rel_R is_local F T Hleast Hexact _ _ _ _ _ _ _ _ 0 fields
+             fields' Hf).
+Qed.
+
+Theorem rebuild_with_types_refines_local :
+  rebuild_with_types_refines_local_statement.
+Proof.
+  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hcf Hwf Hexits Hcheck
+    Hlrs Hcheck_exact.
+  exact (RP.rebuild_with_refines_local flag is_local u e T b _ Hlocal Hfrag
+           Hcf Hwf Hexits Hcheck Hlrs Hcheck_exact
+           (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
+              (check_field_used_exact_sound is_local _ _ Hcheck_exact))).
+Qed.
+
+Theorem rebuild_with_types_refines_up_to_heap_local :
+  rebuild_with_types_refines_up_to_heap_local_statement.
+Proof.
+  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hdc Hrk Hwf Hexits
+    Hcheck Hlrs Hcheck_exact.
+  exact (RP.rebuild_with_refines_up_to_heap_local flag is_local u e T b _
+           Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact
+           (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
+              (check_field_used_exact_sound is_local _ _ Hcheck_exact))).
+Qed.
+
+From OxCamlFlambda2 Require FlambdaReaperCallingConventionsProofs.
+Module CCP := FlambdaReaperCallingConventionsProofs.
+
+Theorem rebuild_cc_with_types_refines_up_to_heap_local :
+  rebuild_cc_with_types_refines_up_to_heap_local_statement.
+Proof.
+  intros flag is_local u e T sets cannot_change b Hleast Hlocal Hfrag Hdc Hrk
+    Hwf Hexits Hcheck Hlrs Hcheck_exact Hccc Hwid.
+  pose proof (CCP.traverse_witness_code_ids flag u e) as Hcid.
+  assert (Hkinded : RP.calls_kinded [] e = true).
+  { apply (proj1 RP.calls_kinded_of_results e [] [] [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  destruct (CCP.check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
+  exact (RP.exits_rel_heap _ false _ _
+           (RP.rebuild_cc_with_refines_checked_local true false flag is_local
+              u e T (fun n => mem_node n cannot_change) ccw b _ Hlocal Hfrag
+              (proj1 (RP.any_kind_arguments_checked
+                        (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
+              Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+              (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
+                 (check_field_used_exact_sound is_local _ _ Hcheck_exact))
+              Hrk Hcl (CCP.check_apply_widgets_sound _ _ Hwid)
+              (CCP.check_witness_code_ids_sound _ Hcid))).
 Qed.

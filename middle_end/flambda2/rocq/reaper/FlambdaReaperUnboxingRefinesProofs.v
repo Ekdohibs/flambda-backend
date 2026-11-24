@@ -3649,7 +3649,7 @@ Qed.
 Abbreviation sol_u := (solution_without_unboxed sol unboxed).
 
 Definition plain_rebuild (en : rebuild_env) (e : expr) : expr :=
-  rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh en e.
+  rebuild_expr F sol preserve_direct_calls unit_code_ids first_fresh None en e.
 
 Definition unbox_rebuild (en : unbox_env) (e : expr) : expr :=
   rebuild_expr_u false F sol cannot_change code_deps preserve_direct_calls
@@ -4546,7 +4546,7 @@ Lemma plain_rebuild_let_static (en : rebuild_env)
   = Let_static
       (flat_map
          (rebuild_binding F sol preserve_direct_calls unit_code_ids
-            first_fresh en)
+            first_fresh None en)
          bindings)
       (plain_rebuild (bind_variables en []) body).
 Proof. reflexivity. Qed.
@@ -4572,7 +4572,7 @@ Lemma plain_rebuild_let_cont (en : rebuild_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler F sol preserve_direct_calls unit_code_ids
-           first_fresh en true mask h)
+           first_fresh None en true mask h)
         body
     else body.
 Proof. reflexivity. Qed.
@@ -4606,7 +4606,7 @@ Lemma plain_rebuild_let_cont_rec (en : rebuild_env)
          (fun '(k, h) =>
             (k,
              rebuild_handler F sol preserve_direct_calls unit_code_ids
-               first_fresh en false (handler_mask sol false h) h))
+               first_fresh None en false (handler_mask sol false h) h))
          handlers)
       (plain_rebuild en body).
 Proof. reflexivity. Qed.
@@ -4634,7 +4634,7 @@ Proof. reflexivity. Qed.
 Lemma plain_rebuild_handler (en : rebuild_env) (dead : bool)
     (mask : list bool) (params : list variable) (metadata : handler_metadata)
     (handler : expr) :
-  rebuild_handler F sol preserve_direct_calls unit_code_ids first_fresh en
+  rebuild_handler F sol preserve_direct_calls unit_code_ids first_fresh None en
     dead mask (Handler params metadata handler)
   = let bound := with_kinds params (hm_params_kinds metadata) in
     Handler (filter_kept mask params)
@@ -4677,12 +4677,13 @@ Lemma local_bindings_rebuilt (en : unbox_env)
     bindings
   = flat_map
       (rebuild_binding F sol preserve_direct_calls unit_code_ids first_fresh
+        None
          (pen_of en C))
       bindings
   ∧ forallb (local_binding unboxed)
       (flat_map
          (rebuild_binding F sol preserve_direct_calls unit_code_ids
-            first_fresh (pen_of en C))
+            first_fresh None (pen_of en C))
          bindings)
     = true.
 Proof.
@@ -4723,7 +4724,7 @@ Lemma rebuild_ub :
            ∃ (ps ps' : list (variable * flambda_kind))
              (metadata metadata' : handler_metadata) (hp hu : expr),
              rebuild_handler F sol preserve_direct_calls unit_code_ids
-               first_fresh (pen_of en C) dead (handler_mask sol is_exn h) h
+               first_fresh None (pen_of en C) dead (handler_mask sol is_exn h) h
              = Handler (map fst ps) metadata hp
              ∧ rebuild_handler_u false F sol cannot_change code_deps
                  preserve_direct_calls unit_code_ids codes unboxed
@@ -5067,7 +5068,7 @@ Proof.
           (fun '(k, h) =>
              (k,
               rebuild_handler F sol preserve_direct_calls unit_code_ids
-                first_fresh (bind_continuations (pen_of en C) masks) false
+                first_fresh None (bind_continuations (pen_of en C) masks) false
                 (handler_mask sol false h) h))
           hs
       in
@@ -6596,7 +6597,7 @@ Abbreviation urb en e :=
      preserve_direct_calls unit_code_ids codes [] first_fresh [] en e).
 Abbreviation crb en e :=
   (rebuild_expr_cc F sol cannot_change code_deps preserve_direct_calls
-     unit_code_ids codes first_fresh en e).
+     unit_code_ids codes first_fresh None en e).
 
 Lemma cinv_bind (conts : finite_map (list flambda_kind)) (en : unbox_env)
     (bound : list (variable * flambda_kind)) (projections : list variable) :
@@ -6698,7 +6699,7 @@ Lemma rebuild_code_nil (id : code_id) (params : list variable)
   rebuild_code_u false F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes [] first_fresh [] id (Code params mc ret exn md cbody)
   = rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
-      unit_code_ids codes first_fresh id (Code params mc ret exn md cbody).
+      unit_code_ids codes first_fresh None id (Code params mc ret exn md cbody).
 Proof.
   intros Hbody Hp Hcd Hm. cbn [rebuild_code_u rebuild_code_cc].
   rewrite code_change_nil.
@@ -6745,7 +6746,7 @@ Lemma rebuild_nil :
            preserve_direct_calls unit_code_ids codes [] first_fresh [] en dead
            (handler_decisions false sol [] is_exn h) h
          = rebuild_handler_cc F sol cannot_change code_deps
-             preserve_direct_calls unit_code_ids codes first_fresh
+             preserve_direct_calls unit_code_ids codes first_fresh None
              (ue_env en) dead (handler_mask sol is_exn h) h).
 Proof.
   apply FlambdaReaperFlowProofs.expr_handler_ind.

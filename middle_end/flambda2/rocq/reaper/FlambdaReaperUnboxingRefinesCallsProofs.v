@@ -930,7 +930,8 @@ Abbreviation sol_u := (solution_without_unboxed sol unboxed).
 Abbreviation fresh z := (among z (field_variables unboxed) = false).
 
 Definition cc_rebuild (en : rebuild_env) (e : expr) : expr :=
-  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff en
+  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff None
+    en
     e.
 
 Definition u_rebuild (en : unbox_env) (e : expr) : expr :=
@@ -1797,7 +1798,7 @@ Lemma cc_rebuild_let_static (en : rebuild_env)
   = Let_static
       (flat_map
          (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-            codes ff en)
+            codes ff None en)
          bindings)
       (cc_rebuild (bind_variables en []) body).
 Proof. reflexivity. Qed.
@@ -1822,7 +1823,7 @@ Lemma cc_rebuild_let_cont (en : rebuild_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler_cc F sol cannot_change code_deps pdc unit_code_ids
-           codes ff en true mask h)
+           codes ff None en true mask h)
         body
     else body.
 Proof. reflexivity. Qed.
@@ -1855,7 +1856,8 @@ Lemma cc_rebuild_let_cont_rec (en : rebuild_env)
          (fun '(k, h) =>
             (k,
              rebuild_handler_cc F sol cannot_change code_deps pdc
-               unit_code_ids codes ff en false (handler_mask sol false h) h))
+               unit_code_ids codes ff None en false (handler_mask sol false h)
+                 h))
          handlers)
       (cc_rebuild en body).
 Proof. reflexivity. Qed.
@@ -1883,6 +1885,7 @@ Lemma cc_rebuild_handler (en : rebuild_env) (dead_check : bool)
     (mask : list bool) (params : list variable) (metadata : handler_metadata)
     (handler : expr) :
   rebuild_handler_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+    None
     en dead_check mask (Handler params metadata handler)
   = let bound := with_kinds params (hm_params_kinds metadata) in
     Handler (filter_kept mask params)
@@ -2328,7 +2331,8 @@ Qed.
 Lemma cc_rebuild_code (id : code_id) (params : list variable)
     (mc : variable) (ret exn : continuation) (md : code_metadata)
     (body : expr) :
-  rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff id
+  rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff None
+    id
     (Code params mc ret exn md body)
   = let change :=
       code_calling_convention_change sol cannot_change code_deps
@@ -2559,6 +2563,7 @@ Lemma code_rebuilt_nc (id : code_id) (c : code) :
   = Not_changing_u ->
   let ccc :=
     rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+      None
       id c
   in
   let cu :=
@@ -2767,6 +2772,7 @@ Lemma code_rebuilt (id : code_id) (c : code) :
     kept_slots codes0 symbols True False id c ->
   let ccc :=
     rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+      None
       id c
   in
   let cu :=
@@ -2941,8 +2947,8 @@ Proof.
       * split; [ exact Hcs | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split.
-        { cbn [code_params_arity changed_code_metadata cm_params_arity
-               cs_params_arity].
+        { cbn [code_params_arity changed_code_metadata_with
+               changed_code_metadata cm_params_arity cs_params_arity].
           unfold arity_of_grouped_decisions, arity_of_grouped_decisions_u.
           rewrite !length_map, prepend_first_length,
             !group_by_parameter_length.
@@ -2975,8 +2981,8 @@ Proof.
       * split; [ exact Hcs | ].
         split; [ reflexivity | split; [ reflexivity | ] ].
         split.
-        { cbn [code_params_arity changed_code_metadata cm_params_arity
-               cs_params_arity].
+        { cbn [code_params_arity changed_code_metadata_with
+               changed_code_metadata cm_params_arity cs_params_arity].
           unfold arity_of_grouped_decisions, arity_of_grouped_decisions_u.
           rewrite !length_map, prepend_first_length,
             !group_by_parameter_length.
@@ -3003,10 +3009,11 @@ Qed.
 
 Lemma cc_rebuild_binding_code (en : rebuild_env) (id : code_id) (c : code) :
   rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+    None
     en (Bind_code id c)
   = if is_code_id_used sol id
     then [Bind_code id (rebuild_code_cc F sol cannot_change code_deps pdc
-                          unit_code_ids codes ff id c)]
+                          unit_code_ids codes ff None id c)]
     else [Bind_deleted_code id].
 Proof. reflexivity. Qed.
 
@@ -3021,6 +3028,7 @@ Proof. reflexivity. Qed.
 
 Lemma cc_rebuild_binding_deleted (en : rebuild_env) (id : code_id) :
   rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+    None
     en (Bind_deleted_code id)
   = [Bind_deleted_code id].
 Proof. reflexivity. Qed.
@@ -3034,6 +3042,7 @@ Proof. reflexivity. Qed.
 Lemma cc_rebuild_binding_block (en : rebuild_env) (sym : symbol) (tag : Z)
     (fields : list simple) :
   rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+    None
     en (Bind_symbol sym (Static_const_block tag fields))
   = if is_symbol_used sol sym
     then [Bind_symbol sym
@@ -3089,7 +3098,7 @@ Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
   let bcc :=
     flat_map
       (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-         codes ff en)
+         codes ff None en)
       bindings
   in
   let bu :=
@@ -6941,7 +6950,8 @@ Lemma rebuild_uc :
            ∃ (ps ps' : list (variable * flambda_kind))
              (md md' : handler_metadata) (hp hu : expr),
              rebuild_handler_cc F sol cannot_change code_deps pdc
-               unit_code_ids codes ff en dead_check (handler_mask sol is_exn h)
+               unit_code_ids codes ff None en dead_check (handler_mask sol
+                 is_exn h)
                h
              = Handler (map fst ps) md hp
              ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
@@ -7446,7 +7456,7 @@ Proof.
         let hps :=
           map (fun '(k, h) =>
                  (k, rebuild_handler_cc F sol cannot_change code_deps pdc
-                       unit_code_ids codes ff en' false
+                       unit_code_ids codes ff None en' false
                        (handler_mask sol false h) h))
             hs
         in
