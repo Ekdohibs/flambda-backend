@@ -694,14 +694,14 @@ Definition rewrite_of_context (ctx : rewrite_context)
 
 (* What the rebuild with types reads of the unit [e]: the rewriting, the
    code deps [code_deps] of its traversal, at whose nodes kept code is
-   rewritten, and the parameters of its continuations
-   (FlambdaReaperUnboxing.conts_params). *)
+   rewritten, and the parameters of its handlers
+   (FlambdaReaperRebuild.handlers_params), which the wrappers take. *)
 Definition subkinds_of_context (ctx : rewrite_context)
     (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr)
     : FlambdaReaperRebuild.subkinds_rewriting :=
   Some
     (FlambdaReaperRebuild.Subkinds_types (rewrite_of_context ctx) code_deps
-       (FlambdaReaperUnboxing.conts_params code_deps e)).
+       (FlambdaReaperRebuild.handlers_params e)).
 
 (* The rebuild of the reaper with types; [rebuild_unit] is that without. *)
 Definition rebuild_unit_with_types (ctx : rewrite_context) (F : facts)

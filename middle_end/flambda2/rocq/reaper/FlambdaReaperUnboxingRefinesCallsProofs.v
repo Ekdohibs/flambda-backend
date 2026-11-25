@@ -3335,7 +3335,7 @@ Definition call_or_wrap (p : expr) (ap : apply_expr) : Prop :=
             (Apply (with_continuation ap ff)).
 
 Lemma make_apply_wrapper_cases (en : rebuild_env) (ap : apply_expr) :
-  call_or_wrap (make_apply_wrapper ff en ap) ap.
+  call_or_wrap (make_apply_wrapper ff None en ap) ap.
 Proof.
   unfold call_or_wrap, make_apply_wrapper.
   destruct (lookup _ (env_conts en)) as [mask | ]; [ | left; reflexivity ].
@@ -4969,7 +4969,7 @@ Lemma make_apply_wrapper_as_cc (en : rebuild_env) (ap : apply_expr) :
      lookup (ap_continuation ap) (env_conts en) = Some mask
      ∧ length mask = length (unarize (ap_return_arity ap)))
   ∨ lookup (ap_continuation ap) (env_conts en) = None ->
-  make_apply_wrapper ff en ap
+  make_apply_wrapper ff None en ap
   = make_apply_wrapper_cc ff en ap
       (map (fun k => (Keep k, k)) (unarize (ap_return_arity ap))).
 Proof.
@@ -5213,7 +5213,7 @@ Proof.
   assert (HCS : CSf id = Some cs).
   { unfold CSf. rewrite Hcodes, Hde, Hnc, Hpd'. reflexivity. }
   match goal with
-  | |- uc_result _ _ (make_apply_wrapper _ _ ?X)
+  | |- uc_result _ _ (make_apply_wrapper _ _ _ ?X)
          (make_apply_wrapper_u _ _ None [] _ ?Y _ _) =>
     set (ap1 := X); set (ap1u := Y)
   end.
@@ -6381,7 +6381,7 @@ Proof.
                (ap_args_arity ap) (ap_return_arity ap)
                (pshape1 (Pdesc dv true Value)) true).
   match goal with
-  | |- uc_result _ _ (make_apply_wrapper _ _ ?X)
+  | |- uc_result _ _ (make_apply_wrapper _ _ _ ?X)
          (make_apply_wrapper_u _ _ None [] _ ?Y _ _) =>
     set (ap1 := X); set (ap1u := Y)
   end.
@@ -6535,7 +6535,7 @@ Proof.
                (ap_args_arity ap) (ap_return_arity ap)
                (pshape1 (Pdesc dv true Value)) true).
   match goal with
-  | |- uc_result _ _ (make_apply_wrapper _ _ ?X)
+  | |- uc_result _ _ (make_apply_wrapper _ _ _ ?X)
          (make_apply_wrapper_u _ _ None [] _ ?Y _ _) =>
     set (ap1 := X); set (ap1u := Y)
   end.

@@ -419,16 +419,19 @@
      forgets that the value is not null.
    - The reaper with types ([rebuild_unit_with_types_from_tables],
      [rebuild_unit_cc_with_types_from_tables]: the rebuilds where the
-     parameters of the code and handlers kept state what
-     [rewrite_kind_with_subkind] gives):
+     parameters of the code, of the handlers and of the wrappers of
+     calls kept state what [rewrite_kind_with_subkind] gives):
      [rebuild_with_types_refines_local_statement],
      [rebuild_with_types_refines_up_to_heap_local_statement] and
      [rebuild_cc_with_types_refines_up_to_heap_local_statement], the
      refinements of the unit that the rebuilds without types have, under
      the least solution in addition, for any sets of closures given to
-     the rewriting. The proof runs the simulation of the rebuild with
-     what is stated of each parameter shown to hold of the value that
-     the rebuilt unit gives it, by the proof of
+     the rewriting, where each continuation of the unit is bound once
+     (the wrappers read a table keyed by the names of the continuations,
+     as the compiler's [cont_params_to_keep] is; [well_formed_unit] asks
+     it of the names of one binder only). The proof runs the simulation
+     of the rebuild with what is stated of each parameter shown to hold
+     of the value that the rebuilt unit gives it, by the proof of
      [rewrite_kind_with_subkind_sound] for the relation of the
      simulation. No fault found.
 
@@ -483,7 +486,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperSolution FlambdaReaperRebuild FlambdaReaperFlowSpec
   FlambdaReaperLeastSpec FlambdaReaperLocalFields FlambdaReaperTypes.
 From OxCamlFlambda2 Require FlambdaReaperUnboxing
-  FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperCallingConventionsSpec.
+  FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperCallingConventionsSpec
+  FlambdaStaticsInScopeSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaBindingTime FlambdaTypingEnv
   FlambdaTypingEnvSpec.
@@ -2992,13 +2996,16 @@ Definition rewrite_kind_with_subkind_sound_statement : Prop :=
 (* ======================================================================== *)
 
 (* The rebuild of the reaper with types, which rewrites what the
-   parameters of the code and handlers kept state
-   ([rebuild_unit_with_types_from_tables]), refines the unit as the
-   rebuild without types does
+   parameters of the code, of the handlers and of the wrappers of calls
+   kept state ([rebuild_unit_with_types_from_tables]), refines the unit
+   as the rebuild without types does
    (FlambdaReaperRebuildSpec.rebuild_refines_local_statement), under the
    least solution, for any sets of closures given to the rewriting: what
    a parameter kept states holds of the value that the rebuilt unit
-   gives it. *)
+   gives it. Each continuation of the unit is bound once: the rebuild
+   finds what the parameters of the continuation of a call state in a
+   table keyed by the names of the continuations, as the compiler
+   does ([cont_params_to_keep]). *)
 Definition rebuild_with_types_refines_local_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
@@ -3008,6 +3015,7 @@ Definition rebuild_with_types_refines_local_statement : Prop :=
     in_flow_fragment e = true ->
     FlambdaReaperRebuildSpec.closure_free e = true ->
     well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
     FlambdaReaperRebuildSpec.exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
     check_local_reads_used is_local (traverse_unit flag u e) T = true ->
@@ -3030,6 +3038,7 @@ Definition rebuild_with_types_refines_up_to_heap_local_statement : Prop :=
     FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
     FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
     FlambdaReaperRebuildSpec.exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
     check_local_reads_used is_local (traverse_unit flag u e) T = true ->
@@ -3043,7 +3052,7 @@ Definition rebuild_with_types_refines_up_to_heap_local_statement : Prop :=
    (FlambdaReaperCallingConventionsSpec.v,
    [rebuild_cc_refines_up_to_heap_local_statement]): a code that changes
    its calling convention states of the parameters it keeps what the
-   rewriting gives. *)
+   rewriting gives at the nodes of its code dep. *)
 Definition rebuild_cc_with_types_refines_up_to_heap_local_statement : Prop :=
   ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
@@ -3055,6 +3064,7 @@ Definition rebuild_cc_with_types_refines_up_to_heap_local_statement : Prop :=
     FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
     FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
     well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
     FlambdaReaperRebuildSpec.exits_one_value u e = true ->
     check_closed is_local (traverse_unit flag u e) T = true ->
     check_local_reads_used is_local (traverse_unit flag u e) T = true ->

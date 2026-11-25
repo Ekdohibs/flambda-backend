@@ -190,12 +190,19 @@
      parameter kept by a handler states at its variable
      ([kept_handler_metadata], [should_keep_param]), and what each
      parameter and each result of kept code states at its node in the
-     code dep ([kept_code_metadata], [compute_code_changes]); a list of
-     which nothing says anything is the empty list. Left out, with
-     types: what the parameters of a wrapper state, which the compiler
-     takes from the parameters of the continuation that it applies; they
-     state nothing here. The arities of a call have no subkinds in the
-     model.
+     code dep ([kept_code_metadata], [compute_code_changes]), and what
+     each parameter of the wrapper of a call states: what the parameter
+     of the continuation of the call states, rewritten at its variable,
+     if the continuation keeps it ([wrapper_metadata], the return arity
+     of [rebuild_apply] from [cont_params_to_keep]); a list of which
+     nothing says anything is the empty list. The compiler's table of the
+     continuations is keyed by their names, which are fresh; the model's
+     ([handlers_params]) is the same where each continuation of the unit
+     is bound once. Left out, with types: the wrapper of a call to the
+     return continuation of code, whose parameters the compiler takes
+     from the results of the code dep, states nothing here (the machine
+     does not test what code states of its results). The arities of a
+     call have no subkinds in the model.
    - The model has no phantom binding, no region of code, no
      [Rec_info], no [Never_returns], no cost metrics, inlining
      decisions, [is_my_closure_used], [only_full_applications],
@@ -324,7 +331,7 @@ Definition subkinds_rewrite : Type := node -> param_subkind -> param_subkind.
 (* What the reaper with types reads: the rewriting, the code deps of the
    traversal, whose nodes code is rewritten at ([compute_code_changes]),
    and the parameters of the continuations of the unit with what they
-   state, which the parameters of a wrapper take
+   state ([handlers_params]), which the parameters of a wrapper take
    ([cont_params_to_keep]). *)
 Record subkinds_types : Type := Subkinds_types {
   st_rewrite : subkinds_rewrite;
@@ -411,6 +418,101 @@ Definition with_code_subkinds (params_sks result_sks : list param_subkind)
 Definition rewritten_at (rewrite : subkinds_rewrite) (nodes : list node)
     (sks : list param_subkind) : list param_subkind :=
   map (fun '(n, ps) => rewrite n ps) (nodes_with_subkinds nodes sks).
+
+(* The parameters of a handler at their variables, with what they
+   state. *)
+Definition handler_entry (h : continuation_handler)
+    : list (node * param_subkind) :=
+  match h with
+  | Handler params metadata _ =>
+    nodes_with_subkinds (map Node_variable params)
+      (hm_params_subkinds metadata)
+  end.
+
+(* The continuations that a term binds, each with the parameters of its
+   handler and what these state ([Traverse_acc.continuation_info], whose
+   parameters [should_keep_param] rewrites into [cont_params_to_keep]),
+   in the order of FlambdaStaticsInScopeSpec.bound_continuations. The
+   return and exception continuations of code have no parameter here:
+   the compiler takes for those of the return continuation the nodes of
+   the results in the code dep, of which the machine does not test what
+   the code states, so a wrapper of a call to it states nothing. *)
+Fixpoint handlers_params (e : expr)
+    : finite_map (list (node * param_subkind)) :=
+  match e with
+  | Let _ _ _ body => handlers_params body
+  | Let_static bindings body =>
+    flat_map binding_handlers_params bindings ++ handlers_params body
+  | Let_cont_non_recursive k h body =>
+    (k, handler_entry h) :: handler_handlers_params h
+    ++ handlers_params body
+  | Let_cont_recursive handlers body =>
+    map (fun '(k, h) => (k, handler_entry h)) handlers
+    ++ flat_map (fun '(_, h) => handler_handlers_params h) handlers
+    ++ handlers_params body
+  | Apply _ | Apply_cont _ | Switch _ _ | Invalid => []
+  end
+with handler_handlers_params (h : continuation_handler)
+    : finite_map (list (node * param_subkind)) :=
+  match h with
+  | Handler _ _ handler => handlers_params handler
+  end
+with binding_handlers_params (binding : static_binding)
+    : finite_map (list (node * param_subkind)) :=
+  match binding with
+  | Bind_code _ c => code_handlers_params c
+  | Bind_deleted_code _ | Bind_symbol _ _ => []
+  end
+with code_handlers_params (c : code)
+    : finite_map (list (node * param_subkind)) :=
+  match c with
+  | Code _ _ return_continuation exn_continuation _ body =>
+    (return_continuation, []) :: (exn_continuation, [])
+    :: handlers_params body
+  end.
+
+(* What the parameters of the wrapper of a call state, given the
+   parameters of the continuation of the call with what they state: the
+   return arity of the call ([rebuild_apply]), each result kept by the
+   continuation ([mask]) what its parameter states, rewritten
+   ([cont_params_to_keep]), each other nothing ([erase_subkind]). *)
+Fixpoint wrapper_subkinds (rewrite : subkinds_rewrite) (mask : list bool)
+    (params : list (node * param_subkind)) : list param_subkind :=
+  match mask, params with
+  | keep :: mask, (n, ps) :: params =>
+    (if keep then rewrite n ps else any_value)
+    :: wrapper_subkinds rewrite mask params
+  | _, _ => []
+  end.
+
+(* The metadata of the wrapper of a call, whose parameters are of the
+   kinds [kinds], the continuation of the call keeping [mask] of the
+   parameters [params]: without types, they state nothing beyond their
+   kinds. *)
+Definition wrapper_metadata (types : subkinds_rewriting) (mask : list bool)
+    (kinds : list flambda_kind) (params : list (node * param_subkind))
+    : handler_metadata :=
+  match types with
+  | None => make_handler_metadata kinds
+  | Some t =>
+    {| hm_params_kinds := kinds;
+       hm_params_subkinds :=
+         stated (wrapper_subkinds (st_rewrite t) mask params);
+       hm_is_exn_handler := false |}
+  end.
+
+(* The parameters of the continuation [k] in the table of the reaper with
+   types. *)
+Definition cont_params_of (types : subkinds_rewriting) (k : continuation)
+    : list (node * param_subkind) :=
+  match types with
+  | Some t =>
+    match lookup k (st_conts t) with
+    | Some params => params
+    | None => []
+    end
+  | None => []
+  end.
 
 (* The metadata of the code [id] that keeps its calling convention: with
    types, each parameter and each result states what is stated of it,
@@ -990,7 +1092,9 @@ Definition rebuild_exn_extra_args (en : rebuild_env) (ap : apply_expr)
 (* [make_apply_wrapper], for a call whose results are all kept by the
    callee ([func_decisions] of [rebuild_apply]): if the return
    continuation of the call does not keep all its parameters, the call
-   returns to a wrapper, which applies it to those it keeps. *)
+   returns to a wrapper, which applies it to those it keeps. With types,
+   the parameters of the wrapper state what those of the continuation
+   kept state, rewritten ([wrapper_metadata]). *)
 Definition make_apply_wrapper (en : rebuild_env) (ap : apply_expr) : expr :=
   match lookup (ap_continuation ap) (env_conts en) with
   | Some mask =>
@@ -1000,7 +1104,9 @@ Definition make_apply_wrapper (en : rebuild_env) (ap : apply_expr) : expr :=
       let kinds := unarize (ap_return_arity ap) in
       let params := names_from (length kinds) first_fresh in
       Let_cont_non_recursive first_fresh
-        (Handler params (make_handler_metadata kinds)
+        (Handler params
+           (wrapper_metadata types mask kinds
+              (cont_params_of types (ap_continuation ap)))
            (Apply_cont
               {| ac_continuation := ap_continuation ap;
                  ac_args := filter_kept mask (map Var params);

@@ -138,6 +138,8 @@ Proof.
   assert (Hagree0 : kinds_agree [] (env_conts FlambdaReaperRebuild.empty_env)
                       [] []).
   { intros k m Hl. discriminate Hl. }
+  assert (Htab0 : conts_tabled None [] [] [] (handlers_params e))
+    by (intros t Ht; discriminate Ht).
   (* The calls raise to exception handlers, with extra arguments only to
      handlers in scope. *)
   assert (Hraises : raises_kept [] e = true).
@@ -282,7 +284,9 @@ Proof.
                                    (exits_bound_unit u e Hexits Hfree)))
                               (conj Hscr (conj Hcf (conj (conj Hfresh
                                  (conj (ex_intro _ [] (conj Hkinded Hagree0))
-                                    (ex_intro _ [] (conj Hraises Hxagree0))))
+                                    (conj (ex_intro _ []
+                                             (conj Hraises Hxagree0))
+                                       Htab0)))
                                  (fun r K H => rets_nil_any _ r K H)))))). }
   destruct Hx as (L & m & t & vs' & hp' & rd' & Hm & Ht & HE & Hrel).
   exists L, m, t, vs', hp', rd'.

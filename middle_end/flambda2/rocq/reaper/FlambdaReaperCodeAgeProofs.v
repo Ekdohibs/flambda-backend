@@ -366,7 +366,7 @@ Abbreviation rebuild_c :=
 Lemma unit_codes_rebuild_apply_cc (en : rebuild_env) (ap : apply_expr) :
   unit_codes
     (rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
-       unit_code_ids codes first_fresh en ap)
+       unit_code_ids codes first_fresh types en ap)
   = [].
 Proof.
   unfold rebuild_apply_cc.

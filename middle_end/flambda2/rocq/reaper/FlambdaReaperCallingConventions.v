@@ -138,8 +138,19 @@
      erased ([Keep] of [compute_code_changes]). With types, code that
      keeps its calling convention is rewritten as the rebuild without
      changes rewrites it ([kept_code_metadata], at the nodes of its code
-     dep), and code that changes states what its parameters kept state,
-     rewritten at their variables ([changed_code_metadata_with]).
+     dep), and code that changes states what its parameters and results
+     kept state, rewritten at the nodes of its code dep as well
+     ([changed_code_metadata_with]). The wrapper of a call of code that
+     keeps its calling convention is that of FlambdaReaperRebuild.v,
+     which states what the continuation of the call states of the
+     parameters it keeps, rewritten, but for the return continuation of
+     code that changes, whose wrapper states nothing; the wrapper of a
+     call of code that changes ([make_apply_wrapper_cc]) states nothing,
+     where the compiler states what the callee states of the results it
+     keeps, rewritten ([get_parameters] of its [return_decisions]): the
+     machine does not test what code states of its results, so that a
+     unit whose code states of a result what it is not runs, where such
+     a wrapper would stop.
    - What the model has not got: [only_full_applications] (rebuild.ml:
      [rewrite_set_of_closures], which sets it for code that changes),
      [first_complex_local_param], [param_modes] and [is_my_closure_used]
@@ -375,20 +386,33 @@ Definition changed_code_metadata (metadata : code_metadata)
      cm_is_tupled := false;
      cm_is_stub := cm_is_stub metadata |}.
 
-(* The same, what the parameters kept state rewritten as [types] says
-   ([Keep] of [compute_code_changes], with types), the parameters of the
-   code being [params]. *)
+(* The same for the code [id], with types: each parameter and each
+   result kept states what is stated of it, rewritten at its node in the
+   code dep ([Keep] of [compute_code_changes], whose kind is rewritten at
+   [code_dep.params] and [code_dep.return]); code with no code dep, as
+   without types, states nothing. *)
 Definition changed_code_metadata_with (types : subkinds_rewriting)
-    (params : list variable) (metadata : code_metadata)
+    (id : code_id) (metadata : code_metadata)
     (params_decisions return_decisions : list param_decision)
     : code_metadata :=
+  let changed :=
+    changed_code_metadata metadata params_decisions return_decisions
+  in
   match types with
-  | None => changed_code_metadata metadata params_decisions return_decisions
   | Some t =>
-    with_code_params_subkinds
-      (rewritten_subkinds (st_rewrite t) (map is_kept params_decisions) params
-         (cm_params_subkinds metadata))
-      (changed_code_metadata metadata params_decisions return_decisions)
+    match lookup id (st_code_deps t) with
+    | Some cd =>
+      with_code_subkinds
+        (filter_kept (map is_kept params_decisions)
+           (rewritten_at (st_rewrite t) (cd_params cd)
+              (cm_params_subkinds metadata)))
+        (filter_kept (map is_kept return_decisions)
+           (rewritten_at (st_rewrite t) (cd_return cd)
+              (cm_result_subkinds metadata)))
+        changed
+    | None => changed
+    end
+  | None => changed
   end.
 
 Definition metadata_of_code (c : code) : code_metadata :=
@@ -609,7 +633,8 @@ Definition make_apply_wrapper_cc (en : rebuild_env) (ap : apply_expr)
 Definition rebuild_apply_cc (en : rebuild_env) (ap : apply_expr) : expr :=
   match apply_calling_convention_change ap with
   | Not_changing_calling_convention =>
-    rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh en ap
+    rebuild_apply F sol preserve_direct_calls unit_code_ids first_fresh types
+      en ap
   | Changing_calling_convention params_decisions return_decisions =>
     if simple_is_dead sol en (ap_callee ap)
        || existsb (simple_is_dead sol en) (ap_args ap)
@@ -759,7 +784,7 @@ with rebuild_code_cc (id : code_id) (c : code) : code :=
     | Changing_calling_convention params_decisions return_decisions =>
       Code (filter_kept (map is_kept params_decisions) params) my_closure
         return_continuation exn_continuation
-        (changed_code_metadata_with types params metadata params_decisions
+        (changed_code_metadata_with types id metadata params_decisions
            return_decisions)
         body
     end

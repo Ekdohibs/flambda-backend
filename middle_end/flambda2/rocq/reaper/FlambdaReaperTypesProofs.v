@@ -11204,28 +11204,39 @@ Lemma subkinds_of_context_deps (ctx : rewrite_context)
     FlambdaReaperRebuild.st_code_deps t = code_deps.
 Proof. intros t Ht. injection Ht as <-. reflexivity. Qed.
 
+(* The table of the continuations that the rebuild with types reads is
+   that of the unit. *)
+Lemma subkinds_of_context_conts (ctx : rewrite_context)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr) :
+  distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+  RP.conts_table_ok (subkinds_of_context ctx code_deps e) e.
+Proof. intros Hd t Ht. injection Ht as <-. split; [ reflexivity | exact Hd ].
+Qed.
+
 Theorem rebuild_with_types_refines_local :
   rebuild_with_types_refines_local_statement.
 Proof.
-  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hcf Hwf Hexits Hcheck
-    Hlrs Hcheck_exact.
+  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hcf Hwf Hdist
+    Hexits Hcheck Hlrs Hcheck_exact.
   exact (RP.rebuild_with_refines_local flag is_local u e T b _ Hlocal Hfrag
            Hcf Hwf Hexits Hcheck Hlrs Hcheck_exact
            (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast Hlocal
               (check_field_used_exact_sound is_local _ _ Hcheck_exact))
-           (subkinds_of_context_deps _ _ _)).
+           (subkinds_of_context_deps _ _ _)
+           (subkinds_of_context_conts _ _ _ Hdist)).
 Qed.
 
 Theorem rebuild_with_types_refines_up_to_heap_local :
   rebuild_with_types_refines_up_to_heap_local_statement.
 Proof.
-  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hdc Hrk Hwf Hexits
-    Hcheck Hlrs Hcheck_exact.
+  intros flag is_local u e T sets b Hleast Hlocal Hfrag Hdc Hrk Hwf Hdist
+    Hexits Hcheck Hlrs Hcheck_exact.
   exact (RP.rebuild_with_refines_up_to_heap_local flag is_local u e T b _
            Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact
            (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast Hlocal
               (check_field_used_exact_sound is_local _ _ Hcheck_exact))
-           (subkinds_of_context_deps _ _ _)).
+           (subkinds_of_context_deps _ _ _)
+           (subkinds_of_context_conts _ _ _ Hdist)).
 Qed.
 
 From OxCamlFlambda2 Require FlambdaReaperCallingConventionsProofs.
@@ -11235,7 +11246,7 @@ Theorem rebuild_cc_with_types_refines_up_to_heap_local :
   rebuild_cc_with_types_refines_up_to_heap_local_statement.
 Proof.
   intros flag is_local u e T sets cannot_change b Hleast Hlocal Hfrag Hdc Hrk
-    Hwf Hexits Hcheck Hlrs Hcheck_exact Hccc Hwid.
+    Hwf Hdist Hexits Hcheck Hlrs Hcheck_exact Hccc Hwid.
   pose proof (CCP.traverse_witness_code_ids flag u e) as Hcid.
   assert (Hkinded : RP.calls_kinded [] e = true).
   { apply (proj1 RP.calls_kinded_of_results e [] [] [] Hrk).
@@ -11250,7 +11261,8 @@ Proof.
               (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast
                  Hlocal
                  (check_field_used_exact_sound is_local _ _ Hcheck_exact))
-              (subkinds_of_context_deps _ _ _) Hrk Hcl
+              (subkinds_of_context_deps _ _ _)
+              (subkinds_of_context_conts _ _ _ Hdist) Hrk Hcl
               (CCP.check_apply_widgets_sound _ _ Hwid)
               (CCP.check_witness_code_ids_sound _ Hcid))).
 Qed.

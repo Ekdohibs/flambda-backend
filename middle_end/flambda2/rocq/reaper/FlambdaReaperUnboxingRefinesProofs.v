@@ -6184,7 +6184,7 @@ Lemma wrapper_cc_plain (en : rebuild_env) (ap : apply_expr)
      lookup (ap_continuation ap) (env_conts en) = Some mask ->
      length mask <= length ks) ->
   make_apply_wrapper_cc first_fresh en ap (combine (map Keep ks) ks)
-  = make_apply_wrapper first_fresh en ap.
+  = make_apply_wrapper first_fresh None en ap.
 Proof.
   intros Hks Hlen. unfold make_apply_wrapper_cc, make_apply_wrapper,
     apply_decisions.
@@ -6399,7 +6399,7 @@ Lemma rebuild_apply_nil (conts : finite_map (list flambda_kind))
   rebuild_apply_u false F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes [] first_fresh None [] en ap
   = rebuild_apply_cc F sol cannot_change code_deps preserve_direct_calls
-      unit_code_ids codes first_fresh (ue_env en) ap.
+      unit_code_ids codes first_fresh None (ue_env en) ap.
 Proof.
   intros Hinv Hap. cbn [arities_match] in Hap.
   apply andb_true_iff in Hap as [Hk Hres].
