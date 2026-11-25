@@ -2463,7 +2463,7 @@ with rebuild_code_cc_unchanged (id : code_id) (c : code) {struct c} :
   rebuild_code_cc F sol cannot_change code_deps preserve_direct_calls
     unit_code_ids codes first_fresh types id c
   = rebuild_code F sol preserve_direct_calls unit_code_ids first_fresh types
-      c.
+      id c.
 Proof.
   - destruct e as [x kind defining_expr body | bindings body | k h body
                   | handlers body | ap | ac | scrutinee arms | ].
@@ -3659,6 +3659,10 @@ Hypothesis Hcode_id_of_witness :
     g_constructor G w Field_code_id_of_call_witness (Node_code_id id') ->
     id' = id.
 Hypothesis Hslots_read : slots_read -> local_reads_used is_local G sol.
+(* The code deps that the rebuild with types reads are those of the
+   traversal. *)
+Hypothesis Htypes_deps :
+  ∀ t : subkinds_types, types = Some t -> st_code_deps t = cds.
 
 Abbreviation slots := slots_read.
 Abbreviation called := (called_by G cds).
@@ -6174,6 +6178,39 @@ Proof.
            Hl Hl' Hsk H).
 Qed.
 
+(* So for what nodes state, rewritten. *)
+Lemma values_of_rewritten_at (statics statics' : static_env)
+    (rewrite : subkinds_rewrite) :
+  ∀ (nodes : list node) (sks : list param_subkind) (vs vs' : list value),
+    length vs' = length vs ->
+    values_of_subkinds statics vs sks = true ->
+    (∀ (i : nat) (n : node) (v v' : value) (ps : param_subkind),
+       nth_error nodes i = Some n -> nth_error vs i = Some v ->
+       nth_error vs' i = Some v' -> value_at statics ps v = true ->
+       value_at statics' (rewrite n ps) v' = true) ->
+    values_of_subkinds statics' vs' (rewritten_at rewrite nodes sks) = true.
+Proof.
+  induction nodes as [ | n nodes IH]; intros sks vs vs' Hl Hsk H;
+    [ reflexivity | ].
+  destruct vs' as [ | v' vs']; [ reflexivity | ].
+  destruct vs as [ | v vs]; [ discriminate Hl | ].
+  injection Hl as Hl.
+  assert (H' : ∀ (i : nat) (n' : node) (w w' : value) (ps : param_subkind),
+             nth_error nodes i = Some n' -> nth_error vs i = Some w ->
+             nth_error vs' i = Some w' -> value_at statics ps w = true ->
+             value_at statics' (rewrite n' ps) w' = true)
+    by (intros i; exact (H (S i))).
+  unfold rewritten_at. cbn [nodes_with_subkinds map values_of_subkinds].
+  destruct sks as [ | ps sks]; cbn [hd tl].
+  - rewrite (H 0 n v v' any_value eq_refl eq_refl eq_refl
+               (value_at_any_value statics v)).
+    exact (IH [] vs vs' Hl (values_of_subkinds_nil _ _) H').
+  - cbn [values_of_subkinds] in Hsk.
+    apply andb_true_iff in Hsk as [Hv Hsk].
+    rewrite (H 0 n v v' ps eq_refl eq_refl eq_refl Hv).
+    exact (IH sks vs vs' Hl Hsk H').
+Qed.
+
 (* Code whose subkinds are erased states nothing of its parameters. *)
 Lemma erased_subkinds_say_nothing (md : code_metadata) :
   subkinds_say_nothing (cm_params_subkinds (erase_code_subkinds md)) = true.
@@ -6701,23 +6738,29 @@ Lemma statics_sourced_of_flow (statics : static_env) :
   statics_flow_ statics -> statics_sourced statics.
 Proof. intros H s allocated Hl. exact (proj1 (H s allocated Hl)). Qed.
 
-(* What the rebuild states of a parameter that it keeps holds of every
-   value of the second run related to one of the first that is of what
-   the parameter stated; for a parameter with no use, of every value. *)
+(* What the rebuild states of a node holds of every value of the second
+   run related at the node to one of the first that is of what was
+   stated; for a node with no use, of every value. *)
 Definition types_sound : Prop :=
   match types with
   | None => True
-  | Some rewrite =>
-    ∀ (x : variable) (ps : param_subkind) (v v' : value)
+  | Some t =>
+    ∀ (n : node) (ps : param_subkind) (v v' : value)
       (statics statics' : static_env),
       statics_rel statics statics' -> statics_sourced statics ->
-      (is_var_used sol x (kind_of_value v) = true ->
-       rel v (Node_variable x) v') ->
+      (hu n -> rel v n v') ->
       value_at statics ps v = true ->
-      value_at statics' (rewrite (Node_variable x) ps) v' = true
+      value_at statics' (st_rewrite t n ps) v' = true
   end.
 
 Hypothesis Htypes : types_sound.
+
+(* A variable with a use is used, whatever its kind. *)
+Lemma var_used_of_hu (p : variable) (kind : flambda_kind) :
+  hu (Node_variable p) -> is_var_used sol p kind = true.
+Proof.
+  intros H. destruct kind; unfold is_var_used; try exact H; reflexivity.
+Qed.
 
 (* So what a rebuilt handler states of the parameters it keeps holds of
    the values kept. *)
@@ -6739,13 +6782,14 @@ Proof.
   intros Hst Hsrc Hl Hl' Hsk Hrel.
   pose proof Htypes as Ht. unfold types_sound in Ht.
   unfold kept_handler_metadata.
-  destruct types as [rewrite | ].
+  destruct types as [t | ].
   - cbn [hm_params_subkinds].
-    apply (values_of_rewritten statics statics' rewrite mask params _ vs vs'
-             Hl Hl' Hsk).
+    apply (values_of_rewritten statics statics' (st_rewrite t) mask params _
+             vs vs' Hl Hl' Hsk).
     intros i p v v' ps Hp Hv Hv' Hat.
-    apply (Ht p ps v v' statics statics' Hst Hsrc); [ | exact Hat ].
-    exact (Hrel i p v v' Hp Hv Hv').
+    apply (Ht (Node_variable p) ps v v' statics statics' Hst Hsrc);
+      [ | exact Hat ].
+    intros Hhu. exact (Hrel i p v v' Hp Hv Hv' (var_used_of_hu p _ Hhu)).
   - rewrite with_params_kinds_subkinds. apply values_of_subkinds_nil.
 Qed.
 
@@ -11296,63 +11340,63 @@ Lemma code_fields_rebuild (id : code_id) (c : code) :
   ∧ code_is_tupled (rebuild_c id c) = code_is_tupled c.
 Proof.
   destruct c. unfold unchanged. cbn [metadata_of_code rebuild_code_cc].
-  intros Hun. rewrite Hun. repeat split; destruct types; reflexivity.
+  intros Hun. rewrite Hun.
+  repeat split; unfold kept_code_metadata; destruct types as [t | ];
+    try destruct (lookup id (st_code_deps t)); reflexivity.
 Qed.
 
 (* What the rebuilt code that keeps its calling convention states of its
    parameters holds of the arguments of the second run, related to those
-   of the first, which are of what the code stated. *)
-Lemma rebuilt_code_subkinds_sound (id : code_id) (c : code)
+   of the first, which are of what the code stated, at the parameters of
+   its code dep. *)
+Lemma rebuilt_code_subkinds_sound (id : code_id) (c : code) (cd : code_dep)
     (vs vs' : list value) (statics statics' : static_env) :
-  unchanged id c -> statics_rel statics statics' -> statics_sourced statics ->
-  length vs = length (code_params c) -> length vs' = length (code_params c) ->
+  unchanged id c -> lookup id cds = Some cd ->
+  statics_rel statics statics' -> statics_sourced statics ->
+  length vs' = length vs ->
   values_of_subkinds statics vs (code_params_subkinds c) = true ->
-  (∀ (i : nat) (p : variable) (v v' : value),
-     nth_error (code_params c) i = Some p -> nth_error vs i = Some v ->
-     nth_error vs' i = Some v' ->
-     is_var_used sol p (kind_of_value v) = true ->
-     rel v (Node_variable p) v') ->
+  (∀ (i : nat) (q : node) (v v' : value),
+     nth_error (cd_params cd) i = Some q -> nth_error vs i = Some v ->
+     nth_error vs' i = Some v' -> hu q -> rel v q v') ->
   values_of_subkinds statics' vs' (code_params_subkinds (rebuild_c id c))
   = true.
 Proof.
   destruct c as [params mc ret exn md body]. unfold unchanged.
   cbn [metadata_of_code rebuild_code_cc code_params code_params_subkinds].
-  intros Hun Hst Hsrc Hl Hl' Hsk Hrel. rewrite Hun.
+  intros Hun Hcd Hst Hsrc Hl Hsk Hrel. rewrite Hun.
   cbn [code_params_subkinds].
   pose proof Htypes as Ht. unfold types_sound in Ht.
+  pose proof Htypes_deps as Htd.
   unfold kept_code_metadata.
-  destruct types as [rewrite | ]; [ | apply values_of_subkinds_nil ].
-  cbn [with_code_params_subkinds cm_params_subkinds].
-  rewrite <- (filter_kept_nil vs').
-  apply (values_of_rewritten statics statics' rewrite [] params _ vs vs' Hl
-           Hl' Hsk).
-  intros i p v v' ps Hp Hv Hv' Hat.
-  exact (Ht p ps v v' statics statics' Hst Hsrc (Hrel i p v v' Hp Hv Hv')
+  destruct types as [t | ]; [ | apply values_of_subkinds_nil ].
+  rewrite (Htd t eq_refl), Hcd.
+  cbn [with_code_subkinds cm_params_subkinds].
+  unfold stated.
+  destruct (subkinds_say_nothing _); [ apply values_of_subkinds_nil | ].
+  apply (values_of_rewritten_at statics statics' (st_rewrite t) _ _ vs vs'
+           Hl Hsk).
+  intros i q v v' ps Hq Hv Hv' Hat.
+  exact (Ht q ps v v' statics statics' Hst Hsrc (Hrel i q v v' Hq Hv Hv')
            Hat).
 Qed.
 
-(* The same, given what the relation of a binding of the parameters
-   asks ([bind_params_rel]). *)
-Lemma rebuilt_subkinds_of_bind (id : code_id) (c : code)
-    (vs vs' : list value) (vars hv : env) (mask : list bool)
-    (statics statics' : static_env) :
-  unchanged id c -> statics_rel statics statics' -> statics_sourced statics ->
+(* The same, given the values bound to the parameters. *)
+Lemma rebuilt_subkinds_of_bind (id : code_id) (c : code) (cd : code_dep)
+    (vs vs' : list value) (vars hv : env) (statics statics' : static_env) :
+  unchanged id c -> lookup id cds = Some cd ->
+  statics_rel statics statics' -> statics_sourced statics ->
   bind_params (code_params c) vs vars = Some hv ->
   length vs' = length vs ->
-  (∀ (i : nat) (p : variable) (v v' : value),
-     nth_error (code_params c) i = Some p -> nth_error vs i = Some v ->
-     nth_error vs' i = Some v' ->
-     is_var_used sol p (kind_of_value v) = true ->
-     nth_error mask i = Some true ∧ rel v (Node_variable p) v') ->
+  (∀ (i : nat) (q : node) (v v' : value),
+     nth_error (cd_params cd) i = Some q -> nth_error vs i = Some v ->
+     nth_error vs' i = Some v' -> hu q -> rel v q v') ->
   values_of_subkinds statics vs (code_params_subkinds c) = true ->
   values_of_subkinds statics' vs' (code_params_subkinds (rebuild_c id c))
   = true.
 Proof.
-  intros Hun Hst Hsrc Hbind Hlen Hrel Hsk.
-  pose proof (bind_params_length _ _ _ _ Hbind) as Lvs.
-  apply (rebuilt_code_subkinds_sound id c vs vs' statics statics' Hun Hst Hsrc
-           Lvs (eq_trans Hlen Lvs) Hsk).
-  intros i p v v' Hp Hv Hv' Hu. exact (proj2 (Hrel i p v v' Hp Hv Hv' Hu)).
+  intros Hun Hcd Hst Hsrc _ Hlen Hrel Hsk.
+  exact (rebuilt_code_subkinds_sound id c cd vs vs' statics statics' Hun Hcd
+           Hst Hsrc Hlen Hsk Hrel).
 Qed.
 
 (* The rebuilt code binds nothing static if the code does not. *)
@@ -11509,13 +11553,13 @@ Proof.
   cbn [code_params_subkinds].
   pose proof Htypes as Ht. unfold types_sound in Ht.
   unfold changed_code_metadata_with.
-  destruct types as [rewrite | ]; [ | apply values_of_subkinds_nil ].
+  destruct types as [t | ]; [ | apply values_of_subkinds_nil ].
   cbn [with_code_params_subkinds cm_params_subkinds].
-  apply (values_of_rewritten statics statics' rewrite (map is_kept pd) params
-           _ vs vs' Hl Hl' Hsk).
+  apply (values_of_rewritten statics statics' (st_rewrite t) (map is_kept pd)
+           params _ vs vs' Hl Hl' Hsk).
   intros i p v v' ps Hp Hv Hv' Hat.
-  exact (Ht p ps v v' statics statics' Hst Hsrc (Hrel i p v v' Hp Hv Hv')
-           Hat).
+  exact (Ht (Node_variable p) ps v v' statics statics' Hst Hsrc
+           (fun Hhu => Hrel i p v v' Hp Hv Hv' (var_used_of_hu p _ Hhu)) Hat).
 Qed.
 
 (* The body of the rebuilt code, in which the return continuation keeps
@@ -14707,12 +14751,23 @@ Proof.
       (code_params_subkinds
          (rebuild_c id (Code params mc ret exn_k md cbody)))
     = true).
-  { pose proof (bind_params_length _ _ _ _ Hbind) as Lvs.
-    apply (rebuilt_code_subkinds_sound id (Code params mc ret exn_k md cbody)
-             vs vs' statics statics' Hun Hst (flow_ok_sourced _ Hflow') Lvs
-             (eq_trans Hlen' Lvs) Hsk).
-    intros i p v v' Hp Hv Hv' Hu.
-    exact (proj2 (Hrel_params i p v v' Hp Hv Hv' Hu)). }
+  { apply (rebuilt_code_subkinds_sound id (Code params mc ret exn_k md cbody)
+             cd vs vs' statics statics' Hun (lookup_nodup_in _ _ _ Hnd Hcd')
+             Hst (flow_ok_sourced _ Hflow') Hlen' Hsk).
+    intros i q v v' Hq Hv Hv' Hhu_q.
+    destruct (eval_simples_nth _ _ _ _ _ Hvs Hv) as (s & Hs & Hsv).
+    assert (Hm : nth_error mask i = Some true).
+    { apply (known_mask_used _ b w q _ i Hb Hbb Hcw Hw_self (Hpar i q Hq)
+               Hhu_q).
+      apply nth_error_Some. congruence. }
+    pose proof (Hrels' i s v v' Hs Hv Hv' Hm) as Hrel_s.
+    pose proof (flows_hs is_local G sol keep called located Hc _ _
+                  (simple_flows is_local G sol noted cds keep located Hc Hconsts
+                     Hsyms _ _ _ Hvars (Hnoted_args s (nth_error_In _ _ Hs))
+                     Hsv))
+      as Hhs.
+    exact (rel_argument w witness q (node_of_simple s) i v v' Hw
+             (Hargs i s Hs) (Hpar i q Hq) Hhs Hrel_s). }
   exact (call_entered ap vars vars' conts conts' statics statics' hp hp' rcd
       rcd' en
     ce
@@ -15845,6 +15900,30 @@ Proof.
     exact (args_rel_app _ _ aa a applied applied' vs vs' Haa Ha Hshift
              (Hlen_app Hk)). }
   (* The parameters of the code get the arguments at them. *)
+  assert (Hparams_q :
+    ∀ (all all' : list value) (A : arity),
+      args_rel (from_node M) A all all' ->
+      (∀ i g kk : nat,
+         group_position (arity_sizes (cm_params_arity md)) i = Some (g, kk)
+         -> group_position (arity_sizes A) i = Some (g, kk)) ->
+      ∀ (i : nat) (q : node) (v v' : value),
+        nth_error (cd_params cd) i = Some q -> nth_error all i = Some v ->
+        nth_error all' i = Some v' -> hu q -> rel v q v').
+  { intros all all' A HA Hpos_eq i q v v' Hq Hv Hv' Hhu_q.
+    assert (Hi' : i < length (cd_params cd))
+      by (apply nth_error_Some; congruence).
+    assert (Hiq : i < list_sum (arity_sizes (cm_params_arity md))).
+    { rewrite sum_arity_sizes, <- Lp. exact Hi'. }
+    destruct (group_position_some _ _ Hiq) as (g & kk & Hpos).
+    destruct (group_by_sizes_nth _ _ _ _ _ _ Hpos Hq) as (grp & Hgrp & Hq').
+    destruct (group_position_lt _ _ _ _ Hpos) as [Hg _].
+    rewrite length_arity_sizes in Hg.
+    destruct (Hnth_L g Hg) as (f & W & HLg).
+    destruct (nth_error_combine_inv _ _ _ _ _ HLg) as [Hf _].
+    rewrite Hgrp in Hf. injection Hf as <-.
+    destruct (code_chain_nth G _ _ _ _ _ _ _ Hcch HLg) as (Hpar & _).
+    exact (args_rel_nth _ _ _ _ HA i v v' g kk W q Hv Hv' (Hpos_eq _ _ _ Hpos)
+             (Hwc g grp W HLg) (Hpar kk q Hq') Hhu_q). }
   assert (Hparams :
     ∀ (all all' : list value) (A : arity),
       args_rel (from_node M) A all all' ->
@@ -15990,11 +16069,12 @@ Proof.
       * apply kinds_per_parameter_eqb_eq. exact Hk2.
       * apply arity_eqb_eq. exact Hk3.
       * exact Hbind'.
-      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) _
-                 _ _ _ (repeat true (length params)) statics statics' Hun);
-          [ assumption | exact (statics_sourced_of_flow _ Hsflow)
+      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) cd
+                 _ _ _ _ statics statics' Hun);
+          [ exact (lookup_nodup_in _ _ _ Hnd Hcd') | assumption
+          | exact (statics_sourced_of_flow _ Hsflow)
           | exact Hbind | exact Hlen'
-          | exact (Hparams _ _ _ HA Hk1 Hpos_eq Hlenp)
+          | exact (Hparams_q _ _ _ HA Hpos_eq)
           | exact (call_code_step_subkinds _ _ _ _ _ _ _ _ _ _ _ Hcc) ].
     + assert (Hway_e : way_out cont_rel over_rel [cd_exn cd] et et').
       { apply (way_out_transport _ _ [exn]); [ exact Hexn | reflexivity | ].
@@ -16167,6 +16247,23 @@ Proof.
       rewrite <- (firstn_skipn p (arity_sizes (aa ++ a))).
       rewrite group_position_app_l; [ exact H | ].
       exact (proj2 (group_position_lt _ _ _ _ H)). }
+    assert (Hparams_over_q :
+      ∀ (i : nat) (q : node) (v v' : value),
+        nth_error (cd_params cd) i = Some q ->
+        nth_error (firstn size (applied ++ vs)) i = Some v ->
+        nth_error (firstn size (applied' ++ vs')) i = Some v' ->
+        hu q -> rel v q v').
+    { intros i q v v' Hq Hv Hv' Hhu_q.
+      assert (Hi : i < size).
+      { assert (Hl : i < length (firstn size (applied ++ vs)))
+          by (apply nth_error_Some; congruence).
+        rewrite length_firstn in Hl. lia. }
+      rewrite nth_error_firstn_lt in Hv, Hv' by exact Hi.
+      refine (Hparams_q _ _ _ HA _ i q v v' Hq Hv Hv' Hhu_q).
+      intros i' g kk H. rewrite Hsizes in H.
+      rewrite <- (firstn_skipn p (arity_sizes (aa ++ a))).
+      rewrite group_position_app_l; [ exact H | ].
+      exact (proj2 (group_position_lt _ _ _ _ H)). }
     assert (Hlen_f : length (firstn size (applied' ++ vs'))
                      = length (firstn size (applied ++ vs)))
       by (rewrite !length_firstn, Hlen'; reflexivity).
@@ -16193,10 +16290,11 @@ Proof.
       * apply kinds_per_parameter_eqb_eq. exact Hk2.
       * rewrite Era. apply arity_eqb_eq. reflexivity.
       * exact Hbind'.
-      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) _
-                 _ _ _ (repeat true (length params)) statics statics' Hun);
-          [ assumption | exact (statics_sourced_of_flow _ Hsflow)
-          | exact Hbind | exact Hlen_f | exact Hparams_over
+      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) cd
+                 _ _ _ _ statics statics' Hun);
+          [ exact (lookup_nodup_in _ _ _ Hnd Hcd') | assumption
+          | exact (statics_sourced_of_flow _ Hsflow)
+          | exact Hbind | exact Hlen_f | exact Hparams_over_q
           | exact (call_code_step_subkinds _ _ _ _ _ _ _ _ _ _ _ Hcc) ].
     + apply (code_entered id params mc rk ek md cbody cd closure
                (firstn size (applied ++ vs)) callee_vars callee_vars' _ _ et
@@ -16515,6 +16613,12 @@ Proof.
     injection Hx as <-. rewrite Hkind_c. split; [ reflexivity | ].
     intros _. exists callee'. split; [ reflexivity | exact Hrel_mc ]. }
   (* The parameters of the code get the fields of the tuple. *)
+  assert (Hparams_q :
+    ∀ (i : nat) (q : node) (v v' : value),
+      nth_error (cd_params cd) i = Some q -> nth_error fields i = Some v ->
+      nth_error fields' i = Some v' -> hu q -> rel v q v').
+  { intros i q v v' Hq Hv Hv' Hhu_q.
+    exact (Hrelf i q v v' (Hacc i q Hq) Hhu_q Hv Hv'). }
   assert (Hparams :
     length params = length (cd_params cd) ->
     ∀ (i : nat) (p : variable) (v v' : value),
@@ -16586,10 +16690,11 @@ Proof.
       * apply kinds_per_parameter_eqb_eq. exact Hk2'.
       * apply arity_eqb_eq. exact Hk3'.
       * exact Hbind'.
-      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) _
-                 _ _ _ (repeat true (length params)) statics statics' Hun);
-          [ assumption | exact (statics_sourced_of_flow _ Hsflow)
-          | exact Hbind | exact Hlen_f' | exact (Hparams Hlenp)
+      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) cd
+                 _ _ _ _ statics statics' Hun);
+          [ first [ assumption | exact (lookup_nodup_in _ _ _ Hnd Hcd') ]
+          | assumption | exact (statics_sourced_of_flow _ Hsflow)
+          | exact Hbind | exact Hlen_f' | exact Hparams_q
           | exact (call_code_step_subkinds _ _ _ _ _ _ _ _ _ _ _ Hcc) ].
     + assert (Hway_e : way_out cont_rel over_rel [cd_exn cd] et et').
       { apply (way_out_transport _ _ [exn]); [ exact Hexn | reflexivity | ].
@@ -16749,10 +16854,11 @@ Proof.
           as (_ & _ & _ & _ & _ & Era & _).
         rewrite Era. reflexivity.
       * exact Hbind'.
-      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) _
-                 _ _ _ (repeat true (length params)) statics statics' Hun);
-          [ assumption | exact (statics_sourced_of_flow _ Hsflow)
-          | exact Hbind | exact Hlen_f' | exact (Hparams Hlenp)
+      * eapply (rebuilt_subkinds_of_bind id (Code params mc rk ek md cbody) cd
+                 _ _ _ _ statics statics' Hun);
+          [ first [ assumption | exact (lookup_nodup_in _ _ _ Hnd Hcd') ]
+          | assumption | exact (statics_sourced_of_flow _ Hsflow)
+          | exact Hbind | exact Hlen_f' | exact Hparams_q
           | exact (call_code_step_subkinds _ _ _ _ _ _ _ _ _ _ _ Hcc) ].
     + apply (code_entered id params mc rk ek md cbody cd callee fields
                callee_vars callee_vars' _ _ et et' statics statics' hp hp' rcd
@@ -19785,6 +19891,12 @@ Proof.
   - cbn [lookup]. rewrite Pos.eqb_refl. reflexivity.
 Qed.
 
+(* Without types, the rebuild reads no code dep. *)
+Lemma no_types_deps (cds : finite_map code_dep) :
+  ∀ t : subkinds_types,
+    (None : subkinds_rewriting) = Some t -> st_code_deps t = cds.
+Proof. intros t Ht. discriminate Ht. Qed.
+
 (* With local fields, the tables passing the check of the fix. *)
 (* What the rebuild states of the parameters kept holds of the values
    that it gives them, whatever the arguments of the relation (but the
@@ -19816,6 +19928,8 @@ Lemma rebuild_with_refines_checked_local (hb ex : bool)
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   types_sound_all (graph_of_facts (traverse_unit flag u e))
     (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   (ex = false -> results_kinded [] [] e = true) ->
   refines_heap_with (exits_rel (if hb then True else False) ex)
     (State e [] [] empty_static_env empty_heap no_reads)
@@ -19824,14 +19938,17 @@ Lemma rebuild_with_refines_checked_local (hb ex : bool)
        [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
-    Htypes Hrk_ex.
+    Htypes Htypes_deps0 Hrk_ex.
   rename preserve_direct_calls into b.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
     as Hexact.
   destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
-        & Hkeys & Hkeep_alive & _).
+        & Hkeys & Hkeep_alive & Hcds_eq).
+  assert (Htypes_deps :
+            ∀ t : subkinds_types, types = Some t -> st_code_deps t = cds)
+    by (intros t Ht; rewrite (Htypes_deps0 t Ht), Hcds_eq; reflexivity).
   pose proof (traverse_unit_scrutinees ex (unit_codes e) flag u e Hcf)
     as Hscr.
   set (F := traverse_unit flag u e) in *.
@@ -20003,7 +20120,7 @@ Proof.
   exact (rebuild_with_refines_checked_local hb ex flag is_local u e T
            preserve_direct_calls None Hlocal Hfrag Hcf Hkinded Hwf Hexits
            Hcheck Hlrs Hcheck_exact (fun _ _ _ _ _ _ _ _ _ _ _ _ => I)
-           Hrk_ex).
+           (no_types_deps _) Hrk_ex).
 Qed.
 
 Lemma rebuild_refines_checked (hb ex : bool)
@@ -20052,6 +20169,8 @@ Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   types_sound_all (graph_of_facts (traverse_unit flag u e))
     (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   results_kinded [] [] e = true ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
     cannot_change_witness cannot_change ->
@@ -20078,7 +20197,7 @@ Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
        [] [] empty_static_env empty_heap no_reads).
 Proof.
   intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
-    Htypes Hrk Hccc Hwid Hcid.
+    Htypes Htypes_deps0 Hrk Hccc Hwid Hcid.
   rename preserve_direct_calls into b.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
@@ -20086,6 +20205,9 @@ Proof.
   destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & Hcds_eq).
+  assert (Htypes_deps :
+            ∀ t : subkinds_types, types = Some t -> st_code_deps t = cds)
+    by (intros t Ht; rewrite (Htypes_deps0 t Ht), Hcds_eq; reflexivity).
   pose proof (traverse_unit_scrutinees ex (unit_codes e) flag u e Hcf)
     as Hscr.
   set (F := traverse_unit flag u e) in *.
@@ -20293,7 +20415,8 @@ Proof.
   exact (rebuild_cc_with_refines_checked_local hb ex flag is_local u e T
            cannot_change cannot_change_witness preserve_direct_calls None
            Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
-           (fun _ _ _ _ _ _ _ _ _ _ _ _ => I) Hrk Hccc Hwid Hcid).
+           (fun _ _ _ _ _ _ _ _ _ _ _ _ => I) (no_types_deps _) Hrk Hccc Hwid
+           Hcid).
 Qed.
 
 Lemma rebuild_cc_refines_checked (hb ex : bool)
@@ -21048,16 +21171,19 @@ Lemma rebuild_with_refines_local (flag : reaper_preserve_direct_calls)
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   types_sound_all (graph_of_facts (traverse_unit flag u e))
     (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   program_refines e
     (rebuild_unit_with types (traverse_unit flag u e) (solution_of_tables T)
        b e).
 Proof.
-  intros Hlocal Hfrag Hcf Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes.
+  intros Hlocal Hfrag Hcf Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes
+    Htypes_deps.
   pose proof (closure_free_no_code_no_slots e Hcf) as Hns.
   refine (proj2 (exits_rel_flow true _ _
                    (rebuild_with_refines_checked_local false true flag
                       is_local u e T b types Hlocal Hfrag _ _ Hwf Hexits
-                      Hcheck Hlrs Hcheck_exact Htypes
+                      Hcheck Hlrs Hcheck_exact Htypes Htypes_deps
                       (fun E => match E with end))) eq_refl).
   - rewrite (proj1 (checked_modes (unit_codes e)) e). exact Hns.
   - apply (proj1 (calls_kinded_of_exact (unit_codes e))).
@@ -21079,11 +21205,14 @@ Lemma rebuild_with_refines_up_to_heap_local
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   types_sound_all (graph_of_facts (traverse_unit flag u e))
     (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   program_refines_up_to_heap e
     (rebuild_unit_with types (traverse_unit flag u e) (solution_of_tables T)
        b e).
 Proof.
-  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes
+    Htypes_deps.
   assert (Hkinded : calls_kinded [] e = true).
   { apply (proj1 calls_kinded_of_results e [] [] [] Hrk).
     intros k l Hl. discriminate Hl. }
@@ -21091,7 +21220,7 @@ Proof.
            (rebuild_with_refines_checked_local true false flag is_local u e T
               b types Hlocal Hfrag
               (proj1 (any_kind_arguments_checked (unit_codes e)) e Hdc)
-              Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes
+              Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact Htypes Htypes_deps
               (fun _ => Hrk))).
 Qed.
 

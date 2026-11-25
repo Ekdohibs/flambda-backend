@@ -135,7 +135,11 @@
      what its parameters and results state erased
      ([erase_code_subkinds]); code that changes states nothing of its
      parameters and results ([changed_code_metadata]): what is kept is
-     erased ([Keep] of [compute_code_changes]).
+     erased ([Keep] of [compute_code_changes]). With types, code that
+     keeps its calling convention is rewritten as the rebuild without
+     changes rewrites it ([kept_code_metadata], at the nodes of its code
+     dep), and code that changes states what its parameters kept state,
+     rewritten at their variables ([changed_code_metadata_with]).
    - What the model has not got: [only_full_applications] (rebuild.ml:
      [rewrite_set_of_closures], which sets it for code that changes),
      [first_complex_local_param], [param_modes] and [is_my_closure_used]
@@ -380,9 +384,9 @@ Definition changed_code_metadata_with (types : subkinds_rewriting)
     : code_metadata :=
   match types with
   | None => changed_code_metadata metadata params_decisions return_decisions
-  | Some rewrite =>
+  | Some t =>
     with_code_params_subkinds
-      (rewritten_subkinds rewrite (map is_kept params_decisions) params
+      (rewritten_subkinds (st_rewrite t) (map is_kept params_decisions) params
          (cm_params_subkinds metadata))
       (changed_code_metadata metadata params_decisions return_decisions)
   end.
@@ -751,7 +755,7 @@ with rebuild_code_cc (id : code_id) (c : code) : code :=
     match change with
     | Not_changing_calling_convention =>
       Code params my_closure return_continuation exn_continuation
-        (kept_code_metadata types params metadata) body
+        (kept_code_metadata types id metadata) body
     | Changing_calling_convention params_decisions return_decisions =>
       Code (filter_kept (map is_kept params_decisions) params) my_closure
         return_continuation exn_continuation

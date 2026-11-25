@@ -686,26 +686,39 @@ End Subkinds.
 (* The reaper with types                                                    *)
 (* ======================================================================== *)
 
-(* How the reaper with types ([With_types]) rewrites what the parameters
-   that kept code and handlers keep state: [rewrite_kind_with_subkind] at
-   the node of each. *)
+(* How the reaper with types ([With_types]) rewrites what a node states:
+   [rewrite_kind_with_subkind]. *)
+Definition rewrite_of_context (ctx : rewrite_context)
+    : FlambdaReaperRebuild.subkinds_rewrite :=
+  fun n ps => rewrite_kind_with_subkind ctx n ps.
+
+(* What the rebuild with types reads of the unit [e]: the rewriting, the
+   code deps [code_deps] of its traversal, at whose nodes kept code is
+   rewritten, and the parameters of its continuations
+   (FlambdaReaperUnboxing.conts_params). *)
 Definition subkinds_of_context (ctx : rewrite_context)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr)
     : FlambdaReaperRebuild.subkinds_rewriting :=
-  Some (fun n ps => rewrite_kind_with_subkind ctx n ps).
+  Some
+    (FlambdaReaperRebuild.Subkinds_types (rewrite_of_context ctx) code_deps
+       (FlambdaReaperUnboxing.conts_params code_deps e)).
 
 (* The rebuild of the reaper with types; [rebuild_unit] is that without. *)
 Definition rebuild_unit_with_types (ctx : rewrite_context) (F : facts)
-    (sol : solution) (preserve_direct_calls : bool) (e : expr) : expr :=
-  FlambdaReaperRebuild.rebuild_unit_with (subkinds_of_context ctx) F sol
-    preserve_direct_calls e.
+    (sol : solution)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  FlambdaReaperRebuild.rebuild_unit_with (subkinds_of_context ctx code_deps e)
+    F sol preserve_direct_calls e.
 
 (* From the tables, under the context of the rebuild without unboxing,
    with the sets of closures [sets] of the unit. *)
 Definition rebuild_unit_with_types_from_tables (is_local : field -> bool)
     (F : facts) (T : tables) (sets : list set_of_closures)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   rebuild_unit_with_types (plain_context is_local F T sets) F
-    (solution_of_tables T) preserve_direct_calls e.
+    (solution_of_tables T) code_deps preserve_direct_calls e.
 
 (* The same with changes of calling convention. *)
 Definition rebuild_unit_cc_with_types (ctx : rewrite_context) (F : facts)
@@ -713,7 +726,7 @@ Definition rebuild_unit_cc_with_types (ctx : rewrite_context) (F : facts)
     (code_deps : finite_map FlambdaReaperTraversal.code_dep)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   FlambdaReaperCallingConventions.rebuild_unit_cc_with
-    (subkinds_of_context ctx) F sol cannot_change code_deps
+    (subkinds_of_context ctx code_deps e) F sol cannot_change code_deps
     preserve_direct_calls e.
 
 Definition rebuild_unit_cc_with_types_from_tables (is_local : field -> bool)
@@ -740,8 +753,9 @@ Definition rebuild_unit_unbox_repr_mode_with_types (fixed : bool)
     (dominated : list (node * node)) (to_unbox tcr : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   FlambdaReaperUnboxing.rebuild_unit_unbox_repr_mode_with
-    (subkinds_of_context (plain_context is_local F T [])) fixed is_local F T
-    cannot_change code_deps dominated to_unbox tcr preserve_direct_calls e.
+    (Some (rewrite_of_context (plain_context is_local F T []))) fixed
+    is_local F T cannot_change code_deps dominated to_unbox tcr
+    preserve_direct_calls e.
 
 Definition rebuild_unit_unbox_repr_with_types :=
   rebuild_unit_unbox_repr_mode_with_types false.

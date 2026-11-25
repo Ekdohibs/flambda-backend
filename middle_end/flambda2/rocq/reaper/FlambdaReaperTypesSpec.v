@@ -3014,7 +3014,8 @@ Definition rebuild_with_types_refines_local_statement : Prop :=
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     FlambdaUnusedStaticsSpec.program_refines e
       (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
-         T sets preserve_direct_calls e).
+         T sets (FlambdaReaperCallingConventions.unit_code_deps flag u e)
+         preserve_direct_calls e).
 
 (* The same with the heap
    (FlambdaReaperRebuildSpec.rebuild_refines_up_to_heap_local_statement).
@@ -3035,7 +3036,8 @@ Definition rebuild_with_types_refines_up_to_heap_local_statement : Prop :=
     check_field_used_exact is_local (traverse_unit flag u e) T = true ->
     FlambdaReaperRebuildSpec.program_refines_up_to_heap e
       (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
-         T sets preserve_direct_calls e).
+         T sets (FlambdaReaperCallingConventions.unit_code_deps flag u e)
+         preserve_direct_calls e).
 
 (* The same for the rebuild with types and changes of calling convention
    (FlambdaReaperCallingConventionsSpec.v,

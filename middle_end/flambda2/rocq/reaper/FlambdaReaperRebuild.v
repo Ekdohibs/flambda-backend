@@ -185,16 +185,17 @@
      naked kind), so that the rebuilt code ([erase_code_subkinds]) and
      handlers ([with_params_kinds]) state nothing: the empty list, as
      the test tool converts the compiler's term
-     ([convert_params_subkinds]). The reaper with types ([Some rewrite],
-     FlambdaReaperTypes.rebuild_unit_with_types) gives each parameter
-     kept what [rewrite] gives of it and of what it stated
-     ([kept_handler_metadata], [kept_code_metadata]); a list of which
-     nothing says anything is the empty list. Left out, with types: what
-     code states of its results, which the compiler rewrites under the
-     nodes of its code dep and the machine does not test, and what the
-     parameters of a wrapper state, which the compiler takes from the
-     parameters of the continuation that it applies; both state nothing
-     here. The arities of a call have no subkinds in the model.
+     ([convert_params_subkinds]). The reaper with types ([Some],
+     FlambdaReaperTypes.rebuild_unit_with_types) rewrites what a
+     parameter kept by a handler states at its variable
+     ([kept_handler_metadata], [should_keep_param]), and what each
+     parameter and each result of kept code states at its node in the
+     code dep ([kept_code_metadata], [compute_code_changes]); a list of
+     which nothing says anything is the empty list. Left out, with
+     types: what the parameters of a wrapper state, which the compiler
+     takes from the parameters of the continuation that it applies; they
+     state nothing here. The arities of a call have no subkinds in the
+     model.
    - The model has no phantom binding, no region of code, no
      [Rec_info], no [Never_returns], no cost metrics, inlining
      decisions, [is_my_closure_used], [only_full_applications],
@@ -229,6 +230,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaMapSpec FlambdaBindersSpec FlambdaWellFormedSpec
   FlambdaNameAbstractionSpec FlambdaFreshQuantifierSpec
   FlambdaRenameApartSpec FlambdaReaperGraphSpec.
+From OxCamlFlambda2 Require FlambdaReaperTraversal.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -316,11 +318,24 @@ Definition with_params_kinds (metadata : handler_metadata)
   then make_exn_handler_metadata kinds
   else make_handler_metadata kinds.
 
+(* How [rewrite_kind_with_subkind] rewrites what is stated of a node. *)
+Definition subkinds_rewrite : Type := node -> param_subkind -> param_subkind.
+
+(* What the reaper with types reads: the rewriting, the code deps of the
+   traversal, whose nodes code is rewritten at ([compute_code_changes]),
+   and the parameters of the continuations of the unit with what they
+   state, which the parameters of a wrapper take
+   ([cont_params_to_keep]). *)
+Record subkinds_types : Type := Subkinds_types {
+  st_rewrite : subkinds_rewrite;
+  st_code_deps : finite_map FlambdaReaperTraversal.code_dep;
+  st_conts : finite_map (list (node * param_subkind))
+}.
+
 (* How the rebuild rewrites what a parameter that it keeps states: not
    at all, so that it states nothing ([None], the reaper without types),
-   or by a function of the parameter and of what it stated ([Some]). *)
-Definition subkinds_rewriting : Type :=
-  option (node -> param_subkind -> param_subkind).
+   or as the reaper with types does ([Some]). *)
+Definition subkinds_rewriting : Type := option subkinds_types.
 
 (* Each parameter with what it states; nothing where the list is
    shorter. *)
@@ -354,10 +369,11 @@ Definition kept_handler_metadata (types : subkinds_rewriting)
   match types with
   | None =>
     with_params_kinds metadata (filter_kept mask (hm_params_kinds metadata))
-  | Some rewrite =>
+  | Some t =>
     {| hm_params_kinds := filter_kept mask (hm_params_kinds metadata);
        hm_params_subkinds :=
-         rewritten_subkinds rewrite mask params (hm_params_subkinds metadata);
+         rewritten_subkinds (st_rewrite t) mask params
+           (hm_params_subkinds metadata);
        hm_is_exn_handler := hm_is_exn_handler metadata |}
   end.
 
@@ -371,17 +387,50 @@ Definition with_code_params_subkinds (sks : list param_subkind)
      cm_is_tupled := cm_is_tupled metadata;
      cm_is_stub := cm_is_stub metadata |}.
 
-(* The metadata of code that keeps its calling convention, whose
-   parameters are [params]: with types, what they state is rewritten,
-   and nothing is stated of the results. *)
-Definition kept_code_metadata (types : subkinds_rewriting)
-    (params : list variable) (metadata : code_metadata) : code_metadata :=
+(* Each node with what is stated of it; nothing where the list is
+   shorter. *)
+Fixpoint nodes_with_subkinds (nodes : list node) (sks : list param_subkind)
+    : list (node * param_subkind) :=
+  match nodes with
+  | [] => []
+  | n :: nodes => (n, hd any_value sks) :: nodes_with_subkinds nodes (tl sks)
+  end.
+
+(* Code that states [params_sks] of its parameters and [result_sks] of
+   its results. *)
+Definition with_code_subkinds (params_sks result_sks : list param_subkind)
+    (metadata : code_metadata) : code_metadata :=
+  {| cm_params_arity := cm_params_arity metadata;
+     cm_params_subkinds := stated params_sks;
+     cm_result_arity := cm_result_arity metadata;
+     cm_result_subkinds := stated result_sks;
+     cm_is_tupled := cm_is_tupled metadata;
+     cm_is_stub := cm_is_stub metadata |}.
+
+(* What the nodes state, rewritten. *)
+Definition rewritten_at (rewrite : subkinds_rewrite) (nodes : list node)
+    (sks : list param_subkind) : list param_subkind :=
+  map (fun '(n, ps) => rewrite n ps) (nodes_with_subkinds nodes sks).
+
+(* The metadata of the code [id] that keeps its calling convention: with
+   types, each parameter and each result states what is stated of it,
+   rewritten at its node in the code dep ([compute_code_changes]); code
+   with no code dep, as without types, states nothing. *)
+Definition kept_code_metadata (types : subkinds_rewriting) (id : code_id)
+    (metadata : code_metadata) : code_metadata :=
   match types with
+  | Some t =>
+    match lookup id (st_code_deps t) with
+    | Some cd =>
+      with_code_subkinds
+        (rewritten_at (st_rewrite t) (FlambdaReaperTraversal.cd_params cd)
+           (cm_params_subkinds metadata))
+        (rewritten_at (st_rewrite t) (FlambdaReaperTraversal.cd_return cd)
+           (cm_result_subkinds metadata))
+        metadata
+    | None => erase_code_subkinds metadata
+    end
   | None => erase_code_subkinds metadata
-  | Some rewrite =>
-    with_code_params_subkinds
-      (rewritten_subkinds rewrite [] params (cm_params_subkinds metadata))
-      (erase_code_subkinds metadata)
   end.
 
 (* The continuation of a call changed. *)
@@ -1069,7 +1118,7 @@ with rebuild_binding (en : rebuild_env) (binding : static_binding)
   match binding with
   | Bind_code id c =>
     if is_code_id_used id
-    then [Bind_code id (rebuild_code c)]
+    then [Bind_code id (rebuild_code id c)]
     else [Bind_deleted_code id]
   | Bind_deleted_code _ => [binding]
   | Bind_symbol s const =>
@@ -1079,8 +1128,9 @@ with rebuild_binding (en : rebuild_env) (binding : static_binding)
   end
 (* [rebuild_code] and [rebuild_function_params_and_body]: the body is
    [Invalid] if [my_closure] or a parameter has no source, and what the
-   parameters and the results state is erased. *)
-with rebuild_code (c : code) : code :=
+   parameters and the results state is erased, or rewritten with types
+   ([kept_code_metadata]). *)
+with rebuild_code (id : code_id) (c : code) : code :=
   match c with
   | Code params my_closure return_continuation exn_continuation metadata
       body =>
@@ -1089,7 +1139,7 @@ with rebuild_code (c : code) : code :=
       :: with_kinds params (unarize (cm_params_arity metadata))
     in
     Code params my_closure return_continuation exn_continuation
-      (kept_code_metadata types params metadata)
+      (kept_code_metadata types id metadata)
       (if existsb (fun '(x, kind) => is_dead_var x kind) bound
        then Invalid
        else rebuild_expr (bind_variables empty_env bound) body)

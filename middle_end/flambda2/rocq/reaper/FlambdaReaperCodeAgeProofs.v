@@ -463,7 +463,9 @@ Proof.
   unfold code_calling_convention_change, cannot_change_calling_convention.
   rewrite H, orb_true_r.
   unfold same_convention, kept_code_metadata.
-  destruct types; simpl; (split; [ reflexivity | split; reflexivity ]).
+  destruct types as [t | ];
+    [ destruct (lookup id (st_code_deps t)) | ]; simpl;
+    (split; [ reflexivity | split; reflexivity ]).
 Qed.
 
 End Rebuilt.

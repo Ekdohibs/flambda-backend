@@ -11118,7 +11118,7 @@ Qed.
    that the rebuild gives it, related to one of the first run of what the
    parameter stated; nothing is stated of a parameter with no use. *)
 Lemma subkinds_of_context_sound (statics statics' : static_env)
-    (x : variable) (nb : bool) (sk : subkind) (v v' : value) :
+    (nd : node) (nb : bool) (sk : subkind) (v v' : value) :
   RP.statics_sourced sol statics ->
   (∀ (s : symbol) (c : const),
      lookup s (static_values statics)
@@ -11132,15 +11132,12 @@ Lemma subkinds_of_context_sound (statics statics' : static_env)
      ∃ fields' : list value,
        lookup s (static_values statics') = Some (Static_block tag fields')
        ∧ fields_rebuilt (field_R F T rel (Node_symbol s)) 0 fields fields') ->
-  (is_var_used sol x (kind_of_value v) = true ->
-   rel v (Node_variable x) v') ->
+  (s_has_usage sol nd = true -> rel v nd v') ->
   value_at statics (nb, sk) v = true ->
-  value_at statics'
-    (rewrite_kind_with_subkind ctx (Node_variable x) (nb, sk)) v'
-  = true.
+  value_at statics' (rewrite_kind_with_subkind ctx nd (nb, sk)) v' = true.
 Proof.
   intros Hsrc Hboxed Hblocks Hrel Hat.
-  destruct (is_var_used sol x (kind_of_value v)) eqn:Hu.
+  destruct (s_has_usage sol nd) eqn:Hhu.
   - apply (subkind_sound_at is_local F T sets statics statics' Hleast Hlocal
              rel) with (v := v);
       [ intros v0 n v0' H; eapply RP.rel_kind; exact H
@@ -11155,17 +11152,13 @@ Proof.
     exists a, fields'.
     split; [ exact Hmay | split; [ exact Hhs | split; [ reflexivity | ] ] ].
     exact (fields_rel_R a 0 fields fields' Hf).
-  - assert (Hhu : s_has_usage sol (Node_variable x) = false).
-    { unfold is_var_used in Hu. destruct (kind_of_value v); try exact Hu;
-        discriminate Hu. }
-    unfold rewrite_kind_with_subkind. cbn [fst snd].
+  - unfold rewrite_kind_with_subkind. cbn [fst snd].
     rewrite (rewrite_subkind_erasing is_local F T sets); [ | ].
     + apply FlambdaSubkindProofs.value_at_any_value.
     + unfold metadata_for_name, get_usages.
-      change (has_use ctx (Node_variable x)) with
-        (s_has_usage sol (Node_variable x)).
+      change (has_use ctx nd) with (s_has_usage sol nd).
       rewrite Hhu.
-      destruct (get_single_source ctx (Node_variable x)); reflexivity.
+      destruct (get_single_source ctx nd); reflexivity.
 Qed.
 
 End Subkinds_rel.
@@ -11173,16 +11166,18 @@ End Subkinds_rel.
 (* The rebuild with types states only what holds, whatever the arguments
    of the relation of the simulation. *)
 Lemma subkinds_of_context_sound_all (is_local : field -> bool) (F : facts)
-    (T : tables) (sets : list set_of_closures) :
+    (T : tables) (sets : list set_of_closures)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr) :
   least_solution is_local F T -> is_local_slots_only is_local ->
   field_used_exact is_local (graph_of_facts F) (solution_of_tables T) ->
   RP.types_sound_all (graph_of_facts F) (solution_of_tables T) F
-    (subkinds_of_context (plain_context is_local F T sets)).
+    (subkinds_of_context (plain_context is_local F T sets) code_deps e).
 Proof.
   intros Hleast Hlocal Hexact cds keep hp b ids ff ex se cc cdeps cmds
     located.
   unfold RP.types_sound, subkinds_of_context. cbv beta iota.
-  intros x [nb sk] v v' statics statics' Hst Hsrc Hrel Hat.
+  cbn [FlambdaReaperRebuild.st_rewrite]. unfold rewrite_of_context.
+  intros n [nb sk] v v' statics statics' Hst Hsrc Hrel Hat.
   destruct Hst as (_ & Hblocks & Honly & _).
   eapply (subkinds_of_context_sound is_local F T sets Hleast Hlocal Hexact);
     [ exact Hsrc | | | exact Hrel | exact Hat ].
@@ -11201,6 +11196,14 @@ Proof.
              fields' Hf).
 Qed.
 
+(* The code deps that the rebuild with types reads are those given. *)
+Lemma subkinds_of_context_deps (ctx : rewrite_context)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr) :
+  ∀ t : FlambdaReaperRebuild.subkinds_types,
+    subkinds_of_context ctx code_deps e = Some t ->
+    FlambdaReaperRebuild.st_code_deps t = code_deps.
+Proof. intros t Ht. injection Ht as <-. reflexivity. Qed.
+
 Theorem rebuild_with_types_refines_local :
   rebuild_with_types_refines_local_statement.
 Proof.
@@ -11208,8 +11211,9 @@ Proof.
     Hlrs Hcheck_exact.
   exact (RP.rebuild_with_refines_local flag is_local u e T b _ Hlocal Hfrag
            Hcf Hwf Hexits Hcheck Hlrs Hcheck_exact
-           (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
-              (check_field_used_exact_sound is_local _ _ Hcheck_exact))).
+           (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast Hlocal
+              (check_field_used_exact_sound is_local _ _ Hcheck_exact))
+           (subkinds_of_context_deps _ _ _)).
 Qed.
 
 Theorem rebuild_with_types_refines_up_to_heap_local :
@@ -11219,8 +11223,9 @@ Proof.
     Hcheck Hlrs Hcheck_exact.
   exact (RP.rebuild_with_refines_up_to_heap_local flag is_local u e T b _
            Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact
-           (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
-              (check_field_used_exact_sound is_local _ _ Hcheck_exact))).
+           (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast Hlocal
+              (check_field_used_exact_sound is_local _ _ Hcheck_exact))
+           (subkinds_of_context_deps _ _ _)).
 Qed.
 
 From OxCamlFlambda2 Require FlambdaReaperCallingConventionsProofs.
@@ -11242,8 +11247,10 @@ Proof.
               (proj1 (RP.any_kind_arguments_checked
                         (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
               Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
-              (subkinds_of_context_sound_all is_local _ T sets Hleast Hlocal
+              (subkinds_of_context_sound_all is_local _ T sets _ _ Hleast
+                 Hlocal
                  (check_field_used_exact_sound is_local _ _ Hcheck_exact))
-              Hrk Hcl (CCP.check_apply_widgets_sound _ _ Hwid)
+              (subkinds_of_context_deps _ _ _) Hrk Hcl
+              (CCP.check_apply_widgets_sound _ _ Hwid)
               (CCP.check_witness_code_ids_sound _ Hcid))).
 Qed.

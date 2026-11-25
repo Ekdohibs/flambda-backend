@@ -2231,15 +2231,6 @@ Definition field_read (d : named) : option (field * simple) :=
 (* What the parameters state, with types                                    *)
 (* ------------------------------------------------------------------------ *)
 
-(* Each node with what is stated of it; nothing where the list is
-   shorter. *)
-Fixpoint nodes_with_subkinds (nodes : list node) (sks : list param_subkind)
-    : list (node * param_subkind) :=
-  match nodes with
-  | [] => []
-  | n :: nodes => (n, hd any_value sks) :: nodes_with_subkinds nodes (tl sks)
-  end.
-
 (* What the parameters at nodes, with what they state, state once the
    decisions are made ([get_parameters] of the decisions of
    [compute_code_changes] and of [should_keep_param], as
@@ -2287,17 +2278,6 @@ Definition handler_metadata_with (metadata : handler_metadata)
   {| hm_params_kinds := kinds;
      hm_params_subkinds := stated sks;
      hm_is_exn_handler := hm_is_exn_handler metadata |}.
-
-(* Code that states [params_sks] of its parameters and [result_sks] of
-   its results. *)
-Definition with_code_subkinds (params_sks result_sks : list param_subkind)
-    (metadata : code_metadata) : code_metadata :=
-  {| cm_params_arity := cm_params_arity metadata;
-     cm_params_subkinds := stated params_sks;
-     cm_result_arity := cm_result_arity metadata;
-     cm_result_subkinds := stated result_sks;
-     cm_is_tupled := cm_is_tupled metadata;
-     cm_is_stub := cm_is_stub metadata |}.
 
 Section Conts_params.
 
@@ -2373,10 +2353,10 @@ Variable first_fresh : positive.
    ([changed_representations]). *)
 Variable changed : list (node * closure_repr).
 (* How the rebuild rewrites what the parameters kept state
-   (FlambdaReaperRebuild.subkinds_rewriting: [None] without types), and,
+   (FlambdaReaperRebuild.subkinds_rewrite; [None] without types), and,
    for the reaper with types, the parameters of the continuations of the
    unit ([conts_params]). *)
-Variable types : subkinds_rewriting.
+Variable types : option subkinds_rewrite.
 Variable cont_params : finite_map (list (node * param_subkind)).
 
 (* [Analysis.get_unboxed_fields]. *)
@@ -3707,8 +3687,9 @@ Definition rebuild_unit_unbox_repr_mode (fixed : bool)
 (* The same, with what the parameters kept state rewritten as [types]
    says: the reaper with types ([Some], FlambdaReaperTypes.v) or without
    ([None], [rebuild_unit_unbox_repr_mode]). *)
-Definition rebuild_unit_unbox_repr_mode_with (types : subkinds_rewriting)
-    (fixed : bool) (is_local : field -> bool) (F : facts) (T : tables)
+Definition rebuild_unit_unbox_repr_mode_with
+    (types : option subkinds_rewrite) (fixed : bool)
+    (is_local : field -> bool) (F : facts) (T : tables)
     (cannot_change : list node) (code_deps : finite_map code_dep)
     (dominated : list (node * node)) (to_unbox tcr : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
