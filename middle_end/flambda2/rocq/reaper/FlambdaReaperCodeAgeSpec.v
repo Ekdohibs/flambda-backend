@@ -33,7 +33,7 @@
 
    This file is to be reviewed: [refines_observably_aged],
    [unit_statics], [same_convention], [sound_conventions_for],
-   [conventions_agree], [age_fixed_table], [cut_relation], the three
+   [conventions_agree], [age_fixed_table], [cut_relation], the four
    units and the statements. The proofs are in
    FlambdaReaperCodeAgeProofs.v, which needs no review.
 
@@ -77,7 +77,8 @@
 
    2. A direct call of a closure of a newer version within the unit
       ([aged_call_counterexample_statement],
-      [aged_call_sound_example_statement]). The traversal reads the
+      [aged_call_sound_example_statement],
+      [aged_call_sound_counterexample_statement]). The traversal reads the
       witness of a direct call off its callee, and with [Auto] links the
       call to the code that it names only where the callee has any
       source: the graph takes the call for a call of the code of the
@@ -95,10 +96,15 @@
       wrong. With a sound relation both rebuilds refine it on the
       machine; but the solution does not describe that run: [f50] has no
       use and its closure no source, and the run enters the body of
-      [f50] with its closure bound to the closure of [f51]. What is
-      proved of every unit on the machine is the statements of the
-      rebuild for a unit that does not go wrong on [step]
-      ([least_rebuild_refines_aged_statement],
+      [f50] with its closure bound to the closure of [f51]. And a sound
+      relation is not enough: where [f51] itself calls its closure
+      directly naming [f50], the relation can be sound for every
+      closure, [sound_for] comparing a call of [f51], whose own call
+      goes by [f50], with a call of [f50]; the rebuild names [f51] at
+      both calls, and the rebuilt unit runs without end where the unit
+      exits. What is proved of every unit on the machine is the
+      statements of the rebuild for a unit that does not go wrong on
+      [step] ([least_rebuild_refines_aged_statement],
       [least_rebuild_cc_auto_refines_aged_statement]), from
       [refines_aged_of_defined_statement] and
       [refines_observably_aged_of_defined_statement]: such a unit makes
@@ -136,15 +142,18 @@
       each code for the runs of the unit, and not for every call that
       [sound_for] speaks of.
 
-   Not reached: a statement of the rebuild on the machine for a unit
+   Found false: the refinement of the rebuild on the machine for a unit
    that makes a direct call of a closure of a newer version of the code
-   named, under a relation sound for each closure so called. The proof
-   of the rebuild rests on the invariant of the flow, which is of the
-   runs of [step] (FlambdaReaperFlowSpec.v) and does not hold of such a
-   run ([aged_call_sound_example_statement]). It would need that
-   invariant of the run in which each such call goes by the code of its
-   closure, and that this run refines the run of the machine, from the
-   soundness of the relation at each call; neither is done. *)
+   named, under a relation sound for each closure so called
+   ([aged_call_sound_counterexample_statement]). Not reached: such a
+   statement under a premise that makes it hold. The rebuild makes each
+   such call go by the code of its closure, the calls in the newer code
+   too; a premise would have to speak of the runs in which every such
+   call does so, and a proof would need the invariant of the flow for
+   those runs (FlambdaReaperFlowSpec.v is of the runs of [step], and it
+   does not describe the runs of the machine:
+   [aged_call_sound_example_statement]) and that they refine the runs of
+   the machine. Neither is done. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -808,6 +817,149 @@ Definition aged_call_sound_example_statement : Prop :=
   ∧ program_refines_observably_aged age_of e (AgedCallExample.rebuilt e)
   ∧ program_refines_observably_aged age_of e
       (AgedCallExample.rebuilt_fixed e).
+
+(* A unit in which the newer code calls its own closure directly, naming
+   the older code, and which calls the static closure of the newer code
+   directly, naming the older code:
+
+     let code f50 x40 my_closure x41 return k3 exn k4 = k3 x40 in
+     let code f51 x43 my_closure x44 return k5 exn k6 =
+       x44 x43 return k5 exn k6                   (direct, to f50)
+     in
+     let symbol s80 = closure at 70 of { 70 = f51 } in
+     let_cont k20 x30 = return x30 in
+     s80 9 return k20 exn k2                      (direct, to f50)
+
+   [unit_naming main inner] is that unit with the call of the unit naming
+   [main] and the call in [f51] naming [inner]. On the machine the call
+   of the unit runs [f50] with [s80], which returns 9. [f51], with a
+   closure of [f51], calls [f50] with that closure and its argument, and
+   so refines [f50] for it. The flow finds [f51] at both calls (only
+   [s80] reaches [x44]); the rebuild makes both name [f51], and [f51]
+   then calls itself without end. *)
+Module RecursiveAgedExample.
+
+Local Open Scope positive_scope.
+Import FlambdaReaperCallingConventions.Examples.
+
+Definition older : code :=
+  Code [40] 41 3 4 (make_code_metadata [Singleton Value] [Singleton Value])
+    (return_to 3 [Var 40]).
+
+Definition newer_naming (inner : code_id) : code :=
+  Code [43] 44 5 6 (make_code_metadata [Singleton Value] [Singleton Value])
+    (Apply
+       {| ap_callee := Var 44; ap_call_kind := Direct inner;
+          ap_args := [Var 43];
+          ap_continuation := 5; ap_exn_continuation := 6;
+          ap_exn_extra_args := [];
+          ap_args_arity := [Singleton Value];
+          ap_return_arity := [Singleton Value] |}).
+
+Definition newer : code := newer_naming 50.
+
+Definition unit_naming (main inner : code_id) : expr :=
+  Let_static
+    [Bind_code 50 older; Bind_code 51 (newer_naming inner);
+     Bind_symbol 80 (Static_const_closure_of_set 70 [(70, 80)] [(70, 51)] [])]
+    (Let_cont_non_recursive 20
+       (Handler [30] (make_handler_metadata [Value]) (return_to 1 [Var 30]))
+       (Apply
+          {| ap_callee := Symbol 80; ap_call_kind := Direct main;
+             ap_args := [Const (Tagged_immediate 9)];
+             ap_continuation := 20; ap_exn_continuation := 2;
+             ap_exn_extra_args := [];
+             ap_args_arity := [Singleton Value];
+             ap_return_arity := [Singleton Value] |})).
+
+Definition unit_expr : expr := unit_naming 50 50.
+
+Definition relation : Code_age_relation.t :=
+  Code_age_relation.add Code_age_relation.empty 51 50.
+
+Definition age_of (_ : static_env) : Code_age_relation.t := relation.
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match FlambdaReaperLeast.compute_least no_local facts 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+(* The rebuild without changes of calling convention, with them and the
+   least table, and with them and the table of the fix. *)
+Definition rebuilt : expr :=
+  rebuild_unit_from_tables facts tables true unit_expr.
+
+Definition rebuilt_cc : expr :=
+  rebuild_unit_cc_from_tables facts tables (derive_cannot_change facts tables)
+    (unit_code_deps Auto interface unit_expr) true unit_expr.
+
+Definition rebuilt_fixed : expr :=
+  rebuild_unit_cc_from_tables facts tables
+    (age_fixed_table relation (derive_cannot_change facts tables))
+    (unit_code_deps Auto interface unit_expr) true unit_expr.
+
+Definition initial (e : expr) : state :=
+  State e [] [] empty_static_env empty_heap no_reads.
+
+End RecursiveAgedExample.
+
+(* The relation is well-formed and sound for every closure, with the
+   statics of the unit, which every state of its run has after the
+   first. The unit meets the premises of
+   FlambdaReaperLeastSpec.least_rebuild_refines_observably_statement and
+   least_rebuild_cc_auto_refines_observably_statement, and goes wrong on
+   [step]. On the machine it exits with 9. The unit whose call names
+   [f51], the call in [f51] still naming [f50], exits with 9 too: that
+   one replacement refines the unit, as
+   FlambdaCodeAgeCallsSpec.direct_call_newer_version_refines_statement
+   says of the call. The unit whose two calls name [f51] runs without
+   end, and so do the three rebuilds: plain, with changes of calling
+   convention, and with the table of the fix. None refines the unit on
+   the machine. [sound_for] compares a call of the newer code, whose own
+   direct calls go by the code that they name, with a call of the older;
+   the rebuild makes every direct call of a closure of a newer version
+   go by the code of the closure, those in the newer code too. So a
+   relation sound for each closure so called does not make the rebuild
+   refine the unit on the machine. *)
+Definition aged_call_sound_counterexample_statement : Prop :=
+  let e := RecursiveAgedExample.unit_expr in
+  let F := RecursiveAgedExample.facts in
+  let T := RecursiveAgedExample.tables in
+  let age_of := RecursiveAgedExample.age_of in
+  let nine :=
+    Exit 1%positive [Value_const (Tagged_immediate 9)] empty_heap no_reads
+  in
+  least_solution Examples.no_local F T
+  ∧ in_flow_fragment e = true ∧ any_kind_arguments e = true
+  ∧ results_kinded [] [] e = true
+  ∧ well_formed_unit Examples.interface e = true
+  ∧ exits_one_value Examples.interface e = true
+  ∧ behaves (RecursiveAgedExample.initial e) Goes_wrong
+  ∧ well_formed RecursiveAgedExample.relation
+  ∧ (∀ v : value, sound_for age_of (unit_statics e) v)
+  ∧ run_aged age_of 5 (RecursiveAgedExample.initial e) = nine
+  ∧ run_aged age_of 6
+      (RecursiveAgedExample.initial
+         (RecursiveAgedExample.unit_naming 51%positive 50%positive))
+    = nine
+  ∧ behaves_aged age_of
+      (RecursiveAgedExample.initial
+         (RecursiveAgedExample.unit_naming 51%positive 51%positive))
+      Diverges
+  ∧ behaves_aged age_of
+      (RecursiveAgedExample.initial RecursiveAgedExample.rebuilt) Diverges
+  ∧ behaves_aged age_of
+      (RecursiveAgedExample.initial RecursiveAgedExample.rebuilt_cc) Diverges
+  ∧ behaves_aged age_of
+      (RecursiveAgedExample.initial RecursiveAgedExample.rebuilt_fixed)
+      Diverges
+  ∧ ~ program_refines_observably_aged age_of e RecursiveAgedExample.rebuilt
+  ∧ ~ program_refines_observably_aged age_of e RecursiveAgedExample.rebuilt_cc
+  ∧ ~ program_refines_observably_aged age_of e
+        RecursiveAgedExample.rebuilt_fixed.
 
 (* ======================================================================== *)
 (* What the fix does not keep                                               *)

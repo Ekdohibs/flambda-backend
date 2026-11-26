@@ -38,8 +38,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperCallingConventionsSpec FlambdaReaperLeastSpec
   FlambdaCodeAgeCallsSpec FlambdaCodeAgeCallsProofs
   FlambdaReaperCodeAgeSpec.
-From OxCamlFlambda2 Require FlambdaReaperLeast FlambdaReaperLeastProofs
-  FlambdaReaperCallingConventionsProofs FlambdaReaperFlowProofs.
+From OxCamlFlambda2 Require FlambdaSemanticsProofs FlambdaReaperLeast
+  FlambdaReaperLeastProofs FlambdaReaperCallingConventionsProofs
+  FlambdaReaperFlowProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaCodeAgeRelation FlambdaCodeAgeRelationSpec
   FlambdaCodeAgeRelationProofs.
@@ -149,6 +150,43 @@ Proof.
   - intros k vs hp Hb. apply step_behaves_by in Hb. rewrite H in Hb.
     discriminate Hb.
   - intros b _ _. right. apply step_behaves_by. rewrite H. reflexivity.
+Qed.
+
+(* A state whose first step comes to [s] behaves as [s] does. *)
+Lemma refines_by_of_step (s t : state) :
+  machine_step t = Step s -> refines_by machine_step s t.
+Proof.
+  intros H. split.
+  - intros k vs hp Hb. apply step_behaves_by. rewrite H. exact Hb.
+  - intros b _ Hb. left. apply step_behaves_by in Hb. rewrite H in Hb.
+    exact Hb.
+Qed.
+
+(* A state whose step is itself. *)
+Lemma run_by_loop (s : state) :
+  machine_step s = Step s -> ∀ n : nat, run_by machine_step n s = Step s.
+Proof.
+  intros H n. induction n as [ | n IH]; [ reflexivity | ]. simpl.
+  rewrite H. exact IH.
+Qed.
+
+(* A run that comes to such a state diverges, and does not exit. *)
+Lemma behaves_by_loop (n : nat) (s0 s : state) :
+  run_by machine_step n s0 = Step s -> machine_step s = Step s ->
+  behaves_by machine_step s0 Diverges.
+Proof.
+  intros Hrun Hloop. apply (run_behaves_by machine_step n). rewrite Hrun.
+  cbn [result_behaves_by behaves_by]. intros m. exists s.
+  apply run_by_loop. exact Hloop.
+Qed.
+
+Lemma not_exits_of_diverges (s : state) (k : continuation) (vs : list value)
+    (hp : heap) :
+  behaves_by machine_step s Diverges ->
+  ~ behaves_by machine_step s (Exits k vs hp).
+Proof.
+  intros Hd [n [rd Hn]]. destruct (Hd n) as [s' Hs']. rewrite Hn in Hs'.
+  discriminate Hs'.
 Qed.
 
 End Machine.
@@ -671,6 +709,64 @@ Proof.
   injection Hb as _ <- _. exact (Hne Hrel).
 Qed.
 
+(* A run that exits and one that diverges. *)
+Lemma not_refines_observably_aged_of_diverges
+    (age_of : static_env -> Code_age_relation.t) (n : nat) (s t : state)
+    (k : continuation) (vs : list value) (hp : heap) (rd : read_record) :
+  run_aged age_of n s = Exit k vs hp rd ->
+  behaves_aged age_of t Diverges ->
+  ~ refines_observably_aged age_of s t.
+Proof.
+  intros Hs Ht (H1 & _ & _).
+  destruct (H1 k vs hp) as (vs' & Hb & _); [ exists n, rd; exact Hs | ].
+  exact (not_exits_of_diverges _ t k vs' hp Ht Hb).
+Qed.
+
+(* The run of a state that comes, in [n] steps, to a state whose step is
+   itself. *)
+Ltac loops n :=
+  match goal with
+  | |- behaves_aged ?age_of ?s Diverges =>
+    apply (behaves_by_loop _ n s
+             (match run_aged age_of n s with
+              | Step s' => s'
+              | _ => s
+              end));
+    vm_compute; reflexivity
+  end.
+
+(* A full call of code that passes the tests of [call_code]. *)
+Lemma call_code_runs (closure : value) (c : code) (vs : list value)
+    (args_arity return_arity : arity) (return_to exn_to : cont_value)
+    (statics : static_env) (hp : heap) (rd : read_record) (vars : env) :
+  binds_statics (code_body c) = false ->
+  map kind_of_value vs = unarize args_arity ->
+  unarize_per_parameter args_arity
+  = unarize_per_parameter (code_params_arity c) ->
+  return_arity = code_result_arity c ->
+  values_of_subkinds statics vs (code_params_subkinds c) = true ->
+  bind_params (code_params c) vs [(code_my_closure c, closure)] = Some vars ->
+  call_code closure c vs args_arity return_arity return_to exn_to statics hp
+    rd
+  = Step (State (code_body c) vars
+            [(code_return_continuation c, return_to);
+             (code_exn_continuation c, exn_to)]
+            statics hp rd).
+Proof.
+  intros Hb Hk Hp Hr Hs Hbind. unfold call_code.
+  rewrite Hb, Hk, Hp, Hr, FlambdaSemanticsProofs.kinds_eqb_refl,
+    FlambdaSemanticsProofs.arity_eqb_refl.
+  unfold kinds_per_parameter_eqb.
+  destruct (list_eq_dec _ _ _) as [_ | Hne]; [ | contradiction ].
+  cbn [andb negb]. rewrite Hs. cbn [negb]. rewrite Hbind. reflexivity.
+Qed.
+
+Lemma unarize_of_per_parameter (a : arity) :
+  unarize a = concat (unarize_per_parameter a).
+Proof.
+  unfold unarize, unarize_per_parameter. apply flat_map_concat_map.
+Qed.
+
 (* Every code of [codes] has the convention of [c0]: the conventions
    agree, whatever the relation. *)
 Lemma conventions_agree_uniform (rel : Code_age_relation.t)
@@ -1068,6 +1164,129 @@ Proof.
   split; [ exact (refines_observably_aged_of_runs _ 5 5 _ _ _ _ _ _ _ _ H0 H1
                     Hrel) | ].
   exact (refines_observably_aged_of_runs _ 5 5 _ _ _ _ _ _ _ _ H0 H2 Hrel).
+Qed.
+
+(* The code 51, for a closure of 51, refines the code 50: its body calls
+   the code 50 with that closure and its argument. *)
+Lemma recursive_codes_refine (statics : static_env) (v : value)
+    (slots : list (value_slot * value)) :
+  closure_of statics v = Some (51%positive, slots) ->
+  lookup 50%positive (static_code statics)
+  = Some RecursiveAgedExample.older ->
+  code_refines_for RecursiveAgedExample.age_of statics v
+    RecursiveAgedExample.older RecursiveAgedExample.newer.
+Proof.
+  intros Hv H50.
+  split; [ reflexivity | split; [ reflexivity | split; [ reflexivity | ] ] ].
+  intros vs args_arity return_arity return_to exn_to hp rd.
+  unfold result_refines_aged.
+  destruct (call_code v RecursiveAgedExample.older vs args_arity return_arity
+              return_to exn_to statics hp rd) as [s | k vs' hp' rd' | ]
+    eqn:Hs;
+    [ | exfalso;
+        exact (FlambdaReaperFlowProofs.call_code_not_exit _ _ _ _ _ _ _ _ _ _
+                 _ _ _ _ Hs)
+      | exact I ].
+  pose proof (FlambdaSemanticsProofs.call_code_step_subkinds _ _ _ _ _ _ _ _
+                _ _ _ Hs) as Hsub.
+  apply FlambdaSemanticsProofs.call_code_step in Hs
+    as (vars & _ & Hk & Hp & Hr & Hb & ->).
+  destruct vs as [ | x [ | y vs] ]; try discriminate Hb.
+  injection Hb as <-.
+  rewrite (call_code_runs v RecursiveAgedExample.newer [x] args_arity
+             return_arity return_to exn_to statics hp rd
+             [(43%positive, x); (44%positive, v)] eq_refl Hk Hp Hr Hsub
+             eq_refl).
+  cbn [result_refines_by]. apply refines_by_of_step.
+  unfold RecursiveAgedExample.newer, RecursiveAgedExample.newer_naming.
+  cbn [code_body code_return_continuation code_exn_continuation].
+  rewrite (step_aged_apply_direct _ _ 50%positive); [ | reflexivity ].
+  cbn [ap_callee ap_args exn_extra_simples ap_exn_extra_args map fst
+       eval_simple eval_simples lookup Pos.eqb ap_continuation
+       ap_exn_continuation resolve with_extra_args ap_args_arity
+       ap_return_arity].
+  unfold shape_of_aged_direct_call. rewrite Hv.
+  replace (same_or_newer_b (RecursiveAgedExample.age_of statics) 51%positive
+             50%positive)
+    with true by (vm_compute; reflexivity).
+  rewrite H50.
+  change (arguments_for_code statics RecursiveAgedExample.older [x]
+            [Singleton Value])
+    with (Some ([x], [Singleton Value])).
+  cbv iota beta.
+  change (shape_of_code_call v RecursiveAgedExample.older [x]
+            [Singleton Value] [Singleton Value])
+    with (Some (Full_call v RecursiveAgedExample.older [x]
+                  [Singleton Value])).
+  cbn [run_call].
+  assert (Hkx : map kind_of_value [x] = unarize [Singleton Value]).
+  { rewrite Hk, unarize_of_per_parameter, Hp. reflexivity. }
+  rewrite (call_code_runs v RecursiveAgedExample.older [x] [Singleton Value]
+             [Singleton Value] return_to exn_to statics hp rd
+             [(40%positive, x); (41%positive, v)] eq_refl Hkx eq_refl
+             eq_refl Hsub eq_refl).
+  reflexivity.
+Qed.
+
+Theorem aged_call_sound_counterexample :
+  aged_call_sound_counterexample_statement.
+Proof.
+  cbv zeta.
+  set (e := RecursiveAgedExample.unit_expr).
+  set (age_of := RecursiveAgedExample.age_of).
+  assert (Hleast : least_solution Examples.no_local RecursiveAgedExample.facts
+                     RecursiveAgedExample.tables).
+  { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity. }
+  assert (H0 : run_aged age_of 5 (RecursiveAgedExample.initial e)
+               = Exit 1%positive [Value_const (Tagged_immediate 9)]
+                   empty_heap no_reads).
+  { vm_compute. reflexivity. }
+  assert (D1 : behaves_aged age_of
+                 (RecursiveAgedExample.initial RecursiveAgedExample.rebuilt)
+                 Diverges).
+  { loops 4. }
+  assert (D2 : behaves_aged age_of
+                 (RecursiveAgedExample.initial RecursiveAgedExample.rebuilt_cc)
+                 Diverges).
+  { loops 3. }
+  assert (D3 : behaves_aged age_of
+                 (RecursiveAgedExample.initial
+                    RecursiveAgedExample.rebuilt_fixed)
+                 Diverges).
+  { loops 4. }
+  split; [ exact Hleast | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exists 5; vm_compute; reflexivity | ].
+  split.
+  { intros id older Hl Hs. apply one_link in Hl as [-> ->].
+    apply same_or_newer_b_decides in Hs. vm_compute in Hs.
+    discriminate Hs. }
+  split.
+  { intros v newer older c c' Hat Hl Hc Hc'.
+    apply one_link in Hl as [-> ->].
+    vm_compute in Hc, Hc'. injection Hc as <-. injection Hc' as <-.
+    destruct Hat as (called & slots & Hv & Hsn).
+    assert (Hcalled : called = 51%positive).
+    { inversion Hsn as [ | id o id' Ho _ ]; [ reflexivity | ].
+      apply one_link in Ho as [-> _]. reflexivity. }
+    subst called.
+    apply (recursive_codes_refine _ v slots Hv). vm_compute. reflexivity. }
+  split; [ exact H0 | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ loops 3 | ].
+  split; [ exact D1 | ].
+  split; [ exact D2 | ].
+  split; [ exact D3 | ].
+  split; [ exact (not_refines_observably_aged_of_diverges _ 5 _ _ _ _ _ _ H0
+                    D1) | ].
+  split; [ exact (not_refines_observably_aged_of_diverges _ 5 _ _ _ _ _ _ H0
+                    D2) | ].
+  exact (not_refines_observably_aged_of_diverges _ 5 _ _ _ _ _ _ H0 D3).
 Qed.
 
 (* ======================================================================== *)
