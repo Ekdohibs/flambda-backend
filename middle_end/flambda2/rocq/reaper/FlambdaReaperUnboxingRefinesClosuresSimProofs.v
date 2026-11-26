@@ -54,7 +54,9 @@
    value ([rr_proj_unboxed]: [proj_lets]). Calls are the same in both
    ([rr_call]): direct, full, with plain arguments, and with a callee of
    the class of the [my_closure] of the code ([CS]: [callee_ok]), so that
-   the code of both runs, related, runs with its [my_closure] related.
+   the code of both runs, related, runs with its [my_closure] related,
+   and states the same of its parameters ([code_frame]), as the handlers
+   of the two runs do.
    Arguments of continuations are plain, so that the values of an exit
    are the same in both runs.
 
@@ -210,7 +212,7 @@ Definition code_frame (id : code_id) (c c' : code) (ci : code_info) : Prop :=
   ∧ length (code_params_arity c) = ci_nparams ci
   ∧ forallb (plain_variable M) (code_params c) = true
   ∧ my_closure_ok ci (code_my_closure c)
-  ∧ subkinds_say_nothing (code_params_subkinds c') = true.
+  ∧ code_params_subkinds c' = code_params_subkinds c.
 
 (* A call of the code [id] whose class is [ci]: as [rr_call]. *)
 Definition call_ok_c (ap : apply_expr) (id : code_id) (ci : code_info)
@@ -1788,7 +1790,7 @@ Proof.
   | |- context [if negb ?t then Undefined else _] =>
     destruct t eqn:Htest
   end; cbn [negb]; [ | exact I ].
-  destruct (values_of_subkinds S vs (code_params_subkinds cc));
+  destruct (values_of_subkinds S vs (code_params_subkinds cc)) eqn:Hsk;
     cbn [negb]; [ | exact I ].
   destruct (bind_params (code_params cc) vs [(code_my_closure cc, c1)])
     as [hv | ] eqn:Hb; [ | exact I ].
@@ -1810,7 +1812,8 @@ Proof.
   unfold shape_of_code_call. rewrite Hpa, Hlen, <- Hlenc, Nat.eqb_refl.
   cbn beta iota. unfold call_code.
   rewrite Hbs', Hpa, Hra, Htest.
-  cbn [negb]. rewrite (values_of_subkinds_nothing S' _ vs Hsk').
+  cbn [negb].
+  rewrite Hsk', (values_of_subkinds_same_values S' S vs _ (proj1 Hst)), Hsk.
   cbn [negb]. rewrite Hps, Hmc, Hb', Hret, Hexn. reflexivity.
 Qed.
 

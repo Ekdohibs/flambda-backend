@@ -59,7 +59,14 @@
    in its version with local fields ([_local]), of which the statement
    with the old premise is a corollary; the statements with no code
    taken to never return are those with [nr] empty. The examples are the
-   statements applied, or runs. *)
+   statements applied, or runs.
+   The two rebuilds rewrite what the parameters that they keep state as
+   [types] says, the same for both (the section [Rebuilds]): the handlers
+   and the code of the fragment have decided decisions, so that they keep
+   the same parameters in the two rebuilds and state the same of them
+   ([u_handler_metadata_decided], [decisions_subkinds_decided]).
+   [rebuild_repr_modes_with_refines_cc] holds for any [types],
+   [rebuild_repr_modes_refines_cc] is its instance without types. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -362,6 +369,9 @@ Variable codes0 : list (code_id * code).
 Variable symbols : list symbol.
 Variable is_local : field -> bool.
 Variable nr : code_id -> bool.
+(* How the two rebuilds rewrite what the parameters that they keep state,
+   the same for both (FlambdaReaperRebuild.subkinds_rewriting). *)
+Variable types : subkinds_rewriting.
 Hypothesis sol_closed : closed is_local (graph_of_facts F) sol.
 Hypothesis local_slots : is_local_slots_only is_local.
 Hypothesis fields_read : ∀ (x : variable) (fields : unboxed_fields)
@@ -403,13 +413,13 @@ Definition CSf (id : code_id) : option code_info :=
   end.
 
 Definition cc_rebuild (en : rebuild_env) (e : expr) : expr :=
-  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff None
+  rebuild_expr_cc F sol cannot_change code_deps pdc unit_code_ids codes ff types
     en
     e.
 
 Definition u_rebuild (en : unbox_env) (e : expr) : expr :=
   rebuild_expr_u true F sol cannot_change code_deps pdc unit_code_ids
-    codes unboxed ffu changed None en e.
+    codes unboxed ffu changed types en e.
 
 (* The continuations in scope ([C]): those that may be applied have the
    decisions of [C] in the second rebuild, and their masks in the first;
@@ -882,14 +892,15 @@ Proof.
 Qed.
 
 Lemma wrapper_u_none (tl : bool) (next : positive) (enu : unbox_env)
-    (ap : apply_expr) (rd : list param_decision) (ks : list flambda_kind) :
+    (ap : apply_expr) (rd : list param_decision) (ks : list flambda_kind)
+    (wsk : list param_subkind) :
   length rd <= length ks ->
   match lookup (ap_continuation ap) (ue_decisions enu) with
   | Some ds => forallb2 same_decision ds (map Decided rd) = true
   | None => forallb keeps (map Decided rd) = true
   end ->
-  make_apply_wrapper_u tl next None [] enu ap (combine (map Decided rd) ks)
-    false
+  make_apply_wrapper_u tl next types wsk enu ap
+    (combine (map Decided rd) ks) false
   = Apply ap.
 Proof.
   intros Hlen Hds. unfold make_apply_wrapper_u. cbv zeta.
@@ -1234,7 +1245,7 @@ Proof.
        - destruct (ci_out _ _ _ Hci _ HC) as (_ & Hm). rewrite Hm.
          exact (keeps_kept rd_cc Hret). }
   rewrite Hnr_ap.
-  rewrite (wrapper_u_none true ffu enu ap' rd_cc _ Hlen_ks).
+  rewrite (wrapper_u_none true ffu enu ap' rd_cc _ _ Hlen_ks).
   2: { cbn [ap_continuation ap'].
        destruct (lookup (ap_continuation ap) C) as [[ds [ | ]] | ] eqn:HC;
          [ | discriminate Hret | ].
@@ -1410,7 +1421,7 @@ Lemma cc_let_cont (en : rebuild_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler_cc F sol cannot_change code_deps pdc unit_code_ids
-           codes ff None en true mask h)
+           codes ff types en true mask h)
         body'
     else body'.
 Proof. reflexivity. Qed.
@@ -1425,7 +1436,7 @@ Lemma u_let_cont (enu : unbox_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler_u true F sol cannot_change code_deps pdc
-           unit_code_ids codes unboxed ffu changed None enu true ds h)
+           unit_code_ids codes unboxed ffu changed types enu true ds h)
         body'
     else body'.
 Proof. reflexivity. Qed.
@@ -1441,7 +1452,7 @@ Lemma cc_let_cont_rec (en : rebuild_env)
       (map
          (fun '(k, h) =>
             (k, rebuild_handler_cc F sol cannot_change code_deps pdc
-                  unit_code_ids codes ff None en' false (handler_mask sol false
+                  unit_code_ids codes ff types en' false (handler_mask sol false
                     h)
                   h))
          handlers)
@@ -1460,7 +1471,7 @@ Lemma u_let_cont_rec (enu : unbox_env)
       (map
          (fun '(k, h) =>
             (k, rebuild_handler_u true F sol cannot_change code_deps pdc
-                  unit_code_ids codes unboxed ffu changed None enu' false
+                  unit_code_ids codes unboxed ffu changed types enu' false
                   (handler_decisions true sol unboxed false h) h))
          handlers)
       (u_rebuild enu' body).
@@ -1472,7 +1483,7 @@ Lemma cc_let_static (en : rebuild_env) (bindings : list static_binding)
   = Let_static
       (flat_map
          (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-            codes ff None en)
+            codes ff types en)
          bindings)
       (cc_rebuild (bind_variables en []) body).
 Proof. reflexivity. Qed.
@@ -1483,7 +1494,7 @@ Lemma u_let_static (enu : unbox_env) (bindings : list static_binding)
   = Let_static
       (flat_map
          (rebuild_binding_u true F sol cannot_change code_deps pdc
-            unit_code_ids codes unboxed ffu changed None enu)
+            unit_code_ids codes unboxed ffu changed types enu)
          bindings)
       (u_rebuild (ubind_variables enu []) body).
 Proof. reflexivity. Qed.
@@ -1586,6 +1597,121 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma param_decisions_at_decided (params : list variable) :
+  ∀ pd : list param_decision,
+    length params = length pd ->
+    map (fun '(x, d) => param_decision_at unboxed x d)
+      (combine params (map Decided pd))
+    = map Decided pd.
+Proof.
+  induction params as [ | x params IH]; intros [ | d pd] Hlen;
+    cbn in Hlen; try lia; [ reflexivity | ].
+  cbn [map combine]. rewrite IH by lia. reflexivity.
+Qed.
+
+(* With decided decisions, the second rebuild states of the parameters of
+   code what the first does. *)
+Lemma decisions_subkinds_decided (rw : subkinds_rewrite) (nodes : list node) :
+  ∀ (sks : list param_subkind) (dcs : list param_decision),
+    decisions_subkinds rw (nodes_with_subkinds nodes sks) (map Decided dcs)
+    = filter_kept (map is_kept dcs) (rewritten_at rw nodes sks).
+Proof.
+  unfold rewritten_at.
+  induction nodes as [ | n nodes IH]; intros sks [ | d dcs];
+    [ reflexivity | reflexivity | | ].
+  - cbn [nodes_with_subkinds map decisions_subkinds filter_kept].
+    specialize (IH (tl sks) []). cbn [map] in IH. rewrite IH. reflexivity.
+  - cbn [nodes_with_subkinds map decisions_subkinds filter_kept].
+    rewrite IH. destruct d; reflexivity.
+Qed.
+
+Lemma with_subkinds_cons_c (x : variable) (params : list variable)
+    (sks : list param_subkind) :
+  with_subkinds (x :: params) sks
+  = (x, hd any_value sks) :: with_subkinds params (tl sks).
+Proof. destruct sks; reflexivity. Qed.
+
+(* With decided decisions, the second rebuild states of the parameters of
+   a handler what the first does. *)
+Lemma decide_c_subkinds (rw : subkinds_rewrite)
+    (bound : list (variable * flambda_kind)) :
+  ∀ (mask : list bool) (sks : list param_subkind),
+    length mask = length bound ->
+    decisions_subkinds rw
+      (nodes_with_subkinds (map (fun '(x, _) => Node_variable x) bound) sks)
+      (map decide_c (combine bound mask))
+    = filter_kept mask
+        (map (fun '(x, ps) => rw (Node_variable x) ps)
+           (with_subkinds (map fst bound) sks)).
+Proof.
+  induction bound as [ | [x kind] bound IH]; intros [ | keep mask] sks Hlen;
+    cbn in Hlen; try lia; [ reflexivity | ].
+  cbn [map fst combine nodes_with_subkinds decisions_subkinds].
+  rewrite with_subkinds_cons_c. cbn [map].
+  rewrite IH by lia. destruct keep; reflexivity.
+Qed.
+
+Lemma u_rebuild_handler_c (enu : unbox_env) (dead_check : bool)
+    (decisions : list decision) (params : list variable)
+    (metadata : handler_metadata) (handler : expr) :
+  rebuild_handler_u true F sol cannot_change code_deps pdc unit_code_ids
+    codes unboxed ffu changed types enu dead_check decisions
+    (Handler params metadata handler)
+  = let bound := with_kinds params (hm_params_kinds metadata) in
+    Handler (map fst (params_of_decisions bound decisions))
+      (FlambdaReaperUnboxingRefinesCallsProofs.u_handler_metadata types
+         metadata bound decisions)
+      (if dead_check && existsb (fun '(x, kind) => is_dead_var sol x kind) bound
+       then Invalid
+       else u_rebuild (ubind_variables enu bound) handler).
+Proof. reflexivity. Qed.
+
+(* The handlers of the fragment state the same in the two rebuilds. *)
+Lemma u_handler_metadata_decided (is_exn : bool) (params : list variable)
+    (md : handler_metadata) (handler : expr) :
+  length params = length (hm_params_kinds md) ->
+  forallb decided
+    (handler_decisions true sol unboxed is_exn (Handler params md handler))
+  = true ->
+  FlambdaReaperUnboxingRefinesCallsProofs.u_handler_metadata types md
+    (with_kinds params (hm_params_kinds md))
+    (handler_decisions true sol unboxed is_exn (Handler params md handler))
+  = kept_handler_metadata types
+      (handler_mask sol is_exn (Handler params md handler)) params md.
+Proof.
+  intros Hlen Hdec.
+  destruct (handler_params_c is_exn params md handler Hlen Hdec)
+    as (_ & Hsnd & _).
+  assert (Hm : length (handler_mask sol is_exn (Handler params md handler))
+               = length (with_kinds params (hm_params_kinds md)))
+    by (unfold handler_mask; apply params_to_keep_length).
+  assert (Hfst : map fst (with_kinds params (hm_params_kinds md)) = params)
+    by (rewrite (with_kinds_combine params _ Hlen);
+        apply map_fst_combine; exact Hlen).
+  unfold FlambdaReaperUnboxingRefinesCallsProofs.u_handler_metadata,
+    kept_handler_metadata.
+  rewrite Hsnd.
+  destruct types as [t | ]; [ | reflexivity ].
+  unfold handler_metadata_with, rewritten_subkinds.
+  rewrite (handler_decisions_decided is_exn params md handler Hdec).
+  rewrite (decide_c_subkinds (st_rewrite t) _ _ _ Hm), Hfst.
+  reflexivity.
+Qed.
+
+Lemma changed_code_metadata_with_shape_c (id : code_id)
+    (md : code_metadata) (pd rd : list param_decision) :
+  cm_params_arity (changed_code_metadata_with types id md pd rd)
+  = cm_params_arity (changed_code_metadata md pd rd)
+  ∧ cm_result_arity (changed_code_metadata_with types id md pd rd)
+    = cm_result_arity (changed_code_metadata md pd rd)
+  ∧ cm_is_tupled (changed_code_metadata_with types id md pd rd)
+    = cm_is_tupled (changed_code_metadata md pd rd).
+Proof.
+  unfold changed_code_metadata_with.
+  destruct types as [t | ]; [ destruct (lookup id (st_code_deps t)) | ];
+    repeat split.
+Qed.
+
 (* Code of the fragment is rebuilt into related code. *)
 Lemma code_rebuilt (id : code_id) (c : code) :
   rebuild_ok (code_body c) ->
@@ -1599,20 +1725,20 @@ Lemma code_rebuilt (id : code_id) (c : code) :
   ∃ ci : code_info,
     code_frame MM CH CSf id
       (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes
-         ff None id c)
+         ff types id c)
       (rebuild_code_u true F sol cannot_change code_deps pdc
-         unit_code_ids codes unboxed ffu changed None id c)
+         unit_code_ids codes unboxed ffu changed types id c)
       ci
     ∧ rr MM CH CSf
         (code_dead ci
            (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids
-              codes ff None id c))
+              codes ff types id c))
         (code_body
            (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids
-              codes ff None id c))
+              codes ff types id c))
         (code_body
            (rebuild_code_u true F sol cannot_change code_deps pdc
-              unit_code_ids codes unboxed ffu changed None id c)).
+              unit_code_ids codes unboxed ffu changed types id c)).
 Proof.
   intros IH Hrepr Hnames Hconts Hedges.
   destruct c as [params mc ret exn md body].
@@ -1652,12 +1778,25 @@ Proof.
     [ discriminate Hmcd | ].
   cbn [decision_params app]. rewrite (params_decided params pd_cc Hlen).
   rewrite changed_metadata_decided.
+  destruct (changed_code_metadata_with_shape_c id md pd_cc rd_cc)
+    as (Hca & Hcr & Hct).
   exists (Code_info (CH mc) (length (cm_params_arity md)) (nr id)). split.
-  - split; [ unfold CSf; rewrite Hmd, Hmc; reflexivity | ].
+  - match goal with
+    | |- code_frame _ _ _ _ (Code _ _ _ _ ?MA _) (Code _ _ _ _ ?MB _) _ =>
+      replace MB with MA
+    end.
+    2: { unfold changed_code_metadata_with.
+         destruct types as [t | ]; [ | reflexivity ].
+         destruct (lookup id (st_code_deps t)) as [cd' | ];
+           [ | reflexivity ].
+         cbn [app]. rewrite (param_decisions_at_decided params pd_cc Hlen).
+         rewrite !decisions_subkinds_decided. reflexivity. }
+    split; [ unfold CSf; rewrite Hmd, Hmc; reflexivity | ].
     cbn [code_params code_my_closure code_return_continuation
          code_exn_continuation code_params_arity code_result_arity
-         code_is_tupled changed_code_metadata_with changed_code_metadata
-         cm_params_arity cm_is_tupled].
+         code_is_tupled].
+    rewrite Hca, Hcr, Hct.
+    cbn [changed_code_metadata cm_params_arity cm_is_tupled].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ reflexivity | split; [ reflexivity | ] ].
     split; [ reflexivity | split; [ reflexivity | ] ].
@@ -1743,11 +1882,11 @@ Lemma bindings_rebuilt (C : finite_map (list decision * bool))
   rr_bindings MM CH CSf
     (flat_map
        (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
-          codes ff None en)
+          codes ff types en)
        bindings)
     (flat_map
        (rebuild_binding_u true F sol cannot_change code_deps pdc
-          unit_code_ids codes unboxed ffu changed None enu)
+          unit_code_ids codes unboxed ffu changed types enu)
        bindings).
 Proof.
   intros IHcode Hci. induction bindings as [ | b bs IH];
@@ -2053,7 +2192,7 @@ Proof.
         destruct (bind_block_fields_lets2 sol unboxed (ue_env enu) x tag args
                     fields)
           with (body := rebuild_expr_u true F sol cannot_change code_deps
-                          pdc unit_code_ids codes unboxed ffu changed None
+                          pdc unit_code_ids codes unboxed ffu changed types
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
         { intros f u Hin.
@@ -2081,7 +2220,7 @@ Proof.
                     (rebuild_named sol (ue_env enu) x
                        (Prim (Unary (Box_number bn)) [c])) Hc)
           with (body := rebuild_expr_u true F sol cannot_change code_deps
-                          pdc unit_code_ids codes unboxed ffu changed None
+                          pdc unit_code_ids codes unboxed ffu changed types
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
         { intros Hne. destruct fields as [ | [f u] fields]; [ easy | ].
@@ -2108,7 +2247,7 @@ Proof.
         unfold rebuild_unboxed_binding.
         destruct (bind_fields_pairs fields fields_y
                     (rebuild_expr_u true F sol cannot_change code_deps pdc
-                       unit_code_ids codes unboxed ffu changed None
+                       unit_code_ids codes unboxed ffu changed types
                        (ubind_variables enu [(x, Value)]) body)
                     Hflat)
           as (pairs & Hentries & Hl).
@@ -2130,7 +2269,7 @@ Proof.
         rewrite Hy, Hny.
         destruct (bind_fields_pairs fields nested
                     (rebuild_expr_u true F sol cannot_change code_deps pdc
-                       unit_code_ids codes unboxed ffu changed None
+                       unit_code_ids codes unboxed ffu changed types
                        (ubind_variables enu [(x, Value)]) body)
                     Halike)
           as (pairs & Hentries & Hl).
@@ -2346,12 +2485,12 @@ Lemma rebuild_rr :
          ∀ dead_check : bool,
            ∃ (ps : list variable) (md : handler_metadata) (hp hu : expr),
              rebuild_handler_cc F sol cannot_change code_deps pdc
-               unit_code_ids codes ff None en dead_check (handler_mask sol
+               unit_code_ids codes ff types en dead_check (handler_mask sol
                  is_exn h)
                h
              = Handler ps md hp
              ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
-                 unit_code_ids codes unboxed ffu changed None enu dead_check
+                 unit_code_ids codes unboxed ffu changed types enu dead_check
                  (handler_decisions true sol unboxed is_exn h) h
                = Handler ps md hu
              ∧ forallb (plain_variable MM) ps = true
@@ -2541,13 +2680,13 @@ Proof.
         rr_handlers MM CH CSf D'
           (map (fun '(k, h) =>
                   (k, rebuild_handler_cc F sol cannot_change code_deps pdc
-                        unit_code_ids codes ff None en' false
+                        unit_code_ids codes ff types en' false
                         (handler_mask sol false h) h))
              hs)
           (map (fun '(k, h) =>
                   (k, rebuild_handler_u true F sol cannot_change
                         code_deps pdc unit_code_ids codes unboxed ffu changed
-                          None
+                          types
                         enu' false (handler_decisions true sol unboxed false h)
                         h))
              hs)).
@@ -2605,8 +2744,9 @@ Proof.
     apply Nat.eqb_eq in Hlen.
     destruct (handler_params_c is_exn params md handler Hlen Hdec)
       as (Hfst & Hsnd & Hkept).
-    cbn [rebuild_handler_cc rebuild_handler_u]. cbv zeta.
-    rewrite Hfst, Hsnd.
+    cbn [rebuild_handler_cc]. rewrite u_rebuild_handler_c. cbv zeta.
+    rewrite (u_handler_metadata_decided is_exn params md handler Hlen Hdec).
+    rewrite Hfst.
     eexists _, _, _, _. split; [ reflexivity | split; [ reflexivity | ] ].
     unfold names_ok_h in Hnames. cbn [variables_in_handler] in Hnames.
     split.
@@ -2665,8 +2805,11 @@ Proof.
     exact (IH id mc H).
 Qed.
 
-(* The statement of the fix. *)
-Lemma rebuild_repr_modes_refines_cc
+(* The statement of the fix, for any rewriting of what the parameters
+   kept state, the same for the two rebuilds: the handlers and the code of
+   the fragment keep their parameters alike in the two, and state the
+   same. *)
+Lemma rebuild_repr_modes_with_refines_cc (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
@@ -2679,9 +2822,10 @@ Lemma rebuild_repr_modes_refines_cc
   = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
   program_refines
-    (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+    (rebuild_unit_cc_with types (traverse_unit flag u e)
+       (solution_of_tables T) (fun n => mem_node n cannot_change)
        (unit_code_deps flag u e) pdc e)
-    (rebuild_unit_unbox_repr_mode true is_local
+    (rebuild_unit_unbox_repr_mode_with types true is_local
        (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
        dominated to_unbox tcr pdc e).
 Proof.
@@ -2696,8 +2840,7 @@ Proof.
                 (FlambdaNameAbstractionSpec.fresh_name (names_of e)))
     as Hnext.
   cbv zeta in Hnext. destruct Hnext as (Hnext & _ & _).
-  unfold rebuild_unit_unbox_repr_mode, rebuild_unit_cc_from_tables,
-    rebuild_unit_cc.
+  unfold rebuild_unit_unbox_repr_mode_with, rebuild_unit_cc_with.
   destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
     eqn:Hunboxed.
   assert (Hnext' : (FlambdaNameAbstractionSpec.fresh_name (names_of e)
@@ -2838,8 +2981,8 @@ Proof.
                        unboxed changed (bound_code_my_closures e)
                        (FlambdaNameAbstractionSpec.fresh_name (names_of e))
                        next noted deps cds (unit_kept e) (unit_codes e)
-                       (static_names symbols_of_binding e) is_local nr Hcl
-                       Hslots Hfields_read Hreads_found Hmc)
+                       (static_names symbols_of_binding e) is_local nr types
+                       Hcl Hslots Hfields_read Hreads_found Hmc)
                 e empty_env empty_unbox_env [] None (unit_conts u))
     as Hrr.
   apply (rr_refines (M' unboxed changed)) in Hrr.
@@ -2860,6 +3003,30 @@ Proof.
     unfold FlambdaNameAbstractionSpec.fresh_name in Hnext' |- *.
     split; intros ->; lia.
   - intros k [].
+Qed.
+
+(* The same without types. *)
+Lemma rebuild_repr_modes_refines_cc
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
+    (nr : code_id -> bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  repr_unboxing_nr nr is_local (traverse_unit flag u e) T cannot_change
+    (unit_code_deps flag u e) dominated to_unbox tcr e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  program_refines
+    (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode true is_local
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox tcr pdc e).
+Proof.
+  exact (rebuild_repr_modes_with_refines_cc None flag is_local u e T
+           cannot_change dominated to_unbox tcr pdc nr).
 Qed.
 
 Theorem rebuild_repr_fixed_refines_cc_never_returns :

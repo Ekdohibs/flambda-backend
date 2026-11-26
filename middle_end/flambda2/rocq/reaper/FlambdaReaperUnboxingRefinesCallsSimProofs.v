@@ -45,7 +45,16 @@
    return continuation of the code it is in, whose shapes those of the
    results [transport] to, directly ([uc_call]), through a wrapper of the
    second run ([uc_call_wrap], [wrap_u_ok]) or through one of each run
-   ([uc_call_wraps], [wrap_both_ok]). Through tail calls, the
+   ([uc_call_wraps], [wrap_both_ok]). What the handlers, the code and
+   the wrappers of the second run state of their parameters holds of the
+   values that they are given where what those of the first state holds
+   of the first's ([sks_follow2], at the shapes of the parameters, and
+   [sks_rel2], one for one: the same of a parameter that is that of the
+   first, what every value is of where the second may give anything,
+   nothing of the fields of one unboxed); the test of a subkind reads
+   only the symbols of the static environment, bound alike in the two
+   runs ([sks_follow2_statics]). A wrapper of the second run alone states
+   nothing ([wrap_u_ok]). Through tail calls, the
    continuation of code is a handler under wrappers of either run, any
    number of them ([cont_rel_wrap_u], [cont_rel_wrap_both]), which
    [cont_answered] answers by induction. Code raises exceptions of one
@@ -215,6 +224,42 @@ Definition transport (sh sh' : list pshape) (KS : list flambda_kind)
   ∀ vs vs' : list value,
     vrel sh vs vs' -> map kind_of_value vs = KS -> vrel sh' vs vs'.
 
+(* What the second run states of the parameters of a continuation or of
+   code, [sks'], holds of the values that it is given, of the shapes [sh],
+   where what the first states, [sks], holds of those of the first. *)
+Definition sks_follow2 (sh : list pshape) (sks sks' : list param_subkind)
+    : Prop :=
+  ∀ (S : static_env) (vs vs' : list value),
+    vrel sh vs vs' -> values_of_subkinds S vs sks = true ->
+    values_of_subkinds S vs' sks' = true.
+
+Lemma sks_follow2_nil (sh : list pshape) (sks : list param_subkind) :
+  sks_follow2 sh sks [].
+Proof.
+  intros S vs vs' _ _. apply FlambdaSubkindProofs.values_of_subkinds_nil.
+Qed.
+
+Lemma sks_follow2_nothing (sh : list pshape) (sks sks' : list param_subkind) :
+  subkinds_say_nothing sks' = true -> sks_follow2 sh sks sks'.
+Proof.
+  intros H S vs vs' _ _.
+  exact (FlambdaSubkindProofs.values_of_subkinds_nothing S sks' vs' H).
+Qed.
+
+(* The test of the second run, under a static environment that binds the
+   symbols as that of the first does. *)
+Lemma sks_follow2_statics (sh : list pshape) (sks sks' : list param_subkind)
+    (S S' : static_env) (vs vs' : list value) :
+  sks_follow2 sh sks sks' -> static_values S' = static_values S ->
+  vrel sh vs vs' -> values_of_subkinds S vs sks = true ->
+  values_of_subkinds S' vs' sks' = true.
+Proof.
+  intros H Hst Hv Hs.
+  rewrite (FlambdaSubkindProofs.values_of_subkinds_same_values S' S vs' sks'
+             Hst).
+  exact (H S vs vs' Hv Hs).
+Qed.
+
 (* What code takes and returns: the shapes of the parameters and of the
    results that the first run keeps, the kinds of those results in the
    first run, the arities of the code in the second, the shape of the
@@ -272,7 +317,9 @@ Definition wrapper_closure (ps : list variable) (md : handler_metadata)
 (* A wrapper of the second run alone: given what the callee returns, of
    the shapes [sh_r], it gives the continuation, whose parameters are of
    the shapes [sh_k] and which takes [KS] in the first run, what the first
-   run gives it directly. It states nothing of its parameters. *)
+   run gives it directly. It states nothing of its parameters: the second
+   rebuild makes one alone only for a call of code that changes its
+   calling convention, whose wrapper states nothing. *)
 Definition wrap_u_ok (sh_r sh_k : list pshape) (KS : list flambda_kind)
     (wps : list variable) (wmd : handler_metadata) (wargs : list simple)
     : Prop :=
@@ -287,12 +334,16 @@ Definition wrap_u_ok (sh_r sh_k : list pshape) (KS : list flambda_kind)
 
 (* Wrappers in both runs: given what the callee returns, of the shapes
    [sh_r], they give the continuation, whose parameters are of the shapes
-   [sh_k], related arguments. That of the second run states nothing of
-   its parameters. *)
+   [sh_k], related arguments. What that of the second run states of its
+   parameters holds where what that of the first states does. *)
 Definition wrap_both_ok (sh_r sh_k : list pshape) (cps : list variable)
     (cmd : handler_metadata) (cargs : list simple) (wps : list variable)
     (wmd : handler_metadata) (wargs : list simple) : Prop :=
-  hm_params_subkinds wmd = []
+  (∀ (S : static_env) (vs vs' : list value),
+     vrel sh_r vs vs' ->
+     kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd) = true ->
+     values_of_subkinds S vs (hm_params_subkinds cmd) = true ->
+     values_of_subkinds S vs' (hm_params_subkinds wmd) = true)
   ∧ ∀ vs vs' : list value,
     vrel sh_r vs vs' ->
     kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd) = true ->
@@ -652,7 +703,8 @@ Definition code_frame (id : code_id) (c c' : code) (cs : code_shape)
   ∧ code_exn_continuation c' = code_exn_continuation c
   ∧ (binds_statics (code_body c') = true ->
      binds_statics (code_body c) = true)
-  ∧ subkinds_say_nothing (code_params_subkinds c') = true
+  ∧ sks_follow2 (cs_params cs) (code_params_subkinds c)
+      (code_params_subkinds c')
   ∧ ∃ (sh : list pshape) (pk pk' : list (variable * flambda_kind)),
       code_params c = map fst pk ∧ code_params c' = map fst pk'
       ∧ params_rel2 sh pk pk' ∧ Forall2 fits (cs_params cs) sh.
@@ -759,7 +811,8 @@ Inductive uc : finite_map kshape -> expr -> expr -> Prop :=
     params_rel2 sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> uc K handler handler' ->
     uc ((k, Kshape sh (map snd ps) true) :: K) body body' ->
-    hm_params_subkinds metadata' = [] ->
+    sks_follow2 sh (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     uc K
       (Let_cont_non_recursive k (Handler (map fst ps) metadata handler) body)
       (Let_cont_non_recursive k (Handler (map fst ps') metadata' handler')
@@ -856,7 +909,9 @@ with uc_handlers : finite_map kshape
       (S : finite_map kshape) :
     params_rel2 sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> uc K handler handler' ->
-    uc_handlers K handlers handlers' S -> hm_params_subkinds metadata' = [] ->
+    uc_handlers K handlers handlers' S ->
+    sks_follow2 sh (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     uc_handlers K ((k, Handler (map fst ps) metadata handler) :: handlers)
       ((k, Handler (map fst ps') metadata' handler') :: handlers')
       ((k, Kshape sh (map snd ps) true) :: S)
@@ -905,7 +960,8 @@ Inductive cont_rel : kshape -> cont_value -> cont_value -> Prop :=
     ks_kinds ksh = map snd ps ->
     uc (S ++ K) handler handler' -> env_rel2 vars vars' ->
     conts_rel K conts conts' -> uc_handlers (S ++ K) recursive recursive' S ->
-    hm_params_subkinds metadata' = [] ->
+    sks_follow2 sh0 (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     cont_rel ksh
       (Closure (Handler (map fst ps) metadata handler) vars conts recursive)
       (Closure (Handler (map fst ps') metadata' handler') vars' conts'
@@ -1080,6 +1136,77 @@ Lemma fields_leaves_paths (fields : unboxed_fields) :
     (fields_leaves fields) (fields_paths fields).
 Proof. exact (leaves_paths (Unboxed fields) Value). Qed.
 
+(* What the two runs state of the parameters of a continuation or of code,
+   one for one: of a parameter of the second run that is that of the first,
+   the same; of one that the second may give anything of its kind, what
+   every value is of; of the fields of one unboxed, nothing; beyond the
+   shapes, the same; or nothing in either. *)
+Inductive sks_rel2 : list pshape -> list param_subkind -> list param_subkind
+    -> Prop :=
+  | sks_rel2_beyond (sks : list param_subkind) : sks_rel2 [] sks sks
+  | sks_rel2_nil (sh : list pshape) : sks_rel2 sh [] []
+  | sks_rel2_plain (sh : list pshape) (ps : param_subkind)
+      (sks sks' : list param_subkind) :
+    sks_rel2 sh sks sks' -> sks_rel2 (Psh_plain :: sh) (ps :: sks) (ps :: sks')
+  | sks_rel2_dead (sh : list pshape) (kind : flambda_kind)
+      (ps ps' : param_subkind) (sks sks' : list param_subkind) :
+    (∀ (S : static_env) (v : value), value_at S ps' v = true) ->
+    sks_rel2 sh sks sks' ->
+    sks_rel2 (Psh_dead kind :: sh) (ps :: sks) (ps' :: sks')
+  | sks_rel2_unboxed (sh : list pshape) (fields : unboxed_fields)
+      {A : Type} (l : list A) (ps : param_subkind)
+      (sks sks' : list param_subkind) :
+    length l = length (fields_paths fields) -> sks_rel2 sh sks sks' ->
+    sks_rel2 (Psh_unboxed fields :: sh) (ps :: sks)
+      (map (fun _ => any_value) l ++ sks').
+
+Lemma fields_vals_length (fields : unboxed_fields) (v : value)
+    (ws : list value) :
+  fields_vals fields v ws -> length ws = length (fields_paths fields).
+Proof. intros H. symmetry. exact (Forall2_length H). Qed.
+
+Lemma sks_rel2_follow (sh : list pshape) (sks sks' : list param_subkind) :
+  sks_rel2 sh sks sks' -> sks_follow2 sh sks sks'.
+Proof.
+  induction 1 as [sks | sh | sh ps sks sks' _ IH
+                  | sh kind ps ps' sks sks' Hany _ IH
+                  | sh fields A l ps sks sks' Hl _ IH];
+    intros S vs vs' Hv Hs.
+  - inversion Hv; subst. exact Hs.
+  - apply FlambdaSubkindProofs.values_of_subkinds_nil.
+  - inversion Hv as [ | o sh0 | sh0 v vs0 vs0' Hv0 | | ]; subst;
+      [ apply FlambdaSubkindProofs.values_of_subkinds_no_values | ].
+    rewrite FlambdaSubkindProofs.values_of_subkinds_cons in Hs |- *.
+    apply andb_true_iff in Hs as [Hh Ht]. rewrite Hh.
+    exact (IH S vs0 vs0' Hv0 Ht).
+  - inversion Hv as [ | o sh0 | | sh0 kind0 v v' vs0 vs0' _ Hv0 | ]; subst;
+      [ apply FlambdaSubkindProofs.values_of_subkinds_no_values | ].
+    rewrite FlambdaSubkindProofs.values_of_subkinds_cons in Hs |- *.
+    apply andb_true_iff in Hs as [_ Ht]. rewrite Hany.
+    exact (IH S vs0 vs0' Hv0 Ht).
+  - inversion Hv as [ | o sh0 | | | sh0 fields0 v ws vs0 vs0' Hws Hv0 ];
+      subst; [ apply FlambdaSubkindProofs.values_of_subkinds_no_values | ].
+    rewrite FlambdaSubkindProofs.values_of_subkinds_cons in Hs.
+    apply andb_true_iff in Hs as [_ Ht].
+    rewrite (FlambdaReaperUnboxingRefinesProofs.values_of_any_app S l ws vs0'
+               sks')
+      by (rewrite (fields_vals_length _ _ _ Hws); exact (eq_sym Hl)).
+    exact (IH S vs0 vs0' Hv0 Ht).
+Qed.
+
+(* What is stated, with nothing stated as the empty list. *)
+Lemma sks_follow2_stated (sh : list pshape) (sks sks' : list param_subkind) :
+  sks_follow2 sh sks sks' -> sks_follow2 sh (stated sks) (stated sks').
+Proof.
+  intros H S vs vs' Hv Hs.
+  rewrite FlambdaReaperUnboxingRefinesProofs.values_of_stated_u in Hs |- *.
+  exact (H S vs vs' Hv Hs).
+Qed.
+
+Lemma fields_leaves_length (fields : unboxed_fields) :
+  length (fields_leaves fields) = length (fields_paths fields).
+Proof. exact (Forall2_length (fields_leaves_paths fields)). Qed.
+
 (* The second variable of each pair is at the path of the first. *)
 Lemma pairs_paths (u : unboxed_field) :
   ∀ (k : flambda_kind) (u' : unboxed_field)
@@ -1234,6 +1361,15 @@ Proof.
   - inversion Hall; subst. rewrite IH; [ reflexivity | assumption ].
   - inversion Hall; subst. discriminate.
   - inversion Hall; subst. discriminate.
+Qed.
+
+(* At plain shapes, the values are the same, and so is what is stated of
+   them. *)
+Lemma sks_follow2_refl (sh : list pshape) (sks : list param_subkind) :
+  Forall (fun o => o = Psh_plain) sh -> sks_follow2 sh sks sks.
+Proof.
+  intros Hall S vs vs' Hv Hs. rewrite (vrel_plain_eq sh vs vs' Hv Hall).
+  exact Hs.
 Qed.
 
 Lemma fields_vals_kinds (fields : unboxed_fields) (v : value)
@@ -1978,7 +2114,9 @@ Proof.
       [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
     exact Hk.
   - eapply cont_rel_wrap_both; [ exact Hin | ].
-    split; [ exact (proj1 Hok) | ].
+    split.
+    { intros S0 vs vs' Hv Hk Hs. apply (proj1 Hok S0 vs vs');
+        [ exact (vrel_fits _ _ _ Hv _ Hf) | exact Hk | exact Hs ]. }
     intros vs vs' Hv Hk. apply (proj2 Hok);
       [ exact (vrel_fits _ _ _ Hv _ Hf) | ].
     exact Hk.
@@ -2022,7 +2160,7 @@ Lemma closure_answered (sh sh0 : list pshape)
   uc M dead CS NR RCH OV REM (S0 ++ K) h h' -> env_rel2 M dead vars vars' ->
   conts_rel M dead CS NR RCH OV REM K conts conts' ->
   uc_handlers M dead CS NR RCH OV REM (S0 ++ K) rec rec' S0 ->
-  hm_params_subkinds md' = [] ->
+  sks_follow2 sh0 (hm_params_subkinds md) (hm_params_subkinds md') ->
   vrel sh vs vs' -> statics_rel M dead CS NR RCH OV REM S S' ->
   apply_cont_value (Closure (Handler (map fst ps) md h) vars conts rec) vs S
     empty_heap rd
@@ -2038,7 +2176,7 @@ Proof.
   destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hk;
     [ | discriminate Ha ].
   apply kinds_eqb_eq in Hk.
-  destruct (values_of_subkinds _ vs _); [ | discriminate Ha ].
+  destruct (values_of_subkinds _ vs _) eqn:Hsk; [ | discriminate Ha ].
   destruct (bind_params (map fst ps) vs vars) as [hv | ] eqn:Hb;
     [ | discriminate Ha ].
   injection Ha as <-.
@@ -2048,7 +2186,9 @@ Proof.
               Hvars Hb)
     as (hv' & Hb' & Hrel).
   eexists. split.
-  - cbn [apply_cont_value]. rewrite Hmd', <- Hk', kinds_eqb_refl, Hsk', Hb'.
+  - cbn [apply_cont_value]. rewrite Hmd', <- Hk', kinds_eqb_refl.
+    rewrite (sks_follow2_statics _ _ _ S S' vs vs' Hsk' (proj1 Hst) Hv0 Hsk),
+      Hb'.
     reflexivity.
   - exists (S0 ++ K). cbn [state_expr state_vars state_conts state_statics
                            state_heap state_reads].
@@ -2100,7 +2240,10 @@ Proof.
     intros vs vs' Hv Hk. apply (proj2 Hok); [ exact (Hf _ _ Hv Hk) | exact
       Hk ].
   - eapply cont_rel_wrap_both; [ exact Hin | ].
-    split; [ exact (proj1 Hok) | ].
+    split.
+    { intros S0 vs vs' Hv Hk Hs. apply (proj1 Hok S0 vs vs'); [ | exact Hk
+                                                             | exact Hs ].
+      apply Hf; [ exact Hv | apply kinds_eqb_eq; exact Hk ]. }
     intros vs vs' Hv Hk. apply (proj2 Hok); [ | exact Hk ].
     apply Hf; [ exact Hv | apply kinds_eqb_eq; exact Hk ].
   - discriminate Hh.
@@ -2272,9 +2415,11 @@ Proof.
     eqn:Htest; [ discriminate Hcall | ].
   apply negb_false_iff, andb_true_iff in Htest as [_ Hrta].
   apply arity_eqb_eq in Hrta.
-  destruct (negb (values_of_subkinds S vs (code_params_subkinds c)));
-    [ discriminate Hcall | ].
-  rewrite (values_of_subkinds_nothing S' _ vs Hsk'). cbn [negb].
+  destruct (values_of_subkinds S vs (code_params_subkinds c)) eqn:Hsk;
+    cbn [negb] in Hcall; [ | discriminate Hcall ].
+  rewrite (sks_follow2_statics _ _ _ S S' vs vs Hsk' (proj1 Hst)
+             (vrel_plain_refl _ vs Hppl) Hsk).
+  cbn [negb].
   rewrite Hpk in Hcall. rewrite Hpk', Hmc.
   destruct (bind_params (map fst pk) vs [(code_my_closure c, cl)])
     as [hv | ] eqn:Hb; [ | discriminate Hcall ].
@@ -3160,7 +3305,7 @@ Proof.
   - unfold wrapper_closure at 1. cbn [apply_cont_value].
     destruct (kinds_eqb (map kind_of_value vs) (hm_params_kinds cmd)) eqn:Hk;
       [ | exact I ].
-    destruct (values_of_subkinds _ vs (hm_params_subkinds cmd));
+    destruct (values_of_subkinds _ vs (hm_params_subkinds cmd)) eqn:Hsk;
       [ | exact I ].
     destruct (bind_params cps vs cvars) as [hv | ] eqn:Hb; [ | exact I ].
     cbn [ks_shapes] in Hv.
@@ -3168,7 +3313,10 @@ Proof.
     destruct (Hbind cvars wvars hv Hb) as (hv' & Hb' & Hargs).
     eexists _, 0, _. split.
     + unfold wrapper_closure. cbn [apply_cont_value].
-      rewrite Hwk, (proj1 Hok), Hb'.
+      rewrite Hwk.
+      rewrite (FlambdaSubkindProofs.values_of_subkinds_same_values S' S vs'
+                 _ (proj1 Hst)),
+        (proj1 Hok S vs vs' Hv Hk Hsk), Hb'.
       reflexivity.
     + split; [ reflexivity | ]. right. right.
       eexists _, _, (Kshape sh_k KS true).
@@ -3476,9 +3624,10 @@ Proof.
       arity_eqb_refl.
     rewrite (proj2 (kinds_per_parameter_eqb_eq _ _) eq_refl). reflexivity. }
   rewrite Htest'. cbn [negb].
-  destruct (values_of_subkinds S vs (code_params_subkinds c)); cbn [negb];
-    [ | exact I ].
-  rewrite (values_of_subkinds_nothing S' _ vs' Hsk'). cbn [negb].
+  destruct (values_of_subkinds S vs (code_params_subkinds c)) eqn:Hsk;
+    cbn [negb]; [ | exact I ].
+  rewrite (sks_follow2_statics _ _ _ S S' vs vs' Hsk' Hval Hv Hsk).
+  cbn [negb].
   rewrite Hpk, Hmc.
   destruct (bind_params (map fst pk) vs [(code_my_closure c, callee)])
     as [hv | ] eqn:Hb; [ | exact I ].
@@ -3708,9 +3857,11 @@ Proof.
                     (unarize_per_parameter (code_params_arity c))
                && arity_eqb rta (code_result_arity c)))
     eqn:Htest; [ discriminate Hcall | ].
-  destruct (negb (values_of_subkinds S vs (code_params_subkinds c)));
-    [ discriminate Hcall | ].
-  rewrite (values_of_subkinds_nothing S' _ vs Hsk'). cbn [negb].
+  destruct (values_of_subkinds S vs (code_params_subkinds c)) eqn:Hsk;
+    cbn [negb] in Hcall; [ | discriminate Hcall ].
+  rewrite (sks_follow2_statics _ _ _ S S' vs vs Hsk' (proj1 Hst)
+             (vrel_plain_refl _ vs Hppl) Hsk).
+  cbn [negb].
   rewrite Hpk in Hcall. rewrite Hpk', Hmc.
   destruct (bind_params (map fst pk) vs [(code_my_closure c, cl)])
     as [hv | ] eqn:Hb; [ | discriminate Hcall ].

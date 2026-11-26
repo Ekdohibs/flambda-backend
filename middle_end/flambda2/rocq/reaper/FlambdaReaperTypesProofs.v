@@ -11421,3 +11421,338 @@ Proof.
               is_local u e T Hlocal_slots Hprojections)
            Hexact Hlocal Hcheck).
 Qed.
+
+(* ======================================================================== *)
+(* The reaper with types and the unboxing with calls                        *)
+(* ======================================================================== *)
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesCallsProofs.
+Module URCP := FlambdaReaperUnboxingRefinesCallsProofs.
+
+(* The rewriting of the reaper with types states nothing of a node with no
+   use: the metadata of such a node erases. *)
+Lemma rewrite_of_context_unused (is_local : field -> bool) (F : facts)
+    (T : tables) (sets : list set_of_closures) (n : node)
+    (ps : param_subkind) (S : static_env) (v : value) :
+  s_has_usage (solution_of_tables T) n = false ->
+  value_at S (rewrite_of_context (plain_context is_local F T sets) n ps) v
+  = true.
+Proof.
+  intros Hhu. destruct ps as [nb sk].
+  unfold rewrite_of_context, rewrite_kind_with_subkind. cbn [fst snd].
+  rewrite (rewrite_subkind_erasing is_local F T sets);
+    [ apply FlambdaSubkindProofs.value_at_any_value | ].
+  unfold metadata_for_name, get_usages.
+  change (has_use (plain_context is_local F T sets) n)
+    with (s_has_usage (solution_of_tables T) n).
+  rewrite Hhu.
+  destruct (get_single_source (plain_context is_local F T sets) n);
+    reflexivity.
+Qed.
+
+Lemma subkinds_of_context_unused (is_local : field -> bool) (F : facts)
+    (T : tables) (sets : list set_of_closures)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep) (e : expr) :
+  ∀ t : FlambdaReaperRebuild.subkinds_types,
+    subkinds_of_context (plain_context is_local F T sets) code_deps e
+    = Some t ->
+    ∀ (n : node) (ps : param_subkind) (S : static_env) (v : value),
+      s_has_usage (solution_of_tables T) n = false ->
+      value_at S (FlambdaReaperRebuild.st_rewrite t n ps) v = true.
+Proof.
+  intros t Ht n ps S v Hu. injection Ht as <-.
+  exact (rewrite_of_context_unused is_local F T sets n ps S v Hu).
+Qed.
+
+(* The rebuild with types and changes of calling convention refines the
+   unit up to observation, as the rebuild without types does
+   (FlambdaReaperCallingConventionsProofs.rebuild_cc_refines_observably_local).
+   *)
+Lemma rebuild_cc_with_types_refines_observably_local
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) (cannot_change : list node) (b : bool) :
+  least_solution is_local (traverse_unit flag u e) T ->
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  FlambdaReaperCallingConventions.check_cc_closed (traverse_unit flag u e) T
+    cannot_change
+  = true ->
+  FlambdaReaperCallingConventionsSpec.check_apply_widgets
+    (traverse_unit flag u e) T
+  = true ->
+  FlambdaReaperRebuildSpec.program_refines_observably e
+    (rebuild_unit_cc_with_types_from_tables is_local (traverse_unit flag u e)
+       T sets cannot_change
+       (FlambdaReaperCallingConventions.unit_code_deps flag u e) b e).
+Proof.
+  intros Hleast Hlocal Hfrag Hdc Hrk Hwf Hdist Hexits Hcheck Hlrs
+    Hcheck_exact Hccc Hwid.
+  pose proof (CCP.traverse_witness_code_ids flag u e) as Hcid.
+  assert (Hkinded : RP.calls_kinded [] e = true).
+  { apply (proj1 RP.calls_kinded_of_results e [] [] [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  destruct (CCP.check_cc_closed_sound _ _ _ Hccc) as (ccw & Hcl).
+  exact (proj1 (RP.exits_rel_flow false _ _
+                  (RP.rebuild_cc_with_refines_checked_local false false flag
+                     is_local u e T (fun n => mem_node n cannot_change) ccw b
+                     _ Hlocal Hfrag
+                     (proj1 (RP.any_kind_arguments_checked
+                               (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
+                     Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+                     (subkinds_of_context_sound_all is_local _ T sets _ _
+                        Hleast Hlocal
+                        (check_field_used_exact_sound is_local _ _
+                           Hcheck_exact))
+                     (subkinds_of_context_deps _ _ _)
+                     (subkinds_of_context_conts _ _ _ Hdist) Hrk Hcl
+                     (CCP.check_apply_widgets_sound _ _ Hwid)
+                     (CCP.check_witness_code_ids_sound _ Hcid)))).
+Qed.
+
+Theorem rebuild_unbox_fixed_with_types_refines_cc_nr :
+  rebuild_unbox_fixed_with_types_refines_cc_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b nr Hslots
+    Hfrag Hdist Hclosed Hcalls Hcheck.
+  exact (URCP.rebuild_unbox_modes_with_refines_cc
+           (subkinds_of_context
+              (plain_context is_local (traverse_unit flag u e) T [])
+              (FlambdaReaperCallingConventions.unit_code_deps flag u e) e)
+           flag is_local u e T cannot_change dominated to_unbox b nr
+           (subkinds_of_context_unused is_local _ T [] _ e)
+           (subkinds_of_context_conts _ _ _ Hdist) Hslots Hfrag Hclosed
+           Hcalls Hcheck).
+Qed.
+
+Theorem rebuild_unbox_fixed_with_types_local_nr :
+  rebuild_unbox_fixed_with_types_local_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b nr Hleast
+    Hslots Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hlrs Hexact Hccc Hwid Hcalls
+    Hcheck.
+  exact (URP.refines_observably_refines _ _ _
+           (rebuild_cc_with_types_refines_observably_local flag is_local u e
+              T [] cannot_change b Hleast Hslots Hfrag Hany Hrk Hwf Hdist
+              Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_unbox_fixed_with_types_refines_cc_nr flag
+              is_local u e T cannot_change dominated to_unbox b nr Hslots
+              Hfrag Hdist Hclosed Hcalls Hcheck)).
+Qed.
+
+Theorem rebuild_unbox_fixed_with_types_observably_nr :
+  rebuild_unbox_fixed_with_types_observably_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b nr Hleast
+    Hslots Hproj Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hexact Hccc Hwid
+    Hcalls Hcheck.
+  exact (rebuild_unbox_fixed_with_types_local_nr flag is_local u e
+           T cannot_change dominated to_unbox b nr Hleast Hslots Hfrag Hany
+           Hrk Hwf Hdist Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hcalls Hcheck).
+Qed.
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesClosuresProofs.
+Module URRP := FlambdaReaperUnboxingRefinesClosuresProofs.
+
+Theorem rebuild_repr_fixed_with_types_refines_cc_nr :
+  rebuild_repr_fixed_with_types_refines_cc_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox tcr b nr
+    Hslots Hfrag Hclosed Hrepr Hcheck.
+  exact (URRP.rebuild_repr_modes_with_refines_cc
+           (subkinds_of_context
+              (plain_context is_local (traverse_unit flag u e) T [])
+              (FlambdaReaperCallingConventions.unit_code_deps flag u e) e)
+           flag is_local u e T cannot_change dominated to_unbox tcr b nr
+           Hslots Hfrag Hclosed Hrepr Hcheck).
+Qed.
+
+Theorem rebuild_repr_fixed_with_types_local_nr :
+  rebuild_repr_fixed_with_types_local_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox tcr b nr Hleast
+    Hslots Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hlrs Hexact Hccc Hwid Hrepr
+    Hcheck.
+  exact (URP.refines_observably_refines _ _ _
+           (rebuild_cc_with_types_refines_observably_local flag is_local u e
+              T [] cannot_change b Hleast Hslots Hfrag Hany Hrk Hwf Hdist
+              Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_repr_fixed_with_types_refines_cc_nr flag is_local u e T
+              cannot_change dominated to_unbox tcr b nr Hslots Hfrag Hclosed
+              Hrepr Hcheck)).
+Qed.
+
+Theorem rebuild_repr_fixed_with_types_observably_nr :
+  rebuild_repr_fixed_with_types_observably_nr_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox tcr b nr Hleast
+    Hslots Hproj Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hexact Hccc Hwid
+    Hrepr Hcheck.
+  exact (rebuild_repr_fixed_with_types_local_nr flag is_local u e T
+           cannot_change dominated to_unbox tcr b nr Hleast Hslots Hfrag Hany
+           Hrk Hwf Hdist Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hrepr Hcheck).
+Qed.
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesReachProofs
+  FlambdaReaperUnboxingRefinesReach2Proofs
+  FlambdaReaperUnboxingRefinesOver2Proofs
+  FlambdaReaperUnboxingRefinesReach3Proofs FlambdaReaperLocalFieldsProofs.
+Module URR1 := FlambdaReaperUnboxingRefinesReachProofs.
+Module URR2 := FlambdaReaperUnboxingRefinesReach2Proofs.
+Module URO2 := FlambdaReaperUnboxingRefinesOver2Proofs.
+Module URR3 := FlambdaReaperUnboxingRefinesReach3Proofs.
+
+(* As FlambdaReaperUnboxingRefinesNeverProofs.rebuild_unbox_nr_ind_refines_cc,
+   whose proof this repeats with the first rebuilt unit with types. *)
+Theorem rebuild_unbox_nr_ind_with_types_refines_cc :
+  rebuild_unbox_nr_ind_with_types_refines_cc_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox pdc nr
+    Hslots Hfrag Hdist Hclosed Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck.
+  unfold first_rebuild_with_types, rebuild_unit_cc_with_types_from_tables,
+    rebuild_unit_cc_with_types in *.
+  set (types := subkinds_of_context
+                  (plain_context is_local (traverse_unit flag u e) T [])
+                  (FlambdaReaperCallingConventions.unit_code_deps flag u e) e)
+    in *.
+  set (e1 := FlambdaReaperCallingConventions.rebuild_unit_cc_with types
+               (traverse_unit flag u e) (solution_of_tables T)
+               (fun n => mem_node n cannot_change)
+               (FlambdaReaperCallingConventions.unit_code_deps flag u e) pdc e)
+    in *.
+  set (F1 := traverse_unit flag u e1) in *.
+  pose proof (check_closed_sound is_local _ _ Hclosed1) as Hc1.
+  pose proof (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+                is_local _ _ Hlrs1) as Hlr1.
+  apply (URCP.rebuild_unbox_modes_with_refines_cc_never types flag is_local u
+           e T cannot_change dominated to_unbox pdc nr
+           (FlambdaReaperUnboxingRefinesReach2Spec.flow_reach2 F1 T1)
+           (FlambdaReaperUnboxingRefinesOver2Spec.over_reach F1 T1)
+           (FlambdaReaperUnboxingRefinesReach3Spec.rem_reach F1 T1)
+           (subkinds_of_context_unused is_local _ T [] _ e)
+           (subkinds_of_context_conts _ _ _ Hdist) Hslots Hfrag Hclosed
+           Hcalls Hcheck).
+  - (* The flow, as in FlambdaReaperUnboxingRefinesReach2Proofs.v. *)
+    intros n s Hrun ap f v id slots _ _ Hf.
+    destruct (URR2.run_flows_called2 flag is_local u e1 T1 n Hslots Hfrag1
+                Hc1 Hlr1)
+      as (located & cds & Hcds & Hnd & Hflows).
+    fold F1 in Hcds, Hflows. fold e1 in Hrun. rewrite Hrun in Hflows.
+    destruct Hflows as ((Hvars & _ & Hst & _) & Hchains & Hpa).
+    assert (Hclosure :
+      ∀ (v0 : value) (id0 : code_id) (slots0 : list (value_slot * value)),
+        lookup f (state_vars s) = Some v0 ->
+        closure_of (state_statics s) v0 = Some (id0, slots0) ->
+        FlambdaReaperUnboxingRefinesReachSpec.flow_reach F1 T1 f id0 = true)
+      by (intros v0 id0 slots0 Hf0 Hclo0;
+          exact (URR1.closure_reach F1 T1 cds
+                   (FlambdaReaperFlowSpec.unit_kept e1) located
+                   (state_vars s) (state_statics s) f v0 id0 slots0 Hcds
+                   Hvars Hst Hf0 Hclo0)).
+    split; intros Hclo;
+      cbn [FlambdaReaperUnboxingRefinesReach2Spec.flow_reach2].
+    + exact (Hclosure v id slots Hf Hclo).
+    + destruct v as [c | code vs0 | slot decls vs | sym | tag fields
+                     | elements | contents | l | cl applied aa];
+        try (unfold FlambdaReaperUnboxingRefinesReach2Spec.flow_reach_u;
+             rewrite (Hclosure _ id slots Hf Hclo); reflexivity).
+      exact (URR2.partial_reach is_local F1 T1 cds
+               (FlambdaReaperFlowSpec.unit_kept e1) located
+               (state_statics s) f cl applied aa id slots Hc1 Hcds Hnd Hst
+               Hchains (Hpa f _ Hf) (Hvars f _ Hf) Hclo).
+  - (* What a step over-applies. *)
+    intros n s Hrun.
+    pose proof (URO2.run_over_used flag is_local u e1 T1 n Hslots Hfrag1 Hc1
+                  Hlr1)
+      as Hover.
+    fold F1 in Hover. fold e1 in Hrun. rewrite Hrun in Hover.
+    exact (URO2.step_over_ok_mono _ _ s (URO2.over_used_reach F1 T1) Hover).
+  - (* What is left of an over-application calls. *)
+    intros n s Hrun.
+    pose proof (URR3.run_rem_used flag is_local u e1 T1 n Hslots Hfrag1 Hc1
+                  Hlr1)
+      as Hrem.
+    fold F1 in Hrem. fold e1 in Hrun. rewrite Hrun in Hrem.
+    exact (URR3.step_rem_ok_mono _ _ s (URR3.rem_used_reach F1 T1) Hrem).
+Qed.
+
+Theorem rebuild_unbox_nr_ind_with_types_local :
+  rebuild_unbox_nr_ind_with_types_local_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox b nr Hleast
+    Hslots Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hlrs Hexact Hccc Hwid Hfrag1
+    Hclosed1 Hlrs1 Hcalls Hcheck.
+  exact (URP.refines_observably_refines _ _ _
+           (rebuild_cc_with_types_refines_observably_local flag is_local u e
+              T [] cannot_change b Hleast Hslots Hfrag Hany Hrk Hwf Hdist
+              Hone Hclosed Hlrs Hexact Hccc Hwid)
+           (rebuild_unbox_nr_ind_with_types_refines_cc flag is_local u e T T1
+              cannot_change dominated to_unbox b nr Hslots Hfrag Hdist Hclosed
+              Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck)).
+Qed.
+
+Theorem rebuild_unbox_nr_ind_with_types_observably :
+  rebuild_unbox_nr_ind_with_types_observably_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox b nr Hleast
+    Hslots Hproj Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hexact Hccc Hwid
+    Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck.
+  exact (rebuild_unbox_nr_ind_with_types_local flag is_local u e T T1
+           cannot_change dominated to_unbox b nr Hleast Hslots Hfrag Hany Hrk
+           Hwf Hdist Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hslots Hproj)
+           Hexact Hccc Hwid Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck).
+Qed.
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesUnitFlowProofs.
+Module URUF := FlambdaReaperUnboxingRefinesUnitFlowProofs.
+
+Theorem rebuild_unbox_unit_never_with_types_refines_cc :
+  rebuild_unbox_unit_never_with_types_refines_cc_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox b Hslots
+    Hfrag Hdist Hclosed Hfrag1 Hclosed1 Hlrs1 Hcalls Hcov Hcheck.
+  exact (rebuild_unbox_nr_ind_with_types_refines_cc flag is_local u e T T1
+           cannot_change dominated to_unbox b _ Hslots Hfrag Hdist Hclosed
+           Hfrag1 Hclosed1 Hlrs1
+           (URUF.unit_never_covered _ _ _ _ _ _ _ _ _ e Hcalls Hcov) Hcheck).
+Qed.
+
+Theorem rebuild_unbox_unit_never_with_types_local :
+  rebuild_unbox_unit_never_with_types_local_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox b Hleast
+    Hslots Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hlrs Hexact Hccc Hwid Hfrag1
+    Hclosed1 Hlrs1 Hcalls Hcov Hcheck.
+  exact (rebuild_unbox_nr_ind_with_types_local flag is_local u e T T1
+           cannot_change dominated to_unbox b _ Hleast Hslots Hfrag Hany Hrk
+           Hwf Hdist Hone Hclosed Hlrs Hexact Hccc Hwid Hfrag1 Hclosed1 Hlrs1
+           (URUF.unit_never_covered _ _ _ _ _ _ _ _ _ e Hcalls Hcov) Hcheck).
+Qed.
+
+Theorem rebuild_unbox_unit_never_with_types_observably :
+  rebuild_unbox_unit_never_with_types_observably_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox b Hleast
+    Hslots Hproj Hfrag Hany Hrk Hwf Hdist Hone Hclosed Hexact Hccc Hwid
+    Hfrag1 Hclosed1 Hlrs1 Hcalls Hcov Hcheck.
+  exact (rebuild_unbox_nr_ind_with_types_observably flag is_local u e T T1
+           cannot_change dominated to_unbox b _ Hleast Hslots Hproj Hfrag Hany
+           Hrk Hwf Hdist Hone Hclosed Hexact Hccc Hwid Hfrag1 Hclosed1 Hlrs1
+           (URUF.unit_never_covered _ _ _ _ _ _ _ _ _ e Hcalls Hcov) Hcheck).
+Qed.
