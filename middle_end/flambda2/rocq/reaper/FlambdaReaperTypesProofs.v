@@ -11266,3 +11266,158 @@ Proof.
               (CCP.check_apply_widgets_sound _ _ Hwid)
               (CCP.check_witness_code_ids_sound _ Hcid))).
 Qed.
+
+(* ======================================================================== *)
+(* The reaper with types and the local unboxing                             *)
+(* ======================================================================== *)
+
+From OxCamlFlambda2 Require FlambdaReaperUnboxingRefinesHeapProofs.
+Module URHP := FlambdaReaperUnboxingRefinesHeapProofs.
+
+(* The rebuild with unboxing with types refines the rebuild with types
+   without unboxing for any rewriting
+   (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_with_refines_rebuild):
+   the two state the same of a parameter kept and not unboxed. *)
+Theorem rebuild_unbox_with_types_refines_rebuild :
+  rebuild_unbox_with_types_refines_rebuild_statement.
+Proof.
+  intros flag is_local u e T cannot_change code_deps dominated to_unbox b
+    Hslots Hfragment Hclosed Hlocal Hcheck.
+  exact (URP.rebuild_unbox_with_refines_rebuild
+           (subkinds_of_context
+              (plain_context is_local (traverse_unit flag u e) T [])
+              code_deps e)
+           flag is_local u e T cannot_change code_deps dominated to_unbox b
+           Hslots Hfragment Hclosed Hlocal Hcheck).
+Qed.
+
+Theorem rebuild_unbox_with_types_refines_rebuild_heap :
+  rebuild_unbox_with_types_refines_rebuild_heap_statement.
+Proof.
+  intros flag is_local u e T cannot_change code_deps dominated to_unbox b
+    Hslots Hfragment Hclosed Hlocal Hcheck.
+  exact (URHP.rebuild_unbox_with_refines_rebuild_heap
+           (subkinds_of_context
+              (plain_context is_local (traverse_unit flag u e) T [])
+              code_deps e)
+           flag is_local u e T cannot_change code_deps dominated to_unbox b
+           Hslots Hfragment Hclosed Hlocal Hcheck).
+Qed.
+
+(* The rebuild with types refines the unit up to observation, as the
+   rebuild without types does
+   (FlambdaReaperRebuildProofs.rebuild_refines_observably_local). *)
+Lemma rebuild_with_types_refines_observably_local
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) (b : bool) :
+  least_solution is_local (traverse_unit flag u e) T ->
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  FlambdaReaperRebuildSpec.any_kind_arguments e = true ->
+  FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+  FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  FlambdaReaperRebuildSpec.program_refines_observably e
+    (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e) T
+       sets (FlambdaReaperCallingConventions.unit_code_deps flag u e) b e).
+Proof.
+  intros Hleast Hlocal Hfrag Hdc Hrk Hwf Hdist Hexits Hcheck Hlrs
+    Hcheck_exact.
+  assert (Hkinded : RP.calls_kinded [] e = true).
+  { apply (proj1 RP.calls_kinded_of_results e [] [] [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  exact (proj1 (RP.exits_rel_flow false _ _
+                  (RP.rebuild_with_refines_checked_local false false flag
+                     is_local u e T b _ Hlocal Hfrag
+                     (proj1 (RP.any_kind_arguments_checked
+                               (FlambdaReaperFlowSpec.unit_codes e)) e Hdc)
+                     Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+                     (subkinds_of_context_sound_all is_local _ T sets _ _
+                        Hleast Hlocal
+                        (check_field_used_exact_sound is_local _ _
+                           Hcheck_exact))
+                     (subkinds_of_context_deps _ _ _)
+                     (subkinds_of_context_conts _ _ _ Hdist)
+                     (fun _ => Hrk)))).
+Qed.
+
+Theorem rebuild_unbox_with_types_refines_observably_local :
+  rebuild_unbox_with_types_refines_observably_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b Hleast
+    Hlocal_slots Hfragment Hstatic Hkinded Hwell_formed Hdist Hone Hclosed
+    Hlrs Hexact Hlocal Hcheck.
+  apply (URP.refines_observably_refines _
+           (State (rebuild_unit_with_types_from_tables is_local
+                     (traverse_unit flag u e) T []
+                     (FlambdaReaperCallingConventions.unit_code_deps flag u
+                        e)
+                     b e)
+              [] [] empty_static_env empty_heap no_reads)).
+  - exact (rebuild_with_types_refines_observably_local flag is_local u e T []
+             b Hleast Hlocal_slots Hfragment
+             (RP.static_constants_any_kind_arguments _ e Hstatic)
+             Hkinded Hwell_formed Hdist Hone Hclosed Hlrs Hexact).
+  - exact (rebuild_unbox_with_types_refines_rebuild flag is_local u e T
+             cannot_change
+             (FlambdaReaperCallingConventions.unit_code_deps flag u e)
+             dominated to_unbox b Hlocal_slots Hfragment Hclosed Hlocal
+             Hcheck).
+Qed.
+
+Theorem rebuild_unbox_with_types_refines_observably :
+  rebuild_unbox_with_types_refines_observably_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b Hleast
+    Hlocal_slots Hprojections Hfragment Hstatic Hkinded Hwell_formed Hdist
+    Hone Hclosed Hexact Hlocal Hcheck.
+  exact (rebuild_unbox_with_types_refines_observably_local flag is_local u e
+           T cannot_change dominated to_unbox b Hleast Hlocal_slots
+           Hfragment Hstatic Hkinded Hwell_formed Hdist Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal_slots Hprojections)
+           Hexact Hlocal Hcheck).
+Qed.
+
+Theorem rebuild_unbox_with_types_refines_up_to_heap_local :
+  rebuild_unbox_with_types_refines_up_to_heap_local_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b Hleast
+    Hlocal_slots Hfragment Hstatic Hkinded Hwell_formed Hdist Hone Hclosed
+    Hlrs Hexact Hlocal Hcheck.
+  apply (URHP.refines_up_to_heap_refines _
+           (State (rebuild_unit_with_types_from_tables is_local
+                     (traverse_unit flag u e) T []
+                     (FlambdaReaperCallingConventions.unit_code_deps flag u
+                        e)
+                     b e)
+              [] [] empty_static_env empty_heap no_reads)).
+  - exact (rebuild_with_types_refines_up_to_heap_local flag is_local u e T []
+             b Hleast Hlocal_slots Hfragment
+             (RP.static_constants_any_kind_arguments _ e Hstatic)
+             Hkinded Hwell_formed Hdist Hone Hclosed Hlrs Hexact).
+  - exact (rebuild_unbox_with_types_refines_rebuild_heap flag is_local u e T
+             cannot_change
+             (FlambdaReaperCallingConventions.unit_code_deps flag u e)
+             dominated to_unbox b Hlocal_slots Hfragment Hclosed Hlocal
+             Hcheck).
+Qed.
+
+Theorem rebuild_unbox_with_types_refines_up_to_heap :
+  rebuild_unbox_with_types_refines_up_to_heap_statement.
+Proof.
+  intros flag is_local u e T cannot_change dominated to_unbox b Hleast
+    Hlocal_slots Hprojections Hfragment Hstatic Hkinded Hwell_formed Hdist
+    Hone Hclosed Hexact Hlocal Hcheck.
+  exact (rebuild_unbox_with_types_refines_up_to_heap_local flag is_local u e
+           T cannot_change dominated to_unbox b Hleast Hlocal_slots
+           Hfragment Hstatic Hkinded Hwell_formed Hdist Hone Hclosed
+           (FlambdaReaperFlowProofs.old_premise_local_reads_used flag
+              is_local u e T Hlocal_slots Hprojections)
+           Hexact Hlocal Hcheck).
+Qed.

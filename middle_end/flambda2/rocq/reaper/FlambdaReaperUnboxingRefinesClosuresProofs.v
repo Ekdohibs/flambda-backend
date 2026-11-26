@@ -409,7 +409,7 @@ Definition cc_rebuild (en : rebuild_env) (e : expr) : expr :=
 
 Definition u_rebuild (en : unbox_env) (e : expr) : expr :=
   rebuild_expr_u true F sol cannot_change code_deps pdc unit_code_ids
-    codes unboxed ffu changed None [] en e.
+    codes unboxed ffu changed None en e.
 
 (* The continuations in scope ([C]): those that may be applied have the
    decisions of [C] in the second rebuild, and their masks in the first;
@@ -1425,7 +1425,7 @@ Lemma u_let_cont (enu : unbox_env) (k : continuation)
     then
       Let_cont_non_recursive k
         (rebuild_handler_u true F sol cannot_change code_deps pdc
-           unit_code_ids codes unboxed ffu changed None [] enu true ds h)
+           unit_code_ids codes unboxed ffu changed None enu true ds h)
         body'
     else body'.
 Proof. reflexivity. Qed.
@@ -1460,7 +1460,7 @@ Lemma u_let_cont_rec (enu : unbox_env)
       (map
          (fun '(k, h) =>
             (k, rebuild_handler_u true F sol cannot_change code_deps pdc
-                  unit_code_ids codes unboxed ffu changed None [] enu' false
+                  unit_code_ids codes unboxed ffu changed None enu' false
                   (handler_decisions true sol unboxed false h) h))
          handlers)
       (u_rebuild enu' body).
@@ -1483,7 +1483,7 @@ Lemma u_let_static (enu : unbox_env) (bindings : list static_binding)
   = Let_static
       (flat_map
          (rebuild_binding_u true F sol cannot_change code_deps pdc
-            unit_code_ids codes unboxed ffu changed None [] enu)
+            unit_code_ids codes unboxed ffu changed None enu)
          bindings)
       (u_rebuild (ubind_variables enu []) body).
 Proof. reflexivity. Qed.
@@ -1601,7 +1601,7 @@ Lemma code_rebuilt (id : code_id) (c : code) :
       (rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes
          ff None id c)
       (rebuild_code_u true F sol cannot_change code_deps pdc
-         unit_code_ids codes unboxed ffu changed None [] id c)
+         unit_code_ids codes unboxed ffu changed None id c)
       ci
     ∧ rr MM CH CSf
         (code_dead ci
@@ -1612,7 +1612,7 @@ Lemma code_rebuilt (id : code_id) (c : code) :
               codes ff None id c))
         (code_body
            (rebuild_code_u true F sol cannot_change code_deps pdc
-              unit_code_ids codes unboxed ffu changed None [] id c)).
+              unit_code_ids codes unboxed ffu changed None id c)).
 Proof.
   intros IH Hrepr Hnames Hconts Hedges.
   destruct c as [params mc ret exn md body].
@@ -1747,7 +1747,7 @@ Lemma bindings_rebuilt (C : finite_map (list decision * bool))
        bindings)
     (flat_map
        (rebuild_binding_u true F sol cannot_change code_deps pdc
-          unit_code_ids codes unboxed ffu changed None [] enu)
+          unit_code_ids codes unboxed ffu changed None enu)
        bindings).
 Proof.
   intros IHcode Hci. induction bindings as [ | b bs IH];
@@ -2053,7 +2053,7 @@ Proof.
         destruct (bind_block_fields_lets2 sol unboxed (ue_env enu) x tag args
                     fields)
           with (body := rebuild_expr_u true F sol cannot_change code_deps
-                          pdc unit_code_ids codes unboxed ffu changed None []
+                          pdc unit_code_ids codes unboxed ffu changed None
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
         { intros f u Hin.
@@ -2081,7 +2081,7 @@ Proof.
                     (rebuild_named sol (ue_env enu) x
                        (Prim (Unary (Box_number bn)) [c])) Hc)
           with (body := rebuild_expr_u true F sol cannot_change code_deps
-                          pdc unit_code_ids codes unboxed ffu changed None []
+                          pdc unit_code_ids codes unboxed ffu changed None
                           (ubind_variables enu [(x, Value)]) body)
           as (ls & Hl & Hentries).
         { intros Hne. destruct fields as [ | [f u] fields]; [ easy | ].
@@ -2108,7 +2108,7 @@ Proof.
         unfold rebuild_unboxed_binding.
         destruct (bind_fields_pairs fields fields_y
                     (rebuild_expr_u true F sol cannot_change code_deps pdc
-                       unit_code_ids codes unboxed ffu changed None []
+                       unit_code_ids codes unboxed ffu changed None
                        (ubind_variables enu [(x, Value)]) body)
                     Hflat)
           as (pairs & Hentries & Hl).
@@ -2130,7 +2130,7 @@ Proof.
         rewrite Hy, Hny.
         destruct (bind_fields_pairs fields nested
                     (rebuild_expr_u true F sol cannot_change code_deps pdc
-                       unit_code_ids codes unboxed ffu changed None []
+                       unit_code_ids codes unboxed ffu changed None
                        (ubind_variables enu [(x, Value)]) body)
                     Halike)
           as (pairs & Hentries & Hl).
@@ -2351,7 +2351,7 @@ Lemma rebuild_rr :
                h
              = Handler ps md hp
              ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
-                 unit_code_ids codes unboxed ffu changed None [] enu dead_check
+                 unit_code_ids codes unboxed ffu changed None enu dead_check
                  (handler_decisions true sol unboxed is_exn h) h
                = Handler ps md hu
              ∧ forallb (plain_variable MM) ps = true
@@ -2547,7 +2547,7 @@ Proof.
           (map (fun '(k, h) =>
                   (k, rebuild_handler_u true F sol cannot_change
                         code_deps pdc unit_code_ids codes unboxed ffu changed
-                          None []
+                          None
                         enu' false (handler_decisions true sol unboxed false h)
                         h))
              hs)).

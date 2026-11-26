@@ -84,6 +84,8 @@ Abbreviation ac_rel :=
   (URP.ac_rel M).
 Abbreviation env_rel :=
   (URP.env_rel M).
+Abbreviation sks_follow :=
+  URP.sks_follow.
 (* [K] are the shapes of the parameters of the continuations in scope. *)
 Inductive ubh : finite_map (list (option unboxed_fields)) -> expr -> expr
     -> Prop :=
@@ -150,7 +152,9 @@ Inductive ubh : finite_map (list (option unboxed_fields)) -> expr -> expr
       (handler handler' body body' : expr) :
     params_rel sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> ubh K handler handler' ->
-    ubh ((k, sh) :: K) body body' -> hm_params_subkinds metadata' = [] ->
+    ubh ((k, sh) :: K) body body' ->
+    sks_follow sh (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     ubh K
       (Let_cont_non_recursive k (Handler (map fst ps) metadata handler) body)
       (Let_cont_non_recursive k (Handler (map fst ps') metadata' handler')
@@ -190,7 +194,9 @@ with ubh_handlers : finite_map (list (option unboxed_fields))
       (S : finite_map (list (option unboxed_fields))) :
     params_rel sh ps ps' -> hm_params_kinds metadata = map snd ps ->
     hm_params_kinds metadata' = map snd ps' -> ubh K handler handler' ->
-    ubh_handlers K handlers handlers' S -> hm_params_subkinds metadata' = [] ->
+    ubh_handlers K handlers handlers' S ->
+    sks_follow sh (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     ubh_handlers K ((k, Handler (map fst ps) metadata handler) :: handlers)
       ((k, Handler (map fst ps') metadata' handler') :: handlers')
       ((k, sh) :: S).
@@ -208,7 +214,8 @@ Inductive cont_relh : list (option unboxed_fields) -> cont_value -> cont_value
     hm_params_kinds metadata' = map snd ps' -> ubh (S ++ K) handler handler' ->
     env_rel vars vars' -> conts_relh K conts conts' ->
     ubh_handlers (S ++ K) recursive recursive' S ->
-    hm_params_subkinds metadata' = [] ->
+    sks_follow sh (hm_params_subkinds metadata)
+      (hm_params_subkinds metadata') ->
     cont_relh sh
       (Closure (Handler (map fst ps) metadata handler) vars conts recursive)
       (Closure (Handler (map fst ps') metadata' handler') vars' conts'
@@ -502,8 +509,8 @@ Abbreviation args_rel_nil_inv :=
   (URP.args_rel_nil_inv M).
 Abbreviation alloc_entries_variables :=
   (URP.alloc_entries_variables M).
-Abbreviation bind_args_rel :=
-  (URP.bind_args_rel M M_distinct).
+Abbreviation bind_args_follow :=
+  (URP.bind_args_follow M M_distinct).
 Abbreviation find_arm_rel :=
   (URP.find_arm_rel M).
 Lemma relatedh_answered (s t : state) :
@@ -767,18 +774,18 @@ Proof.
       destruct (kinds_eqb (map kind_of_value vs) (map snd ps)) eqn:Hkinds;
         [ | exact I ].
       apply FlambdaSemanticsProofs.kinds_eqb_eq in Hkinds.
-      destruct (values_of_subkinds statics vs (hm_params_subkinds md));
-        [ | exact I ].
+      destruct (values_of_subkinds statics vs (hm_params_subkinds md))
+        eqn:Hsks; [ | exact I ].
       destruct (bind_params (map fst ps) vs cvars) as [hv | ] eqn:Hbind;
         [ | exact I ].
-      destruct (bind_args_rel sh _ _ Hargs ps ps' vars vars' cvars cvars' hv vs
-                  Hps Hvars Hcv Hvs Hkinds Hbind)
-        as (vs' & hv' & Hvs' & Hk' & Hb' & Hrel).
+      destruct (bind_args_follow sh _ _ Hargs ps ps' vars vars' cvars cvars'
+                  hv vs Hps Hvars Hcv Hvs Hkinds Hbind)
+        as (vs' & hv' & Hvs' & Hk' & Hb' & Hrel & Hfol).
       right. left. eexists. split.
       * rewrite step_apply_cont, Hvs'. unfold apply_continuation.
         rewrite Hk, <- Ec'. cbn [apply_cont_value]. rewrite Hmd', <- Hk'.
         rewrite (proj2 (FlambdaSemanticsProofs.kinds_eqb_eq _ _) eq_refl),
-          Hsk', Hb'.
+          (Hsk' statics vs vs' Hfol Hsks), Hb'.
         reflexivity.
       * exists (S ++ Kc). split; [ exact Hh | split; [ exact Hrel | ] ].
         split; [ apply rec_closures_relh; assumption | repeat split ].
@@ -828,6 +835,8 @@ Variable unit_code_ids : list code_id.
 Variable codes : finite_map code_metadata.
 Variable unboxed : list (node * unboxed_fields).
 Variable first_fresh first_fresh_u : positive.
+(* What the parameters kept state, the same in both rebuilds. *)
+Variable types : subkinds_rewriting.
 
 
 (* What the graph has of the unit: the facts of FlambdaReaperFlowProofs.v
@@ -871,10 +880,12 @@ Abbreviation kept_simple :=
 Abbreviation field_kept :=
   (URP.field_kept F sol unboxed is_local sol_closed local_slots fields_read).
 Abbreviation plain_rebuild :=
-  (URP.plain_rebuild F sol preserve_direct_calls unit_code_ids first_fresh).
+  (URP.plain_rebuild F sol preserve_direct_calls unit_code_ids first_fresh
+     types).
 Abbreviation unbox_rebuild :=
   (URP.unbox_rebuild F sol cannot_change code_deps preserve_direct_calls
-     unit_code_ids codes unboxed first_fresh_u).
+     unit_code_ids codes unboxed first_fresh_u
+     types).
 Abbreviation shape_of_param :=
   (URP.shape_of_param unboxed).
 Abbreviation K_of :=
@@ -943,32 +954,44 @@ Abbreviation rebuild_let_u_plain :=
   (URP.rebuild_let_u_plain sol unboxed).
 Abbreviation plain_rebuild_let_static :=
   (URP.plain_rebuild_let_static F sol preserve_direct_calls unit_code_ids
-     first_fresh).
+     first_fresh types).
 Abbreviation unbox_rebuild_let_static :=
   (URP.unbox_rebuild_let_static F sol cannot_change code_deps
-     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u).
+     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u
+     types).
 Abbreviation plain_rebuild_let_cont :=
   (URP.plain_rebuild_let_cont F sol preserve_direct_calls unit_code_ids
-     first_fresh).
+     first_fresh types).
 Abbreviation unbox_rebuild_let_cont :=
   (URP.unbox_rebuild_let_cont F sol cannot_change code_deps
-     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u).
+     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u
+     types).
 Abbreviation plain_rebuild_let_cont_rec :=
   (URP.plain_rebuild_let_cont_rec F sol preserve_direct_calls unit_code_ids
-     first_fresh).
+     first_fresh types).
 Abbreviation unbox_rebuild_let_cont_rec :=
   (URP.unbox_rebuild_let_cont_rec F sol cannot_change code_deps
-     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u).
+     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u
+     types).
 Abbreviation plain_rebuild_handler :=
   (URP.plain_rebuild_handler F sol preserve_direct_calls unit_code_ids
-     first_fresh).
+     first_fresh types).
 Abbreviation unbox_rebuild_handler :=
   (URP.unbox_rebuild_handler F sol cannot_change code_deps
-     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u).
+     preserve_direct_calls unit_code_ids codes unboxed first_fresh_u
+     types).
 Abbreviation local_bindings_rebuilt :=
   (URP.local_bindings_rebuilt F sol cannot_change code_deps
      preserve_direct_calls unit_code_ids codes unboxed first_fresh
-     first_fresh_u).
+     first_fresh_u types).
+Abbreviation unbox_handler_metadata :=
+  (URP.unbox_handler_metadata types).
+Abbreviation hm_kept_handler_metadata :=
+  (URP.hm_kept_handler_metadata types).
+Abbreviation hm_unbox_handler_metadata :=
+  (URP.hm_unbox_handler_metadata types).
+Abbreviation handler_sks_follow :=
+  (URP.handler_sks_follow unboxed types).
 Definition ubh_result (K : finite_map (list (option unboxed_fields)))
     (p q : expr) : Prop :=
   ubh unboxed K p q
@@ -1002,11 +1025,12 @@ Lemma rebuild_ubh :
            ∃ (ps ps' : list (variable * flambda_kind))
              (metadata metadata' : handler_metadata) (hp hu : expr),
              rebuild_handler F sol preserve_direct_calls unit_code_ids
-               first_fresh None (pen_of en C) dead (handler_mask sol is_exn h) h
+               first_fresh types (pen_of en C) dead
+               (handler_mask sol is_exn h) h
              = Handler (map fst ps) metadata hp
              ∧ rebuild_handler_u false F sol cannot_change code_deps
                  preserve_direct_calls unit_code_ids codes unboxed
-                 first_fresh_u [] None [] en dead
+                 first_fresh_u [] types en dead
                  (handler_decisions false sol unboxed is_exn h) h
                = Handler (map fst ps') metadata' hu
              ∧ params_rel unboxed
@@ -1016,7 +1040,12 @@ Lemma rebuild_ubh :
                  ps ps'
              ∧ hm_params_kinds metadata = map snd ps
              ∧ hm_params_kinds metadata' = map snd ps'
-             ∧ hm_params_subkinds metadata' = []
+             ∧ sks_follow
+                 (flat_map shape_of_param
+                    (combine (handler_variables h)
+                       (handler_mask sol is_exn h)))
+                 (hm_params_subkinds metadata)
+                 (hm_params_subkinds metadata')
              ∧ Forall2 decision_match
                  (combine (handler_variables h) (handler_mask sol is_exn h))
                  (handler_decisions false sol unboxed is_exn h)
@@ -1072,7 +1101,7 @@ Proof.
       destruct (bind_fields_pairs fields fields_y
                   (rebuild_expr_u false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
-                     first_fresh_u [] None [] (ubind_variables en [(x, Value)])
+                     first_fresh_u [] types (ubind_variables en [(x, Value)])
                        body)
                   Hflat)
         as (pairs & Hentries & Hl).
@@ -1083,7 +1112,7 @@ Proof.
       destruct (lets_free_continuations (pairs_lets pairs)
                   (rebuild_expr_u false F sol cannot_change code_deps
                      preserve_direct_calls unit_code_ids codes unboxed
-                     first_fresh_u [] None [] (ubind_variables en [(x, Value)])
+                     first_fresh_u [] types (ubind_variables en [(x, Value)])
                        body))
         as [Hfc Hbs].
       split; [ exact (ubh_alias unboxed _ x y fields fields_y pairs _ _ Hx Hxf
@@ -1113,7 +1142,7 @@ Proof.
       * destruct (bind_block_fields_lets2 (ue_env en) x tag args' fields)
           with (body := rebuild_expr_u false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
-                          first_fresh_u [] None [] (ubind_variables en [(x,
+                          first_fresh_u [] types (ubind_variables en [(x,
                             Value)])
                           body)
           as (ls & Hl & Hentries).
@@ -1128,7 +1157,7 @@ Proof.
         destruct (lets_free_continuations (concat ls)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] None [] (ubind_variables en [(x,
+                       first_fresh_u [] types (ubind_variables en [(x,
                          Value)])
                        body))
           as [Hfc Hbs].
@@ -1142,7 +1171,7 @@ Proof.
                        (Prim (Unary (Box_number bn)) [c])) Hc)
           with (body := rebuild_expr_u false F sol cannot_change code_deps
                           preserve_direct_calls unit_code_ids codes unboxed
-                          first_fresh_u [] None [] (ubind_variables en [(x,
+                          first_fresh_u [] types (ubind_variables en [(x,
                             Value)])
                           body)
           as (ls & Hl & Hentries).
@@ -1159,7 +1188,7 @@ Proof.
         destruct (lets_free_continuations (concat ls)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] None [] (ubind_variables en [(x,
+                       first_fresh_u [] types (ubind_variables en [(x,
                          Value)])
                        body))
           as [Hfc Hbs].
@@ -1179,7 +1208,7 @@ Proof.
         destruct (bind_fields_pairs fields nested
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] None [] (ubind_variables en [(x,
+                       first_fresh_u [] types (ubind_variables en [(x,
                          Value)])
                        body)
                     Halike)
@@ -1188,7 +1217,7 @@ Proof.
         destruct (lets_free_continuations (pairs_lets pairs)
                     (rebuild_expr_u false F sol cannot_change code_deps
                        preserve_direct_calls unit_code_ids codes unboxed
-                       first_fresh_u [] None [] (ubind_variables en [(x,
+                       first_fresh_u [] types (ubind_variables en [(x,
                          Value)])
                        body))
           as [Hfc Hbs].
@@ -1347,7 +1376,7 @@ Proof.
           (fun '(k, h) =>
              (k,
               rebuild_handler F sol preserve_direct_calls unit_code_ids
-                first_fresh None (bind_continuations (pen_of en C) masks) false
+                first_fresh types (bind_continuations (pen_of en C) masks) false
                 (handler_mask sol false h) h))
           hs
       in
@@ -1357,7 +1386,7 @@ Proof.
              (k,
               rebuild_handler_u false F sol cannot_change code_deps
                 preserve_direct_calls unit_code_ids codes unboxed
-                first_fresh_u [] None [] (ubind_continuations en dss) false
+                first_fresh_u [] types (ubind_continuations en dss) false
                 (handler_decisions false sol unboxed false h) h))
           hs
       in
@@ -1511,21 +1540,21 @@ Proof.
       (params_of_decisions bound
          (handler_decisions false sol unboxed is_exn
             (Handler params metadata handler))),
-      (with_params_kinds metadata
-         (filter_kept mask (hm_params_kinds metadata))),
-      (with_params_kinds metadata
-         (map snd
-            (params_of_decisions bound
-               (handler_decisions false sol unboxed is_exn
-                  (Handler params metadata handler))))).
+      (kept_handler_metadata types mask params metadata),
+      (unbox_handler_metadata metadata bound
+         (handler_decisions false sol unboxed is_exn
+            (Handler params metadata handler))).
     eexists _, _.
     split; [ rewrite <- filter_kept_map, Hfst; reflexivity | ].
     split; [ reflexivity | ].
     split; [ exact Hrel | ].
-    split; [ rewrite hm_with_params_kinds, <- Hsnd, filter_kept_map;
+    split; [ rewrite hm_kept_handler_metadata, <- Hsnd, filter_kept_map;
              reflexivity | ].
-    split; [ apply hm_with_params_kinds | ].
-    split; [ apply with_params_kinds_subkinds | ].
+    split; [ apply hm_unbox_handler_metadata | ].
+    split.
+    { pose proof (handler_sks_follow bound mask metadata Hmlen Hparams)
+        as Hsk.
+      rewrite Hfst in Hsk. exact Hsk. }
     split; [ exact Hmatch | ].
     split; [ rewrite Hmlen; unfold bound; apply with_kinds_length | ].
     destruct (dead && _); [ exact (ubh_result_invalid _) | ].
@@ -1535,17 +1564,31 @@ Qed.
 
 End Rebuilds_heap.
 
-Theorem rebuild_unbox_refines_rebuild_heap :
-  rebuild_unbox_refines_rebuild_heap_statement.
+(* The same for any [types], the same in both rebuilds
+   (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_with_refines_rebuild).
+   *)
+Lemma rebuild_unbox_with_refines_rebuild_heap (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  in_heap_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  program_refines
+    (rebuild_unit_with types (traverse_unit flag u e) (solution_of_tables T)
+       preserve_direct_calls e)
+    (rebuild_unit_unbox_with types (traverse_unit flag u e) T cannot_change
+       code_deps dominated to_unbox preserve_direct_calls e).
 Proof.
-  intros flag is_local u e T cannot_change code_deps dominated to_unbox
-    preserve_direct_calls Hslots Hfragment Hclosed Hlocal Hcheck.
+  intros Hslots Hfragment Hclosed Hlocal Hcheck.
   set (F := traverse_unit flag u e) in *.
   unfold local_unboxing in Hlocal.
   pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
     as [Hdistinct Hfresh].
-  unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
-    rebuild_unit_unbox_repr_mode.
+  unfold rebuild_unit_unbox_with, rebuild_unit_unbox_repr_mode_with.
   destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
     eqn:Hunboxed.
   cbn [fst] in Hlocal, Hdistinct, Hfresh.
@@ -1675,7 +1718,7 @@ Proof.
                      (fun n => mem_node n cannot_change) code_deps
                      preserve_direct_calls (static_names code_ids_bound e)
                      (bound_code_metadata e) unboxed
-                     (fresh_name (names_of e)) next noted deps cds
+                     (fresh_name (names_of e)) next types noted deps cds
                      (unit_kept e) (unit_codes e)
                      (static_names symbols_of_binding e) is_local Hcl Hslots
                      Hfields_read Hreads_found)
@@ -1683,6 +1726,16 @@ Proof.
               Hloc' Hedges)
     as (Hub & _ & _).
   exact (ubh_refines unboxed Hdistinct _ _ Hub).
+Qed.
+
+Theorem rebuild_unbox_refines_rebuild_heap :
+  rebuild_unbox_refines_rebuild_heap_statement.
+Proof.
+  intros flag is_local u e T cannot_change code_deps dominated to_unbox
+    preserve_direct_calls Hslots Hfragment Hclosed Hlocal Hcheck.
+  exact (rebuild_unbox_with_refines_rebuild_heap None flag is_local u e T
+           cannot_change code_deps dominated to_unbox preserve_direct_calls
+           Hslots Hfragment Hclosed Hlocal Hcheck).
 Qed.
 
 

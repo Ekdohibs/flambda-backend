@@ -434,6 +434,25 @@
      of the value that the rebuilt unit gives it, by the proof of
      [rewrite_kind_with_subkind_sound] for the relation of the
      simulation. No fault found.
+   - The reaper with types and the local unboxing
+     ([rebuild_unit_unbox_with_types]: the rebuild with unboxing where a
+     handler states of a parameter that it keeps and does not unbox what
+     [rewrite_kind_with_subkind] gives, and nothing of the fields of one
+     that it unboxes): [rebuild_unbox_with_types_refines_rebuild_statement]
+     and [rebuild_unbox_with_types_refines_rebuild_heap_statement], the
+     refinements of the rebuild with types without unboxing that the
+     rebuild with unboxing has of the plain rebuild, with the same
+     premises (what each states of a parameter kept and not unboxed is
+     the same; nothing is asked of the rewriting);
+     [rebuild_unbox_with_types_refines_observably_local_statement],
+     [rebuild_unbox_with_types_refines_observably_statement],
+     [rebuild_unbox_with_types_refines_up_to_heap_local_statement] and
+     [rebuild_unbox_with_types_refines_up_to_heap_statement], the
+     refinements of the unit that the rebuild with unboxing without types
+     has, under the least solution and with each continuation bound once
+     in addition, as for the rebuild with types without unboxing. The
+     fragment of the local unboxing has no code and no call, so no wrapper
+     and no code is rebuilt there. No fault found.
 
    What is left out:
    - Closures of a set of one function with no slot named
@@ -474,7 +493,11 @@
      representations in FlambdaReaperTypesTraversalSpec.v under a premise
      on the solution; the rebuild with a change of representation in the
      other statements is left; the unboxing of closures
-     and of names whose uses are called (not of [check_unboxed_uses]);
+     and of names whose uses are called (not of [check_unboxed_uses]),
+     and the rebuild with unboxing with types of units with calls or
+     code (the simulations of FlambdaReaperUnboxingRefinesCallsProofs.v
+     and FlambdaReaperUnboxingRefinesClosuresProofs.v run without
+     types);
      the fields of an unboxed [my_closure], which the result types give
      no equation, so that there is nothing to state of them. *)
 
@@ -487,7 +510,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperLeastSpec FlambdaReaperLocalFields FlambdaReaperTypes.
 From OxCamlFlambda2 Require FlambdaReaperUnboxing
   FlambdaReaperUnboxingRefinesCallsSpec FlambdaReaperCallingConventionsSpec
-  FlambdaStaticsInScopeSpec.
+  FlambdaStaticsInScopeSpec FlambdaReaperUnboxingRefinesSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaBindingTime FlambdaTypingEnv
   FlambdaTypingEnvSpec.
@@ -3080,3 +3103,176 @@ Definition rebuild_cc_with_types_refines_up_to_heap_local_statement : Prop :=
          (traverse_unit flag u e) T sets cannot_change
          (FlambdaReaperCallingConventions.unit_code_deps flag u e)
          preserve_direct_calls e).
+
+(* The rebuild with unboxing of the reaper with types
+   ([rebuild_unit_unbox_with_types]), where the unboxing is local
+   (FlambdaReaperUnboxingRefinesSpec.v): a handler states of a parameter
+   that it keeps and does not unbox what the rebuild of the reaper with
+   types without unboxing states, rewritten at its variable, and nothing
+   of the fields of a parameter that it unboxes. It refines that rebuild,
+   with the sets of closures that it gives the rewriting (none), as the
+   rebuild with unboxing refines the plain rebuild
+   (FlambdaReaperUnboxingRefinesSpec.v,
+   [rebuild_unbox_refines_rebuild_statement]), with the same premises,
+   for any code deps. *)
+Definition rebuild_unbox_with_types_refines_rebuild_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaUnusedStaticsSpec.program_refines
+      (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
+         T [] code_deps preserve_direct_calls e)
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change code_deps dominated to_unbox preserve_direct_calls e).
+
+(* The unit rebuilt with unboxing by the reaper with types refines the
+   unit up to observation, with the premises of the statement without
+   types (FlambdaReaperUnboxingRefinesSpec.v,
+   [rebuild_unbox_refines_observably_local_statement]), the least
+   solution, and each continuation of the unit bound once, as
+   [rebuild_with_types_refines_local_statement] asks. *)
+Definition rebuild_unbox_with_types_refines_observably_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.static_constants (unit_codes e) e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaReaperRebuildSpec.program_refines_observably e
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+         to_unbox preserve_direct_calls e).
+
+(* The same without local fields (FlambdaReaperUnboxingRefinesSpec.v,
+   [rebuild_unbox_refines_observably_statement]). *)
+Definition rebuild_unbox_with_types_refines_observably_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_flow_fragment e = true ->
+    FlambdaReaperRebuildSpec.static_constants (unit_codes e) e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaReaperRebuildSpec.program_refines_observably e
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+         to_unbox preserve_direct_calls e).
+
+(* The same three with the primitives of the heap
+   (FlambdaReaperUnboxingRefinesHeapSpec.v). *)
+Definition rebuild_unbox_with_types_refines_rebuild_heap_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool),
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaUnusedStaticsSpec.program_refines
+      (rebuild_unit_with_types_from_tables is_local (traverse_unit flag u e)
+         T [] code_deps preserve_direct_calls e)
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change code_deps dominated to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_with_types_refines_up_to_heap_local_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    in_heap_fragment e = true ->
+    FlambdaReaperRebuildSpec.static_constants (unit_codes e) e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaReaperRebuildSpec.program_refines_up_to_heap e
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+         to_unbox preserve_direct_calls e).
+
+Definition rebuild_unbox_with_types_refines_up_to_heap_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool),
+    least_solution is_local (traverse_unit flag u e) T ->
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free e = true ->
+    in_heap_fragment e = true ->
+    FlambdaReaperRebuildSpec.static_constants (unit_codes e) e = true ->
+    FlambdaReaperRebuildSpec.results_kinded [] [] e = true ->
+    well_formed_unit u e = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+    FlambdaReaperRebuildSpec.exits_one_value u e = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+    FlambdaReaperUnboxingRefinesSpec.local_unboxing (traverse_unit flag u e)
+      T dominated to_unbox e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaReaperRebuildSpec.program_refines_up_to_heap e
+      (rebuild_unit_unbox_with_types is_local (traverse_unit flag u e) T
+         cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+         to_unbox preserve_direct_calls e).

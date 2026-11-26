@@ -745,7 +745,8 @@ Definition rebuild_unit_cc_with_types_from_tables (is_local : field -> bool)
    handlers and the wrappers kept state, and what code states of its
    results, rewritten as [rewrite_kind_with_subkind] does, which reads
    neither the sets of closures nor the changes of representation of the
-   context. *)
+   context; the code deps and the table of the continuations are those of
+   the rebuild without unboxing ([subkinds_of_context]). *)
 Definition rebuild_unit_unbox_repr_mode_with_types (fixed : bool)
     (is_local : field -> bool) (F : facts) (T : tables)
     (cannot_change : list node)
@@ -753,7 +754,7 @@ Definition rebuild_unit_unbox_repr_mode_with_types (fixed : bool)
     (dominated : list (node * node)) (to_unbox tcr : list node)
     (preserve_direct_calls : bool) (e : expr) : expr :=
   FlambdaReaperUnboxing.rebuild_unit_unbox_repr_mode_with
-    (Some (rewrite_of_context (plain_context is_local F T []))) fixed
+    (subkinds_of_context (plain_context is_local F T []) code_deps e) fixed
     is_local F T cannot_change code_deps dominated to_unbox tcr
     preserve_direct_calls e.
 
@@ -762,6 +763,17 @@ Definition rebuild_unit_unbox_repr_with_types :=
 
 Definition rebuild_unit_unbox_repr_fixed_with_types :=
   rebuild_unit_unbox_repr_mode_with_types true.
+
+(* The same with no change of representation
+   (FlambdaReaperUnboxing.rebuild_unit_unbox). *)
+Definition rebuild_unit_unbox_with_types (is_local : field -> bool)
+    (F : facts) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map FlambdaReaperTraversal.code_dep)
+    (dominated : list (node * node)) (to_unbox : list node)
+    (preserve_direct_calls : bool) (e : expr) : expr :=
+  FlambdaReaperUnboxing.rebuild_unit_unbox_with
+    (subkinds_of_context (plain_context is_local F T []) code_deps e) F T
+    cannot_change code_deps dominated to_unbox preserve_direct_calls e.
 
 (* ======================================================================== *)
 (* Closures (the closure case of [Rewriter.rewrite])                        *)

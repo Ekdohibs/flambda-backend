@@ -864,7 +864,7 @@ Variable ff : positive.
 Variable changed : list (node * closure_repr).
 
 Lemma fc_apply (en : unbox_env) (ap : apply_expr) (k : continuation) :
-  k ∈ fc (rebuild_apply_u true F sol cc cds pdc uci codes unboxed ff None [] en
+  k ∈ fc (rebuild_apply_u true F sol cc cds pdc uci codes unboxed ff None en
     ap) ->
   k = ap_exn_continuation ap
   ∨ (k = ap_continuation ap ∧ apply_never_returns F sol cds codes ap = false).
@@ -1353,11 +1353,11 @@ Variable pdc : bool.
 Abbreviation rebuild :=
   (rebuild_expr_u true F S (fun n => mem_node n cannot_change) cds pdc
      (static_names code_ids_bound e0) (bound_code_metadata e0) unboxed ff
-     changed None []).
+     changed None).
 Abbreviation rebuild_handler :=
   (rebuild_handler_u true F S (fun n => mem_node n cannot_change) cds pdc
      (static_names code_ids_bound e0) (bound_code_metadata e0) unboxed ff
-     changed None []).
+     changed None).
 Abbreviation calls :=
   (rebuilt_calls S (fun n => mem_node n cannot_change) cds
      (static_names code_ids_bound e0) unboxed).
