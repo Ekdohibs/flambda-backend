@@ -49,7 +49,16 @@
    [Kinds.bad_fact]).
 
    [changed_closures_one_allocation_unaliased]: by induction on
-   [derivable], each tuple of a closure is as [ok_atom] says. *)
+   [derivable], each tuple of a closure is as [ok_atom] says.
+
+   The statements of the closure types without [changed_unstored] follow
+   from FlambdaReaperTypesProofs.rewrite_stored_type_sound_slots as those
+   with it did from FlambdaReaperTypesProofs.rewrite_changed_type_sound_slots,
+   which are now their corollaries
+   (FlambdaReaperTypesProofs.statics_changed_of_unstored,
+   [rebuilt_changed_of_runs]). [stored_example]: the relation of the
+   runs is built level by level ([rebuilt_changed_fold]) on the graph
+   and tables of the unit, computed; the rewritten types are computed. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -2064,6 +2073,76 @@ Qed.
 (* The statement                                                            *)
 (* ======================================================================== *)
 
+(* For every value, wherever the closures that change are held. *)
+Theorem rewrite_stored_type_sound_traversal :
+  rewrite_stored_type_sound_traversal_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hone Ht Hrv Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  apply (TP.rewrite_stored_type_sound_slots is_local (traverse_unit Auto u e)
+           T sets dominated to_unbox tcr e tenv canon statics statics'
+           valuation valuation' fuel m t n v v');
+    try assumption.
+  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
+           Hfs Hmut Hdomc Hone).
+Qed.
+
+Theorem rewrite_stored_type_sound_traversal_landed :
+  rewrite_stored_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hone Ht Hrv Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  apply (TP.rewrite_stored_type_sound_slots_landed is_local
+           (traverse_unit Auto u e) T sets dominated to_unbox tcr e tenv canon
+           statics statics' valuation valuation' fuel m t n v v');
+    try assumption.
+  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
+           Hfs Hmut Hdomc Hone).
+Qed.
+
+Theorem stored_type_sound_traversal :
+  stored_type_sound_traversal_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hu Ht Hrv
+    Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_stored_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Theorem stored_type_sound_traversal_landed :
+  stored_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hu Ht Hrv
+    Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_stored_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hrv Hat Hsat).
+Qed.
+
+(* The statements with [changed_unstored], as corollaries. *)
 Theorem rewrite_changed_type_sound_traversal :
   rewrite_changed_type_sound_traversal_statement.
 Proof.
@@ -2071,13 +2150,16 @@ Proof.
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc
     Huses Hunst Hone Ht Hcis Hrv Hat Hch Hsat.
-  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
-  apply (TP.rewrite_changed_type_sound_slots is_local (traverse_unit Auto u e)
-           T sets dominated to_unbox tcr e tenv canon statics statics'
-           valuation valuation' fuel m t n v v_mid v');
-    try assumption.
-  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
-           Hfs Hmut Hdomc Hone).
+  pose proof (TP.least_closed_tables is_local _ T (or_introl Hleast)) as Hc.
+  exact (rewrite_stored_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Hkinds Henv
+           Hfragt Halloc (TP.statics_changed_of_unstored _ T _ Hunst _ _ Hst)
+           (TP.sets_whole_of_unstored T _ _ _ Hwhole) Hcopies Hdomc Huses Hone
+           Ht
+           (TP.rebuilt_changed_of_runs is_local _ T _ Hc Hunst statics n v
+              v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.
 
 Theorem rewrite_changed_type_sound_traversal_landed :
@@ -2087,30 +2169,35 @@ Proof.
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc
     Huses Hunst Hone Ht Hcis Hrv Hat Hch Hsat.
-  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
-  apply (TP.rewrite_changed_type_sound_slots_landed is_local
-           (traverse_unit Auto u e) T sets dominated to_unbox tcr e tenv
-           canon statics statics' valuation valuation' fuel m t n v v_mid v');
-    try assumption.
-  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
-           Hfs Hmut Hdomc Hone).
+  pose proof (TP.least_closed_tables is_local _ T (or_introl Hleast)) as Hc.
+  exact (rewrite_stored_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Hkinds Henv
+           Hfragt Halloc (TP.statics_changed_of_unstored _ T _ Hunst _ _ Hst)
+           (TP.sets_whole_of_unstored T _ _ _ Hwhole) Hcopies Hdomc Huses Hone
+           Ht
+           (TP.rebuilt_changed_of_runs is_local _ T _ Hc Hunst statics n v
+              v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.
 
-Theorem changed_type_sound_traversal : changed_type_sound_traversal_statement.
+Theorem changed_type_sound_traversal :
+  changed_type_sound_traversal_statement.
 Proof.
   intros is_local u T sets dominated to_unbox tcr e tenv canon statics
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
     Hunst Hu Ht Hcis Hrv Hat Hch Hsat.
-  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
-  exact (rewrite_changed_type_sound_traversal is_local u T sets dominated
-           to_unbox tcr e tenv canon statics statics' valuation valuation'
-           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets
-           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
-           Hst Hwhole Hcopies Hdomc Huses Hunst
-           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
-              Hfs Hmut Hu)
-           Ht Hcis Hrv Hat Hch Hsat).
+  pose proof (TP.least_closed_tables is_local _ T (or_introl Hleast)) as Hc.
+  exact (stored_type_sound_traversal is_local u T sets dominated to_unbox tcr e
+           tenv canon statics statics' valuation valuation' fuel m t n v v'
+           Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt Halloc
+           (TP.statics_changed_of_unstored _ T _ Hunst _ _ Hst)
+           (TP.sets_whole_of_unstored T _ _ _ Hwhole) Hcopies Hdomc Huses Hu
+           Ht
+           (TP.rebuilt_changed_of_runs is_local _ T _ Hc Hunst statics n v
+              v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.
 
 Theorem changed_type_sound_traversal_landed :
@@ -2120,15 +2207,17 @@ Proof.
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
     Hunst Hu Ht Hcis Hrv Hat Hch Hsat.
-  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
-  exact (rewrite_changed_type_sound_traversal_landed is_local u T sets dominated
+  pose proof (TP.least_closed_tables is_local _ T (or_introl Hleast)) as Hc.
+  exact (stored_type_sound_traversal_landed is_local u T sets dominated
            to_unbox tcr e tenv canon statics statics' valuation valuation'
-           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets
-           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
-           Hst Hwhole Hcopies Hdomc Huses Hunst
-           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
-              Hfs Hmut Hu)
-           Ht Hcis Hrv Hat Hch Hsat).
+           fuel m t n v v'
+           Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt Halloc
+           (TP.statics_changed_of_unstored _ T _ Hunst _ _ Hst)
+           (TP.sets_whole_of_unstored T _ _ _ Hwhole) Hcopies Hdomc Huses Hu
+           Ht
+           (TP.rebuilt_changed_of_runs is_local _ T _ Hc Hunst statics n v
+              v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.
 
 (* ======================================================================== *)
@@ -2168,4 +2257,209 @@ Proof.
   pose proof (H _ _ _ _ Hc (fun g E => ltac:(discriminate E)) Hmay
                 ltac:(vm_compute; reflexivity)) as E.
   vm_compute in E. discriminate E.
+Qed.
+
+(* ======================================================================== *)
+(* The closure stored in a block, without [changed_unstored]               *)
+(* ======================================================================== *)
+
+Module StoredRuns.
+
+Import StoredExampleRuns.
+Local Open Scope positive_scope.
+
+Local Abbreviation G := (graph_of_facts StoredExample.facts).
+Local Abbreviation sol := (solution_of_tables StoredExample.tables).
+Local Abbreviation RC := (rebuilt_changed G sol StoredExample.reprs).
+
+Ltac in_cases H :=
+  repeat match type of H with
+         | _ ∨ _ => destruct H as [H | H]
+         end;
+  try discriminate H; try contradiction H.
+
+Ltac in_find := repeat first [ left; reflexivity | right ].
+
+Lemma constructors :
+  f_constructor StoredExample.facts
+  = [(x60, Field_call_witness Known_arity_code_pointer, Node_made 7);
+     (x60, Field_call_witness Unknown_arity_code_pointer, Node_made 8);
+     (x10, Field_block 0 Value, x60);
+     (x10, Field_is_int, Node_all_constants);
+     (x10, Field_get_tag, Node_all_constants);
+     (x60, Field_value_slot 80, Node_all_constants);
+     (x60, Field_function_slot 70, x60);
+     (Node_made 8, Field_return_of_call Exn, Node_made 4);
+     (Node_made 8, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 8, Field_code_id_of_call_witness, Node_code_id 53);
+     (Node_made 7, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 7, Field_return_of_call Exn, Node_made 4);
+     (Node_made 7, Field_code_id_of_call_witness, Node_code_id 53)].
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma cons_in (F : facts) (a : node) (f : field) (b : node) :
+  g_constructor (graph_of_facts F) a f b -> (a, f, b) ∈ f_constructor F.
+Proof. exact (fun H => H). Qed.
+
+Lemma sites_ok :
+  set_sites G [(70%positive, 53%positive)] (fun _ => x60).
+Proof.
+  intros f id Hf g b. cbn [lookup] in Hf.
+  destruct (Pos.eqb_spec f 70) as [-> | _]; [ | discriminate Hf ].
+  split.
+  - intros Hcons. apply (cons_in StoredExample.facts) in Hcons.
+    rewrite constructors in Hcons.
+    cbn [In] in Hcons. in_cases Hcons.
+    injection Hcons as <- <-. split; reflexivity.
+  - intros [Hg ->]. unfold is_bound in Hg. cbn [lookup] in Hg.
+    destruct (Pos.eqb g 70) eqn:Hg70; [ | discriminate Hg ].
+    apply Pos.eqb_eq in Hg70. subst g. vm_compute. in_find.
+Qed.
+
+Lemma closure_at (n : node) :
+  may_come_from sol x60 n -> RC closure n closure'.
+Proof.
+  intros Hmay. apply FlambdaReaperTypesProofs.rebuilt_changed_fold.
+  cbn [rebuilt_changed_step closure].
+  exists (fun _ => x60), [(80%positive, Value_const (Tagged_immediate 7))].
+  split; [ exact Hmay | split; [ exact sites_ok | split ] ].
+  - apply for_all_bindings_lookup. intros w x Hw f id Hf Hfu.
+    cbn [lookup] in Hw.
+    destruct (Pos.eqb_spec w 80) as [-> | _]; [ | discriminate Hw ].
+    injection Hw as <-.
+    exists Node_all_constants, (Value_const (Tagged_immediate 7)).
+    split; [ | split; [ vm_compute; reflexivity | ] ].
+    { intros f' id' _ b. split.
+      - intros Hcons. apply (cons_in StoredExample.facts) in Hcons.
+        rewrite constructors in Hcons.
+        cbn [In] in Hcons. in_cases Hcons.
+        injection Hcons as <-. reflexivity.
+      - intros ->. vm_compute. in_find. }
+    split; [ vm_compute; reflexivity | split; [ reflexivity | ] ].
+    apply FlambdaReaperTypesProofs.rebuilt_changed_fold.
+    cbn [rebuilt_changed_step].
+    split; [ vm_compute; reflexivity | reflexivity ].
+  - vm_compute.
+    exists [(70%positive, 53%positive)],
+      [(80%positive, Value_const (Tagged_immediate 7))],
+      [(81%positive, Value_const (Tagged_immediate 7))].
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    constructor; [ split; reflexivity | constructor ].
+Qed.
+
+Lemma x60_self : may_come_from sol x60 x60.
+Proof.
+  apply FlambdaReaperTypesProofs.may_come_from_self;
+    vm_compute; auto.
+Qed.
+
+Lemma x60_x11 : may_come_from sol x60 x11.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ right; vm_compute; reflexivity | ].
+  split; [ intros H; vm_compute in H; discriminate H | ].
+  split; [ intros H; vm_compute in H; discriminate H | ].
+  intros _ u Hu. left. cbn [s_usages solution_of_tables] in Hu |- *.
+  apply mem_pair_In in Hu. apply mem_pair_In. vm_compute in Hu |- *.
+  in_cases Hu; injection Hu as <-; in_find.
+Qed.
+
+Lemma block_at : RC block x10 block'.
+Proof.
+  apply FlambdaReaperTypesProofs.rebuilt_changed_fold.
+  cbn [rebuilt_changed_step block].
+  exists x10, [closure'].
+  split; [ apply FlambdaReaperTypesProofs.may_come_from_self;
+           vm_compute; auto | ].
+  split; [ vm_compute; reflexivity | split; [ reflexivity | ] ].
+  cbn [fields_rebuilt]. split; [ | exact I ].
+  exists x60. split; [ vm_compute; in_find | split ].
+  - intros _. split; [ vm_compute; reflexivity | ].
+    exact (closure_at x60 x60_self).
+  - intros H. vm_compute in H. discriminate H.
+Qed.
+
+Lemma metadata_single (a n : node) :
+  (∀ b : node, s_sources sol n b = true -> b = a) ->
+  s_any_source sol n = false ->
+  metadata_at sol (FlambdaReaperTypes.Single_source a) n.
+Proof.
+  intros Hsrc Han b (_ & [Has | Hs] & _) _;
+    [ rewrite Han in Has; discriminate Has | ].
+  exact (Hsrc b Hs).
+Qed.
+
+End StoredRuns.
+
+Theorem stored_example : stored_example_statement.
+Proof.
+  split.
+  { intros fdecls sites slot id Hl Hsites.
+    exists (hd [] StoredExampleRuns.sets).
+    assert (Hb0 : is_bound slot fdecls = true)
+      by (unfold is_bound; rewrite Hl; reflexivity).
+    pose proof (proj2 (Hsites slot id Hl slot (sites slot)) (conj Hb0 eq_refl))
+      as Hself.
+    apply (StoredRuns.cons_in StoredExample.facts) in Hself.
+    rewrite StoredRuns.constructors in Hself.
+    cbn [In] in Hself. StoredRuns.in_cases Hself.
+    injection Hself as Hs70 E70 _. subst slot.
+    assert (Hdom : ∀ g : function_slot,
+               is_bound g fdecls = true ->
+               g = 70%positive ∧ sites g = sites 70%positive).
+    { intros g Hg. pose proof (proj2 (Hsites 70%positive id Hl g (sites g))
+                                 (conj Hg eq_refl)) as Hc.
+      apply (StoredRuns.cons_in StoredExample.facts) in Hc.
+      rewrite StoredRuns.constructors in Hc.
+      rewrite Hs70 in Hc.
+      cbn [In] in Hc. StoredRuns.in_cases Hc.
+      injection Hc as <- E. split; [ reflexivity | congruence ]. }
+    split; [ cbn; left; reflexivity | split ].
+    - intros g c code Hin. cbn in Hin. destruct Hin as [Hin | []].
+      injection Hin as <- <- _.
+      split; [ exact Hb0 | exact Hs70 ].
+    - intros g Hg. destruct (Hdom g Hg) as [-> _]. vm_compute. reflexivity. }
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ split; [ vm_compute; reflexivity | ] | ].
+  { intros s k w Hin Hw. vm_compute in Hin. StoredRuns.in_cases Hin;
+      injection Hin as <- <-; cbn in Hw; injection Hw as <-; left; eexists;
+      reflexivity. }
+  split; [ split; [ vm_compute; reflexivity | ] | ].
+  { intros s k w Hin Hw. vm_compute in Hin. StoredRuns.in_cases Hin;
+      injection Hin as <- <-; cbn in Hw; injection Hw as <-; left; eexists;
+      reflexivity. }
+  split; [ exact StoredRuns.block_at | ].
+  split; [ exact (StoredRuns.closure_at _ StoredRuns.x60_x11) | ].
+  split.
+  { apply StoredRuns.metadata_single; [ | vm_compute; reflexivity ].
+    intros b Hs. cbn [s_sources solution_of_tables] in Hs.
+    apply mem_pair_In in Hs. vm_compute in Hs. StoredRuns.in_cases Hs.
+    injection Hs as <-. reflexivity. }
+  split.
+  { apply StoredRuns.metadata_single; [ | vm_compute; reflexivity ].
+    intros b Hs. cbn [s_sources solution_of_tables] in Hs.
+    apply mem_pair_In in Hs. vm_compute in Hs. StoredRuns.in_cases Hs.
+    injection Hs as <-. reflexivity. }
+  split; [ apply FlambdaTypeMeaningBoolProofs.type_satisfied_b_iff;
+           vm_compute; reflexivity | ].
+  split; [ apply FlambdaTypeMeaningBoolProofs.type_satisfied_b_iff;
+           vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | split; [ vm_compute; reflexivity | ] ].
+  split; apply FlambdaTypeMeaningBoolProofs.type_satisfied_b_iff;
+    vm_compute; reflexivity.
+Qed.
+
+Theorem stored_example_landed : stored_example_landed_statement.
+Proof.
+  destruct stored_example
+    as (H1 & H2 & H3 & H4 & H5 & H6 & H7 & H8 & H9 & H10 & H11 & _ & _ & H14
+        & H15).
+  split; [ exact H1 | split; [ exact H2 | split; [ exact H3 | ] ] ].
+  split; [ exact H4 | split; [ exact H5 | split; [ exact H6 | ] ] ].
+  split; [ exact H7 | split; [ exact H8 | split; [ exact H9 | ] ] ].
+  split; [ exact H10 | split; [ exact H11 | ] ].
+  split; [ vm_compute; reflexivity | split; [ vm_compute; reflexivity | ] ].
+  split; [ exact H14 | exact H15 ].
 Qed.

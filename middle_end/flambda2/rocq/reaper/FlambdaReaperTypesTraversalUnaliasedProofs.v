@@ -1865,18 +1865,57 @@ Proof.
   exact (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e Hfrag).
 Qed.
 
-Theorem changed_type_sound_full : changed_type_sound_full_statement.
+(* For every value, wherever the closures that change are held. *)
+Theorem stored_type_sound_full :
+  stored_type_sound_full_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Ht Hrv Hat
+    Hsat.
+  exact (TT.stored_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Theorem stored_type_sound_full_landed :
+  stored_type_sound_full_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Ht Hrv Hat
+    Hsat.
+  exact (TT.stored_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
+           Ht Hrv Hat Hsat).
+Qed.
+
+(* The statements with [changed_unstored], as corollaries. *)
+Theorem changed_type_sound_full :
+  changed_type_sound_full_statement.
 Proof.
   intros is_local u T sets dominated to_unbox tcr e tenv canon statics
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
     Hunst Ht Hcis Hrv Hat Hch Hsat.
-  exact (TT.changed_type_sound_traversal is_local u T sets dominated
-           to_unbox tcr e tenv canon statics statics' valuation valuation'
-           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv
-           Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hunst
-           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
-           Ht Hcis Hrv Hat Hch Hsat).
+  pose proof (FlambdaReaperTypesProofs.least_closed_tables is_local _ T
+                (or_introl Hleast)) as Hc.
+  exact (stored_type_sound_full is_local u T sets dominated to_unbox tcr e tenv
+           canon statics statics' valuation valuation' fuel m t n v v' Hfrag
+           Hwfu Honce Hleast Hlocal Hsets Henv Hfragt Halloc
+           (FlambdaReaperTypesProofs.statics_changed_of_unstored _ T _ Hunst
+              _ _ Hst)
+           (FlambdaReaperTypesProofs.sets_whole_of_unstored T _ _ _ Hwhole)
+           Hcopies Hdomc Huses Ht
+           (FlambdaReaperTypesProofs.rebuilt_changed_of_runs is_local _ T _ Hc
+              Hunst statics n v v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.
 
 Theorem changed_type_sound_full_landed :
@@ -1886,10 +1925,16 @@ Proof.
     statics' valuation valuation' fuel m t n v v_mid v' Hfrag Hwfu Honce
     Hleast Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
     Hunst Ht Hcis Hrv Hat Hch Hsat.
-  exact (TT.changed_type_sound_traversal_landed is_local u T sets dominated
-           to_unbox tcr e tenv canon statics statics' valuation valuation'
-           fuel m t n v v_mid v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv
-           Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hunst
-           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
-           Ht Hcis Hrv Hat Hch Hsat).
+  pose proof (FlambdaReaperTypesProofs.least_closed_tables is_local _ T
+                (or_introl Hleast)) as Hc.
+  exact (stored_type_sound_full_landed is_local u T sets dominated to_unbox
+           tcr e tenv canon statics statics' valuation valuation' fuel m t n
+           v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt Halloc
+           (FlambdaReaperTypesProofs.statics_changed_of_unstored _ T _ Hunst
+              _ _ Hst)
+           (FlambdaReaperTypesProofs.sets_whole_of_unstored T _ _ _ Hwhole)
+           Hcopies Hdomc Huses Ht
+           (FlambdaReaperTypesProofs.rebuilt_changed_of_runs is_local _ T _ Hc
+              Hunst statics n v v_mid v' Hcis Hrv Hch)
+           Hat Hsat).
 Qed.

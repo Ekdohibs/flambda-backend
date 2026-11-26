@@ -44,7 +44,10 @@
    [slot_value_at_path], [changed_closure_rebuilt], [changed_unstored],
    [reprs_of_sets], [reprs_without_slots], [changed_at] and
    [function_slots_mutual] (for the closures whose representation
-   changes), the statements, and the
+   changes), [allocation_repr], [rebuilt_changed_step],
+   [rebuilt_changed_closed], [rebuilt_changed], [static_rebuilt_with],
+   [statics_rebuilt_changed] and [static_sets_whole_unchanged] (for those
+   closures wherever they are held), the statements, and the
    examples,
    against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
@@ -400,6 +403,22 @@
      FlambdaReaperTypesTraversalSpec.v derives it, and
      [function_slots_mutual], for the graph of the traversal. No fault
      found.
+   - [rewrite_stored_type_sound_statement] and
+     [rewrite_stored_type_sound_slots_statement]: the two above without
+     [changed_unstored], for every value of the first run at a node,
+     closure or not. What the third run has for it is related by
+     [rebuilt_changed]: as [rebuilt_value] relates it to the second, but
+     that a closure whose allocation changes is in the representation of
+     its allocation wherever it is held, in a field of a block, in a
+     value slot, or in a value slot unboxed in turn, and that the static
+     sets that change are left out (a symbol does not change); the
+     static environment of the third run is related by
+     [statics_rebuilt_changed] and [static_sets_whole_unchanged]. The
+     type of a field, rewritten under the metadata of the field, has the
+     new representation where the closures held there change, as
+     types_rewriter.ml has it. The two statements above are their
+     corollaries: with [changed_unstored], the runs that they relate are
+     related so. No fault found.
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
@@ -1631,6 +1650,283 @@ Definition rewrite_changed_type_sound_slots_statement : Prop :=
 
 Definition rewrite_changed_type_sound_slots_landed_statement : Prop :=
   rewrite_changed_type_sound_slots_with landed_fixes.
+
+(* ======================================================================== *)
+(* Closures whose representation changes, wherever they are held           *)
+(* ======================================================================== *)
+
+Section Rebuilt_changed.
+
+Variable G : graph.
+Variable sol : solution.
+Variable reprs : list (node * FlambdaReaperUnboxing.closure_repr).
+
+(* The representation that the allocation [a] changes to, if it changes:
+   [a] is an allocation, which has a source, and [reprs] gives it one. *)
+Definition allocation_repr (a : node)
+    : option FlambdaReaperUnboxing.closure_repr :=
+  if s_has_source sol a then Keyed.lookup node_eqb a reprs else None.
+
+(* One level of what the run of the unit rebuilt with unboxing and
+   changes of representation has, [v'], for a value [v] of the first run
+   that may be at the node [n], what [v] holds being related by [R]: as
+   [rebuilt_value] relates [v] to the run of the unit rebuilt without,
+   but that a closure whose allocation changes is the closure, with the
+   value slots that [R] relates to those of [v], in the representation of
+   its allocation ([changed_closure_rebuilt]), and that a symbol has a
+   use and does not change: the static sets whose representation changes
+   are left out. *)
+Definition rebuilt_changed_step (R : value -> node -> value -> Prop)
+    (v : value) (n : node) (v' : value) : Prop :=
+  match v with
+  | Value_const _ => s_any_source sol n = true ∧ v' = v
+  | Value_symbol s =>
+    v' = v ∧ may_come_from sol (Node_symbol s) n
+    ∧ s_has_usage sol (Node_symbol s) = true
+    ∧ allocation_repr (Node_symbol s) = None
+  | Value_block tag fields =>
+    ∃ (a : node) (fields' : list value),
+      may_come_from sol a n ∧ s_has_source sol a = true
+      ∧ v' = Value_block tag fields'
+      ∧ fields_rebuilt (field_rebuilt G sol R a) 0 fields fields'
+  | Value_boxed_number c =>
+    ∃ (a : node) (bn : boxable_number) (from : node),
+      may_come_from sol a n ∧ s_has_source sol a = true
+      ∧ is_number_of_kind bn c = true
+      ∧ g_constructor G a (Field_boxed_number bn) from
+      ∧ v' = (if s_field_used sol a (Field_boxed_number bn) then v
+              else Value_const (Poison Value))
+  | Value_immutable_array _ =>
+    ∃ elements' : list value, v' = Value_immutable_array elements'
+  | Value_closure_of_set slot function_decls value_slots =>
+    ∃ (sites : function_slot -> node)
+      (value_slots' : list (value_slot * value)),
+      may_come_from sol (sites slot) n
+      ∧ set_sites G function_decls sites
+      ∧ for_all_bindings
+          (value_slot_rebuilt G sol R function_decls sites value_slots')
+          value_slots
+      ∧ match allocation_repr (sites slot) with
+        | None => v' = Value_closure_of_set slot function_decls value_slots'
+        | Some r =>
+          changed_closure_rebuilt r
+            (Value_closure_of_set slot function_decls value_slots') v'
+        end
+  | Value_partial_application _ _ args_arity =>
+    ∃ (closure' : value) (args' : list value),
+      v' = Value_partial_application closure' args' args_arity
+  | Value_closure _ _ | Value_location _ => False
+  end.
+
+(* The relations that hold, one level down, of what they relate. *)
+Definition rebuilt_changed_closed (R : value -> node -> value -> Prop)
+    : Prop :=
+  ∀ (v : value) (n : node) (v' : value),
+    R v n v' -> rebuilt_changed_step R v n v'.
+
+(* What the run of the unit rebuilt with unboxing and changes of
+   representation has, [v'], for a value [v] of the first run that may be
+   at the node [n]: [v] and [v'] are related by a relation that holds, one
+   level down, of what it relates. A closure whose allocation changes is
+   in the representation of its allocation wherever it is held: in a
+   field of a block, in a value slot of a closure that changes or not,
+   and in a value slot unboxed in turn. A level relates only values that
+   the value of the level holds, so that this, the largest such relation,
+   is also the least. *)
+Definition rebuilt_changed (v : value) (n : node) (v' : value) : Prop :=
+  ∃ R : value -> node -> value -> Prop,
+    rebuilt_changed_closed R ∧ R v n v'.
+
+(* [static_rebuilt], with [R] for what the fields and the value slots
+   hold. *)
+Definition static_rebuilt_with (R : value -> node -> value -> Prop)
+    (s : symbol) (allocated : statically_allocated_value)
+    (found : option statically_allocated_value) : Prop :=
+  match allocated with
+  | Static_block tag fields =>
+    ∃ fields' : list value,
+      found = Some (Static_block tag fields')
+      ∧ fields_rebuilt (field_rebuilt G sol R (Node_symbol s)) 0 fields
+          fields'
+  | Static_boxed_number _ | Static_string _ | Static_imported _ =>
+    found = Some allocated
+  | Static_immutable_array _ =>
+    ∃ elements' : list value, found = Some (Static_immutable_array elements')
+  | Static_closure_of_set slot closure_symbols function_decls value_slots =>
+    ∃ (sites : function_slot -> node)
+      (value_slots' : list (value_slot * value)),
+      found
+      = Some
+          (Static_closure_of_set slot closure_symbols function_decls
+             value_slots')
+      ∧ sites slot = Node_symbol s
+      ∧ set_sites G function_decls sites
+      ∧ for_all_bindings
+          (value_slot_rebuilt G sol R function_decls sites value_slots')
+          value_slots
+  | Static_closure _ _ => False
+  end.
+
+(* The static environment of the run of the unit rebuilt with unboxing
+   and changes of representation binds every symbol that has a use and
+   does not change as [static_rebuilt_with] says, what the fields and the
+   value slots hold being related by [rebuilt_changed]. *)
+Definition statics_rebuilt_changed (statics statics' : static_env) : Prop :=
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    s_has_usage sol (Node_symbol s) = true ->
+    allocation_repr (Node_symbol s) = None ->
+    static_rebuilt_with rebuilt_changed s allocated
+      (lookup s (static_values statics')).
+
+(* [static_sets_whole], of the static sets that do not change. *)
+Definition static_sets_whole_unchanged (statics statics' : static_env)
+    : Prop :=
+  ∀ (s : symbol) (slot : function_slot)
+    (closure_symbols : list (function_slot * symbol))
+    (function_decls : list (function_slot * code_id))
+    (vs : list (value_slot * value)),
+    lookup s (static_values statics)
+    = Some (Static_closure_of_set slot closure_symbols function_decls vs) ->
+    s_has_usage sol (Node_symbol s) = true ->
+    allocation_repr (Node_symbol s) = None ->
+    lookup slot closure_symbols = Some s
+    ∧ ∃ vs' : list (value_slot * value),
+        ∀ (g : function_slot) (s_g : symbol),
+          lookup g closure_symbols = Some s_g ->
+          lookup s_g (static_values statics)
+          = Some (Static_closure_of_set g closure_symbols function_decls vs)
+          ∧ lookup s_g (static_values statics')
+            = Some
+                (Static_closure_of_set g closure_symbols function_decls vs').
+
+End Rebuilt_changed.
+
+(* [rewrite_changed_type_sound_statement] for every value, wherever the
+   closures whose representation changes are held: the type [t] of the
+   fragment [loose] that holds of a value [v] of the first run, at the
+   node [n], rewritten as [rewrite_arbitrary_u] rewrites it, with the
+   changes of representation of the unit, under a metadata [m] that holds
+   at [n], holds of what the run of the unit rebuilt with unboxing and
+   changes of representation has for it ([v'], [rebuilt_changed]), its
+   static environment [statics'] binding the symbols as
+   [statics_rebuilt_changed] and [static_sets_whole_unchanged] say. It
+   asks nothing of where the closures that change are held
+   ([changed_unstored] is not asked); of the representations, that they
+   be those of sets ([reprs_of_sets]) and keep no value slot
+   ([reprs_without_slots]). *)
+Definition rewrite_stored_type_sound_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    reprs_without_slots
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_stored_type_sound_statement : Prop :=
+  rewrite_stored_type_sound_with all_fixes.
+
+Definition rewrite_stored_type_sound_landed_statement : Prop :=
+  rewrite_stored_type_sound_with landed_fixes.
+
+(* [rewrite_changed_type_sound_slots_statement] for every value, wherever
+   the closures that change are held: [rewrite_stored_type_sound_statement]
+   where the representations keep value slots, with the premises of
+   [rewrite_changed_type_sound_slots_statement] in place of
+   [reprs_without_slots], [changed_unstored] left out. *)
+Definition rewrite_stored_type_sound_slots_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    function_slots_mutual (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_stored_type_sound_slots_statement : Prop :=
+  rewrite_stored_type_sound_slots_with all_fixes.
+
+Definition rewrite_stored_type_sound_slots_landed_statement : Prop :=
+  rewrite_stored_type_sound_slots_with landed_fixes.
 
 (* ======================================================================== *)
 (* The two runs                                                             *)

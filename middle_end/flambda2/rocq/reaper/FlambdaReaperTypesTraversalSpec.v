@@ -32,7 +32,8 @@
 
    This file is to be reviewed: [function_slots_of_sets],
    [changed_closures_one_allocation], [closures_unaliased],
-   [check_closures_unaliased], [StoredExample] and the statements, against
+   [check_closures_unaliased], [StoredExample], [StoredExampleRuns] and
+   the statements, against
    FlambdaReaperTypesSpec.v, FlambdaReaperTraversal.v (the traversal) and
    FlambdaReaperUnboxing.v ([changed_representations]). The proofs are in
    FlambdaReaperTypesTraversalProofs.v, which needs no review.
@@ -101,12 +102,38 @@
      of the third run of the statements, whose fields hold what those of
      the second run hold ([changed_at], [changed_closure_rebuilt]);
      without it, that run would change the closures held in fields too.
+   - [rewrite_stored_type_sound_traversal_statement] and
+     [stored_type_sound_traversal_statement], with [_landed] forms: the
+     two statements of the traversal above without [changed_unstored],
+     for every value of the first run at a node, wherever the closures
+     that change are held, the third run being related to the first by
+     FlambdaReaperTypesSpec.rebuilt_changed
+     (FlambdaReaperTypesSpec.rewrite_stored_type_sound_slots_statement).
+     The two statements above, and those with [changed_unstored] of
+     FlambdaReaperTypesSpec.v, are their corollaries.
+   - [stored_example_statement] and its [_landed] form: [StoredExample]
+     is of these statements ([StoredExampleRuns]). The block [x10] holds
+     the closure [x60], read back into [x11]; the block type, rewritten
+     under the metadata of [x10], is the block of the closure type of the
+     new representation (function slot 82, value slot 81 holding 7), as
+     is the closure type of [x11], rewritten under the metadata of
+     [x11]; and those types hold of the block and of the closure of the
+     run of the unit rebuilt with unboxing and changes of
+     representation, which [rebuilt_changed] relates to those of the
+     run of the unit.
 
    [closures_unaliased] of the graph of the traversal of such a unit is
    proved in FlambdaReaperTypesTraversalUnaliasedSpec.v, which states
    [changed_type_sound_traversal_statement] without it.
 
-   What is left out: [changed_unstored]. The statements that ask
+   [changed_unstored] is no longer asked by the statements without it
+   (above, and [stored_type_sound_full_statement] of
+   FlambdaReaperTypesTraversalUnaliasedSpec.v). What is left out: the
+   static sets whose representation changes, which [rebuilt_changed]
+   does not relate (a symbol does not change), as before; and the
+   simulation of the changes of representation for closures held in
+   fields, whose runs [rebuilt_changed] is to relate. The statements that
+   ask
    [in_flow_fragment] are made for the units with primitives of the heap
    in FlambdaReaperTypesTraversalHeapSpec.v, with [_heap] in their
    names. *)
@@ -388,6 +415,130 @@ Definition changed_type_sound_traversal_statement : Prop :=
 Definition changed_type_sound_traversal_landed_statement : Prop :=
   changed_type_sound_traversal_with landed_fixes.
 
+(* [rewrite_changed_type_sound_traversal_statement] for every value,
+   wherever the closures that change are held
+   (FlambdaReaperTypesSpec.rewrite_stored_type_sound_slots_statement for
+   the graph of the traversal), without [changed_unstored]. *)
+Definition rewrite_stored_type_sound_traversal_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    in_flow_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    block_fields_of_one_kind (graph_of_facts (traverse_unit Auto u e)) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    changed_closures_one_allocation (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T) tcr ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_stored_type_sound_traversal_statement : Prop :=
+  rewrite_stored_type_sound_traversal_with all_fixes.
+
+Definition rewrite_stored_type_sound_traversal_landed_statement : Prop :=
+  rewrite_stored_type_sound_traversal_with landed_fixes.
+
+(* [changed_type_sound_traversal_statement] for every value, wherever the
+   closures that change are held: [rewrite_stored_type_sound_traversal]
+   with [block_fields_of_one_kind] discharged, and [closures_unaliased]
+   in place of [changed_closures_one_allocation]. *)
+Definition stored_type_sound_traversal_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    in_flow_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    closures_unaliased (graph_of_facts (traverse_unit Auto u e)) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition stored_type_sound_traversal_statement : Prop :=
+  stored_type_sound_traversal_with all_fixes.
+
+Definition stored_type_sound_traversal_landed_statement : Prop :=
+  stored_type_sound_traversal_with landed_fixes.
+
 (* ======================================================================== *)
 (* A changed closure stored in a block                                      *)
 (* ======================================================================== *)
@@ -459,3 +610,120 @@ Definition changed_unstored_counterexample_statement : Prop :=
     = true
   ∧ ¬ changed_unstored (graph_of_facts StoredExample.facts)
         (solution_of_tables StoredExample.tables) StoredExample.reprs.
+
+(* What the statements without [changed_unstored]
+   ([FlambdaReaperTypesTraversalUnaliasedSpec.stored_type_sound_full_statement])
+   say of [StoredExample]. In the run of the unit, [x10] is the block of
+   [closure], the closure at the function slot 70 of the code 53 with 7 in
+   its value slot 80, and [x11] is [closure], read back from the block.
+   The set changes its representation: the function slot 70 is the new
+   82 and the value slot 80 the new 81. The rebuilt unit has [closure']
+   where the unit has [closure], stored or not: [x10] is unboxed, the
+   variable of its field holding [closure'], and [x11] is [closure'].
+   [block'] is the block of that field. *)
+Module StoredExampleRuns.
+
+Local Open Scope positive_scope.
+
+Definition x10 : node := Node_variable 10.
+Definition x11 : node := Node_variable 11.
+Definition x60 : node := Node_variable 60.
+
+Definition sets : list set_of_closures :=
+  [[(70, (x60, Or_unknown.Known 53))]].
+
+Definition context : rewrite_context :=
+  Rewrite_context StoredExample.facts StoredExample.tables
+    FlambdaReaperUnboxing.Examples.no_local sets
+    (map fst StoredExample.reprs).
+
+Definition code_my_closures : finite_map variable :=
+  FlambdaReaperUnboxing.bound_code_my_closures StoredExample.unit_expr.
+
+Definition closure_type : flambda_type :=
+  at_least_this_closure 70 [(70, Or_unknown.Known (Function_type 53))] []
+    [(80, this_tagged_immediate 7)] Alloc_mode.Heap.
+
+Definition block_type : flambda_type :=
+  immutable_block false 0 (Scannable Value_only) Alloc_mode.Heap
+    [closure_type].
+
+Definition rewritten_closure : flambda_type :=
+  exactly_this_closure 82 [(82, Or_unknown.Known (Function_type 53))]
+    [(82, unknown Value)] [(81, this_tagged_immediate 7)] Alloc_mode.Heap.
+
+Definition rewritten_block : flambda_type :=
+  immutable_block false 0 (Scannable Value_only) Alloc_mode.Heap
+    [rewritten_closure].
+
+Definition closure : value :=
+  Value_closure_of_set 70 [(70, 53)] [(80, Value_const (Tagged_immediate 7))].
+
+Definition closure' : value :=
+  Value_closure_of_set 82 [(82, 53)] [(81, Value_const (Tagged_immediate 7))].
+
+Definition block : value := Value_block 0 [closure].
+
+Definition block' : value := Value_block 0 [closure'].
+
+End StoredExampleRuns.
+
+(* The closure stored in the block, and the block, are of the statements
+   without [changed_unstored], and the types are rewritten into the new
+   representation: of the graph and tables of [StoredExample], the sets
+   are [sets], the tables of [dominated_by_allocation_point] and of the
+   unboxed uses pass their checks, the types are of the fragment of
+   [loose]; [rebuilt_changed] relates [block] at [x10] to [block'] and
+   [closure] at [x11] to [closure'], where the metadata of the names
+   hold; [block_type] holds of [block] and [closure_type] of [closure];
+   rewritten by [rewrite_arbitrary_u] under those metadata, they are
+   [rewritten_block] and [rewritten_closure], which hold of [block'] and
+   [closure']. The other premises of the statements are met with the
+   empty typing and static environments, and those that ask of the unit
+   with [changed_unstored_counterexample_statement]. *)
+Definition stored_example_with (fx : fixes) : Prop :=
+  sets_of_graph (graph_of_facts StoredExample.facts) StoredExampleRuns.sets
+  ∧ FlambdaReaperUnboxing.check_dominated StoredExample.tables
+      StoredExample.dominated
+    = true
+  ∧ FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      StoredExample.facts StoredExample.tables
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields StoredExample.facts
+              StoredExample.tables StoredExample.dominated
+              [Node_variable 10%positive] StoredExample.unit_expr))
+    = true
+  ∧ type_in_fragment_with true [] StoredExampleRuns.block_type
+  ∧ type_in_fragment_with true [] StoredExampleRuns.closure_type
+  ∧ rebuilt_changed (graph_of_facts StoredExample.facts)
+      (solution_of_tables StoredExample.tables) StoredExample.reprs
+      StoredExampleRuns.block StoredExampleRuns.x10 StoredExampleRuns.block'
+  ∧ rebuilt_changed (graph_of_facts StoredExample.facts)
+      (solution_of_tables StoredExample.tables) StoredExample.reprs
+      StoredExampleRuns.closure StoredExampleRuns.x11
+      StoredExampleRuns.closure'
+  ∧ metadata_at (solution_of_tables StoredExample.tables)
+      (Single_source StoredExampleRuns.x10) StoredExampleRuns.x10
+  ∧ metadata_at (solution_of_tables StoredExample.tables)
+      (Single_source StoredExampleRuns.x60) StoredExampleRuns.x11
+  ∧ type_satisfied empty_static_env [] StoredExampleRuns.block
+      StoredExampleRuns.block_type
+  ∧ type_satisfied empty_static_env [] StoredExampleRuns.closure
+      StoredExampleRuns.closure_type
+  ∧ rewrite_arbitrary_u fx StoredExampleRuns.context Typing_env.create
+      (fun n _ _ => n) StoredExampleRuns.code_my_closures StoredExample.reprs
+      10 (Single_source StoredExampleRuns.x10) StoredExampleRuns.block_type
+    = StoredExampleRuns.rewritten_block
+  ∧ rewrite_arbitrary_u fx StoredExampleRuns.context Typing_env.create
+      (fun n _ _ => n) StoredExampleRuns.code_my_closures StoredExample.reprs
+      10 (Single_source StoredExampleRuns.x60) StoredExampleRuns.closure_type
+    = StoredExampleRuns.rewritten_closure
+  ∧ type_satisfied empty_static_env [] StoredExampleRuns.block'
+      StoredExampleRuns.rewritten_block
+  ∧ type_satisfied empty_static_env [] StoredExampleRuns.closure'
+      StoredExampleRuns.rewritten_closure.
+
+Definition stored_example_statement : Prop :=
+  stored_example_with all_fixes.
+
+Definition stored_example_landed_statement : Prop :=
+  stored_example_with landed_fixes.
