@@ -34,12 +34,14 @@
    statements of the traversal are of [in_flow_fragment].
 
    This file is to be reviewed: [rebuilt_changed_heap_step],
-   [rebuilt_changed_heap], [statics_rebuilt_changed_heap] and the
-   statements, against those of the files above and of
-   FlambdaReaperTypesHeapSpec.v, whose relation of the values of two
-   runs with the heap ([rebuilt_value_heap], [statics_rebuilt_heap])
-   they take. The proofs are in
-   FlambdaReaperTypesTraversalHeapProofs.v, which needs no review.
+   [rebuilt_changed_heap], [statics_rebuilt_changed_heap],
+   [rebuilt_static_changed_heap_step], [rebuilt_static_changed_heap],
+   [statics_rebuilt_static_changed_heap] and the statements, against
+   those of the files above and of FlambdaReaperTypesHeapSpec.v, whose
+   relation of the values of two runs with the heap
+   ([rebuilt_value_heap], [statics_rebuilt_heap]) they take. The proofs
+   are in FlambdaReaperTypesTraversalHeapProofs.v, which needs no
+   review.
 
    The runs. The statements of the unboxing and of the changes of
    representation compare three runs: that of the unit, that of the unit
@@ -111,6 +113,16 @@
      FlambdaReaperTypesSpec.rebuilt_changed relates them, a location
      being rebuilt as the location that [β] gives it. The last asks
      nothing of the graph.
+   - [rewrite_static_type_sound_slots_heap_statement],
+     [rewrite_static_type_sound_traversal_heap_statement],
+     [static_type_sound_traversal_heap_statement] and
+     [static_type_sound_full_heap_statement]: the four above, the static
+     sets whose representation changes included, the first and the third
+     runs related by [rebuilt_static_changed_heap] and
+     [statics_rebuilt_static_changed_heap]: as
+     FlambdaReaperTypesSpec.rebuilt_static_changed and
+     FlambdaReaperTypesSpec.statics_rebuilt_static_changed relate them,
+     a location being rebuilt as the location that [β] gives it.
    - [unbox_types_end_to_end_heap_statement]: the statement of the runs
      of FlambdaReaperTypesHeapSpec.types_end_to_end_term_heap_statement,
      of the unit rebuilt with local unboxing
@@ -796,6 +808,301 @@ Definition stored_type_sound_full_heap_statement : Prop :=
 
 Definition stored_type_sound_full_heap_landed_statement : Prop :=
   stored_type_sound_full_heap_with landed_fixes.
+
+(* ======================================================================== *)
+(* Static sets whose representation changes, with the heap                 *)
+(* ======================================================================== *)
+
+Section Rebuilt_static_changed_heap.
+
+Variable G : graph.
+Variable sol : solution.
+Variable reprs : list (node * FlambdaReaperUnboxing.closure_repr).
+Variable β : location -> location -> Prop.
+
+(* FlambdaReaperTypesSpec.rebuilt_static_changed_step, with a location
+   rebuilt as the location that [β] gives it. *)
+Definition rebuilt_static_changed_heap_step
+    (R : value -> node -> value -> Prop) (v : value) (n : node) (v' : value)
+    : Prop :=
+  rebuilt_static_changed_step G sol reprs R v n v'
+  ∨ ∃ l l' : location, v = Value_location l ∧ v' = Value_location l' ∧ β l l'.
+
+(* FlambdaReaperTypesSpec.rebuilt_static_changed, with
+   [rebuilt_static_changed_heap_step]. *)
+Definition rebuilt_static_changed_heap (v : value) (n : node) (v' : value)
+    : Prop :=
+  ∃ R : value -> node -> value -> Prop,
+    (∀ (x : value) (k : node) (x' : value),
+       R x k x' -> rebuilt_static_changed_heap_step R x k x')
+    ∧ R v n v'.
+
+(* FlambdaReaperTypesSpec.statics_rebuilt_static_changed, with
+   [rebuilt_static_changed_heap]. *)
+Definition statics_rebuilt_static_changed_heap (statics statics' : static_env)
+    : Prop :=
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    s_has_usage sol (Node_symbol s) = true ->
+    match allocation_repr sol reprs (Node_symbol s) with
+    | None =>
+      static_rebuilt_with G sol rebuilt_static_changed_heap s allocated
+        (lookup s (static_values statics'))
+    | Some r =>
+      static_set_changed_rebuilt G sol rebuilt_static_changed_heap r s
+        allocated statics statics'
+    end.
+
+End Rebuilt_static_changed_heap.
+
+(* FlambdaReaperTypesSpec.rewrite_static_type_sound_slots_with, with the
+   values and the static environments of the first and the third runs
+   related by [rebuilt_static_changed_heap] and
+   [statics_rebuilt_static_changed_heap]. *)
+Definition rewrite_static_type_sound_slots_heap_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (β : location -> location -> Prop)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (n : node)
+    (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    function_slots_mutual (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed_heap (graph_of_facts F)
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      β statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed_heap (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      β v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_static_type_sound_slots_heap_statement : Prop :=
+  rewrite_static_type_sound_slots_heap_with all_fixes.
+
+Definition rewrite_static_type_sound_slots_heap_landed_statement : Prop :=
+  rewrite_static_type_sound_slots_heap_with landed_fixes.
+
+(* FlambdaReaperTypesTraversalSpec.rewrite_static_type_sound_traversal_with
+   of the units of [in_heap_fragment], the first and the third runs so
+   related. *)
+Definition rewrite_static_type_sound_traversal_heap_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (β : location -> location -> Prop)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (n : node)
+    (v v' : value),
+    in_heap_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    block_fields_of_one_kind (graph_of_facts (traverse_unit Auto u e)) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed_heap
+      (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    changed_closures_one_allocation (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T) tcr ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed_heap (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_static_type_sound_traversal_heap_statement : Prop :=
+  rewrite_static_type_sound_traversal_heap_with all_fixes.
+
+Definition rewrite_static_type_sound_traversal_heap_landed_statement : Prop :=
+  rewrite_static_type_sound_traversal_heap_with landed_fixes.
+
+(* FlambdaReaperTypesTraversalSpec.static_type_sound_traversal_with of the
+   units of [in_heap_fragment], the first and the third runs so
+   related. *)
+Definition static_type_sound_traversal_heap_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (β : location -> location -> Prop)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (n : node)
+    (v v' : value),
+    in_heap_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed_heap
+      (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    closures_unaliased (graph_of_facts (traverse_unit Auto u e)) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed_heap (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition static_type_sound_traversal_heap_statement : Prop :=
+  static_type_sound_traversal_heap_with all_fixes.
+
+Definition static_type_sound_traversal_heap_landed_statement : Prop :=
+  static_type_sound_traversal_heap_with landed_fixes.
+
+(* FlambdaReaperTypesTraversalUnaliasedSpec.static_type_sound_full_with of
+   the units of [in_heap_fragment], the first and the third runs so
+   related: no condition on the graph. *)
+Definition static_type_sound_full_heap_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (β : location -> location -> Prop)
+    (fuel : nat) (m : rewrite_metadata) (t : flambda_type) (n : node)
+    (v v' : value),
+    in_heap_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed_heap
+      (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed_heap (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      β v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition static_type_sound_full_heap_statement : Prop :=
+  static_type_sound_full_heap_with all_fixes.
+
+Definition static_type_sound_full_heap_landed_statement : Prop :=
+  static_type_sound_full_heap_with landed_fixes.
 
 (* ======================================================================== *)
 (* The exported types of the unit rebuilt with local unboxing               *)

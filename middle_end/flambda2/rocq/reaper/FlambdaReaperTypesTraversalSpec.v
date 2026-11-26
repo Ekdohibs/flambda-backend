@@ -32,8 +32,8 @@
 
    This file is to be reviewed: [function_slots_of_sets],
    [changed_closures_one_allocation], [closures_unaliased],
-   [check_closures_unaliased], [StoredExample], [StoredExampleRuns] and
-   the statements, against
+   [check_closures_unaliased], [StoredExample], [StoredExampleRuns],
+   [StaticExample] and the statements, against
    FlambdaReaperTypesSpec.v, FlambdaReaperTraversal.v (the traversal) and
    FlambdaReaperUnboxing.v ([changed_representations]). The proofs are in
    FlambdaReaperTypesTraversalProofs.v, which needs no review.
@@ -121,6 +121,24 @@
      run of the unit rebuilt with unboxing and changes of
      representation, which [rebuilt_changed] relates to those of the
      run of the unit.
+   - [rewrite_static_type_sound_traversal_statement] and
+     [static_type_sound_traversal_statement], with [_landed] forms: the
+     two above, the static sets whose representation changes included
+     (FlambdaReaperTypesSpec.rewrite_static_type_sound_slots_statement),
+     the third run being related to the first by
+     FlambdaReaperTypesSpec.rebuilt_static_changed and its static
+     environment by FlambdaReaperTypesSpec.statics_rebuilt_static_changed.
+   - [static_example_statement] and its [_landed] form: [StaticExample]
+     is of these statements. The symbol 90 of the unit
+     FlambdaReaperUnboxing.Examples.static_set is the closure of a static
+     set whose representation changes; the run of the unit rebuilt with
+     unboxing and changes of representation binds it to the closure in
+     the new representation (function slot 82, value slot 81 holding 7),
+     which [rebuilt_static_changed] and [statics_rebuilt_static_changed]
+     relate to the first run, and [rebuilt_changed] does not; the type
+     of the symbol, rewritten under its metadata, under which it is
+     exported, is the closure type of the new representation, and holds
+     of the symbol there.
 
    [closures_unaliased] of the graph of the traversal of such a unit is
    proved in FlambdaReaperTypesTraversalUnaliasedSpec.v, which states
@@ -129,11 +147,9 @@
    [changed_unstored] is no longer asked by the statements without it
    (above, and [stored_type_sound_full_statement] of
    FlambdaReaperTypesTraversalUnaliasedSpec.v). What is left out: the
-   static sets whose representation changes, which [rebuilt_changed]
-   does not relate (a symbol does not change), as before; and the
    simulation of the changes of representation for closures held in
-   fields, whose runs [rebuilt_changed] is to relate. The statements that
-   ask
+   fields and for static sets, whose runs [rebuilt_changed] and
+   [rebuilt_static_changed] are to relate. The statements that ask
    [in_flow_fragment] are made for the units with primitives of the heap
    in FlambdaReaperTypesTraversalHeapSpec.v, with [_heap] in their
    names. *)
@@ -539,6 +555,132 @@ Definition stored_type_sound_traversal_statement : Prop :=
 Definition stored_type_sound_traversal_landed_statement : Prop :=
   stored_type_sound_traversal_with landed_fixes.
 
+(* [rewrite_stored_type_sound_traversal_statement], the static sets whose
+   representation changes included
+   (FlambdaReaperTypesSpec.rewrite_static_type_sound_slots_statement for
+   the graph of the traversal): the third run is related to the first by
+   [rebuilt_static_changed], its static environment by
+   [statics_rebuilt_static_changed] and [static_sets_whole_unchanged]. *)
+Definition rewrite_static_type_sound_traversal_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    in_flow_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    block_fields_of_one_kind (graph_of_facts (traverse_unit Auto u e)) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    changed_closures_one_allocation (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T) tcr ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_static_type_sound_traversal_statement : Prop :=
+  rewrite_static_type_sound_traversal_with all_fixes.
+
+Definition rewrite_static_type_sound_traversal_landed_statement : Prop :=
+  rewrite_static_type_sound_traversal_with landed_fixes.
+
+(* [stored_type_sound_traversal_statement], the static sets whose
+   representation changes included: [rewrite_static_type_sound_traversal]
+   with [block_fields_of_one_kind] discharged, and [closures_unaliased]
+   in place of [changed_closures_one_allocation]. *)
+Definition static_type_sound_traversal_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (u : unit_interface) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    in_flow_fragment e = true -> well_formed_unit u e = true ->
+    variables_bound_once e = true ->
+    least_solution is_local (traverse_unit Auto u e) T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts (traverse_unit Auto u e)) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      (traverse_unit Auto u e) T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              (traverse_unit Auto u e) T dominated to_unbox e))
+    = true ->
+    closures_unaliased (graph_of_facts (traverse_unit Auto u e)) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed (graph_of_facts (traverse_unit Auto u e))
+      (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local
+         (traverse_unit Auto u e) T dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context (traverse_unit Auto u e) T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local
+                  (traverse_unit Auto u e) T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local
+            (traverse_unit Auto u e) T dominated to_unbox tcr e)
+         fuel m t).
+
+Definition static_type_sound_traversal_statement : Prop :=
+  static_type_sound_traversal_with all_fixes.
+
+Definition static_type_sound_traversal_landed_statement : Prop :=
+  static_type_sound_traversal_with landed_fixes.
+
 (* ======================================================================== *)
 (* A changed closure stored in a block                                      *)
 (* ======================================================================== *)
@@ -727,3 +869,175 @@ Definition stored_example_statement : Prop :=
 
 Definition stored_example_landed_statement : Prop :=
   stored_example_with landed_fixes.
+
+(* ======================================================================== *)
+(* A static set whose representation changes                                *)
+(* ======================================================================== *)
+
+(* The unit FlambdaReaperUnboxing.Examples.static_set: the symbol 90 is
+   the closure at the function slot 70 of a static set of the code 53,
+   with 7 in its value slot 80, which the code reads; the unit calls it.
+   With the tables of the solver, the set changes its representation
+   (FlambdaReaperUnboxing.Examples.static_set_repr): the value slot 80 is
+   the new 81, the function slot 70 the new 82. [rebuilt] is the unit
+   rebuilt with unboxing and changes of representation, in the mode of
+   the fix, which binds the set in the new representation. [statics] and
+   [statics'] are the static environments of the runs of the unit and of
+   [rebuilt] once their static constants are bound, which bind the symbol
+   as [bound] and [bound'] say. The type of the
+   symbol, [closure_type], says that it is the closure at 70 of the code
+   53 with [= 7] at 80; [rewritten] is the closure at 82 of the code 53
+   with [= 7] at 81. *)
+Module StaticExample.
+
+Import FlambdaReaperUnboxing.Examples.
+Local Open Scope positive_scope.
+
+Definition s90 : node := Node_symbol 90.
+
+Definition dominated : list (node * node) :=
+  FlambdaReaperUnboxing.derive_dominated static_set_tables.
+
+Definition reprs : list (node * FlambdaReaperUnboxing.closure_repr) :=
+  FlambdaReaperUnboxing.unit_changed_representations no_local
+    static_set_facts static_set_tables dominated [] [s90] static_set.
+
+Definition rebuilt : expr :=
+  FlambdaReaperUnboxing.rebuild_unit_unbox_repr_fixed no_local
+    static_set_facts static_set_tables []
+    (FlambdaReaperCallingConventions.unit_code_deps Auto interface static_set)
+    dominated [] [s90] true static_set.
+
+(* The static environment of the run of a unit after its first step. *)
+Definition statics_after_first_step (e : expr) : static_env :=
+  match run 1 (State e [] [] empty_static_env empty_heap no_reads) with
+  | Step s => state_statics s
+  | _ => empty_static_env
+  end.
+
+Definition statics : static_env := statics_after_first_step static_set.
+
+Definition statics' : static_env := statics_after_first_step rebuilt.
+
+(* What the two runs bind to the symbol 90. *)
+Definition bound : list (symbol * statically_allocated_value) :=
+  [(90, Static_closure_of_set 70 [(70, 90)] [(70, 53)]
+          [(80, Value_const (Tagged_immediate 7))])].
+
+Definition bound' : list (symbol * statically_allocated_value) :=
+  [(90, Static_closure_of_set 82 [(82, 90)] [(82, 53)]
+          [(81, Value_const (Tagged_immediate 7))])].
+
+Definition sets : list set_of_closures :=
+  [[(70, (s90, Or_unknown.Known 53))]].
+
+Definition context : rewrite_context :=
+  Rewrite_context static_set_facts static_set_tables no_local sets
+    (map fst reprs).
+
+Definition code_my_closures : finite_map variable :=
+  FlambdaReaperUnboxing.bound_code_my_closures static_set.
+
+Definition closure_type : flambda_type :=
+  at_least_this_closure 70 [(70, Or_unknown.Known (Function_type 53))] []
+    [(80, this_tagged_immediate 7)] Alloc_mode.Heap.
+
+Definition rewritten : flambda_type :=
+  exactly_this_closure 82 [(82, Or_unknown.Known (Function_type 53))]
+    [(82, FlambdaTypeGrammar.unknown Value)] [(81, this_tagged_immediate 7)]
+    Alloc_mode.Heap.
+
+End StaticExample.
+
+(* What the statements of the static sets whose representation changes
+   ([FlambdaReaperTypesTraversalUnaliasedSpec.static_type_sound_full_statement])
+   say of [StaticExample]. The unit is of the flow fragment, well formed,
+   binds each variable once, and its tables are least; the symbol 90
+   changes its representation; the run of the unit binds it to the
+   closure at 70 with 7 at 80, and that of the unit rebuilt with unboxing
+   and changes of representation to the closure at 82 with 7 at 81. Of
+   the graph and tables of the unit, the sets are [sets], the tables of
+   [dominated_by_allocation_point] and of the unboxed uses pass their
+   checks; the static environments of the two runs are related by
+   [statics_rebuilt_static_changed] and [static_sets_whole_unchanged],
+   [statics] binding a symbol of its own allocation; [closure_type] is of
+   the fragment of [loose]; [rebuilt_static_changed] relates the symbol
+   at its node to itself, which [rebuilt_changed] does not, the symbol
+   changing; the metadata of the symbol, under which its type is
+   exported, is [Single_source] of it, and holds there; [closure_type]
+   holds of the symbol in the run of the unit; rewritten under that
+   metadata by [rewrite_arbitrary_u], it is [rewritten], which holds of
+   the symbol in the run of the rebuilt unit. The other premises of the
+   statements are met with the empty typing environment. *)
+Definition static_example_with (fx : fixes) : Prop :=
+  in_flow_fragment FlambdaReaperUnboxing.Examples.static_set = true
+  ∧ well_formed_unit FlambdaReaperUnboxing.Examples.interface
+      FlambdaReaperUnboxing.Examples.static_set
+    = true
+  ∧ variables_bound_once FlambdaReaperUnboxing.Examples.static_set = true
+  ∧ least_solution FlambdaReaperUnboxing.Examples.no_local
+      FlambdaReaperUnboxing.Examples.static_set_facts
+      FlambdaReaperUnboxing.Examples.static_set_tables
+  ∧ StaticExample.reprs
+    = [(StaticExample.s90, FlambdaReaperUnboxing.Examples.static_set_repr);
+       (Node_made 5%positive,
+        FlambdaReaperUnboxing.Examples.static_set_repr);
+       (Node_variable 41%positive,
+        FlambdaReaperUnboxing.Examples.static_set_repr)]
+  ∧ static_values StaticExample.statics = StaticExample.bound
+  ∧ static_values StaticExample.statics' = StaticExample.bound'
+  ∧ sets_of_graph
+      (graph_of_facts FlambdaReaperUnboxing.Examples.static_set_facts)
+      StaticExample.sets
+  ∧ FlambdaReaperUnboxing.check_dominated
+      FlambdaReaperUnboxing.Examples.static_set_tables StaticExample.dominated
+    = true
+  ∧ FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses
+      FlambdaReaperUnboxing.Examples.static_set_facts
+      FlambdaReaperUnboxing.Examples.static_set_tables
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields
+              FlambdaReaperUnboxing.Examples.static_set_facts
+              FlambdaReaperUnboxing.Examples.static_set_tables
+              StaticExample.dominated []
+              FlambdaReaperUnboxing.Examples.static_set))
+    = true
+  ∧ statics_allocated
+      (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+      StaticExample.statics
+  ∧ statics_rebuilt_static_changed
+      (graph_of_facts FlambdaReaperUnboxing.Examples.static_set_facts)
+      (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+      StaticExample.reprs StaticExample.statics StaticExample.statics'
+  ∧ static_sets_whole_unchanged
+      (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+      StaticExample.reprs StaticExample.statics StaticExample.statics'
+  ∧ type_in_fragment_with true [] StaticExample.closure_type
+  ∧ rebuilt_static_changed
+      (graph_of_facts FlambdaReaperUnboxing.Examples.static_set_facts)
+      (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+      StaticExample.reprs (Value_symbol 90%positive) StaticExample.s90
+      (Value_symbol 90%positive)
+  ∧ ¬ rebuilt_changed
+        (graph_of_facts FlambdaReaperUnboxing.Examples.static_set_facts)
+        (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+        StaticExample.reprs (Value_symbol 90%positive) StaticExample.s90
+        (Value_symbol 90%positive)
+  ∧ metadata_for_name StaticExample.context StaticExample.s90
+    = Single_source StaticExample.s90
+  ∧ metadata_at
+      (solution_of_tables FlambdaReaperUnboxing.Examples.static_set_tables)
+      (Single_source StaticExample.s90) StaticExample.s90
+  ∧ type_satisfied StaticExample.statics [] (Value_symbol 90%positive)
+      StaticExample.closure_type
+  ∧ rewrite_arbitrary_u fx StaticExample.context Typing_env.create
+      (fun n _ _ => n) StaticExample.code_my_closures StaticExample.reprs 10
+      (Single_source StaticExample.s90) StaticExample.closure_type
+    = StaticExample.rewritten
+  ∧ type_satisfied StaticExample.statics' [] (Value_symbol 90%positive)
+      StaticExample.rewritten.
+
+Definition static_example_statement : Prop :=
+  static_example_with all_fixes.
+
+Definition static_example_landed_statement : Prop :=
+  static_example_with landed_fixes.

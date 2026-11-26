@@ -48,7 +48,10 @@
    statements of the traversal of a unit follow as without the heap. So
    do those without [changed_unstored]: the erasure makes of
    [rebuilt_changed_heap] [rebuilt_changed] ([rebuilt_changed_heap_erase],
-   the erased pairs being closed under its step, [erased_closed]).
+   the erased pairs being closed under its step, [erased_closed]). So do
+   those of the static sets whose representation changes
+   ([Static_erase]: [rebuilt_static_changed_heap_erase],
+   [statics_static_heap_erase]).
 
    The exported types of the unit rebuilt with local unboxing: those of
    the plain rebuild, with the heap
@@ -704,6 +707,295 @@ Theorem stored_type_sound_full_heap_landed :
   stored_type_sound_full_heap_landed_statement.
 Proof.
   exact (stored_full_heap_gen _ TP.rewrite_stored_type_sound_slots_landed).
+Qed.
+
+(* ======================================================================== *)
+(* Static sets whose representation changes, with the heap                 *)
+(* ======================================================================== *)
+
+Section Static_erase.
+
+Variable G : graph.
+Variable sol : solution.
+Variable reprs : list (node * FlambdaReaperUnboxing.closure_repr).
+Variable β : location -> location -> Prop.
+
+Local Abbreviation RSH := (rebuilt_static_changed_heap G sol reprs β).
+
+Lemma rsh_unfold (y : value) (k : node) (y' : value) :
+  RSH y k y' -> rebuilt_static_changed_heap_step G sol reprs β RSH y k y'.
+Proof.
+  intros (R & HR & Hy). destruct (HR _ _ _ Hy) as [H | H]; [ left | right ].
+  - apply (TP.static_step_impl G sol reprs R); [ | exact H ].
+    intros x m x' Hx. exists R. split; [ exact HR | exact Hx ].
+  - exact H.
+Qed.
+
+(* The values of the first and the third runs, erased. *)
+Definition erased_static_rel (x : value) (k : node) (x' : value) : Prop :=
+  ∃ y y' : value, x = er y ∧ x' = er y' ∧ RSH y k y'.
+
+Lemma slots_static_erase (decls : list (function_slot * code_id))
+    (sites : function_slot -> node) (vs vs' : list (value_slot * value)) :
+  for_all_bindings (value_slot_rebuilt G sol RSH decls sites vs') vs ->
+  for_all_bindings
+    (value_slot_rebuilt G sol erased_static_rel decls sites (erase_slots vs'))
+    (erase_slots vs).
+Proof.
+  intros H. apply (proj2 (FlambdaMapProofs.for_all_bindings_lookup _ _ _)).
+  intros w x0 Hl. rewrite THP.lookup_erase_slots in Hl.
+  destruct (lookup w vs) as [x | ] eqn:E; cbn [option_map] in Hl;
+    [ | discriminate Hl ].
+  injection Hl as <-.
+  pose proof (proj1 (FlambdaMapProofs.for_all_bindings_lookup _ _ _) H w x E)
+    as Hx.
+  intros f id Hf Hused. destruct (Hx f id Hf Hused)
+    as (from & x' & Hheld & Hhs & Hhu & Hl' & Hrv).
+  exists from, (er x').
+  split; [ exact Hheld | split; [ exact Hhs | split; [ exact Hhu | ] ] ].
+  split; [ rewrite THP.lookup_erase_slots, Hl'; reflexivity | ].
+  exists x, x'. split; [ reflexivity | split; [ reflexivity | exact Hrv ] ].
+Qed.
+
+Lemma fields_static_erase (a : node) (fields fields' : list value) :
+  fields_rebuilt (field_rebuilt G sol RSH a) 0 fields fields' ->
+  fields_rebuilt (field_rebuilt G sol erased_static_rel a) 0 (map er fields)
+    (map er fields').
+Proof.
+  intros Hf. refine (THP.fields_rebuilt_map _ _ er fields _ 0 fields' Hf).
+  apply Forall_forall. intros x _ i x' (from & Hc & Hu & Hn).
+  unfold field_rebuilt. rewrite THP.erase_kind. exists from.
+  split; [ exact Hc | split ].
+  - intros Hused. destruct (Hu Hused) as [Hhu Hrv]. split; [ exact Hhu | ].
+    exists x, x'. split; [ reflexivity | split; [ reflexivity | exact Hrv ] ].
+  - intros Hunused. rewrite (Hn Hunused). reflexivity.
+Qed.
+
+Lemma erased_static_closed :
+  rebuilt_static_changed_closed G sol reprs erased_static_rel.
+Proof.
+  intros x k x' (y & y' & -> & -> & Hy).
+  apply rsh_unfold in Hy. destruct Hy as [Hy | (l & l' & -> & -> & _)].
+  2:{ cbn [erase_locations rebuilt_static_changed_step rebuilt_changed_step].
+      exists [Value_location l']. reflexivity. }
+  destruct y as [c | code vs0 | slot decls vs | s | tag fields | elements
+                | c | l | callee args arity];
+    cbn [rebuilt_static_changed_step rebuilt_changed_step] in Hy;
+    cbn [erase_locations rebuilt_static_changed_step rebuilt_changed_step];
+    try contradiction.
+  - destruct Hy as [Has ->]. split; [ exact Has | reflexivity ].
+  - destruct Hy as (sites & vs' & Hmay & Hsites & Hall & Hm).
+    exists sites, (erase_slots vs').
+    split; [ exact Hmay | split; [ exact Hsites | split ] ].
+    + exact (slots_static_erase _ _ _ _ Hall).
+    + destruct (allocation_repr sol reprs (sites slot)) as [r | ].
+      * exact (changed_closure_rebuilt_erase r _ _ Hm).
+      * subst y'. reflexivity.
+  - destruct Hy as (-> & H1 & H2). split; [ reflexivity | auto ].
+  - destruct Hy as (a & fields' & Hmay & Hhs & -> & Hf).
+    exists a, (map er fields').
+    split; [ exact Hmay | split; [ exact Hhs | split; [ reflexivity | ] ] ].
+    exact (fields_static_erase a fields fields' Hf).
+  - destruct Hy as (elements' & ->). exists (map er elements'). reflexivity.
+  - destruct Hy as (a & bn & from & Hmay & Hhs & Hk & Hc & ->).
+    exists a, bn, from. repeat (split; [ assumption | ]).
+    destruct (s_field_used sol a (Field_boxed_number bn)); reflexivity.
+  - destruct Hy as (closure' & args' & ->).
+    exists (er closure'), (map er args'). reflexivity.
+Qed.
+
+Lemma erased_rs (x : value) (k : node) (x' : value) :
+  erased_static_rel x k x' -> rebuilt_static_changed G sol reprs x k x'.
+Proof.
+  exact (TP.rebuilt_static_changed_of_closed G sol reprs _ x k x'
+           erased_static_closed).
+Qed.
+
+(* A value of the first run and what the third has for it, with the heap,
+   erased, are related without. *)
+Lemma rebuilt_static_changed_heap_erase (v : value) (n : node) (v' : value) :
+  RSH v n v' -> rebuilt_static_changed G sol reprs (er v) n (er v').
+Proof.
+  intros H. apply erased_rs. exists v, v'.
+  split; [ reflexivity | split; [ reflexivity | exact H ] ].
+Qed.
+
+Lemma statics_static_heap_erase (statics statics' : static_env) :
+  statics_rebuilt_static_changed_heap G sol reprs β statics statics' ->
+  statics_rebuilt_static_changed G sol reprs (erase_statics statics)
+    (erase_statics statics').
+Proof.
+  intros H s a0 Hl Hhu. rewrite THP.lookup_erase_statics in Hl.
+  destruct (lookup s (static_values statics)) as [a | ] eqn:E;
+    cbn [option_map] in Hl; [ | discriminate Hl ].
+  injection Hl as <-. pose proof (H s a E Hhu) as Hs.
+  destruct (allocation_repr sol reprs (Node_symbol s)) as [r | ].
+  - (* A closure of a static set that changes. *)
+    destruct a as [code vs | slot syms decls vs | tag fields | contents | bytes
+                  | elements | c];
+      cbn [static_set_changed_rebuilt] in Hs;
+      cbn [erase_static static_set_changed_rebuilt]; try contradiction.
+    destruct Hs as (sites & vs_mid & vs' & Hsite & Hsites & Hall & Hcr & Hfst
+                    & Hcs & Hbind).
+    exists sites, (erase_slots vs_mid), (erase_slots vs').
+    split; [ exact Hsite | split; [ exact Hsites | split ] ].
+    { refine (TP.for_all_bindings_impl _ _ _ _
+                (slots_static_erase _ _ _ _ Hall)).
+      intros w x Hw.
+      exact (TP.value_slot_rebuilt_impl G sol _ _ _ _ _ w x erased_rs Hw). }
+    split; [ exact (changed_closure_rebuilt_erase r _ _ Hcr) | ].
+    split; [ exact Hfst | split; [ exact Hcs | ] ].
+    intros g s_g Hg. destruct (Hbind g s_g Hg) as [H1 H2].
+    rewrite !THP.lookup_erase_statics, H1, H2. split; reflexivity.
+  - rewrite THP.lookup_erase_statics.
+    destruct a as [code vs | slot syms decls vs | tag fields | contents | bytes
+                  | elements | c];
+      cbn [static_rebuilt_with] in Hs; cbn [erase_static static_rebuilt_with].
+    + exact Hs.
+    + destruct Hs as (sites & vs' & -> & Hsite & Hsites & Hall).
+      exists sites, (erase_slots vs').
+      split; [ reflexivity | split; [ exact Hsite | ] ].
+      split; [ exact Hsites | ].
+      refine (TP.for_all_bindings_impl _ _ _ _
+                (slots_static_erase _ _ _ _ Hall)).
+      intros w x Hw.
+      exact (TP.value_slot_rebuilt_impl G sol _ _ _ _ _ w x erased_rs Hw).
+    + destruct Hs as (fields' & -> & Hf). exists (map er fields').
+      split; [ reflexivity | ].
+      refine (TP.fields_rebuilt_impl _ _ _ _ _ _
+                (fields_static_erase _ _ _ Hf)).
+      intros i x x' Hx.
+      exact (TP.field_rebuilt_impl G sol _ _ _ i x x' erased_rs Hx).
+    + rewrite Hs. reflexivity.
+    + rewrite Hs. reflexivity.
+    + destruct Hs as (elements' & ->). exists (map er elements'). reflexivity.
+    + rewrite Hs. reflexivity.
+Qed.
+
+End Static_erase.
+
+Lemma static_slots_heap_gen (fx : fixes) :
+  rewrite_static_type_sound_slots_with fx ->
+  rewrite_static_type_sound_slots_heap_with fx.
+Proof.
+  intros Hnh is_local F T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' β fuel m t n v v' Hleast Hlocal Hsets
+    Hkinds Hmut Henv Hfrag Halloc Hst Hwhole Hcopies Hdomc Huses Hreprs Ht
+    Hrv Hat Hsat.
+  apply (proj1 (THP.type_satisfied_erase statics' valuation' v' _)).
+  exact (Hnh is_local F T sets dominated to_unbox tcr e tenv canon
+           (erase_statics statics) (erase_statics statics')
+           (erase_env valuation) (erase_env valuation') fuel m t n (er v)
+           (er v') Hleast Hlocal Hsets Hkinds Hmut
+           (THP.typing_env_satisfied_strictly_erase _ _ _ Henv)
+           (THP.env_in_fragment_erase _ _ _ Hfrag)
+           (THP.statics_allocated_erase _ _ Halloc)
+           (statics_static_heap_erase _ _ _ _ _ _ Hst)
+           (static_sets_whole_unchanged_erase _ _ _ _ Hwhole)
+           (THP.copies_valued_erase _ _ _ _ Hcopies) Hdomc Huses Hreprs
+           (THP.type_in_fragment_erase _ _ _ Ht)
+           (rebuilt_static_changed_heap_erase _ _ _ _ _ _ _ Hrv) Hat
+           (proj2 (THP.type_satisfied_erase _ _ _ _) Hsat)).
+Qed.
+
+Theorem rewrite_static_type_sound_slots_heap :
+  rewrite_static_type_sound_slots_heap_statement.
+Proof. exact (static_slots_heap_gen _ TP.rewrite_static_type_sound_slots). Qed.
+
+Theorem rewrite_static_type_sound_slots_heap_landed :
+  rewrite_static_type_sound_slots_heap_landed_statement.
+Proof.
+  exact (static_slots_heap_gen _ TP.rewrite_static_type_sound_slots_landed).
+Qed.
+
+Lemma static_traversal_heap_gen (fx : fixes) :
+  rewrite_static_type_sound_slots_with fx ->
+  rewrite_static_type_sound_traversal_heap_with fx.
+Proof.
+  intros Hnh is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' β fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hone Ht Hrv Hat Hsat.
+  destruct (TT.traversal_props_heap u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (static_slots_heap_gen fx Hnh is_local (traverse_unit Auto u e) T
+           sets dominated to_unbox tcr e tenv canon statics statics'
+           valuation valuation' β fuel m t n v v' Hleast Hlocal Hsets Hkinds
+           Hmut Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+           (TT.reprs_of_sets_derived is_local _ T dominated to_unbox tcr e
+              Hleast Hfs Hmut Hdomc Hone)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Lemma static_unaliased_heap_gen (fx : fixes) :
+  rewrite_static_type_sound_slots_with fx ->
+  static_type_sound_traversal_heap_with fx.
+Proof.
+  intros Hnh is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' β fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hu Ht Hrv
+    Hat Hsat.
+  destruct (TT.traversal_props_heap u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (static_traversal_heap_gen fx Hnh is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation' β
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (TT.block_fields_of_one_kind_traversal Auto u e) Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (TT.changed_closures_one_allocation_unaliased is_local _ T tcr
+              Hleast Hfs Hmut Hu)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Lemma static_full_heap_gen (fx : fixes) :
+  rewrite_static_type_sound_slots_with fx ->
+  static_type_sound_full_heap_with fx.
+Proof.
+  intros Hnh is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' β fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Ht Hrv Hat
+    Hsat.
+  exact (static_unaliased_heap_gen fx Hnh is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation' β
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (TU.closures_unaliased_traversal_heap u e Hfrag Hwfu Honce)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Theorem rewrite_static_type_sound_traversal_heap :
+  rewrite_static_type_sound_traversal_heap_statement.
+Proof.
+  exact (static_traversal_heap_gen _ TP.rewrite_static_type_sound_slots).
+Qed.
+
+Theorem rewrite_static_type_sound_traversal_heap_landed :
+  rewrite_static_type_sound_traversal_heap_landed_statement.
+Proof.
+  exact (static_traversal_heap_gen _
+           TP.rewrite_static_type_sound_slots_landed).
+Qed.
+
+Theorem static_type_sound_traversal_heap :
+  static_type_sound_traversal_heap_statement.
+Proof.
+  exact (static_unaliased_heap_gen _ TP.rewrite_static_type_sound_slots).
+Qed.
+
+Theorem static_type_sound_traversal_heap_landed :
+  static_type_sound_traversal_heap_landed_statement.
+Proof.
+  exact (static_unaliased_heap_gen _
+           TP.rewrite_static_type_sound_slots_landed).
+Qed.
+
+Theorem static_type_sound_full_heap : static_type_sound_full_heap_statement.
+Proof.
+  exact (static_full_heap_gen _ TP.rewrite_static_type_sound_slots).
+Qed.
+
+Theorem static_type_sound_full_heap_landed :
+  static_type_sound_full_heap_landed_statement.
+Proof.
+  exact (static_full_heap_gen _ TP.rewrite_static_type_sound_slots_landed).
 Qed.
 
 (* ======================================================================== *)

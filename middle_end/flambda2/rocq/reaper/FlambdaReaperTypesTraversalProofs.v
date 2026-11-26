@@ -58,7 +58,12 @@
    (FlambdaReaperTypesProofs.statics_changed_of_unstored,
    [rebuilt_changed_of_runs]). [stored_example]: the relation of the
    runs is built level by level ([rebuilt_changed_fold]) on the graph
-   and tables of the unit, computed; the rewritten types are computed. *)
+   and tables of the unit, computed; the rewritten types are computed.
+   The statements of the static sets whose representation changes follow
+   from FlambdaReaperTypesProofs.rewrite_static_type_sound_slots alike.
+   [static_example]: the static environments are those of the runs,
+   computed, and their relation is checked symbol by symbol
+   ([StaticRuns]). *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -2142,6 +2147,75 @@ Proof.
            Ht Hrv Hat Hsat).
 Qed.
 
+(* The static sets whose representation changes included. *)
+Theorem rewrite_static_type_sound_traversal :
+  rewrite_static_type_sound_traversal_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hone Ht Hrv Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  apply (TP.rewrite_static_type_sound_slots is_local (traverse_unit Auto u e)
+           T sets dominated to_unbox tcr e tenv canon statics statics'
+           valuation valuation' fuel m t n v v');
+    try assumption.
+  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
+           Hfs Hmut Hdomc Hone).
+Qed.
+
+Theorem rewrite_static_type_sound_traversal_landed :
+  rewrite_static_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Hkinds Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses
+    Hone Ht Hrv Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  apply (TP.rewrite_static_type_sound_slots_landed is_local
+           (traverse_unit Auto u e) T sets dominated to_unbox tcr e tenv canon
+           statics statics' valuation valuation' fuel m t n v v');
+    try assumption.
+  exact (reprs_of_sets_derived is_local _ T dominated to_unbox tcr e Hleast
+           Hfs Hmut Hdomc Hone).
+Qed.
+
+Theorem static_type_sound_traversal :
+  static_type_sound_traversal_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hu Ht Hrv
+    Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_static_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Theorem static_type_sound_traversal_landed :
+  static_type_sound_traversal_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Hu Ht Hrv
+    Hat Hsat.
+  destruct (traversal_props u e Hfrag Hwfu Honce) as [Hmut Hfs].
+  exact (rewrite_static_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets
+           (block_fields_of_one_kind_traversal Auto u e) Henv Hfragt Halloc
+           Hst Hwhole Hcopies Hdomc Huses
+           (changed_closures_one_allocation_unaliased is_local _ T tcr Hleast
+              Hfs Hmut Hu)
+           Ht Hrv Hat Hsat).
+Qed.
+
 (* The statements with [changed_unstored], as corollaries. *)
 Theorem rewrite_changed_type_sound_traversal :
   rewrite_changed_type_sound_traversal_statement.
@@ -2462,4 +2536,233 @@ Proof.
   split; [ exact H10 | split; [ exact H11 | ] ].
   split; [ vm_compute; reflexivity | split; [ vm_compute; reflexivity | ] ].
   split; [ exact H14 | exact H15 ].
+Qed.
+
+(* ======================================================================== *)
+(* A static set whose representation changes                                *)
+(* ======================================================================== *)
+
+Module StaticRuns.
+
+Import StaticExample.
+Local Open Scope positive_scope.
+
+Local Abbreviation facts := FlambdaReaperUnboxing.Examples.static_set_facts.
+Local Abbreviation tables := FlambdaReaperUnboxing.Examples.static_set_tables.
+Local Abbreviation G := (graph_of_facts facts).
+Local Abbreviation sol := (solution_of_tables tables).
+Local Abbreviation RS := (rebuilt_static_changed G sol reprs).
+
+Lemma constructors :
+  f_constructor facts
+  = [(s90, Field_call_witness Known_arity_code_pointer, Node_made 7);
+     (s90, Field_call_witness Unknown_arity_code_pointer, Node_made 8);
+     (s90, Field_value_slot 80, Node_all_constants);
+     (s90, Field_function_slot 70, s90);
+     (Node_made 8, Field_return_of_call Exn, Node_made 4);
+     (Node_made 8, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 8, Field_code_id_of_call_witness, Node_code_id 53);
+     (Node_made 7, Field_return_of_call (Normal 0), Node_made 3);
+     (Node_made 7, Field_return_of_call Exn, Node_made 4);
+     (Node_made 7, Field_code_id_of_call_witness, Node_code_id 53)].
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma sites_ok : set_sites G [(70%positive, 53%positive)] (fun _ => s90).
+Proof.
+  intros f id Hf g b. cbn [lookup] in Hf.
+  destruct (Pos.eqb_spec f 70) as [-> | _]; [ | discriminate Hf ].
+  split.
+  - intros Hcons. apply (StoredRuns.cons_in facts) in Hcons.
+    rewrite constructors in Hcons.
+    cbn [In] in Hcons. StoredRuns.in_cases Hcons.
+    injection Hcons as <- <-. split; reflexivity.
+  - intros [Hg ->]. unfold is_bound in Hg. cbn [lookup] in Hg.
+    destruct (Pos.eqb g 70) eqn:Hg70; [ | discriminate Hg ].
+    apply Pos.eqb_eq in Hg70. subst g. vm_compute. StoredRuns.in_find.
+Qed.
+
+Lemma s90_self : may_come_from sol s90 s90.
+Proof.
+  apply FlambdaReaperTypesProofs.may_come_from_self; vm_compute; auto.
+Qed.
+
+(* The value slot 80, which holds 7 in the first run and in the second. *)
+Lemma slot_80 :
+  for_all_bindings
+    (value_slot_rebuilt G sol RS [(70%positive, 53%positive)] (fun _ => s90)
+       [(80%positive, Value_const (Tagged_immediate 7))])
+    [(80%positive, Value_const (Tagged_immediate 7))].
+Proof.
+  apply for_all_bindings_lookup. intros w x Hw f id Hf Hfu.
+  cbn [lookup] in Hw.
+  destruct (Pos.eqb_spec w 80) as [-> | _]; [ | discriminate Hw ].
+  injection Hw as <-.
+  exists Node_all_constants, (Value_const (Tagged_immediate 7)).
+  split; [ | split; [ vm_compute; reflexivity | ] ].
+  { intros f' id' _ b. split.
+    - intros Hcons. apply (StoredRuns.cons_in facts) in Hcons.
+      rewrite constructors in Hcons.
+      cbn [In] in Hcons. StoredRuns.in_cases Hcons.
+      injection Hcons as <-. reflexivity.
+    - intros ->. vm_compute. StoredRuns.in_find. }
+  split; [ vm_compute; reflexivity | split; [ reflexivity | ] ].
+  apply FlambdaReaperTypesProofs.rebuilt_static_changed_fold.
+  cbn [rebuilt_static_changed_step rebuilt_changed_step].
+  split; [ vm_compute; reflexivity | reflexivity ].
+Qed.
+
+Lemma statics_values : static_values statics = bound.
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma statics_values' : static_values statics' = bound'.
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma allocation_s90 :
+  allocation_repr sol reprs s90
+  = Some FlambdaReaperUnboxing.Examples.static_set_repr.
+Proof. vm_compute. reflexivity. Qed.
+
+Lemma allocated : statics_allocated sol statics.
+Proof.
+  intros s a Hl. rewrite statics_values in Hl. cbn [bound lookup] in Hl.
+  destruct (Pos.eqb_spec s 90) as [-> | _]; [ exact s90_self | ].
+  discriminate Hl.
+Qed.
+
+(* The symbol 90 is bound in the run of the rebuilt unit to the closure
+   of its set in the new representation. *)
+Lemma statics_related : statics_rebuilt_static_changed G sol reprs statics
+                          statics'.
+Proof.
+  intros s a Hl Hhu. rewrite statics_values in Hl. cbn [bound lookup] in Hl.
+  destruct (Pos.eqb_spec s 90) as [-> | _]; [ | discriminate Hl ].
+  injection Hl as <-.
+  change (Node_symbol 90) with s90. rewrite allocation_s90.
+  cbn [static_set_changed_rebuilt].
+  exists (fun _ => s90), [(80, Value_const (Tagged_immediate 7))],
+    [(81, Value_const (Tagged_immediate 7))].
+  split; [ reflexivity | split; [ exact sites_ok | ] ].
+  split; [ exact slot_80 | ].
+  split.
+  { vm_compute.
+    exists [(70, 53)], [(80, Value_const (Tagged_immediate 7))],
+      [(81, Value_const (Tagged_immediate 7))].
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    constructor; [ split; reflexivity | constructor ]. }
+  split; [ reflexivity | split; [ reflexivity | ] ].
+  intros g s_g Hg. cbn [lookup] in Hg.
+  destruct (Pos.eqb_spec g 70) as [-> | _]; [ | discriminate Hg ].
+  injection Hg as <-.
+  split; vm_compute; reflexivity.
+Qed.
+
+Lemma whole : static_sets_whole_unchanged sol reprs statics statics'.
+Proof.
+  intros s slot csyms fdecls vs Hl _ Hnc. rewrite statics_values in Hl.
+  cbn [bound lookup] in Hl.
+  destruct (Pos.eqb_spec s 90) as [-> | _]; [ | discriminate Hl ].
+  change (Node_symbol 90) with s90 in Hnc. rewrite allocation_s90 in Hnc.
+  discriminate Hnc.
+Qed.
+
+Lemma symbol_at : RS (Value_symbol 90) s90 (Value_symbol 90).
+Proof.
+  apply FlambdaReaperTypesProofs.rebuilt_static_changed_fold.
+  cbn [rebuilt_static_changed_step].
+  split; [ reflexivity | split; [ exact s90_self | vm_compute; reflexivity ] ].
+Qed.
+
+Lemma symbol_not_changed :
+  ¬ rebuilt_changed G sol reprs (Value_symbol 90) s90 (Value_symbol 90).
+Proof.
+  intros H.
+  pose proof (FlambdaReaperTypesProofs.rebuilt_changed_symbol G sol reprs 90
+                s90 _ H) as Hn.
+  change (Node_symbol 90) with s90 in Hn. rewrite allocation_s90 in Hn.
+  discriminate Hn.
+Qed.
+
+Lemma metadata_single (a n : node) :
+  (∀ b : node, s_sources sol n b = true -> b = a) ->
+  s_any_source sol n = false ->
+  metadata_at sol (FlambdaReaperTypes.Single_source a) n.
+Proof.
+  intros Hsrc Han b (_ & [Has | Hs] & _) _;
+    [ rewrite Han in Has; discriminate Has | ].
+  exact (Hsrc b Hs).
+Qed.
+
+End StaticRuns.
+
+Theorem static_example : static_example_statement.
+Proof.
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split.
+  { apply (FlambdaReaperLeastProofs.check_least_sound _ _ 100).
+    vm_compute. reflexivity. }
+  split; [ vm_compute; reflexivity | ].
+  split; [ exact StaticRuns.statics_values | ].
+  split; [ exact StaticRuns.statics_values' | ].
+  split.
+  { intros fdecls sites slot id Hl Hsites.
+    exists (hd [] StaticExample.sets).
+    assert (Hb0 : is_bound slot fdecls = true)
+      by (unfold is_bound; rewrite Hl; reflexivity).
+    pose proof (proj2 (Hsites slot id Hl slot (sites slot)) (conj Hb0 eq_refl))
+      as Hself.
+    apply (StoredRuns.cons_in FlambdaReaperUnboxing.Examples.static_set_facts)
+      in Hself.
+    rewrite StaticRuns.constructors in Hself.
+    cbn [In] in Hself. StoredRuns.in_cases Hself.
+    injection Hself as Hs70 E70 _. subst slot.
+    assert (Hdom : ∀ g : function_slot,
+               is_bound g fdecls = true ->
+               g = 70%positive ∧ sites g = sites 70%positive).
+    { intros g Hg. pose proof (proj2 (Hsites 70%positive id Hl g (sites g))
+                                 (conj Hg eq_refl)) as Hc.
+      apply (StoredRuns.cons_in FlambdaReaperUnboxing.Examples.static_set_facts)
+        in Hc.
+      rewrite StaticRuns.constructors in Hc.
+      rewrite Hs70 in Hc.
+      cbn [In] in Hc. StoredRuns.in_cases Hc.
+      injection Hc as <- E. split; [ reflexivity | congruence ]. }
+    split; [ cbn; left; reflexivity | split ].
+    - intros g c code Hin. cbn in Hin. destruct Hin as [Hin | []].
+      injection Hin as <- <- _.
+      split; [ exact Hb0 | exact Hs70 ].
+    - intros g Hg. destruct (Hdom g Hg) as [-> _]. vm_compute. reflexivity. }
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exact StaticRuns.allocated | ].
+  split; [ exact StaticRuns.statics_related | ].
+  split; [ exact StaticRuns.whole | ].
+  split; [ split; [ vm_compute; reflexivity | ] | ].
+  { intros s k w Hin Hw. vm_compute in Hin. StoredRuns.in_cases Hin;
+      injection Hin as <- <-; cbn in Hw; injection Hw as <-; left; eexists;
+      reflexivity. }
+  split; [ exact StaticRuns.symbol_at | ].
+  split; [ exact StaticRuns.symbol_not_changed | ].
+  split; [ vm_compute; reflexivity | ].
+  split.
+  { apply StaticRuns.metadata_single; [ | vm_compute; reflexivity ].
+    intros b Hs. cbn [s_sources solution_of_tables] in Hs.
+    apply mem_pair_In in Hs. vm_compute in Hs. StoredRuns.in_cases Hs.
+    injection Hs as <-. reflexivity. }
+  split; [ apply FlambdaTypeMeaningBoolProofs.type_satisfied_b_iff;
+           vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  apply FlambdaTypeMeaningBoolProofs.type_satisfied_b_iff.
+  vm_compute. reflexivity.
+Qed.
+
+Theorem static_example_landed : static_example_landed_statement.
+Proof.
+  destruct static_example
+    as (H1 & H2 & H3 & H4 & H5 & H6 & H7 & H8 & H9 & H10 & H11 & H12 & H13
+        & H14 & H15 & H16 & H17 & H18 & H19 & _ & H21).
+  repeat (split; [ assumption | ]).
+  split; [ vm_compute; reflexivity | exact H21 ].
 Qed.

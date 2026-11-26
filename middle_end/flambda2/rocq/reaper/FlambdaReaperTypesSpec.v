@@ -47,8 +47,11 @@
    changes), [allocation_repr], [rebuilt_changed_step],
    [rebuilt_changed_closed], [rebuilt_changed], [static_rebuilt_with],
    [statics_rebuilt_changed] and [static_sets_whole_unchanged] (for those
-   closures wherever they are held), the statements, and the
-   examples,
+   closures wherever they are held), [rename_closure_symbols],
+   [rebuilt_static_changed_step], [rebuilt_static_changed_closed],
+   [rebuilt_static_changed], [static_set_changed_rebuilt] and
+   [statics_rebuilt_static_changed] (for the static sets whose
+   representation changes), the statements, and the examples,
    against
    FlambdaReaperTypes.v (the rewriting, which needs no review),
    FlambdaReaperFlowSpec.v (where values may be),
@@ -419,6 +422,29 @@
      types_rewriter.ml has it. The two statements above are their
      corollaries: with [changed_unstored], the runs that they relate are
      related so. No fault found.
+   - [rewrite_static_type_sound_statement] and
+     [rewrite_static_type_sound_slots_statement]: the two above, the
+     static sets whose representation changes included. Both rebuilds
+     bind such a set whole in the new representation, used or not
+     (FlambdaReaperUnboxing.rebuild_changed_static_const; rebuild.ml,
+     [rebuild_let_expr_static_consts]), and types_rewriter.ml rewrites
+     the type of its symbols as that of any closure whose set changes.
+     The third run is related to the first by [rebuilt_static_changed]:
+     as [rebuilt_changed], but that a symbol may change, being itself.
+     Its static environment binds a symbol whose allocation does not
+     change as [statics_rebuilt_changed] says, and a symbol of a static
+     set whose representation changes with the set whole in the new
+     representation: each symbol of the set bound to the closure at the
+     new slot of its function slot, of the set at the new function slots,
+     with the closure symbols at their new slots
+     ([rename_closure_symbols]) and the new value slots that
+     [changed_closure_rebuilt] gives ([static_set_changed_rebuilt],
+     [statics_rebuilt_static_changed]). The closure symbols of such a set
+     name its function slots, as in a valid static closure. The
+     statements above are not their corollaries, as their static
+     environment says nothing of the symbols that change; they keep
+     their proofs, the same induction for [rebuilt_changed]. No fault
+     found.
    - [example_statement]: the rewriting of an environment of two symbols
      and a block, computed; [result_types_example_statement]: the
      rewriting of the result types of code that returns the box, with
@@ -1927,6 +1953,249 @@ Definition rewrite_stored_type_sound_slots_statement : Prop :=
 
 Definition rewrite_stored_type_sound_slots_landed_statement : Prop :=
   rewrite_stored_type_sound_slots_with landed_fixes.
+
+(* ======================================================================== *)
+(* Static sets whose representation changes                                 *)
+(* ======================================================================== *)
+
+(* The closure symbols of a static set at the new function slots of the
+   representation [r], as the rebuild binds them
+   (FlambdaReaperUnboxing.rebuild_changed_static_const). *)
+Definition rename_closure_symbols (r : FlambdaReaperUnboxing.closure_repr)
+    (closure_symbols : list (function_slot * symbol))
+    : list (function_slot * symbol) :=
+  map
+    (fun '(fs, sym) => (FlambdaReaperUnboxing.rename_function_slot r fs, sym))
+    closure_symbols.
+
+Section Rebuilt_static_changed.
+
+Variable G : graph.
+Variable sol : solution.
+Variable reprs : list (node * FlambdaReaperUnboxing.closure_repr).
+
+(* One level of what the run of the unit rebuilt with unboxing and
+   changes of representation has, [v'], for a value [v] of the first run
+   that may be at the node [n], the static sets whose representation
+   changes included: [rebuilt_changed_step], but that a symbol may
+   change. It is itself, which has a use; what the third run binds to it
+   is for its static environment to say
+   ([statics_rebuilt_static_changed]). *)
+Definition rebuilt_static_changed_step (R : value -> node -> value -> Prop)
+    (v : value) (n : node) (v' : value) : Prop :=
+  match v with
+  | Value_symbol s =>
+    v' = v ∧ may_come_from sol (Node_symbol s) n
+    ∧ s_has_usage sol (Node_symbol s) = true
+  | _ => rebuilt_changed_step G sol reprs R v n v'
+  end.
+
+(* The relations that hold, one level down, of what they relate. *)
+Definition rebuilt_static_changed_closed
+    (R : value -> node -> value -> Prop) : Prop :=
+  ∀ (v : value) (n : node) (v' : value),
+    R v n v' -> rebuilt_static_changed_step R v n v'.
+
+(* [rebuilt_changed], the static sets whose representation changes
+   included: [v] and [v'] are related by a relation that holds, one level
+   down, of what it relates. [rebuilt_changed] relates no more. *)
+Definition rebuilt_static_changed (v : value) (n : node) (v' : value)
+    : Prop :=
+  ∃ R : value -> node -> value -> Prop,
+    rebuilt_static_changed_closed R ∧ R v n v'.
+
+(* What the third run binds to the symbols of a static set whose
+   representation [r] changes, given by a symbol [s] of the set that the
+   first run binds to [allocated], the closure of the set at [slot]: the
+   set is bound whole in the new representation, as the rebuild binds it
+   (FlambdaReaperUnboxing.rebuild_changed_static_const). Each symbol [s_g]
+   of the set, which the first run binds to the closure of the set at
+   [g] with the value slots [value_slots], the third binds to the closure
+   at the new function slot of [g], of the set of the same functions at
+   their new slots, with the closure symbols at their new slots
+   ([rename_closure_symbols]) and the new value slots [vs']. Those hold
+   what [changed_closure_rebuilt] says of the value slots [vs_mid] that
+   [R] relates to [value_slots] as for a closure of the set
+   ([value_slot_rebuilt]), the allocations of the set being [sites], that
+   at [slot] the symbol [s]. The closure symbols of the set name its
+   function slots, as in a valid static closure
+   (FlambdaClosuresSpec.allocated_valid). *)
+Definition static_set_changed_rebuilt (R : value -> node -> value -> Prop)
+    (r : FlambdaReaperUnboxing.closure_repr) (s : symbol)
+    (allocated : statically_allocated_value) (statics statics' : static_env)
+    : Prop :=
+  match allocated with
+  | Static_closure_of_set slot closure_symbols function_decls value_slots =>
+    ∃ (sites : function_slot -> node) (vs_mid vs' : list (value_slot * value)),
+      sites slot = Node_symbol s
+      ∧ set_sites G function_decls sites
+      ∧ for_all_bindings
+          (value_slot_rebuilt G sol R function_decls sites vs_mid)
+          value_slots
+      ∧ changed_closure_rebuilt r
+          (Value_closure_of_set slot function_decls vs_mid)
+          (Value_closure_of_set (FlambdaReaperUnboxing.current_slot r)
+             (FlambdaReaperUnboxing.rename_function_decls r function_decls)
+             vs')
+      ∧ map fst closure_symbols = map fst function_decls
+      ∧ lookup slot closure_symbols = Some s
+      ∧ ∀ (g : function_slot) (s_g : symbol),
+          lookup g closure_symbols = Some s_g ->
+          lookup s_g (static_values statics)
+          = Some
+              (Static_closure_of_set g closure_symbols function_decls
+                 value_slots)
+          ∧ lookup s_g (static_values statics')
+            = Some
+                (Static_closure_of_set
+                   (FlambdaReaperUnboxing.rename_function_slot r g)
+                   (rename_closure_symbols r closure_symbols)
+                   (FlambdaReaperUnboxing.rename_function_decls r
+                      function_decls)
+                   vs')
+  | _ => False
+  end.
+
+(* The static environment of the third run binds every symbol that has a
+   use: one that does not change as [statics_rebuilt_changed] says, and
+   one whose allocation changes, the closure of a static set, with its
+   set whole in the new representation ([static_set_changed_rebuilt]);
+   what the fields and the value slots hold is related by
+   [rebuilt_static_changed]. *)
+Definition statics_rebuilt_static_changed (statics statics' : static_env)
+    : Prop :=
+  ∀ (s : symbol) (allocated : statically_allocated_value),
+    lookup s (static_values statics) = Some allocated ->
+    s_has_usage sol (Node_symbol s) = true ->
+    match allocation_repr sol reprs (Node_symbol s) with
+    | None =>
+      static_rebuilt_with G sol rebuilt_static_changed s allocated
+        (lookup s (static_values statics'))
+    | Some r =>
+      static_set_changed_rebuilt rebuilt_static_changed r s allocated statics
+        statics'
+    end.
+
+End Rebuilt_static_changed.
+
+(* [rewrite_stored_type_sound_statement], the static sets whose
+   representation changes included: the third run is related to the
+   first by [rebuilt_static_changed], and its static environment binds
+   the symbols as [statics_rebuilt_static_changed] and
+   [static_sets_whole_unchanged] say. A symbol of a static set that
+   changes, whose type is rewritten into the new representation as that
+   of any closure whose set changes, is bound by the third run to its
+   closure in that representation. *)
+Definition rewrite_static_type_sound_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    reprs_without_slots
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_static_type_sound_statement : Prop :=
+  rewrite_static_type_sound_with all_fixes.
+
+Definition rewrite_static_type_sound_landed_statement : Prop :=
+  rewrite_static_type_sound_with landed_fixes.
+
+(* [rewrite_stored_type_sound_slots_statement], the static sets whose
+   representation changes included: [rewrite_static_type_sound_statement]
+   where the representations keep value slots. *)
+Definition rewrite_static_type_sound_slots_with (fx : fixes) : Prop :=
+  ∀ (is_local : field -> bool) (F : facts) (T : tables)
+    (sets : list set_of_closures) (dominated : list (node * node))
+    (to_unbox tcr : list node) (e : expr) (tenv : Typing_env.t)
+    (canon : canon_fn) (statics statics' : static_env)
+    (valuation valuation' : env) (fuel : nat) (m : rewrite_metadata)
+    (t : flambda_type) (n : node) (v v' : value),
+    least_solution is_local F T ->
+    is_local_slots_only is_local ->
+    sets_of_graph (graph_of_facts F) sets ->
+    block_fields_of_one_kind (graph_of_facts F) ->
+    function_slots_mutual (graph_of_facts F) ->
+    typing_env_satisfied_strictly statics valuation tenv ->
+    env_in_fragment_with true valuation tenv ->
+    statics_allocated (solution_of_tables T) statics ->
+    statics_rebuilt_static_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    static_sets_whole_unchanged (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      statics statics' ->
+    copies_valued tenv canon valuation valuation' ->
+    FlambdaReaperUnboxing.check_dominated T dominated = true ->
+    FlambdaReaperUnboxingRefinesCallsSpec.check_unboxed_uses F T
+      (fst (FlambdaReaperUnboxing.unit_unboxed_fields F T dominated to_unbox
+              e))
+    = true ->
+    reprs_of_sets (graph_of_facts F)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e) ->
+    type_in_fragment_with true valuation t ->
+    rebuilt_static_changed (graph_of_facts F) (solution_of_tables T)
+      (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+         dominated to_unbox tcr e)
+      v n v' ->
+    metadata_at (solution_of_tables T) m n ->
+    type_satisfied statics valuation v t ->
+    type_satisfied statics' valuation' v'
+      (rewrite_arbitrary_u fx
+         (Rewrite_context F T is_local sets
+            (map fst
+               (FlambdaReaperUnboxing.unit_changed_representations is_local F
+                  T dominated to_unbox tcr e)))
+         tenv canon (FlambdaReaperUnboxing.bound_code_my_closures e)
+         (FlambdaReaperUnboxing.unit_changed_representations is_local F T
+            dominated to_unbox tcr e)
+         fuel m t).
+
+Definition rewrite_static_type_sound_slots_statement : Prop :=
+  rewrite_static_type_sound_slots_with all_fixes.
+
+Definition rewrite_static_type_sound_slots_landed_statement : Prop :=
+  rewrite_static_type_sound_slots_with landed_fixes.
 
 (* ======================================================================== *)
 (* The two runs                                                             *)

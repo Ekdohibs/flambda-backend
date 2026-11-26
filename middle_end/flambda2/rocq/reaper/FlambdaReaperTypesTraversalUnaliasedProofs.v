@@ -1896,6 +1896,37 @@ Proof.
            Ht Hrv Hat Hsat).
 Qed.
 
+(* The static sets whose representation changes included. *)
+Theorem static_type_sound_full :
+  static_type_sound_full_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Ht Hrv Hat
+    Hsat.
+  exact (TT.static_type_sound_traversal is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
+           Ht Hrv Hat Hsat).
+Qed.
+
+Theorem static_type_sound_full_landed :
+  static_type_sound_full_landed_statement.
+Proof.
+  intros is_local u T sets dominated to_unbox tcr e tenv canon statics
+    statics' valuation valuation' fuel m t n v v' Hfrag Hwfu Honce Hleast
+    Hlocal Hsets Henv Hfragt Halloc Hst Hwhole Hcopies Hdomc Huses Ht Hrv Hat
+    Hsat.
+  exact (TT.static_type_sound_traversal_landed is_local u T sets dominated
+           to_unbox tcr e tenv canon statics statics' valuation valuation'
+           fuel m t n v v' Hfrag Hwfu Honce Hleast Hlocal Hsets Henv Hfragt
+           Halloc Hst Hwhole Hcopies Hdomc Huses
+           (closures_unaliased_traversal u e Hfrag Hwfu Honce)
+           Ht Hrv Hat Hsat).
+Qed.
+
 (* The statements with [changed_unstored], as corollaries. *)
 Theorem changed_type_sound_full :
   changed_type_sound_full_statement.
