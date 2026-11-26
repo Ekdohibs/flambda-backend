@@ -1799,11 +1799,14 @@ Qed.
 
 End Final.
 
-Theorem closures_unaliased_traversal :
-  closures_unaliased_traversal_statement.
+(* [closures_unaliased_traversal] of the units of [in_heap_fragment]. *)
+Lemma closures_unaliased_traversal_heap (u : unit_interface) (e : expr) :
+  in_heap_fragment e = true -> well_formed_unit u e = true ->
+  variables_bound_once e = true ->
+  closures_unaliased (graph_of_facts (traverse_unit Auto u e)).
 Proof.
-  intros u e Hfrag Hwfu Honce.
-  destruct (TT.unit_premises u e Hfrag Hwfu Honce)
+  intros Hfrag Hwfu Honce.
+  destruct (TT.unit_premises_heap u e Hfrag Hwfu Honce)
     as (Hold & Hnl & Hns & Hwf).
   assert (Hb : NoDup (map fst (let_bindings e) ++ param_variables e)).
   { unfold variables_bound_once in Honce. apply distinct_NoDup in Honce.
@@ -1853,6 +1856,13 @@ Proof.
     destruct (Hinto _ x g b Hc H (or_introl eq_refl)) as (h & z & E & Hz).
     injection E as -> ->. exists h. split; [ reflexivity | ].
     apply CE.constructor_of_list. exact Hz.
+Qed.
+
+Theorem closures_unaliased_traversal :
+  closures_unaliased_traversal_statement.
+Proof.
+  intros u e Hfrag. apply closures_unaliased_traversal_heap.
+  exact (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e Hfrag).
 Qed.
 
 Theorem changed_type_sound_full : changed_type_sound_full_statement.

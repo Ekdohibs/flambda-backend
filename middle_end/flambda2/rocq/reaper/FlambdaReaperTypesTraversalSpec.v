@@ -106,7 +106,10 @@
    proved in FlambdaReaperTypesTraversalUnaliasedSpec.v, which states
    [changed_type_sound_traversal_statement] without it.
 
-   What is left out: [changed_unstored]. *)
+   What is left out: [changed_unstored]. The statements that ask
+   [in_flow_fragment] are made for the units with primitives of the heap
+   in FlambdaReaperTypesTraversalHeapSpec.v, with [_heap] in their
+   names. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

@@ -49,7 +49,10 @@
      without [closures_unaliased]: the closure types of a set whose
      representation changes are rewritten soundly, for the graph of the
      traversal of such a unit. [changed_type_sound_full_landed_statement]:
-     the same for the fixes to land (FlambdaReaperTypes.landed_fixes). *)
+     the same for the fixes to land (FlambdaReaperTypes.landed_fixes).
+
+   FlambdaReaperTypesTraversalHeapSpec.v makes these statements for the
+   units with primitives of the heap, with [_heap] in their names. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

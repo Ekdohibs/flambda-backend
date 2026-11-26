@@ -115,10 +115,9 @@
    name with a value, and the statements say nothing of such an
    environment. With a meaning that reads the cell of a location, the
    argument is to go through: [β] relates only locations whose allocation
-   the rebuild keeps, to cells of the same mutability and tag. Also left
-   out: the unboxing and the changes of representation with the heap
-   (FlambdaReaperTypesTraversalSpec.v), whose simulation is of
-   [in_flow_fragment]. *)
+   the rebuild keeps, to cells of the same mutability and tag. The
+   statements of the unboxing and of the changes of representation with
+   the heap are in FlambdaReaperTypesTraversalHeapSpec.v. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

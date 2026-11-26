@@ -1129,16 +1129,18 @@ Proof.
   - exact (IH Hnd' Hx Hy).
 Qed.
 
-(* What the premises of the statements give of the unit. *)
-Lemma unit_premises (u : unit_interface) (e : expr) :
-  in_flow_fragment e = true -> well_formed_unit u e = true ->
+(* What the premises of the statements give of the unit, for the units
+   of [in_heap_fragment]: of the fragment, only that the unit has no
+   older form of set of closures. *)
+Lemma unit_premises_heap (u : unit_interface) (e : expr) :
+  in_heap_fragment e = true -> well_formed_unit u e = true ->
   variables_bound_once e = true ->
   CE.no_old_sets e ∧ NoDup (map fst (let_bindings e))
   ∧ NoDup (map fst (CE.sym_bindings e)) ∧ sets_well_formed e = true.
 Proof.
   intros Hfrag Hwf Honce.
   assert (Hold : CE.no_old_sets e).
-  { unfold in_flow_fragment in Hfrag. apply andb_true_iff in Hfrag as [Hf _].
+  { unfold in_heap_fragment in Hfrag. apply andb_true_iff in Hfrag as [Hf _].
     exact (proj1 (CE.fragment_no_old_sets _ _ _) e Hf). }
   split; [ exact Hold | split; [ | split ] ].
   - unfold variables_bound_once in Honce. apply distinct_NoDup in Honce.
@@ -1150,6 +1152,17 @@ Proof.
   - unfold well_formed_unit in Hwf.
     repeat (apply andb_true_iff in Hwf as [Hwf ?]).
     assumption.
+Qed.
+
+(* What the premises of the statements give of the unit. *)
+Lemma unit_premises (u : unit_interface) (e : expr) :
+  in_flow_fragment e = true -> well_formed_unit u e = true ->
+  variables_bound_once e = true ->
+  CE.no_old_sets e ∧ NoDup (map fst (let_bindings e))
+  ∧ NoDup (map fst (CE.sym_bindings e)) ∧ sets_well_formed e = true.
+Proof.
+  intros Hfrag. apply unit_premises_heap.
+  exact (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e Hfrag).
 Qed.
 
 Section Graph.
@@ -1337,18 +1350,29 @@ Qed.
 
 End Graph.
 
+Lemma traversal_props_heap (u : unit_interface) (e : expr) :
+  in_heap_fragment e = true -> well_formed_unit u e = true ->
+  variables_bound_once e = true ->
+  function_slots_mutual (graph_of_facts (traverse_unit Auto u e))
+  ∧ function_slots_of_sets (graph_of_facts (traverse_unit Auto u e)).
+Proof.
+  intros Hfrag Hwfu Honce.
+  destruct (unit_premises_heap u e Hfrag Hwfu Honce)
+    as (Hold & Hnl & Hns & Hwf).
+  destruct (CE.traverse_unit_groups Auto u e Hnl Hns Hold)
+    as (Gs & a & Ha & Hinv & Hpres).
+  destruct (minv_unit Auto u e Hnl) as (a' & Ha' & Hm).
+  exact (graph_props Auto u e Hnl Hns Hwf Gs a Ha Hinv Hpres a' Ha' Hm).
+Qed.
+
 Lemma traversal_props (u : unit_interface) (e : expr) :
   in_flow_fragment e = true -> well_formed_unit u e = true ->
   variables_bound_once e = true ->
   function_slots_mutual (graph_of_facts (traverse_unit Auto u e))
   ∧ function_slots_of_sets (graph_of_facts (traverse_unit Auto u e)).
 Proof.
-  intros Hfrag Hwfu Honce.
-  destruct (unit_premises u e Hfrag Hwfu Honce) as (Hold & Hnl & Hns & Hwf).
-  destruct (CE.traverse_unit_groups Auto u e Hnl Hns Hold)
-    as (Gs & a & Ha & Hinv & Hpres).
-  destruct (minv_unit Auto u e Hnl) as (a' & Ha' & Hm).
-  exact (graph_props Auto u e Hnl Hns Hwf Gs a Ha Hinv Hpres a' Ha' Hm).
+  intros Hfrag. apply traversal_props_heap.
+  exact (FlambdaReaperFlowProofs.in_flow_fragment_in_heap_fragment e Hfrag).
 Qed.
 
 Theorem function_slots_mutual_traversal :
