@@ -145,16 +145,12 @@
    refines it, does not either, and the state is at a [Let] of a variable
    with a use (above).
 
+   The results of code, at the nodes of [code_dep.return], are in
+   FlambdaReaperTypesReturnsSpec.v, and the statements here in the
+   fragment [loose] (closure types that are not aliases) in
+   FlambdaReaperTypesLooseSpec.v.
+
    What is left out:
-   - The results of code: the model's traversal gives the results of
-     code nodes that are not variables ([Node_made], where the compiler
-     has the variables of [code_dep.return]), and
-     FlambdaReaperTypes.rewrite_result_type reads the metadata of a
-     variable; the statements are of the variables that the run binds.
-   - The fragment [loose] (closure types that are not aliases), which asks
-     that the static sets be kept whole, of the run of the rebuild with
-     changes of calling convention: FlambdaReaperTypesProofs.v proves it
-     of the plain rebuild only (its section [Rebuilt_sets]).
    - The states within a wrapper of both runs, for the third run.
    - The closure types of the sets whose representation changes, of the
      runs of [rr]: the statements of those types

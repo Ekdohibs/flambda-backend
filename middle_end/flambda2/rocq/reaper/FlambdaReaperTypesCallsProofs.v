@@ -63,7 +63,8 @@ From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaReaperUnboxingRefinesCallsProofs FlambdaHeapFreeSpec
   FlambdaHeapFreeProofs FlambdaNameAbstractionSpec FlambdaReaperTypesProofs
   FlambdaReaperTypesTermProofs FlambdaReaperTypesTraversalProofs
-  FlambdaReaperTypesCallsExitProofs FlambdaReaperTypesReprExitProofs.
+  FlambdaReaperTypesCallsExitProofs FlambdaReaperTypesReprExitProofs
+  FlambdaReaperTypesCcSetsProofs FlambdaClosuresProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaTypingEnv FlambdaTypingEnvSpec
   FlambdaEnvAliases.
@@ -91,6 +92,20 @@ Lemma statics_rebuilt_values (G : graph) (sol : solution)
   statics_rebuilt G sol statics statics''.
 Proof.
   intros Heq H s allocated Hl Hhu. rewrite Heq. exact (H s allocated Hl Hhu).
+Qed.
+
+(* [static_sets_whole] reads only the static values of the second run. *)
+Lemma static_sets_whole_values (sol : solution)
+    (statics statics' statics'' : static_env) :
+  static_values statics'' = static_values statics' ->
+  static_sets_whole sol statics statics' ->
+  static_sets_whole sol statics statics''.
+Proof.
+  intros Heq H s slot syms decls vs Hl Hhu.
+  destruct (H s slot syms decls vs Hl Hhu) as [Hs (vs' & Hall)].
+  split; [ exact Hs | ]. exists vs'. intros g s_g Hg.
+  destruct (Hall g s_g Hg) as [H1 H2]. rewrite Heq.
+  split; [ exact H1 | exact H2 ].
 Qed.
 
 (* The static values of a static environment, with no code. *)
@@ -308,7 +323,9 @@ Lemma cc_states (flag : reaper_preserve_direct_calls)
            (rd : read_record),
            step s = Exit k vs hp rd ->
            ∃ (vs' : list value) (rd' : read_record),
-             step t = Exit k vs' hp rd').
+             step t = Exit k vs' hp rd')
+      ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+          (state_statics t).
 Proof.
   intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
     Hvals Hccc Hwid Hcid Hcd n s Hrun Hs.
@@ -341,7 +358,7 @@ Proof.
     as (Hst & Halloc & Hvars & en & Hexpr).
   exists m, t. split; [ exact Hm | ].
   split; [ exact Hst | split; [ exact Halloc | split; [ exact Hvars | ] ] ].
-  split.
+  split; [ | split ].
   - intros y kind d body Hse Hhu. rewrite Hexpr, Hse.
     exact (rebuild_let_used _ _ _ _ _ _ _ _ _ en y kind d body Hhu).
   - intros k vs hp rd Hstep. unfold RP.answered_h in Hans.
@@ -349,6 +366,11 @@ Proof.
     destruct Hans as (vs' & hp' & rd' & Ht & _ & HE).
     destruct (HE (fun H => H)) as [-> _].
     exists vs', rd'. exact Ht.
+  - destruct Hrel as [_ (ctx & en' & ce & rets & _ & _ & _ & _ & Hsr & _)].
+    apply (TP.statics_rel_whole _ _ _ _ _ ltac:(do 10 eexists; exact Hsr)).
+    + exact (FlambdaClosuresProofs.well_formed_sets_bound u e n s Hwf Hrun).
+    + exact (FlambdaReaperTypesCcSetsProofs.cc_rebuilt_sets_bound _ _ _ _ _ b
+               u e m t Hwf Hm).
 Qed.
 
 (* ======================================================================== *)
@@ -642,6 +664,8 @@ Lemma calls_states (local : bool) (flag : reaper_preserve_direct_calls)
         (solution_of_tables T) (state_statics s)
         (values_only (state_statics t))
     ∧ statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+        (values_only (state_statics t))
     ∧ ∀ (x : variable) (v : value),
         lookup x (state_vars s) = Some v ->
         s_has_usage (solution_of_tables T) (Node_variable x) = true ->
@@ -675,7 +699,7 @@ Proof.
   destruct (cc_states flag is_local u e T _ ccw (unit_code_deps flag u e) b
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun Hs)
-    as (m & t & Hm & Hst & Halloc & Hvars & Hlets & _).
+    as (m & t & Hm & Hst & Halloc & Hvars & Hlets & _ & Hwhole).
   assert (Ht : step t <> Undefined).
   { intros Hu. apply Hng.
     destruct (FlambdaReaperCallingConventionsProofs
@@ -704,6 +728,9 @@ Proof.
   split; [ apply (statics_rebuilt_values _ _ _ (state_statics t));
            [ exact Hv | exact Hst ] | ].
   split; [ exact Halloc | ].
+  split;
+    [ exact (static_sets_whole_values _ _ _ (values_only (state_statics t3))
+               Hv Hwhole) | ].
   intros x v Hx Hhux.
   destruct (Hvars x v Hx Hhux) as (v_mid & Hx_t & Hrv).
   exists v_mid. split; [ exact Hrv | split ].
@@ -741,7 +768,9 @@ Lemma calls_exit (local : bool) (flag : reaper_preserve_direct_calls)
     ∧ statics_rebuilt (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) (state_statics s)
         (values_only (state_statics t))
-    ∧ statics_allocated (solution_of_tables T) (state_statics s).
+    ∧ statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+        (values_only (state_statics t)).
 Proof.
   intros Hprem (Hccc & Hwid & Hcalls & Hreads) Hrun Hexit.
   pose proof Hprem as (Hlocal & Hleast & Hfrag & Hdc & Hrk & Hwf & Hexits
@@ -754,7 +783,7 @@ Proof.
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun
               ltac:(rewrite Hexit; discriminate))
-    as (m & t & Hm & Hst & Halloc & _ & _ & Hex).
+    as (m & t & Hm & Hst & Halloc & _ & _ & Hex & Hwhole).
   destruct (Hex k vs hp rd Hexit) as (vs' & rd' & Ht).
   destruct (CX.uc_of_calls flag is_local u e T cannot_change dominated
               to_unbox b nr Hlocal Hfrag Hcheck Hcalls Hreads)
@@ -764,9 +793,12 @@ Proof.
               t k vs' hp rd' Hm Ht)
     as (m3 & t3 & rd3 & Hm3 & Ht3 & Hrel).
   exists m3, t3, vs', rd3.
-  split; [ exact Hm3 | split; [ exact Ht3 | split; [ | exact Halloc ] ] ].
-  apply (statics_rebuilt_values _ _ _ (state_statics t));
-    [ exact (uc_values _ _ _ _ _ _ _ _ _ Hrel) | exact Hst ].
+  split; [ exact Hm3 | split; [ exact Ht3 | split; [ | split ] ] ].
+  - apply (statics_rebuilt_values _ _ _ (state_statics t));
+      [ exact (uc_values _ _ _ _ _ _ _ _ _ Hrel) | exact Hst ].
+  - exact Halloc.
+  - exact (static_sets_whole_values _ _ _ (values_only (state_statics t3))
+             (uc_values _ _ _ _ _ _ _ _ _ Hrel) Hwhole).
 Qed.
 
 (* ======================================================================== *)
@@ -784,7 +816,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (calls_exit local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s k vs hp rd Hprem Hcalls Hrun Hexit)
-    as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc).
+    as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & _).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (type_satisfied_values_only (state_statics t)); [ reflexivity | ].
   apply (TP.rewrite_symbol_type_sound_in fx false Hfx is_local _ T sets tenv
@@ -826,7 +858,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (calls_states local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
-    as (m & t & Hm & Hst & Halloc & Hvars).
+    as (m & t & Hm & Hst & Halloc & _ & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & Hplain & _).
   exists m, t, v_mid.
   split; [ exact Hm | split; [ exact (Hplain Hin Hnone) | ] ].
@@ -874,7 +906,7 @@ Proof.
   apply andb_true_iff in Hcalls_nr as [_ Huses].
   destruct (calls_states local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
-    as (m & t & Hm & Hst & Halloc & Hvars).
+    as (m & t & Hm & Hst & Halloc & _ & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & _ & Hunb).
   destruct (fields_hold_values _ _ _ (Hunb fields Hfields))
     as (ws & Hws & Hvals).
@@ -951,7 +983,9 @@ Lemma repr_exit (local : bool) (flag : reaper_preserve_direct_calls)
     ∧ statics_rebuilt (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) (state_statics s)
         (values_only (state_statics t))
-    ∧ statics_allocated (solution_of_tables T) (state_statics s).
+    ∧ statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+        (values_only (state_statics t)).
 Proof.
   intros Hprem (Hccc & Hwid & Hrepr & Hreads) Hrun Hexit.
   pose proof Hprem as (Hlocal & Hleast & Hfrag & Hdc & Hrk & Hwf & Hexits
@@ -964,7 +998,7 @@ Proof.
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun
               ltac:(rewrite Hexit; discriminate))
-    as (m & t & Hm & Hst & Halloc & _ & _ & Hex).
+    as (m & t & Hm & Hst & Halloc & _ & _ & Hex & Hwhole).
   destruct (Hex k vs hp rd Hexit) as (vs' & rd' & Ht).
   destruct (RX.repr_calls_rr None flag is_local u e T cannot_change
               dominated to_unbox tcr b nr Hlocal Hfrag Hcheck Hrepr Hreads)
@@ -973,9 +1007,12 @@ Proof.
               rd' Hm Ht)
     as (m3 & t3 & rd3 & Hm3 & Ht3 & Hrel).
   exists m3, t3, vs', rd3.
-  split; [ exact Hm3 | split; [ exact Ht3 | split; [ | exact Halloc ] ] ].
-  apply (statics_rebuilt_values _ _ _ (state_statics t));
-    [ exact (RX.rr_values _ _ _ _ _ _ Hrel) | exact Hst ].
+  split; [ exact Hm3 | split; [ exact Ht3 | split; [ | split ] ] ].
+  - apply (statics_rebuilt_values _ _ _ (state_statics t));
+      [ exact (RX.rr_values _ _ _ _ _ _ Hrel) | exact Hst ].
+  - exact Halloc.
+  - exact (static_sets_whole_values _ _ _ (values_only (state_statics t3))
+             (RX.rr_values _ _ _ _ _ _ Hrel) Hwhole).
 Qed.
 
 Lemma repr_calls_types_gen (local : bool) (fx : fixes) :
@@ -989,7 +1026,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (repr_exit local flag is_local u e T cannot_change dominated
               to_unbox tcr b nr sets n s k vs hp rd Hprem Hrepr Hrun Hexit)
-    as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc).
+    as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & _).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (type_satisfied_values_only (state_statics t)); [ reflexivity | ].
   apply (TP.rewrite_symbol_type_sound_in fx false Hfx is_local _ T sets tenv
