@@ -138,9 +138,13 @@
      not an allocation), where the unit exits. The rebuilt unit fails the
      check of regions with every certificate, so the statement of the
      refinement holds of it by its premise. The commutation holds of it.
-     An artefact of the model: in the compiler the mode [Local] is a part
-     of the [Box_number] primitive, which rebuild.ml replaces whole by
-     poison ([rebuild_let_expr_holed], the case of [Box_number]).
+     The unit passes the check of regions, so the check is not kept by the
+     rebuild ([region_check_not_kept_statement]): no certificate for the
+     rebuilt unit can be built from one for the unit where the rebuild
+     makes a local boxed number poison. An artefact of the model: in the
+     compiler the mode [Local] is a part of the [Box_number] primitive,
+     which rebuild.ml replaces whole by poison ([rebuild_let_expr_holed],
+     the case of [Box_number]).
    - [local_set_counterexample_statement]. On a local set of two
      closures, the rebuild with regions removes the projection of the
      second closure, which has no use: the [Local_allocation] hides the
@@ -158,12 +162,13 @@
 
    WHAT IS NOT STATED
 
-   - The rebuild with unboxing. That with changes of calling convention
-     is stated in FlambdaReaperRegionsCcSpec.v.
+   - The rebuild with unboxing across calls. That with changes of
+     calling convention is stated in FlambdaReaperRegionsCcSpec.v, and
+     the local unboxing in FlambdaReaperRegionsUnboxSpec.v.
    - Units with a parameter of the kind [Region], or a local set of
      several closures.
    - That the rebuilt unit passes the check of regions wherever the unit
-     does: false ([boxed_poison_counterexample_statement]).
+     does: false ([region_check_not_kept_statement]).
    - Anything of a run that goes on for ever, or of the heap at the
      exit. *)
 
@@ -737,6 +742,21 @@ Definition boxed_poison_counterexample_statement : Prop :=
   ∧ region_run 10 (initial_region_state boxed_rebuilt empty_static_env base)
     = Region_undefined Not_of_the_conversion
   ∧ ~ regions_refine_observably empty_static_env base boxed boxed_rebuilt.
+
+(* The check of regions is not kept by the rebuild: [boxed] passes it,
+   with the certificate that says that nothing is local but what a local
+   allocation makes, and its rebuild for the least solution fails it with
+   every certificate ([boxed_poison_counterexample_statement]). *)
+Definition region_check_not_kept_statement : Prop :=
+  regions_plain [] boxed = true
+  ∧ least_solution (fun _ => false) (traverse_unit Auto interface boxed)
+      boxed_tables
+  ∧ region_check cert empty_static_env boxed = true
+  ∧ (∀ c : certificate,
+       region_check c empty_static_env
+         (rebuild_unit_from_tables (traverse_unit Auto interface boxed)
+            boxed_tables true boxed)
+       = false).
 
 (* The rebuild does not commute with the erasure on a local set of two
    closures ([local_set], which [regions_plain] refuses): rebuilt with

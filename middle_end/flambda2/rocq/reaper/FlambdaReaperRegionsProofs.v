@@ -834,6 +834,15 @@ Proof.
   discriminate E.
 Qed.
 
+Theorem region_check_not_kept : region_check_not_kept_statement.
+Proof.
+  destruct boxed_poison_counterexample
+    as (Hpl & Hleast & _ & _ & _ & _ & _ & _ & _ & Hreb & _ & _ & Hc & _).
+  split; [ exact Hpl | ]. split; [ exact Hleast | ].
+  split; [ vm_compute; reflexivity | ].
+  rewrite Hreb. exact Hc.
+Qed.
+
 Theorem local_set_counterexample : local_set_counterexample_statement.
 Proof.
   split; [ vm_compute; reflexivity | ].

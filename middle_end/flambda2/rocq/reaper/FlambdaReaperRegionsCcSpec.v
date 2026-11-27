@@ -108,7 +108,8 @@
 
    WHAT IS NOT STATED
 
-   - The rebuild with unboxing.
+   - The rebuild with unboxing across calls. The local unboxing is
+     stated in FlambdaReaperRegionsUnboxSpec.v.
    - Units with a parameter of the kind [Region], with a local set of
      several closures, or with code that returns a region.
    - Anything of a run that goes on for ever, or of the heap at the
