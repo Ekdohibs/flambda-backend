@@ -87,7 +87,16 @@
      what is left of each over-application to the code over-applied
      ([step_rem_ok] ties it to [REM], the code that what is left of any
      over-application may call, which is too coarse for a check per
-     call). *)
+     call).
+
+   FlambdaReaperUnboxingRefinesNever2Spec.v admits the first shape where
+   the closure of the code is never brought to the callee itself (only
+   partial applications of it, which hold a group of arguments at least),
+   and the code has one parameter more than the call has groups: the unit
+   of [never_partial_example_statement] is of its fragments, and its
+   rebuilt unit refines the unit by its statements
+   ([never_partial2_example_statement], below). The second shape is not
+   admitted. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -104,7 +113,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperUnboxingRefinesReach2Spec
   FlambdaReaperUnboxingRefinesReach3Spec
   FlambdaReaperUnboxingRefinesNeverSpec
-  FlambdaReaperUnboxingRefinesUnitFlowSpec.
+  FlambdaReaperUnboxingRefinesUnitFlowSpec
+  FlambdaReaperUnboxingRefinesNever2Spec.
 From OxCamlFlambda2 Require FlambdaReaperCallingConventionsSpec
   FlambdaReaperNeverReturnsSpec.
 Import ListNotations.
@@ -361,3 +371,34 @@ Definition never_over_example_statement : Prop :=
   ∧ program_refines OverNeverExample.first OverNeverExample.rebuilt
   ∧ program_refines_observably OverNeverExample.unit_expr
       OverNeverExample.rebuilt.
+
+(* ======================================================================== *)
+(* The first shape, admitted                                                *)
+(* ======================================================================== *)
+
+(* The unit of [never_partial_example_statement] is of the fragments of
+   FlambdaReaperUnboxingRefinesNever2Spec.v, read off the first rebuilt
+   unit and off the unit's own analysis, with the least solutions and the
+   code of [used_never_returns]: its rebuilt unit refines its first rebuild
+   and the unit up to observation, by the statements of that file. *)
+Definition never_partial2_example_statement : Prop :=
+  calls_unboxing_never2_nr PartialNeverExample.nr PartialNeverExample.facts
+    PartialNeverExample.tables PartialNeverExample.cannot_change
+    PartialNeverExample.code_deps [] [] PartialNeverExample.facts1
+    PartialNeverExample.tables1 PartialNeverExample.unit_expr
+  = true
+  ∧ calls_unboxing_unit_never2_nr PartialNeverExample.nr
+      PartialNeverExample.facts PartialNeverExample.tables
+      PartialNeverExample.cannot_change PartialNeverExample.code_deps [] []
+      PartialNeverExample.unit_expr
+    = true
+  ∧ program_refines PartialNeverExample.first
+      (rebuild_unit_unbox_fixed PartialNeverExample.facts
+         PartialNeverExample.tables PartialNeverExample.cannot_change
+         PartialNeverExample.code_deps [] [] true
+         PartialNeverExample.unit_expr)
+  ∧ program_refines_observably PartialNeverExample.unit_expr
+      (rebuild_unit_unbox_fixed PartialNeverExample.facts
+         PartialNeverExample.tables PartialNeverExample.cannot_change
+         PartialNeverExample.code_deps [] [] true
+         PartialNeverExample.unit_expr).

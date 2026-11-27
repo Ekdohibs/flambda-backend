@@ -27,8 +27,9 @@
 
 (* A run invariant: every partial application that a state holds was
    made by the machine, so it holds fewer groups of arguments than the
-   code of its closure has parameters ([pa_bound]). Statics only grow,
-   with fresh keys, so the bound is stable ([pa_ok_extend]).
+   code of its closure has parameters ([pa_bound]), and a group at least
+   ([pa_made]). Statics only grow, with fresh keys, so the bound is stable
+   ([pa_ok_extend]).
    FlambdaSemanticsProofs.step_values_all asks [P] of a partial
    application to be exactly [P] of its closure and its arguments; its
    call lemmas are copied here with the bound given where
@@ -57,6 +58,23 @@ Import ListNotations.
 (* The call lemmas, with the bound at a partial application                 *)
 (* ======================================================================== *)
 
+(* A partial application holds a group of arguments at least: a call
+   with no argument of code that has parameters is undefined. *)
+Lemma partial_groups_nonempty (args_arity return_arity params_arity
+    result_arity : arity) :
+  length args_arity < length params_arity ->
+  partial_or_over_application args_arity return_arity params_arity
+    result_arity
+  = true ->
+  args_arity <> [].
+Proof.
+  intros Hlt Hpo ->. unfold partial_or_over_application in Hpo.
+  cbv zeta in Hpo. cbn [length] in Hlt, Hpo.
+  destruct (Nat.ltb (length params_arity) 0) eqn:E;
+    [ apply Nat.ltb_lt in E; lia | ].
+  rewrite andb_false_r in Hpo. discriminate Hpo.
+Qed.
+
 Section Values_bound.
 
 Variable P : value -> Prop.
@@ -74,7 +92,7 @@ Hypothesis P_partial_made :
     (c : code) (args : list value) (args_arity : arity),
     closure_of statics callee = Some (called, slots) ->
     lookup called (static_code statics) = Some c ->
-    length args_arity < length (code_params_arity c) ->
+    length args_arity < length (code_params_arity c) -> args_arity <> [] ->
     P callee -> Forall P args ->
     P (Value_partial_application callee args args_arity).
 
@@ -95,14 +113,14 @@ Proof.
   pose proof (arguments_for_code_forall P _ _ _ _ _ _ Hfields Hvs Hargs)
     as Hvs'.
   destruct (shape_of_code_call_cases _ _ _ _ _ _ Hcall)
-    as [[_ ->] | [(_ & _ & _ & ->) | (Hlt & _ & _ & _ & ->)]];
+    as [[_ ->] | [(_ & _ & _ & ->) | (Hlt & _ & Hpo & _ & ->)]];
     simpl.
   - split; assumption.
   - rewrite <- (firstn_skipn (cardinal_unarized (code_params_arity c)) vs')
       in Hvs'.
     apply Forall_app in Hvs'. split; [ exact Hclosure | exact Hvs' ].
   - exact (P_partial_made closure called slots c vs' args_arity' Hcl Hc Hlt
-             Hclosure Hvs').
+             (partial_groups_nonempty _ _ _ _ Hlt Hpo) Hclosure Hvs').
 Qed.
 
 Lemma shape_of_call_values_bound (callee : value) (kind : call_kind)
@@ -216,7 +234,7 @@ Lemma step_values_bound (P : static_env -> value -> Prop)
      (args_arity : arity),
     closure_of statics callee = Some (called, slots) ->
     lookup called (static_code statics) = Some c ->
-    length args_arity < length (code_params_arity c) ->
+    length args_arity < length (code_params_arity c) -> args_arity <> [] ->
     P statics callee -> Forall (P statics) args ->
     P statics (Value_partial_application callee args args_arity)) ->
   state_values_all P Q s ->
@@ -359,9 +377,15 @@ Definition pa_bound (statics : static_env) (cl : value) (args_arity : arity)
     ∧ lookup called (static_code statics) = Some c
     ∧ length args_arity < length (code_params_arity c).
 
+(* A partial application as the machine makes it: [pa_bound], and a group
+   of arguments at least. *)
+Definition pa_made (statics : static_env) (cl : value) (args_arity : arity)
+    : Prop :=
+  pa_bound statics cl args_arity ∧ args_arity <> [].
+
 Definition pa_ok (statics : static_env) (v : value) : Prop :=
   ∀ (cl : value) (args_arity : arity),
-    (cl, args_arity) ∈ partials_of_value v -> pa_bound statics cl args_arity.
+    (cl, args_arity) ∈ partials_of_value v -> pa_made statics cl args_arity.
 
 Definition static_pa_ok (statics : static_env)
     (a : statically_allocated_value) : Prop :=
@@ -376,7 +400,7 @@ Proof. intros H cl aa Hin. rewrite H in Hin. destruct Hin. Qed.
 
 Lemma pa_ok_list (statics : static_env) (vs : list value) :
   (∀ (cl : value) (aa : arity),
-     (cl, aa) ∈ flat_map partials_of_value vs -> pa_bound statics cl aa)
+     (cl, aa) ∈ flat_map partials_of_value vs -> pa_made statics cl aa)
   <-> ∀ v : value, v ∈ vs -> pa_ok statics v.
 Proof.
   split.
@@ -390,7 +414,7 @@ Lemma pa_ok_slots (statics : static_env)
     (slots : list (value_slot * value)) :
   (∀ (cl : value) (aa : arity),
      (cl, aa) ∈ flat_map (fun slot => partials_of_value (snd slot)) slots ->
-     pa_bound statics cl aa)
+     pa_made statics cl aa)
   <-> ∀ (w : value_slot) (v : value), (w, v) ∈ slots -> pa_ok statics v.
 Proof.
   split.
@@ -404,15 +428,18 @@ Lemma pa_ok_partial (statics : static_env) (callee : value)
     (args : list value) (args_arity : arity) :
   pa_ok statics (Value_partial_application callee args args_arity)
   <-> pa_bound statics callee args_arity
-      ∧ pa_ok statics callee ∧ Forall (pa_ok statics) args.
+      ∧ pa_ok statics callee ∧ Forall (pa_ok statics) args
+      ∧ args_arity <> [].
 Proof.
   unfold pa_ok at 1. cbn [partials_of_value]. rewrite Forall_forall.
   split.
-  - intros H. split; [ apply H; left; reflexivity | ]. split.
+  - intros H. pose proof (H _ _ (or_introl eq_refl)) as [Hb Hne].
+    split; [ exact Hb | ]. split; [ | split; [ | exact Hne ] ].
     + intros cl aa Hin. apply H. right. apply in_or_app. left. exact Hin.
     + apply pa_ok_list. intros cl aa Hin. apply H. right. apply in_or_app.
       right. exact Hin.
-  - intros (Hb & Hc & Ha) cl aa [E | Hin]; [ injection E as <- <-; exact Hb | ].
+  - intros (Hb & Hc & Ha & Hne) cl aa [E | Hin];
+      [ injection E as <- <-; exact (conj Hb Hne) | ].
     apply in_app_or in Hin as [Hin | Hin]; [ exact (Hc cl aa Hin) | ].
     exact (proj2 (pa_ok_list statics args) Ha cl aa Hin).
 Qed.
@@ -433,7 +460,8 @@ Qed.
 Lemma pa_ok_extend (statics statics' : static_env) (v : value) :
   statics_extend statics statics' -> pa_ok statics v -> pa_ok statics' v.
 Proof.
-  intros Hext H cl aa Hin. exact (pa_bound_extend _ _ cl aa Hext (H cl aa Hin)).
+  intros Hext H cl aa Hin. destruct (H cl aa Hin) as [Hb Hne].
+  exact (conj (pa_bound_extend _ _ cl aa Hext Hb) Hne).
 Qed.
 
 (* What a static environment binds satisfies [pa_ok]. *)
@@ -721,11 +749,13 @@ Proof.
     end).
   { apply (step_values_bound pa_ok static_pa_ok s).
     - intros statics callee args aa H. apply pa_ok_partial in H.
-      exact (proj2 H).
-    - intros statics callee called slots c args aa Hcl Hc Hlt Hcallee Hargs.
+      exact (conj (proj1 (proj2 H)) (proj1 (proj2 (proj2 H)))).
+    - intros statics callee called slots c args aa Hcl Hc Hlt Hne Hcallee
+        Hargs.
       apply pa_ok_partial.
       split; [ exists called, slots, c; split; [ exact Hcl | ] | ];
-        [ split; [ exact Hc | exact Hlt ] | split; assumption ].
+        [ split; [ exact Hc | exact Hlt ]
+        | split; [ assumption | split; [ assumption | exact Hne ] ] ].
     - exact Hall.
     - intros size tuple fields Ht Hf.
       apply (tuple_fields_forall _ (state_statics s) size tuple fields);
