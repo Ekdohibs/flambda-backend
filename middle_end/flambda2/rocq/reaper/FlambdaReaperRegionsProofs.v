@@ -45,7 +45,8 @@ From OxCamlFlambda2 Require FlambdaSemanticsProofs
   FlambdaReaperSolutionProofs FlambdaReaperLeastProofs FlambdaReaperFlowProofs
   FlambdaReaperLocalFieldsProofs FlambdaRegionsErasureProofs
   FlambdaRegionsCheckSoundProofs FlambdaNameAbstractionProofs
-  FlambdaRegionsCallsProofs FlambdaRegionsCheckProofs.
+  FlambdaRegionsCallsProofs FlambdaRegionsCheckProofs
+  FlambdaReaperRegionsKeepsProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -724,6 +725,33 @@ Proof.
                 Hdc Hrk Hwf Hexits Hc' Hlrs' Hexact' (fresh_name_erase e))
     as Hbase.
   rewrite <- HF'def in Hbase. exact Hbase.
+Qed.
+
+(* ======================================================================== *)
+(* What the rebuild keeps                                                   *)
+(* ======================================================================== *)
+
+Theorem rebuild_keeps_erasable : rebuild_keeps_erasable_statement.
+Proof.
+  intros F T b e.
+  exact (FlambdaReaperRegionsKeepsProofs.rebuild_keeps_erasable F T b e).
+Qed.
+
+Theorem rebuild_keeps_fresh : rebuild_keeps_fresh_statement.
+Proof.
+  intros F T b e base.
+  exact (FlambdaReaperRegionsKeepsProofs.rebuild_keeps_fresh F T b e base).
+Qed.
+
+Theorem least_rebuild_regions_refines_checked :
+  least_rebuild_regions_refines_checked_statement.
+Proof.
+  intros flag is_local u e T b cert base Hpl Hslots Hlocal Hfrag Hdc Hrk
+    Hwf Hexits Hleast Hfe Hee Hcheck.
+  apply (least_rebuild_regions_refines flag is_local u e T b cert base);
+    try assumption.
+  - exact (rebuild_keeps_fresh _ T b e base Hpl Hfe).
+  - exact (rebuild_keeps_erasable _ T b e Hpl Hee).
 Qed.
 
 (* ======================================================================== *)

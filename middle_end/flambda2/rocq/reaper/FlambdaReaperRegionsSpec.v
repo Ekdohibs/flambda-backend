@@ -106,6 +106,16 @@
    machine of regions stops without a step only where the run of its
    erasure goes wrong.
 
+   The other premises on the rebuilt unit follow from those on the unit.
+   On the fragment, for any facts and tables, the rebuild keeps
+   [erasable] ([rebuild_keeps_erasable_statement]): it makes no poison of
+   the kind [Region], as a variable of that kind always has a use and is
+   the argument of no call, and no handler with a parameter of that kind,
+   as no parameter of a handler is of that kind and no call returns one.
+   And it makes no symbol ([rebuild_keeps_fresh_statement]). So the
+   refinement holds with the check of regions as the one premise on the
+   rebuilt unit ([least_rebuild_regions_refines_checked_statement]).
+
    The proof: the erased unit is refined by its rebuild with the facts of
    its traversal and the least solution of the unit with the tuples that
    the erasure adds (the alias of each variable that has any source to the
@@ -148,14 +158,12 @@
 
    WHAT IS NOT STATED
 
-   - The rebuild with changes of calling convention, and with unboxing.
+   - The rebuild with unboxing. That with changes of calling convention
+     is stated in FlambdaReaperRegionsCcSpec.v.
    - Units with a parameter of the kind [Region], or a local set of
      several closures.
-   - That the rebuilt unit is erasable and has fresh symbols wherever the
-     unit has: premises, which the rebuild is believed to keep on the
-     fragment (it makes no poison of the kind [Region] there, and no
-     symbol). That it passes the check of regions wherever the unit does
-     is false ([boxed_poison_counterexample_statement]).
+   - That the rebuilt unit passes the check of regions wherever the unit
+     does: false ([boxed_poison_counterexample_statement]).
    - Anything of a run that goes on for ever, or of the heap at the
      exit. *)
 
@@ -407,6 +415,54 @@ Definition least_rebuild_regions_refines_statement : Prop :=
          preserve_direct_calls e)
       empty_static_env
     = true ->
+    region_check cert empty_static_env
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e)
+    = true ->
+    regions_refine_observably empty_static_env base e
+      (rebuild_unit_from_tables (traverse_unit flag u e) T
+         preserve_direct_calls e).
+
+(* On the fragment, for any facts and tables, the rebuilt unit is
+   erasable wherever the unit is: the rebuild makes no poison of the kind
+   [Region] (a variable of that kind is always used, and none is the
+   argument of a call), and no handler with a parameter of that kind. *)
+Definition rebuild_keeps_erasable_statement : Prop :=
+  ∀ (F : facts) (T : tables) (preserve_direct_calls : bool) (e : expr),
+    regions_plain [] e = true ->
+    erasable e empty_static_env = true ->
+    erasable (rebuild_unit_from_tables F T preserve_direct_calls e)
+      empty_static_env
+    = true.
+
+(* And the rebuilt unit has no symbol at or above the base wherever the
+   unit has none: the rebuild makes no symbol. *)
+Definition rebuild_keeps_fresh_statement : Prop :=
+  ∀ (F : facts) (T : tables) (preserve_direct_calls : bool) (e : expr)
+    (base : symbol),
+    regions_plain [] e = true ->
+    region_names_fresh base e empty_static_env = true ->
+    region_names_fresh base
+      (rebuild_unit_from_tables F T preserve_direct_calls e) empty_static_env
+    = true.
+
+(* So [least_rebuild_regions_refines_statement] holds with no premise on
+   the rebuilt unit but the check of regions. *)
+Definition least_rebuild_regions_refines_checked_statement : Prop :=
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (cert : certificate) (base : symbol),
+    regions_plain [] e = true ->
+    is_local_slots_only is_local ->
+    (∀ f : field, is_local f = false) ∨ projection_free (erase [] e) = true ->
+    in_flow_fragment (erase [] e) = true ->
+    any_kind_arguments (erase [] e) = true ->
+    results_kinded [] [] (erase [] e) = true ->
+    well_formed_unit u (erase [] e) = true ->
+    exits_one_value u (erase [] e) = true ->
+    least_solution is_local (traverse_unit flag u e) T ->
+    region_names_fresh base e empty_static_env = true ->
+    erasable e empty_static_env = true ->
     region_check cert empty_static_env
       (rebuild_unit_from_tables (traverse_unit flag u e) T
          preserve_direct_calls e)
