@@ -119,7 +119,21 @@
    ([ClosuresReachExample]): the set of [x60] changes its representation
    beside a call of known arity whose code is not known, of the closure of
    56 or of 57; and its rebuild in the mode of the fix refines it up to
-   observation. *)
+   observation.
+
+   [repr_reach_never_example_statement]: the same unit with codes 56 and
+   57 that raise in place of returning ([ClosuresReachNeverExample]), so
+   that the call whose code is not known never returns: a unit of
+   [repr_flow_unboxing_nr] for the code 56 and 57 taken to never return,
+   and not for no code, nor of [repr_calls_unboxing_nr]; its rebuild in
+   the mode of the fix gives the call a handler [Invalid]; the unit and
+   its rebuild raise the same exception; and the rebuilt unit refines the
+   unit up to observation.
+
+   What is left out of the fragment, above, is in the S7 log; that the
+   relation of the proofs, whose shape a file of the types reads
+   (FlambdaReaperTypesReprExitProofs.v), has no state within a wrapper of
+   both runs keeps wrappers of calls that return out. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
@@ -898,3 +912,136 @@ Definition repr_reach_ind_call_example_statement : Prop :=
     = Exit 1%positive ClosuresReachExample.result empty_heap no_reads
   ∧ program_refines_observably ClosuresReachExample.unit_expr
       ClosuresReachExample.rebuilt.
+
+(* The unit of [ClosuresReachExample] with codes 56 and 57 that raise their
+   parameter plus 1, resp. 2, in place of returning it, so that the call of
+   [x31], whose code is not known, never returns; the unit raises
+   7 + 8 + 32 + 1. *)
+Module ClosuresReachNeverExample.
+
+Local Open Scope positive_scope.
+
+(* [x] raised to the exception continuation [exn] of the code. *)
+Definition raise_to (exn : continuation) (x : variable) : expr :=
+  Apply_cont {| ac_continuation := exn; ac_args := [Var x];
+                ac_trap_action := Some (Pop exn None) |}.
+
+Definition code_56 : code :=
+  Code [42] 43 5 6 ClosuresReachExample.metadata
+    (Let 44 Value (TwoFieldsExample.add (Var 42) (int 1))
+       (raise_to 6 44)).
+
+Definition code_57 : code :=
+  Code [46] 47 7 8 ClosuresReachExample.metadata
+    (Let 48 Value (TwoFieldsExample.add (Var 46) (int 2))
+       (raise_to 8 48)).
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 54 TwoFieldsExample.code_54; Bind_code 56 code_56;
+     Bind_code 57 code_57]
+    (Let 10 Value (make_block [int 7; int 8])
+       (Let 60 Value (Closure_of_set 70 [(70, 54)] [(80, Var 10)])
+          (ClosuresReachExample.tail (Indirect_known_arity None)
+             (Apply (ClosuresReachExample.call 60 (Direct 54) [int 32] 20))))).
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match FlambdaReaperLeast.compute_least no_local facts 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+Definition dominated : list (node * node) := derive_dominated tables.
+
+Definition to_unbox : list node :=
+  derive_to_unbox no_local facts tables [] max_unbox_size false.
+
+Definition tcr : list node :=
+  derive_to_change_representation no_local facts tables [] max_unbox_size
+    false to_unbox.
+
+Definition cannot_change : list node := derive_cannot_change facts tables.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+Definition first : expr :=
+  first_rebuild Auto interface unit_expr tables cannot_change true.
+
+Definition facts1 : FlambdaReaperGraphSpec.facts :=
+  traverse_unit Auto interface first.
+
+Definition tables1 : FlambdaReaperGraphSpec.tables :=
+  match FlambdaReaperLeast.compute_least no_local facts1 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+(* The code taken to never return. *)
+Definition nr (id : code_id) : bool := Pos.eqb id 56 || Pos.eqb id 57.
+
+Definition rebuilt : expr :=
+  rebuild_unit_unbox_repr_fixed no_local facts tables cannot_change code_deps
+    dominated to_unbox tcr true unit_expr.
+
+(* What the unit and its rebuild raise. *)
+Definition result : list value := [Value_const (Tagged_immediate 48)].
+
+End ClosuresReachNeverExample.
+
+(* With the tables of the least solution, of the unit and of the first
+   rebuilt unit: the set of [x60] changes its representation; the call of
+   [x31] has no code that the solution gives, and the flow brings 56 and 57
+   to [x31], not 54. The unit is of [repr_flow_unboxing_nr] for the code 56
+   and 57 taken to never return, not for no code, and not of
+   [repr_calls_unboxing_nr]; the unit and its rebuild in the mode of the
+   fix (where the call of [x31] returns to a handler [Invalid], and the
+   handler 22 is dropped) raise [result] through the exception
+   continuation 2 of the unit; and the rebuilt unit refines the unit up to
+   observation. *)
+Definition repr_reach_never_example_statement : Prop :=
+  mem_node (v 60) ClosuresReachNeverExample.tcr = true
+  ∧ code_id_actually_called ClosuresReachNeverExample.facts
+      (solution_of_tables ClosuresReachNeverExample.tables)
+      (ClosuresReachExample.call_31 (Indirect_known_arity None))
+    = None
+  ∧ flow_reach2 ClosuresReachNeverExample.facts1
+      ClosuresReachNeverExample.tables1 true 31%positive 56%positive
+    = true
+  ∧ flow_reach2 ClosuresReachNeverExample.facts1
+      ClosuresReachNeverExample.tables1 true 31%positive 57%positive
+    = true
+  ∧ flow_reach2 ClosuresReachNeverExample.facts1
+      ClosuresReachNeverExample.tables1 true 31%positive 54%positive
+    = false
+  ∧ repr_calls_unboxing_nr ClosuresReachNeverExample.nr no_local
+      ClosuresReachNeverExample.facts ClosuresReachNeverExample.tables
+      ClosuresReachNeverExample.cannot_change
+      ClosuresReachNeverExample.code_deps ClosuresReachNeverExample.dominated
+      ClosuresReachNeverExample.to_unbox ClosuresReachNeverExample.tcr
+      ClosuresReachNeverExample.unit_expr
+    = false
+  ∧ repr_flow_unboxing_nr (fun _ => false) no_local
+      ClosuresReachNeverExample.facts ClosuresReachNeverExample.tables
+      ClosuresReachNeverExample.cannot_change
+      ClosuresReachNeverExample.code_deps ClosuresReachNeverExample.dominated
+      ClosuresReachNeverExample.to_unbox ClosuresReachNeverExample.tcr
+      ClosuresReachNeverExample.facts1 ClosuresReachNeverExample.tables1
+      ClosuresReachNeverExample.unit_expr
+    = false
+  ∧ repr_flow_unboxing_nr ClosuresReachNeverExample.nr no_local
+      ClosuresReachNeverExample.facts ClosuresReachNeverExample.tables
+      ClosuresReachNeverExample.cannot_change
+      ClosuresReachNeverExample.code_deps ClosuresReachNeverExample.dominated
+      ClosuresReachNeverExample.to_unbox ClosuresReachNeverExample.tcr
+      ClosuresReachNeverExample.facts1 ClosuresReachNeverExample.tables1
+      ClosuresReachNeverExample.unit_expr
+    = true
+  ∧ run 60 (on_its_own ClosuresReachNeverExample.unit_expr)
+    = Exit 2%positive ClosuresReachNeverExample.result empty_heap no_reads
+  ∧ run 60 (on_its_own ClosuresReachNeverExample.rebuilt)
+    = Exit 2%positive ClosuresReachNeverExample.result empty_heap no_reads
+  ∧ program_refines_observably ClosuresReachNeverExample.unit_expr
+      ClosuresReachNeverExample.rebuilt.

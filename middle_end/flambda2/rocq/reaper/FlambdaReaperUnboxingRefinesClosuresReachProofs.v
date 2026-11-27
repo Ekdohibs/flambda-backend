@@ -280,3 +280,19 @@ Proof.
   - exact RCP.no_local_slots.
   - left. intros f. reflexivity.
 Qed.
+
+Theorem repr_reach_never_example : repr_reach_never_example_statement.
+Proof.
+  do 10 (split; [ vm_compute; reflexivity | ]).
+  apply (rebuild_repr_reach_observably Auto no_local interface
+           ClosuresReachNeverExample.unit_expr
+           ClosuresReachNeverExample.tables
+           ClosuresReachNeverExample.tables1
+           ClosuresReachNeverExample.cannot_change
+           ClosuresReachNeverExample.dominated
+           ClosuresReachNeverExample.to_unbox ClosuresReachNeverExample.tcr
+           true ClosuresReachNeverExample.nr);
+    try (vm_compute; reflexivity).
+  - exact RCP.no_local_slots.
+  - left. intros f. reflexivity.
+Qed.

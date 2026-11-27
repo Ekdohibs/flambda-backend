@@ -515,11 +515,32 @@ Definition crel (r : closure_repr) (v v' : value) : Prop :=
         (Field_value_slot w, u) ∈ cr_fields r ->
         ∃ v0 : value, lookup w vs = Some v0 ∧ slot_holds vs' u v0.
 
+(* [crel], with the value slots of the closure of the second run exactly
+   the new slots of the representation, in their order, each once, as the
+   rebuild makes them (FlambdaReaperUnboxing.changed_value_slots); the
+   fields of the representation are value slots, and the closure of the
+   first run is at a function slot of its set. *)
+Definition crel_exact (r : closure_repr) (v v' : value) : Prop :=
+  crel r v v'
+  ∧ ∃ (decls : list (function_slot * code_id))
+      (vs vs' : list (value_slot * value)),
+      v = Value_closure_of_set (cr_current r) decls vs
+      ∧ v'
+        = Value_closure_of_set (current_slot r)
+            (rename_function_decls r decls) vs'
+      ∧ lookup (cr_current r) decls <> None
+      ∧ map fst vs' = map fst (fields_leaves (cr_fields r))
+      ∧ NoDup (map fst vs')
+      ∧ ∀ fu : field * unboxed_field,
+          fu ∈ cr_fields r ->
+          ∃ (w : value_slot) (u : unboxed_field),
+            fu = (Field_value_slot w, u).
+
 Definition env_rel_c (vars vars' : env) : Prop :=
   env_rel M vars vars'
   ∧ ∀ (x : variable) (r : closure_repr) (w : value),
       CH x = Some r -> lookup x vars = Some w ->
-      ∃ w' : value, lookup x vars' = Some w' ∧ crel r w w'.
+      ∃ w' : value, lookup x vars' = Some w' ∧ crel_exact r w w'.
 
 Definition code_rel (id : code_id) (c c' : code) : Prop :=
   ∃ ci : code_info,
@@ -814,7 +835,7 @@ Qed.
 
 Lemma env_rel_c_bind_changed (vars vars' : env) (x : variable)
     (r : closure_repr) (w w' : value) :
-  env_rel_c M CH vars vars' -> CH x = Some r -> crel r w w' ->
+  env_rel_c M CH vars vars' -> CH x = Some r -> crel_exact r w w' ->
   env_rel_c M CH ((x, w) :: vars) ((x, w') :: vars').
 Proof.
   intros [[Hplain Hfs] Hch] Hx Hc. split; [ split | ].
@@ -956,6 +977,74 @@ Proof.
     split; [ reflexivity | exact Hin' ].
 Qed.
 
+
+(* The keys of the value slots of a closure made: those of its slots. *)
+Lemma eval_value_slots_keys (vars : env) (l : list (value_slot * simple))
+    (vs : list (value_slot * value)) :
+  eval_value_slots vars l = Some vs -> map fst vs = map fst l.
+Proof.
+  revert vs. induction l as [ | [w0 s0] l IH]; intros vs Hl;
+    [ injection Hl as <-; reflexivity | ].
+  cbn [eval_value_slots] in Hl.
+  destruct (eval_simple vars s0) as [v0 | ]; [ | discriminate Hl ].
+  destruct (eval_value_slots vars l) as [vs0 | ] eqn:Hvs0;
+    [ | discriminate Hl ].
+  cbn in Hl. injection Hl as <-. cbn [map fst]. f_equal. exact (IH vs0 eq_refl).
+Qed.
+
+(* The new slots of the fields of a set related are the leaves of the
+   fields, in their order. *)
+Lemma new_slots_keys_c (vs : list (value_slot * simple))
+    (fields : unboxed_fields) :
+  Forall (set_field_ok M CH vs) fields ->
+  map fst (flat_map (new_slot M vs) fields) = map fst (fields_leaves fields).
+Proof.
+  induction 1 as [ | [f u] fields Hfu _ IH]; [ reflexivity | ].
+  cbn [flat_map]. rewrite leaves_cons, !map_app, IH. f_equal.
+  destruct f; try contradiction. cbn [set_field_ok] in Hfu.
+  destruct Hfu as (a & Ha & Hu). unfold new_slot. rewrite Ha.
+  destruct u as [s | nested]; [ reflexivity | ].
+  destruct Hu as (b & fb & pairs & -> & _ & Hb & Hp). rewrite Hb, Hp.
+  rewrite map_map. cbn [field_kind].
+  destruct (pairs_spec _ _ _ _ Hp) as (_ & _ & Hc & _).
+  rewrite <- Hc. apply map_ext. intros [[s x] k]. reflexivity.
+Qed.
+
+(* The closures of a set whose representation changes, made by the two
+   runs from related environments, are related by [crel_exact]. *)
+Lemma set_crel_exact (vars : env) (r : closure_repr)
+    (decls : list (function_slot * code_id))
+    (vs : list (value_slot * simple)) (vs1 vs2 : list (value_slot * value))
+    (code : code_id) :
+  lookup (cr_current r) decls = Some code ->
+  lookup (current_slot r) (rename_function_decls r decls)
+  = lookup (cr_current r) decls ->
+  Forall (set_field_ok M CH vs) (cr_fields r) ->
+  NoDup (map fst (new_slots M r vs)) ->
+  eval_value_slots vars (new_slots M r vs) = Some vs2 ->
+  (∀ (w : value_slot) (u : unboxed_field),
+     (Field_value_slot w, u) ∈ cr_fields r ->
+     ∃ v0 : value, lookup w vs1 = Some v0 ∧ slot_holds vs2 u v0) ->
+  crel_exact r (Value_closure_of_set (cr_current r) decls vs1)
+    (Value_closure_of_set (current_slot r) (rename_function_decls r decls)
+       vs2).
+Proof.
+  intros Hcode Hdecls Hok Hnd Hvs2 Hslots.
+  assert (Hkeys : map fst vs2 = map fst (fields_leaves (cr_fields r))).
+  { rewrite (eval_value_slots_keys _ _ _ Hvs2). unfold new_slots.
+    exact (new_slots_keys_c vs (cr_fields r) Hok). }
+  split.
+  - exists decls, vs1, vs2.
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    split; [ exact Hdecls | exact Hslots ].
+  - exists decls, vs1, vs2.
+    split; [ reflexivity | split; [ reflexivity | ] ].
+    split; [ rewrite Hcode; discriminate | split; [ exact Hkeys | ] ].
+    split; [ rewrite (eval_value_slots_keys _ _ _ Hvs2); exact Hnd | ].
+    intros [f u] Hin. rewrite Forall_forall in Hok.
+    pose proof (Hok _ Hin) as Hf. destruct f; try contradiction.
+    eexists _, _. reflexivity.
+Qed.
 
 (* The [Let]s that the unboxing makes of the fields of [x], of simples,
    run, and bind them as the relation asks. *)
@@ -1771,7 +1860,7 @@ Qed.
 Definition class_rel (o : option closure_repr) (v v' : value) : Prop :=
   match o with
   | None => v' = v
-  | Some r => crel r v v'
+  | Some r => crel_exact r v v'
   end.
 
 Lemma closure_of_class (o : option closure_repr) (S S' : static_env)
@@ -1781,7 +1870,7 @@ Lemma closure_of_class (o : option closure_repr) (S S' : static_env)
   ∃ sl' : list (value_slot * value), closure_of S' v' = Some (code, sl').
 Proof.
   intros Hrel Hst Hc. destruct o as [r | ]; cbn [class_rel] in Hrel.
-  - destruct Hrel as (decls & vs & vs' & -> & -> & Hdecls & _).
+  - destruct Hrel as [(decls & vs & vs' & -> & -> & Hdecls & _) _].
     cbn in Hc |- *. rewrite Hdecls.
     destruct (lookup (cr_current r) decls) as [code' | ];
       [ | discriminate Hc ].
@@ -2838,9 +2927,9 @@ Proof.
     + exists D0; split; [ exact Hbody | ].
       split; [ | split; [ exact Hconts | split; [ exact Hst | repeat split ]]].
       apply (env_rel_c_bind_changed vars vars' x r _ _ Hvars Hxr).
-      exists decls, vs1, vs2.
-      split; [ reflexivity | split; [ reflexivity | ] ].
-      split; [ rewrite Hdecls, Hcode; reflexivity | exact Hslots ].
+      apply (set_crel_exact vars' r decls vs vs1 vs2 code Hcode);
+        [ rewrite Hdecls, Hcode; reflexivity | exact Hok | exact Hnd
+        | exact Hvs2 | exact Hslots ].
   - (* A read of a new slot. *)
     rewrite step_let_exec.
     destruct (exec_named S empty_heap rcd vars d) as [[[r0 hp1] rcd1] | ]
@@ -2855,7 +2944,7 @@ Proof.
     cbn [eval_simple] in Hv1.
     destruct (proj2 Hvars y r v1 Hyr Hv1) as (v2 & Hv2 & Hc).
     destruct (slot_read_crel S S' vars d w (Var y) y r v1 v2 r0 Hd
-                (or_introl eq_refl) Hv1 Hc Hr)
+                (or_introl eq_refl) Hv1 (proj1 Hc) Hr)
       as (vs' & Hholds & Hproj).
     pose proof (Hholds _ Hin) as Hsl. cbn [slot_holds] in Hsl.
     right. left. eexists. split.
@@ -2879,7 +2968,7 @@ Proof.
     cbn [eval_simple] in Hv1.
     destruct (proj2 Hvars y r v1 Hyr Hv1) as (v2 & Hv2 & Hc).
     destruct (slot_read_crel S S' vars d w (Var y) y r v1 v2 r0 Hd
-                (or_introl eq_refl) Hv1 Hc Hr)
+                (or_introl eq_refl) Hv1 (proj1 Hc) Hr)
       as (vs' & Hholds & Hproj).
     pose proof (Hholds _ Hin) as Hhold. cbn [slot_holds] in Hhold.
     destruct (pairs_hold vs' fields nested r0 pairs Hl Hhold)
@@ -3134,3 +3223,36 @@ Proof.
 Qed.
 
 End Simulation.
+
+(* ======================================================================== *)
+(* What other files read of the relation                                    *)
+(* ======================================================================== *)
+
+(* Related states bind the same static values. A file that reads this of
+   [related] through this lemma, rather than through the shape of
+   [related], leaves the relation free to have more kinds of states (as
+   one within a wrapper of both runs). *)
+Lemma related_static_values (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr)
+    (CS : code_id -> option code_info)
+    (RCH : bool -> variable -> code_id -> Prop) (s t : state) :
+  related M CH CS RCH s t ->
+  static_values (state_statics t) = static_values (state_statics s).
+Proof. intros (D & _ & _ & _ & [Hv _] & _). exact Hv. Qed.
+
+(* The two terms related, run from empty environments, are related. *)
+Lemma related_initial (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr)
+    (CS : code_id -> option code_info)
+    (RCH : bool -> variable -> code_id -> Prop) (p q : expr) :
+  rr M CH CS RCH [] p q ->
+  related M CH CS RCH (State p [] [] empty_static_env empty_heap no_reads)
+    (State q [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hrr. exists []. split; [ exact Hrr | ].
+  split; [ exact (env_rel_c_empty M CH) | ].
+  split; [ intros k _; constructor | ].
+  split; [ | repeat split ].
+  split; [ reflexivity | split; [ reflexivity | ] ].
+  intros id c Hc. discriminate Hc.
+Qed.

@@ -4064,9 +4064,10 @@ Qed.
 
 (* The two rebuilt units of the fragment, for any rewriting of what the
    parameters kept state, are related by [rr], with the flow of the run of
-   the first as [reach] says: the proof of the statement below up to its
-   last step. *)
-Lemma rebuild_repr_reach_modes_with_rr (types : subkinds_rewriting)
+   the first as [reach] says, its unboxed names those of the unit and its
+   changed names those of the changes of representation of the unit: the
+   proof of the statement below up to its last step. *)
+Lemma rebuild_repr_reach_modes_with_rr_names (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
@@ -4078,15 +4079,23 @@ Lemma rebuild_repr_reach_modes_with_rr (types : subkinds_rewriting)
     cannot_change (unit_code_deps flag u e) dominated to_unbox tcr reach e
   = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-  ∃ (M : list (node * unboxed_fields))
-    (CH : variable -> option closure_repr)
-    (CS : code_id -> option code_info),
-    distinct (field_variables M) = true
-    ∧ (∀ (x : variable) (r : closure_repr),
-         CH x = Some r -> fields_of M x = Some [])
-    ∧ (∀ (x : variable) (r : closure_repr),
-         CH x = Some r -> among x (field_variables M) = false)
-    ∧ rr M CH CS (fun b f id => reach b f id = true) []
+  ∃ CS : code_id -> option code_info,
+    distinct
+      (field_variables
+         (M' (fst (unit_unboxed_fields (traverse_unit flag u e) T dominated
+                     to_unbox e))
+            (unit_changed_representations is_local (traverse_unit flag u e)
+               T dominated to_unbox tcr e)))
+    = true
+    ∧ rr (M' (fst (unit_unboxed_fields (traverse_unit flag u e) T dominated
+                     to_unbox e))
+            (unit_changed_representations is_local (traverse_unit flag u e)
+               T dominated to_unbox tcr e))
+        (CHf (fst (unit_unboxed_fields (traverse_unit flag u e) T dominated
+                     to_unbox e))
+           (unit_changed_representations is_local (traverse_unit flag u e) T
+              dominated to_unbox tcr e))
+        CS (fun b f id => reach b f id = true) []
         (rebuild_unit_cc_with types (traverse_unit flag u e)
            (solution_of_tables T) (fun n => mem_node n cannot_change)
            (unit_code_deps flag u e) pdc e)
@@ -4113,7 +4122,7 @@ Proof.
   { unfold unit_unboxed_fields in Hunboxed. rewrite Hunboxed in Hnext.
     exact Hnext. }
   clear Hnext.
-  cbn [fst] in Hrepr, Huses, Hdistinct, Hfresh.
+  cbn [fst] in Hrepr, Huses, Hdistinct, Hfresh |- *.
   set (changed := unit_changed_representations is_local F T dominated
                     to_unbox tcr e) in *.
   pose proof (check_closed_sound is_local F T Hclosed) as Hcl.
@@ -4250,10 +4259,8 @@ Proof.
                        reach Hcl Hslots Hfields_read Hreads_found Hmc)
                 e empty_env empty_unbox_env [] None (unit_conts u))
     as Hrr.
-  exists (M' unboxed changed), (CHf unboxed changed). eexists.
+  eexists.
   split; [ rewrite field_variables_M'; exact Hdistinct | ].
-  split; [ exact (CHf_M unboxed changed) | ].
-  split; [ exact (CHf_fresh unboxed changed) | ].
   apply Hrr.
   - split; try reflexivity.
     + intros k ds b H. discriminate H.
@@ -4268,6 +4275,45 @@ Proof.
     unfold FlambdaNameAbstractionSpec.fresh_name in Hnext' |- *.
     split; intros ->; lia.
   - intros k [].
+Qed.
+
+(* The same, the names of the relation left abstract. *)
+Lemma rebuild_repr_reach_modes_with_rr (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
+    (nr : code_id -> bool) (reach : bool -> variable -> code_id -> bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  repr_reach_unboxing_nr nr is_local (traverse_unit flag u e) T
+    cannot_change (unit_code_deps flag u e) dominated to_unbox tcr reach e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  ∃ (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr)
+    (CS : code_id -> option code_info),
+    distinct (field_variables M) = true
+    ∧ (∀ (x : variable) (r : closure_repr),
+         CH x = Some r -> fields_of M x = Some [])
+    ∧ (∀ (x : variable) (r : closure_repr),
+         CH x = Some r -> among x (field_variables M) = false)
+    ∧ rr M CH CS (fun b f id => reach b f id = true) []
+        (rebuild_unit_cc_with types (traverse_unit flag u e)
+           (solution_of_tables T) (fun n => mem_node n cannot_change)
+           (unit_code_deps flag u e) pdc e)
+        (rebuild_unit_unbox_repr_mode_with types true is_local
+           (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+           dominated to_unbox tcr pdc e).
+Proof.
+  intros Hslots Hfragment Hclosed Hrepr Hcheck.
+  destruct (rebuild_repr_reach_modes_with_rr_names types flag is_local u e T
+              cannot_change dominated to_unbox tcr pdc nr reach Hslots
+              Hfragment Hclosed Hrepr Hcheck)
+    as (CS & Hdistinct & Hrr).
+  eexists _, _, CS.
+  split; [ exact Hdistinct | ].
+  split; [ apply CHf_M | split; [ apply CHf_fresh | exact Hrr ] ].
 Qed.
 
 (* The statement of the fix, for any rewriting of what the parameters
