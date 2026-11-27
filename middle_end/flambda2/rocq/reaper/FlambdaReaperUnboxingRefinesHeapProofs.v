@@ -1564,10 +1564,9 @@ Qed.
 
 End Rebuilds_heap.
 
-(* The same for any [types], the same in both rebuilds
-   (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_with_refines_rebuild).
-   *)
-Lemma rebuild_unbox_with_refines_rebuild_heap (types : subkinds_rewriting)
+(* The two rebuilt terms, for any [types], the same in both rebuilds, are
+   related by [ubh], for unboxed fields whose variables are distinct. *)
+Lemma rebuild_unbox_ubh_heap (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (code_deps : finite_map code_dep) (dominated : list (node * node))
@@ -1577,11 +1576,14 @@ Lemma rebuild_unbox_with_refines_rebuild_heap (types : subkinds_rewriting)
   check_closed is_local (traverse_unit flag u e) T = true ->
   local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-  program_refines
-    (rebuild_unit_with types (traverse_unit flag u e) (solution_of_tables T)
-       preserve_direct_calls e)
-    (rebuild_unit_unbox_with types (traverse_unit flag u e) T cannot_change
-       code_deps dominated to_unbox preserve_direct_calls e).
+  ∃ M : list (node * unboxed_fields),
+    distinct (field_variables M) = true
+    ∧ ubh M []
+        (rebuild_unit_with types (traverse_unit flag u e)
+           (solution_of_tables T) preserve_direct_calls e)
+        (rebuild_unit_unbox_with types (traverse_unit flag u e) T
+           cannot_change code_deps dominated to_unbox preserve_direct_calls
+           e).
 Proof.
   intros Hslots Hfragment Hclosed Hlocal Hcheck.
   set (F := traverse_unit flag u e) in *.
@@ -1725,7 +1727,34 @@ Proof.
               e empty_unbox_env [] (unit_conts u) uinv_empty (Forall2_nil _)
               Hloc' Hedges)
     as (Hub & _ & _).
-  exact (ubh_refines unboxed Hdistinct _ _ Hub).
+  exists unboxed. split; [ exact Hdistinct | exact Hub ].
+Qed.
+
+(* The same for any [types], the same in both rebuilds
+   (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_with_refines_rebuild).
+   *)
+Lemma rebuild_unbox_with_refines_rebuild_heap (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool) :
+  is_local_slots_only is_local ->
+  in_heap_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  local_unboxing (traverse_unit flag u e) T dominated to_unbox e = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  program_refines
+    (rebuild_unit_with types (traverse_unit flag u e) (solution_of_tables T)
+       preserve_direct_calls e)
+    (rebuild_unit_unbox_with types (traverse_unit flag u e) T cannot_change
+       code_deps dominated to_unbox preserve_direct_calls e).
+Proof.
+  intros Hslots Hfragment Hclosed Hlocal Hcheck.
+  destruct (rebuild_unbox_ubh_heap types flag is_local u e T cannot_change
+              code_deps dominated to_unbox preserve_direct_calls Hslots
+              Hfragment Hclosed Hlocal Hcheck)
+    as (M & Hdistinct & Hub).
+  exact (ubh_refines M Hdistinct _ _ Hub).
 Qed.
 
 Theorem rebuild_unbox_refines_rebuild_heap :

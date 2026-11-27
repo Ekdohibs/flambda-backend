@@ -39,7 +39,16 @@
    the third run. The second and third runs bind the same static values
    and other code: a type is satisfied under the static values alone
    ([values_only], [type_satisfied_values_only]), as [statics_rebuilt]
-   reads only those ([statics_rebuilt_values]). *)
+   reads only those ([statics_rebuilt_values]).
+
+   The proofs are those of the statements of
+   FlambdaReaperTypesCallsUsedSpec.v, with the wider check of static
+   blocks ([used_premises], each [_used_gen]): the static environments
+   are related by [statics_rebuilt] from the static values of the symbols
+   with a use alone (FlambdaReaperTypesUsedValuesProofs
+   .statics_rel_rebuilt_used, in [related_facts]). The statements of
+   FlambdaReaperTypesCallsSpec.v are their instances
+   ([unit_premises_used]). *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlOption OxCamlList.
@@ -53,7 +62,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperRebuildSpec FlambdaReaperCallingConventions
   FlambdaReaperCallingConventionsSpec FlambdaReaperTypes
   FlambdaReaperTypesSpec FlambdaReaperTypesTermSpec
-  FlambdaReaperTypesCallsSpec FlambdaRenameApartSpec.
+  FlambdaReaperTypesCallsSpec FlambdaReaperTypesUsedValuesSpec
+  FlambdaReaperTypesCallsUsedSpec FlambdaRenameApartSpec.
 From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaReaperCallingConventionsProofs FlambdaReaperLocalFieldsProofs
   FlambdaReaperClosuresExactProofs FlambdaReaperUnboxing
@@ -64,7 +74,8 @@ From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaHeapFreeProofs FlambdaNameAbstractionSpec FlambdaReaperTypesProofs
   FlambdaReaperTypesTermProofs FlambdaReaperTypesTraversalProofs
   FlambdaReaperTypesCallsExitProofs FlambdaReaperTypesReprExitProofs
-  FlambdaReaperTypesCcSetsProofs FlambdaClosuresProofs.
+  FlambdaReaperTypesCcSetsProofs FlambdaClosuresProofs
+  FlambdaReaperTypesUsedValuesProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaTypingEnv FlambdaTypingEnvSpec
   FlambdaEnvAliases.
@@ -79,6 +90,7 @@ Module CX := FlambdaReaperTypesCallsExitProofs.
 Module U := FlambdaReaperUnboxing.
 Module URP := FlambdaReaperUnboxingRefinesProofs.
 Module UCS := FlambdaReaperUnboxingRefinesCallsSimProofs.
+Module UVP := FlambdaReaperTypesUsedValuesProofs.
 
 (* ======================================================================== *)
 (* Static values                                                            *)
@@ -166,8 +178,9 @@ Qed.
 
 (* Two states related by the simulation of the rebuild with changes of
    calling convention, with no primitive of the heap, the closures made
-   where the graph has only the facts of their sets: the static
-   environments are related by [statics_rebuilt], that of the first binds
+   where the graph has only the facts of their sets, the static blocks
+   of the symbols with a use holding values: the static environments are
+   related by [statics_rebuilt], that of the first binds
    allocations of their own, a variable with a use bound in the first is
    bound in the second to what [rebuilt_value] relates to it, and the
    expression of the second is the rebuild of that of the first. *)
@@ -183,7 +196,9 @@ Lemma related_facts (is_local : field -> bool) (G : graph) (sol : solution)
   closed is_local G sol -> field_used_exact is_local G sol ->
   RP.related G sol noted deps cds keep codes symbols u False slots_read F b
     ids ff false True cc code_deps cmds types L s t ->
-  RP.state_no_location s -> statics_of_values (state_statics s) ->
+  RP.state_no_location s ->
+  statics_of_used_values (fun sym => s_has_usage sol (Node_symbol sym))
+    (state_statics s) ->
   statics_rebuilt G sol (state_statics s) (state_statics t)
   ∧ statics_allocated sol (state_statics s)
   ∧ (∀ (x : variable) (v : value),
@@ -205,7 +220,7 @@ Proof.
   pose proof (RP.env_no_location_of _ Hvars_nl) as Henv_nl.
   pose proof (RP.statics_no_location_of _ Hst_nl) as Hstatics_nl.
   split; [ | split; [ | split ] ].
-  - apply (TP.statics_rel_rebuilt is_local G sol keep _ _ Hc Hexact);
+  - apply (UVP.statics_rel_rebuilt_used is_local G sol keep _ _ Hc Hexact);
       [ | exact Hstatics_nl | exact Hvals ].
     do 10 eexists. exact Hst.
   - intros x allocated Hl. exact (proj1 (Hsf x allocated Hl)).
@@ -253,13 +268,14 @@ Proof.
 Qed.
 
 (* The states of the run of the unit and of its rebuild with changes of
-   calling convention, for any table closed under the rules: each state
-   that the first comes to, and from which it steps, is related to one
-   that the second comes to as the statements of types ask, the rebuild
-   of a [Let] of a variable with a use is a [Let] or [Invalid], and an
-   exit of the first is one of the second through the same continuation
-   with the same heap. *)
-Lemma cc_states (flag : reaper_preserve_direct_calls)
+   calling convention, for any table closed under the rules, the static
+   blocks of the symbols with a use holding values: each state that the
+   first comes to, and from which it steps, is related to one that the
+   second comes to as the statements of types ask, the rebuild of a [Let]
+   of a variable with a use is a [Let] or [Invalid], and an exit of the
+   first is one of the second through the same continuation with the
+   same heap. *)
+Lemma cc_states_used (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (cc ccw : node -> bool) (code_deps : finite_map code_dep) (b : bool) :
   is_local_slots_only is_local ->
@@ -272,7 +288,7 @@ Lemma cc_states (flag : reaper_preserve_direct_calls)
   check_local_reads_used is_local (traverse_unit flag u e) T = true ->
   check_field_used_exact is_local (traverse_unit flag u e) T = true ->
   variables_bound_once e = true ->
-  unit_of_values e = true ->
+  used_values T e = true ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
     ccw cc ->
   (∀ (id : code_id) (a a' n y : node),
@@ -348,9 +364,7 @@ Proof.
                    (proj1 (RP.in_fragment_parts false e Hfrag)))
                 Hrun)
     as Hnl.
-  pose proof (FlambdaReaperTypesTermProofs.unit_of_values_runs e n s Hvals
-                Hrun)
-    as Hov.
+  pose proof (UVP.unit_of_values_with_runs _ e n s Hvals Hrun) as Hov.
   destruct (related_facts is_local _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ s t
               (check_closed_sound is_local _ _ Hcheck)
               (check_field_used_exact_sound is_local _ _ Hcheck_exact)
@@ -371,6 +385,82 @@ Proof.
     + exact (FlambdaClosuresProofs.well_formed_sets_bound u e n s Hwf Hrun).
     + exact (FlambdaReaperTypesCcSetsProofs.cc_rebuilt_sets_bound _ _ _ _ _ b
                u e m t Hwf Hm).
+Qed.
+
+(* The same, for a unit whose static blocks hold values. *)
+Lemma cc_states (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (cc ccw : node -> bool) (code_deps : finite_map code_dep) (b : bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  any_kind_arguments e = true ->
+  results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  variables_bound_once e = true ->
+  unit_of_values e = true ->
+  cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+    ccw cc ->
+  (∀ (id : code_id) (a a' n y : node),
+     cc (Node_code_id id) = false ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a
+       (Field_call_witness Known_arity_code_pointer) n ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a'
+       (Field_call_witness Known_arity_code_pointer) n ->
+     (s_any_source (solution_of_tables T) a' = true ->
+      s_any_source (solution_of_tables T) a = true)
+     ∧ (s_sources (solution_of_tables T) a' y = true ->
+        s_sources (solution_of_tables T) a y = true)) ->
+  (∀ (id id' : code_id) (w : node),
+     cc (Node_code_id id) = false ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id) ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id') ->
+     id' = id) ->
+  (∀ id : code_id,
+     cc (Node_code_id id) = false ->
+     lookup id code_deps = lookup id (unit_code_deps flag u e)) ->
+  ∀ (n : nat) (s : state),
+    run n (initial_state e) = Step s -> step s <> Undefined ->
+    ∃ (m : nat) (t : state),
+      run m
+        (initial_state
+           (rebuild_unit_cc_with None (traverse_unit flag u e)
+              (solution_of_tables T) cc code_deps b e))
+      = Step t
+      ∧ statics_rebuilt (graph_of_facts (traverse_unit flag u e))
+          (solution_of_tables T) (state_statics s) (state_statics t)
+      ∧ statics_allocated (solution_of_tables T) (state_statics s)
+      ∧ (∀ (x : variable) (v : value),
+           lookup x (state_vars s) = Some v ->
+           s_has_usage (solution_of_tables T) (Node_variable x) = true ->
+           ∃ v' : value,
+             lookup x (state_vars t) = Some v'
+             ∧ rebuilt_value (graph_of_facts (traverse_unit flag u e))
+                 (solution_of_tables T) v (Node_variable x) v')
+      ∧ (∀ (y : variable) (kind : flambda_kind) (d : named) (body : expr),
+           state_expr s = Let y kind d body ->
+           s_has_usage (solution_of_tables T) (Node_variable y) = true ->
+           state_expr t = Invalid
+           ∨ ∃ (d' : named) (body' : expr),
+               state_expr t = Let y kind d' body')
+      ∧ (∀ (k : continuation) (vs : list value) (hp : heap)
+           (rd : read_record),
+           step s = Exit k vs hp rd ->
+           ∃ (vs' : list value) (rd' : read_record),
+             step t = Exit k vs' hp rd')
+      ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+          (state_statics t).
+Proof.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
+    Hvals.
+  exact (cc_states_used flag is_local u e T cc ccw code_deps b Hlocal Hfrag
+           Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
+           (UVP.unit_of_values_with_instance _ e Hvals)).
 Qed.
 
 (* ======================================================================== *)
@@ -406,6 +496,31 @@ Proof.
            Hll).
 Qed.
 
+(* The premises of FlambdaReaperTypesCallsSpec.v give those with the
+   wider check of static blocks. *)
+Lemma unit_premises_used (local : bool) (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (sets : list set_of_closures) :
+  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets.
+Proof.
+  intros (H1 & H2 & H3 & H4 & H5 & H6 & H7 & H8 & H9 & H10).
+  exact (conj H1 (conj H2 (conj H3 (conj H4 (conj H5 (conj H6 (conj H7
+           (conj H8 (conj (UVP.unit_of_values_with_instance _ e H9)
+                       H10))))))))).
+Qed.
+
+(* A statement of FlambdaReaperTypesCallsSpec.v, from the one of
+   FlambdaReaperTypesCallsUsedSpec.v that [H] proves. *)
+Ltac used_instance H :=
+  let Hu := fresh "Hu" in
+  pose proof H as Hu; red in Hu; red; intros;
+  match goal with
+  | Hp : unit_premises _ _ _ _ _ _ _ |- _ =>
+      eapply Hu; [ exact (unit_premises_used _ _ _ _ _ _ _ Hp) | .. ];
+      eassumption
+  end.
+
 (* ======================================================================== *)
 (* The result types, of the rebuild with changes of calling convention      *)
 (* ======================================================================== *)
@@ -418,7 +533,7 @@ Lemma cc_result_gen (local : bool) (fx : fixes)
     (valuation valuation' : env) (n : nat) (s : state)
     (code_var type_var : variable) (v : value) :
   TP.fixes_sound fx ->
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
     ccw cc ->
   (∀ (id : code_id) (a a' n y : node),
@@ -461,9 +576,9 @@ Proof.
     (Hrun & Hs & Hx & Hhu & Henv & Hfr & Hcopies & Hfind & Hl).
   destruct (least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
-  destruct (cc_states flag is_local u e T cc ccw code_deps b Hlocal Hfrag Hdc
-              Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals Hccc Hwid
-              Hcid Hcd n s Hrun Hs)
+  destruct (cc_states_used flag is_local u e T cc ccw code_deps b Hlocal
+              Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals
+              Hccc Hwid Hcid Hcd n s Hrun Hs)
     as (m & t & Hm & Hst & Halloc & Hvars & _ & _).
   destruct (Hvars code_var v Hx Hhu) as (v' & Hx' & Hrv).
   exists m, t, v'. split; [ exact Hm | split; [ exact Hx' | ] ].
@@ -476,8 +591,8 @@ Qed.
 
 (* The plain rebuild is the rebuild with changes of calling convention
    where no code changes. *)
-Lemma plain_result_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> result_type_end_to_end_with local fx.
+Lemma plain_result_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T b sets tenv canon valuation valuation' n s
     code_var type_var v Hprem Hres.
@@ -497,6 +612,10 @@ Proof.
                 (fun _ _ => eq_refl)).
   exact Hm.
 Qed.
+
+Lemma plain_result_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> result_type_end_to_end_with local fx.
+Proof. intros Hfx. used_instance (plain_result_used_gen local fx Hfx). Qed.
 
 Theorem result_type_end_to_end : result_type_end_to_end_statement.
 Proof. exact (plain_result_gen false all_fixes TP.all_fixes_sound). Qed.
@@ -550,8 +669,8 @@ Proof.
                   flag u e) w id id').
 Qed.
 
-Lemma cc_result_type_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> cc_result_type_end_to_end_with local fx.
+Lemma cc_result_type_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change b sets tenv canon valuation
     valuation' n s code_var type_var v Hprem Hccc Hwid Hres.
@@ -561,6 +680,10 @@ Proof.
            valuation valuation' n s code_var type_var v Hfx Hprem Hcl Hw Hc
            (fun _ _ => eq_refl) Hres).
 Qed.
+
+Lemma cc_result_type_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_result_type_end_to_end_with local fx.
+Proof. intros Hfx. used_instance (cc_result_type_used_gen local fx Hfx). Qed.
 
 Theorem cc_result_type_end_to_end : cc_result_type_end_to_end_statement.
 Proof. exact (cc_result_type_gen false all_fixes TP.all_fixes_sound). Qed.
@@ -648,7 +771,7 @@ Lemma calls_states (local : bool) (flag : reaper_preserve_direct_calls)
     (cannot_change : list node) (dominated : list (node * node))
     (to_unbox : list node) (b : bool) (nr : code_id -> bool)
     (sets : list set_of_closures) (n : nat) (s : state) :
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   calls_premises flag u e T cannot_change dominated to_unbox nr ->
   ~ behaves (initial_state e) Goes_wrong ->
   run n (initial_state e) = Step s ->
@@ -696,7 +819,7 @@ Proof.
   { intros Hu. apply Hng. exists (S n).
     replace (S n) with (n + 1) by lia.
     rewrite run_add, Hrun, run_succ, Hu. reflexivity. }
-  destruct (cc_states flag is_local u e T _ ccw (unit_code_deps flag u e) b
+  destruct (cc_states_used flag is_local u e T _ ccw (unit_code_deps flag u e) b
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun Hs)
     as (m & t & Hm & Hst & Halloc & Hvars & Hlets & _ & Hwhole).
@@ -755,7 +878,7 @@ Lemma calls_exit (local : bool) (flag : reaper_preserve_direct_calls)
     (to_unbox : list node) (b : bool) (nr : code_id -> bool)
     (sets : list set_of_closures) (n : nat) (s : state) (k : continuation)
     (vs : list value) (hp : heap) (rd : read_record) :
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   calls_premises flag u e T cannot_change dominated to_unbox nr ->
   run n (initial_state e) = Step s ->
   step s = Exit k vs hp rd ->
@@ -779,7 +902,7 @@ Proof.
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
   destruct (cc_checks flag u e T cannot_change Hccc Hwid)
     as ((ccw & Hcl) & Hw & Hc).
-  destruct (cc_states flag is_local u e T _ ccw (unit_code_deps flag u e) b
+  destruct (cc_states_used flag is_local u e T _ ccw (unit_code_deps flag u e) b
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun
               ltac:(rewrite Hexit; discriminate))
@@ -805,8 +928,8 @@ Qed.
 (* The statements                                                           *)
 (* ======================================================================== *)
 
-Lemma unbox_calls_types_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> unbox_calls_types_end_to_end_with local fx.
+Lemma unbox_calls_types_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unbox_calls_types_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox b nr sets
     tenv canon valuation valuation' n s k vs hp rd sym allocated Hprem
@@ -825,6 +948,10 @@ Proof.
     try assumption.
   intros H. discriminate H.
 Qed.
+
+Lemma unbox_calls_types_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unbox_calls_types_end_to_end_with local fx.
+Proof. intros Hfx. used_instance (unbox_calls_types_used_gen local fx Hfx). Qed.
 
 Theorem unbox_calls_types_end_to_end :
   unbox_calls_types_end_to_end_statement.
@@ -846,8 +973,8 @@ Proof.
   exact (unbox_calls_types_gen true landed_fixes TP.landed_fixes_sound).
 Qed.
 
-Lemma unbox_calls_result_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> unbox_calls_result_type_end_to_end_with local fx.
+Lemma unbox_calls_result_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unbox_calls_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox b nr sets
     tenv canon valuation valuation' n s code_var type_var v Hprem Hcalls
@@ -870,6 +997,12 @@ Proof.
   intros H. discriminate H.
 Qed.
 
+Lemma unbox_calls_result_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unbox_calls_result_type_end_to_end_with local fx.
+Proof.
+  intros Hfx. used_instance (unbox_calls_result_used_gen local fx Hfx).
+Qed.
+
 Theorem unbox_calls_result_type_end_to_end :
   unbox_calls_result_type_end_to_end_statement.
 Proof. exact (unbox_calls_result_gen false all_fixes TP.all_fixes_sound). Qed.
@@ -890,8 +1023,8 @@ Proof.
   exact (unbox_calls_result_gen true landed_fixes TP.landed_fixes_sound).
 Qed.
 
-Lemma calls_unboxed_result_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> calls_unboxed_result_type_end_to_end_with local fx.
+Lemma calls_unboxed_result_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unboxed_result_type_end_to_end_used_with local fx.
 Proof.
   intros (Hb & Hal & Hr & Hn) flag is_local u e T cannot_change dominated
     to_unbox b nr sets tenv canon valuation valuation' n s code_var type_var
@@ -927,6 +1060,12 @@ Proof.
     [ | exact IH ].
   exact (type_satisfied_values_only (state_statics t) (state_statics t) _ _ _
            eq_refl Hw).
+Qed.
+
+Lemma calls_unboxed_result_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unboxed_result_type_end_to_end_with local fx.
+Proof.
+  intros Hfx. used_instance (calls_unboxed_result_used_gen local fx Hfx).
 Qed.
 
 Theorem calls_unboxed_result_type_end_to_end :
@@ -969,7 +1108,7 @@ Lemma repr_exit (local : bool) (flag : reaper_preserve_direct_calls)
     (to_unbox tcr : list node) (b : bool) (nr : code_id -> bool)
     (sets : list set_of_closures) (n : nat) (s : state) (k : continuation)
     (vs : list value) (hp : heap) (rd : read_record) :
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   repr_premises flag is_local u e T cannot_change dominated to_unbox tcr nr ->
   run n (initial_state e) = Step s ->
   step s = Exit k vs hp rd ->
@@ -994,7 +1133,7 @@ Proof.
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
   destruct (cc_checks flag u e T cannot_change Hccc Hwid)
     as ((ccw & Hcl) & Hw & Hc).
-  destruct (cc_states flag is_local u e T _ ccw (unit_code_deps flag u e) b
+  destruct (cc_states_used flag is_local u e T _ ccw (unit_code_deps flag u e) b
               Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
               Hvals Hcl Hw Hc (fun _ _ => eq_refl) n s Hrun
               ltac:(rewrite Hexit; discriminate))
@@ -1015,8 +1154,8 @@ Proof.
              (RX.rr_values _ _ _ _ _ _ Hrel) Hwhole).
 Qed.
 
-Lemma repr_calls_types_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> repr_calls_types_end_to_end_with local fx.
+Lemma repr_calls_types_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> repr_calls_types_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox tcr b nr
     sets tenv canon valuation valuation' n s k vs hp rd sym allocated Hprem
@@ -1035,6 +1174,10 @@ Proof.
     try assumption.
   intros H. discriminate H.
 Qed.
+
+Lemma repr_calls_types_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> repr_calls_types_end_to_end_with local fx.
+Proof. intros Hfx. used_instance (repr_calls_types_used_gen local fx Hfx). Qed.
 
 Theorem repr_calls_types_end_to_end : repr_calls_types_end_to_end_statement.
 Proof. exact (repr_calls_types_gen false all_fixes TP.all_fixes_sound). Qed.

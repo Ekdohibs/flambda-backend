@@ -359,7 +359,8 @@ Proof.
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & _ & _ & _).
   destruct (CP.calls_exit local flag is_local u e T cannot_change dominated
-              to_unbox b nr sets n s k vs hp rd Hprem Hcalls Hrun Hexit)
+              to_unbox b nr sets n s k vs hp rd
+              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hrun Hexit)
     as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & Hwhole).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (CP.type_satisfied_values_only (state_statics t)); [ reflexivity | ].
@@ -397,7 +398,9 @@ Proof.
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & _ & _ & _).
   destruct (CP.calls_states local flag is_local u e T cannot_change dominated
-              to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
+              to_unbox b nr sets n s
+              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hng Hrun
+              Hlet)
     as (m & t & Hm & Hst & Halloc & Hwhole & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & Hplain & _).
   exists m, t, v_mid.
@@ -441,7 +444,9 @@ Proof.
   unfold FlambdaReaperUnboxingRefinesCallsSpec.calls_unboxing_nr in Hcalls_nr.
   apply andb_true_iff in Hcalls_nr as [_ Huses].
   destruct (CP.calls_states local flag is_local u e T cannot_change dominated
-              to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
+              to_unbox b nr sets n s
+              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hng Hrun
+              Hlet)
     as (m & t & Hm & Hst & Halloc & Hwhole & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & _ & Hunb).
   destruct (CP.fields_hold_values _ _ _ (Hunb fields Hfields))
@@ -499,7 +504,8 @@ Proof.
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & _ & _ & _).
   destruct (CP.repr_exit local flag is_local u e T cannot_change dominated
-              to_unbox tcr b nr sets n s k vs hp rd Hprem Hrepr Hrun Hexit)
+              to_unbox tcr b nr sets n s k vs hp rd
+              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hrepr Hrun Hexit)
     as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & Hwhole).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (CP.type_satisfied_values_only (state_statics t)); [ reflexivity | ].

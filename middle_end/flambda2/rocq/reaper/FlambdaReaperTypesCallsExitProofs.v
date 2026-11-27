@@ -34,13 +34,12 @@
      unit comes to, and from which it steps, is related to one that the
      run of the rebuilt unit comes to, with what the relation answers
      there ([cc_reach], for any table closed under the rules, the
-     closures made where the graph has only the facts of their sets; the
-     hypotheses of the simulation are discharged as
-     FlambdaReaperRebuildProofs.rebuild_cc_with_refines_checked_local
-     does, its proof up to its last step copied; [reach_of_located], for
-     any relation of the shape of that simulation; [shrinking_reaches],
-     for any shrinking simulation). The plain rebuild is the case where no
-     code changes.
+     closures made where the graph has only the facts of their sets, by
+     FlambdaReaperRebuildProofs.rebuild_cc_with_related_checked_local,
+     which discharges the hypotheses of the simulation;
+     [reach_of_located], for any relation of the shape of that
+     simulation; [shrinking_reaches], for any shrinking simulation). The
+     plain rebuild is the case where no code changes.
    - The simulation of the unboxing across calls
      (FlambdaReaperUnboxingRefinesCallsSimProofs.related2): the same of
      the runs of the two rebuilt units ([uc_reach]), and at an exit, the
@@ -250,185 +249,23 @@ Lemma cc_reach (hb ex : bool) (flag : reaper_preserve_direct_calls)
 Proof.
   intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
     Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid' Hcid' Hcode_deps0 Hxe.
-  rename preserve_direct_calls into b.
-  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
-  pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
-    as Hexact.
-  destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
-    as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
-        & Hkeys & Hkeep_alive & Hcds_eq).
-  assert (Htypes_deps :
-            ∀ t : subkinds_types, types = Some t -> st_code_deps t = cds)
-    by (intros t Ht; rewrite (Htypes_deps0 t Ht), Hcds_eq; reflexivity).
-  pose proof (traverse_unit_scrutinees ex (unit_codes e) flag u e Hcf)
-    as Hscr.
-  set (F := traverse_unit flag u e) in *.
-  set (G := graph_of_facts F) in *.
-  set (sol := solution_of_tables T) in *.
-  assert (Hclosed : code_closed e = true).
-  { unfold well_formed_unit in Hwf.
-    destruct (code_closed e); [ reflexivity | ].
-    rewrite andb_false_r in Hwf. discriminate Hwf. }
-  assert (Hfresh : among (fresh_name (names_of e)) (continuations_of e)
-                   = false).
-  { apply not_true_iff_false. intros E. apply among_In in E.
-    pose proof (fresh_name_fresh (names_of e)) as Hff.
-    apply not_true_iff_false in Hff. apply Hff. apply among_In.
-    unfold names_of. apply in_or_app. right. exact E. }
-  assert (Hagree0 : kinds_agree [] (env_conts FlambdaReaperRebuild.empty_env)
-                      [] []).
-  { intros k m Hl. discriminate Hl. }
-  assert (Htab0 : conts_tabled types [] [] [] (handlers_params e))
-    by exact (conts_table_top types e Htypes_conts).
-  pose proof (conts_table_codes types e Htypes_conts) as Hcode_tabled0.
-  (* The calls raise to exception handlers, with extra arguments only to
-     handlers in scope. *)
-  assert (Hraises : raises_kept [] e = true).
-  { assert (Hue : unit_exn_handlers_well_formed (unit_exn u) e = true).
-    { unfold well_formed_unit in Hwf.
-      destruct (unit_exn_handlers_well_formed (unit_exn u) e);
-        [ reflexivity | ].
-      rewrite andb_false_r in Hwf. discriminate Hwf. }
-    unfold unit_exn_handlers_well_formed in Hue.
-    apply andb_true_iff in Hue as [Hue Hewf].
-    apply andb_true_iff in Hue as [Hways _].
-    apply (proj1 raises_kept_of_well_formed e [] Hewf);
-      [ intros k Hl; discriminate Hl | ].
-    intros k _ Hk. unfold ways_out_well_formed in Hways.
-    rewrite forallb_forall in Hways. specialize (Hways k Hk).
-    apply andb_true_iff in Hways as [_ Hg]. apply negb_true_iff in Hg.
-    exact Hg. }
-  assert (Hxagree0 : exn_agree (env_conts FlambdaReaperRebuild.empty_env)
-                       []).
-  { intros k. exact I. }
-  pose proof (proj1 (unit_codes_checked G ex (unit_codes e)
-                       (fresh_name (names_of e))) e None
-                [] [] Hscr Hcf Hraises Hclosed Hkinded Hfresh)
-    as Hcode_checks.
-  (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
-  pose proof (static_names_edges G noted deps cds (unit_kept e) (unit_codes e)
-                (static_names symbols_of_binding e) True
-                (if hb then True else False)) as [Hnames _].
-  destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
-  assert (Hcds : ∀ (id : code_id) (cd : code_dep),
-            lookup id cds = Some cd -> known_witness_edges G id cd).
-  { intros id cd Hl.
-    assert (Hid : id ∈ static_names code_ids_of_binding e).
-    { apply Hkeys. apply (in_map fst cds (id, cd)).
-      exact (lookup_in _ _ _ Hl). }
-    destruct (Hcode_names id Hid) as (c & _ & Hcode).
-    destruct c as [params mc ret exn metadata body].
-    destruct Hcode as (cd' & Hin' & Hw & _).
-    rewrite (lookup_nodup_in _ _ _ Hnd Hin') in Hl. injection Hl as <-.
-    exact Hw. }
-  assert (Hunit_syms : ∀ s : symbol,
-            among s (static_names symbols_of_binding e) = true ->
-            may_come_from sol (Node_symbol s) (Node_symbol s)).
-  { intros s Hs. apply among_In in Hs.
-    destruct (Hsym_names s Hs) as (const & Hb).
-    destruct const as [ | slot syms decls vs | t fields | | | ];
-      simpl in Hb; try contradiction.
-    - destruct Hb as (Hslot & Hdep & _). unfold is_bound in Hslot.
-      destruct (lookup slot decls) as [id | ] eqn:Hl; [ | discriminate Hslot ].
-      exact (called_alloc is_local G sol cds Hc Hcds _ _
-               (Hdeps _ (Hdep id eq_refl))).
-    - destruct Hb as (_ & His & _).
-      exact (alloc_self is_local G sol Hc _ _ _ His
-               (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))).
-    - exact (boxed_self is_local G sol Hc Hconsts _ _ Hb).
-    - exact (any_source_self is_local G sol Hc _
-               (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
-    - destruct elements as [ | el els ].
-      + exact (any_source_self is_local G sol Hc _
-                 (alias_consts_any_source is_local G sol Hc Hconsts _ Hb)).
-      + destruct Hb as (_ & His & _).
-        exact (alloc_self is_local G sol Hc _ _ _ His
-                 (as_hs _ _ _ Hc _ (any_source_input _ _ _ Hc _ Hconsts))). }
-  assert (Hsyms : ∀ s : symbol,
-            noted s -> may_come_from sol (Node_symbol s) (Node_symbol s)).
-  { intros s Hs.
-    destruct (among s (static_names symbols_of_binding e)) eqn:Hunit_s;
-      [ exact (Hunit_syms s Hunit_s) | ].
-    apply (may_come_from_self is_local G sol _ Hc).
-    exact (any_source_input _ _ _ Hc _ (Himported s Hs Hunit_s)). }
-  (* The continuations that the unit names are its own. *)
-  assert (Hfree : ∀ k : continuation,
-            k ∈ free_continuations_of_expr e -> unit_cont u k).
-  { assert (Hnames_in : names_in_scope (unit_return u) (unit_exn u) e = true).
-    { unfold well_formed_unit in Hwf.
-      destruct (names_in_scope (unit_return u) (unit_exn u) e);
-        [ reflexivity | ].
-      rewrite andb_false_r in Hwf. discriminate Hwf. }
-    unfold names_in_scope, names_among in Hnames_in.
-    apply andb_true_iff in Hnames_in as [_ Hks].
-    intros k Hk.
-    pose proof (proj1 (all_among _ _) Hks k (proj2 (among_In _ _) Hk)) as Hin.
-    apply among_In in Hin. destruct Hin as [<- | [<- | []]];
-      [ left | right ]; reflexivity. }
-  (* What the rebuild with changes of calling convention reads. *)
-  pose proof (code_rets_of_unit u e Hwf Hrk) as Hcode_rets0.
-  assert (Hcode_rets :
-    ∀ (id : code_id) (params : list variable) (mc : variable)
-      (ret exn : continuation) (md : code_metadata) (body : expr),
-      ex = false ->
-      (id, Code params mc ret exn md body) ∈ unit_codes e ->
-      (ret <> exn -> no_raise_to ret body = true)
-      ∧ (length params = length (unarize (cm_params_arity md)) ->
-         ret_calls_ok
-           (rev (with_kinds params (unarize (cm_params_arity md)))
-            ++ [(mc, Value)])
-           ret (unarize (cm_result_arity md)) body
-         = true))
-    by (intros id params mc ret exn md body _; apply Hcode_rets0).
-  assert (Hcode_deps :
-    ∀ id : code_id,
-      cannot_change (Node_code_id id) = false ->
-      lookup id code_deps = lookup id cds)
-    by (intros id Hid; rewrite (Hcode_deps0 id Hid), Hcds_eq; reflexivity).
-  assert (Hmetadatas :
-    ∀ (id : code_id) (c : code),
-      (id, c) ∈ unit_codes e -> cannot_change (Node_code_id id) = false ->
-      lookup id (bound_code_metadata e) = Some (metadata_of_code c))
-    by (intros id c Hin _;
-        exact (lookup_bound_code_metadata e id c (unit_codes_nodup hb e Hfrag)
-                 Hin)).
-  unfold rebuild_unit_cc_with.
-  assert (Hslots_read : True -> local_reads_used is_local G sol)
-    by (intros _;
-        exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
-                 is_local _ _ Hlrs)).
+  destruct (RP.rebuild_cc_with_related_checked_local hb ex flag is_local u e
+              T cannot_change cannot_change_witness code_deps
+              preserve_direct_calls types True Hlocal Hfrag Hcf Hkinded Hwf
+              Hexits Hcheck Hlrs Hcheck_exact Htypes Htypes_deps0
+              Htypes_conts Hrk Hccc Hwid' Hcid' Hcode_deps0 (fun _ => Hxe))
+    as (noted & deps & cds & H0 & Hans).
   exists noted, deps, cds.
   intros n s Hrun Hs.
-  refine (reach_of_located (exits_rel (if hb then True else False) ex) measure
-           (RP.related G sol noted deps cds (unit_kept e) (unit_codes e)
-              (static_names symbols_of_binding e) u
-              (if hb then True else False) True F b
-              (static_names code_ids_bound e) (fresh_name (names_of e)) ex
-              True cannot_change code_deps (bound_code_metadata e) types)
-           _ _ _ _ n s Hrun Hs).
-  - intros L.
-    eapply (RP.initial_related is_local G sol noted deps cds (unit_kept e)
+  exact (reach_of_located (exits_rel (if hb then True else False) ex) measure
+           (RP.related (graph_of_facts (traverse_unit flag u e))
+              (solution_of_tables T) noted deps cds (unit_kept e)
               (unit_codes e) (static_names symbols_of_binding e) u
-              (if hb then True else False) True F b);
-      eassumption || reflexivity || (intros; reflexivity)
-      || exact (conj I (conj (ex_intro _ []
-                                (conj (conj (fun k H => H) rets_nil_bound)
-                                   (exits_bound_unit u e Hexits Hfree)))
-                              (conj Hscr (conj Hcf (conj (conj Hfresh
-                                 (conj (ex_intro _ [] (conj Hkinded Hagree0))
-                                    (conj (ex_intro _ []
-                                             (conj Hraises Hxagree0))
-                                       Htab0)))
-                                 (fun r K H => rets_nil_any _ r K H)))))).
-  - intros L i s1 t1 Hrun1 Halloc Hrel.
-    eapply (RP.related_answered is_local G sol noted deps cds (unit_kept e)
-              (unit_codes e) (static_names symbols_of_binding e) u
-              (if hb then True else False) True F b);
-      try (eassumption || reflexivity || (intros; reflexivity)
-           || (intros; apply Htypes)).
-    intros _.
-    exact (proj1 (run_exact G (unit_kept e) i _ s1
-                    (initial_exact G (unit_kept e) e Hxe) Hrun1)).
+              (if hb then True else False) True (traverse_unit flag u e)
+              preserve_direct_calls (static_names code_ids_bound e)
+              (fresh_name (names_of e)) ex True cannot_change code_deps
+              (bound_code_metadata e) types)
+           _ _ H0 Hans n s Hrun Hs).
 Qed.
 
 (* ======================================================================== *)

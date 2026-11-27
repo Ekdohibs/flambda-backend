@@ -97,13 +97,10 @@
    change of calling conventions deletes a result with no use, whose
    type the compiler drops ([Delete] in [rewrite_result_types]).
 
+   The parameters of code at the nodes of [code_dep.params] are in
+   FlambdaReaperTypesParamsSpec.v.
+
    What is left out:
-   - The parameters at the nodes of the code dep: the compiler reads the
-     metadata of [code_dep.params], the model's statements that of the
-     parameters of the code (FlambdaReaperTypesCallsSpec.v), which the
-     traversal aliases to them. The value of a parameter is related at
-     its own node, not at that of the code dep, which stands for the
-     arguments of every call.
    - The unboxing across calls: its simulation relates the states within
      a wrapper of both runs, about to apply a continuation, with no
      environment (FlambdaReaperTypesCallsSpec.v), and a return of code

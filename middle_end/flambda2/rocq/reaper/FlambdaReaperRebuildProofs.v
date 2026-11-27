@@ -20660,14 +20660,49 @@ Proof.
            Hcheck_exact Hrk_ex).
 Qed.
 
-(* The same for the rebuild with changes of calling convention, given
-   what the checks of the table say of it. *)
-(* With local fields, the tables passing the check of the fix. *)
-Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
+(* A relation of the states of the run of a unit and of another run,
+   under the allocations [L] of the locations of the first run, that
+   relates the first states whatever [L] and whose steps are answered
+   where the first run allocates as [L] says, refines. *)
+Lemma located_refines (E : list value -> heap -> list value -> heap -> Prop)
+    (R : (location -> option node) -> state -> state -> Prop) (e : expr)
+    (t0 : state) :
+  (∀ L : location -> option node,
+     R L (State e [] [] empty_static_env empty_heap no_reads) t0) ->
+  (∀ (L : location -> option node) (i : nat) (s t : state),
+     run i (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+     alloc_ok L s -> R L s t -> answered_h E measure (R L) s t) ->
+  refines_heap_with E (State e [] [] empty_static_env empty_heap no_reads)
+    t0.
+Proof.
+  intros H0 Hans.
+  set (s0 := State e [] [] empty_static_env empty_heap no_reads) in *.
+  apply (bounded_refines E E measure (max_spine e) s0); [ | auto ].
+  intros N. destruct (located_exists N s0) as (L & HL).
+  exists (fun (i : nat) (s t : state) => run i s0 = Step s ∧ R L s t).
+  split; [ split; [ reflexivity | exact (H0 L) ] | ].
+  split.
+  - intros i s t Hi [Hrun Hrel].
+    apply (answered_h_mono E measure (R L)).
+    + intros s' t' Hstep Hrel'. split; [ | exact Hrel' ].
+      exact (run_then_step i s0 s s' Hrun Hstep).
+    + exact (Hans L i s t Hrun (HL i s Hi Hrun) Hrel).
+  - intros i s t [Hrun _]. exact (run_measure_bound e i s Hrun).
+Qed.
+
+(* The unit and its rebuild with changes of calling convention, for a
+   table [code_deps] that agrees with the traversal where code changes
+   its calling convention, and a premise [sets_exact] of the closures:
+   the hypotheses of the section [Run] hold, so that the simulation
+   [related] relates the first states, whatever the allocations of the
+   locations, and answers each step of the first run that allocates as
+   they say. *)
+Lemma rebuild_cc_with_related_checked_local (hb ex : bool)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables)
     (cannot_change cannot_change_witness : node -> bool)
-    (preserve_direct_calls : bool) (types : subkinds_rewriting) :
+    (code_deps : finite_map code_dep) (preserve_direct_calls : bool)
+    (types : subkinds_rewriting) (sets_exact : Prop) :
   is_local_slots_only is_local ->
   in_fragment hb e = true ->
   checked ex (unit_codes e) e = true ->
@@ -20685,7 +20720,8 @@ Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
   results_kinded [] [] e = true ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
     cannot_change_witness cannot_change ->
-  (∀ a a' n y : node,
+  (∀ (id : code_id) (a a' n y : node),
+     cannot_change (Node_code_id id) = false ->
      g_accessor (graph_of_facts (traverse_unit flag u e)) a
        (Field_call_witness Known_arity_code_pointer) n ->
      g_accessor (graph_of_facts (traverse_unit flag u e)) a'
@@ -20694,21 +20730,56 @@ Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
       s_any_source (solution_of_tables T) a = true)
      ∧ (s_sources (solution_of_tables T) a' y = true ->
         s_sources (solution_of_tables T) a y = true)) ->
-  (∀ (w : node) (id id' : code_id),
+  (∀ (id id' : code_id) (w : node),
+     cannot_change (Node_code_id id) = false ->
      g_constructor (graph_of_facts (traverse_unit flag u e)) w
        Field_code_id_of_call_witness (Node_code_id id) ->
      g_constructor (graph_of_facts (traverse_unit flag u e)) w
        Field_code_id_of_call_witness (Node_code_id id') ->
      id' = id) ->
-  refines_heap_with (exits_rel (if hb then True else False) ex)
-    (State e [] [] empty_static_env empty_heap no_reads)
-    (State (rebuild_unit_cc_with types (traverse_unit flag u e)
-              (solution_of_tables T) cannot_change (unit_code_deps flag u e)
-              preserve_direct_calls e)
-       [] [] empty_static_env empty_heap no_reads).
+  (∀ id : code_id,
+     cannot_change (Node_code_id id) = false ->
+     lookup id code_deps = lookup id (unit_code_deps flag u e)) ->
+  (sets_exact ->
+   closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+     e) ->
+  ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
+    (cds : finite_map code_dep),
+    (∀ L : location -> option node,
+       related (graph_of_facts (traverse_unit flag u e))
+         (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
+         (static_names symbols_of_binding e) u (if hb then True else False)
+         True (traverse_unit flag u e) preserve_direct_calls
+         (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+         sets_exact cannot_change code_deps (bound_code_metadata e) types L
+         (State e [] [] empty_static_env empty_heap no_reads)
+         (State
+            (rebuild_unit_cc_with types (traverse_unit flag u e)
+               (solution_of_tables T) cannot_change code_deps
+               preserve_direct_calls e)
+            [] [] empty_static_env empty_heap no_reads))
+    ∧ ∀ (L : location -> option node) (i : nat) (s t : state),
+        run i (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+        alloc_ok L s ->
+        related (graph_of_facts (traverse_unit flag u e))
+          (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
+          (static_names symbols_of_binding e) u (if hb then True else False)
+          True (traverse_unit flag u e) preserve_direct_calls
+          (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+          sets_exact cannot_change code_deps (bound_code_metadata e) types L
+          s t ->
+        answered_h (exits_rel (if hb then True else False) ex) measure
+          (related (graph_of_facts (traverse_unit flag u e))
+             (solution_of_tables T) noted deps cds (unit_kept e)
+             (unit_codes e) (static_names symbols_of_binding e) u
+             (if hb then True else False) True (traverse_unit flag u e)
+             preserve_direct_calls (static_names code_ids_bound e)
+             (fresh_name (names_of e)) ex sets_exact cannot_change code_deps
+             (bound_code_metadata e) types L)
+          s t.
 Proof.
   intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
-    Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid Hcid.
+    Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid' Hcid' Hcode_deps0 Hxe.
   rename preserve_direct_calls into b.
   pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
   pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
@@ -20842,8 +20913,8 @@ Proof.
   assert (Hcode_deps :
     ∀ id : code_id,
       cannot_change (Node_code_id id) = false ->
-      lookup id (unit_code_deps flag u e) = lookup id cds)
-    by (intros id _; rewrite Hcds_eq; reflexivity).
+      lookup id code_deps = lookup id cds)
+    by (intros id Hid; rewrite (Hcode_deps0 id Hid), Hcds_eq; reflexivity).
   assert (Hmetadatas :
     ∀ (id : code_id) (c : code),
       (id, c) ∈ unit_codes e -> cannot_change (Node_code_id id) = false ->
@@ -20851,41 +20922,95 @@ Proof.
     by (intros id c Hin _;
         exact (lookup_bound_code_metadata e id c (unit_codes_nodup hb e Hfrag)
                  Hin)).
-  assert (Hwid' :
-    ∀ (id : code_id) (a a' n y : node),
-      cannot_change (Node_code_id id) = false ->
-      g_accessor G a (Field_call_witness Known_arity_code_pointer) n ->
-      g_accessor G a' (Field_call_witness Known_arity_code_pointer) n ->
-      (s_any_source sol a' = true -> s_any_source sol a = true)
-      ∧ (s_sources sol a' y = true -> s_sources sol a y = true))
-    by (intros id a a' n y _; apply Hwid).
-  assert (Hcid' :
-    ∀ (id id' : code_id) (w : node),
-      cannot_change (Node_code_id id) = false ->
-      g_constructor G w Field_code_id_of_call_witness (Node_code_id id) ->
-      g_constructor G w Field_code_id_of_call_witness (Node_code_id id') ->
-      id' = id)
-    by (intros id id' w _; apply Hcid).
   unfold rebuild_unit_cc_with.
   assert (Hslots_read : True -> local_reads_used is_local G sol)
     by (intros _;
         exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
                  is_local _ _ Hlrs)).
-  eapply (unit_refines is_local G sol noted deps cds (unit_kept e)
-            (unit_codes e) (static_names symbols_of_binding e) u
-            (if hb then True else False) True F b);
-    eassumption || reflexivity || (intros; reflexivity)
-    || (intros; apply Htypes)
-    || exact (fun Hf : False => False_ind _ Hf)
-    || exact (conj I (conj (ex_intro _ []
-                              (conj (conj (fun k H => H) rets_nil_bound)
-                                 (exits_bound_unit u e Hexits Hfree)))
-                            (conj Hscr (conj Hcf (conj (conj Hfresh
-                               (conj (ex_intro _ [] (conj Hkinded Hagree0))
-                                  (conj (ex_intro _ []
-                                           (conj Hraises Hxagree0))
-                                     Htab0)))
-                               (fun r K H => rets_nil_any _ r K H)))))).
+  exists noted, deps, cds. split.
+  - intros L.
+    eapply (initial_related is_local G sol noted deps cds (unit_kept e)
+              (unit_codes e) (static_names symbols_of_binding e) u
+              (if hb then True else False) True F b);
+      eassumption || reflexivity || (intros; reflexivity)
+      || exact (conj I (conj (ex_intro _ []
+                                (conj (conj (fun k H => H) rets_nil_bound)
+                                   (exits_bound_unit u e Hexits Hfree)))
+                              (conj Hscr (conj Hcf (conj (conj Hfresh
+                                 (conj (ex_intro _ [] (conj Hkinded Hagree0))
+                                    (conj (ex_intro _ []
+                                             (conj Hraises Hxagree0))
+                                       Htab0)))
+                                 (fun r K H => rets_nil_any _ r K H)))))).
+  - intros L i s1 t1 Hrun1 Halloc Hrel.
+    eapply (related_answered is_local G sol noted deps cds (unit_kept e)
+              (unit_codes e) (static_names symbols_of_binding e) u
+              (if hb then True else False) True F b);
+      try (eassumption || reflexivity || (intros; reflexivity)
+           || (intros; apply Htypes)).
+    intros Hse.
+    exact (proj1 (run_exact G (unit_kept e) i _ s1
+                    (initial_exact G (unit_kept e) e (Hxe Hse)) Hrun1)).
+Qed.
+
+(* The same for the rebuild with changes of calling convention, given
+   what the checks of the table say of it. *)
+(* With local fields, the tables passing the check of the fix. *)
+Lemma rebuild_cc_with_refines_checked_local (hb ex : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change cannot_change_witness : node -> bool)
+    (preserve_direct_calls : bool) (types : subkinds_rewriting) :
+  is_local_slots_only is_local ->
+  in_fragment hb e = true ->
+  checked ex (unit_codes e) e = true ->
+  calls_kinded [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  types_sound_all (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
+  conts_table_ok types e ->
+  results_kinded [] [] e = true ->
+  cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+    cannot_change_witness cannot_change ->
+  (∀ a a' n y : node,
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a
+       (Field_call_witness Known_arity_code_pointer) n ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a'
+       (Field_call_witness Known_arity_code_pointer) n ->
+     (s_any_source (solution_of_tables T) a' = true ->
+      s_any_source (solution_of_tables T) a = true)
+     ∧ (s_sources (solution_of_tables T) a' y = true ->
+        s_sources (solution_of_tables T) a y = true)) ->
+  (∀ (w : node) (id id' : code_id),
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id) ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id') ->
+     id' = id) ->
+  refines_heap_with (exits_rel (if hb then True else False) ex)
+    (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_unit_cc_with types (traverse_unit flag u e)
+              (solution_of_tables T) cannot_change (unit_code_deps flag u e)
+              preserve_direct_calls e)
+       [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+    Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid Hcid.
+  destruct (rebuild_cc_with_related_checked_local hb ex flag is_local u e T
+              cannot_change cannot_change_witness (unit_code_deps flag u e)
+              preserve_direct_calls types False Hlocal Hfrag Hcf Hkinded Hwf
+              Hexits Hcheck Hlrs Hcheck_exact Htypes Htypes_deps0
+              Htypes_conts Hrk Hccc (fun id a a' n y _ => Hwid a a' n y)
+              (fun id id' w _ => Hcid w id id') (fun _ _ => eq_refl)
+              (fun Hf : False => False_ind _ Hf))
+    as (noted & deps & cds & H0 & Hans).
+  exact (located_refines _ _ e _ H0 Hans).
 Qed.
 
 Lemma rebuild_cc_refines_checked_local (hb ex : bool)

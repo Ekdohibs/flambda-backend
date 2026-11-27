@@ -146,9 +146,12 @@
    with a use (above).
 
    The results of code, at the nodes of [code_dep.return], are in
-   FlambdaReaperTypesReturnsSpec.v, and the statements here in the
-   fragment [loose] (closure types that are not aliases) in
-   FlambdaReaperTypesLooseSpec.v.
+   FlambdaReaperTypesReturnsSpec.v, the parameters of code at the nodes
+   of [code_dep.params] in FlambdaReaperTypesParamsSpec.v, the statements
+   here in the fragment [loose] (closure types that are not aliases) in
+   FlambdaReaperTypesLooseSpec.v, and with the wider check of static
+   blocks of FlambdaReaperTypesUsedValuesSpec.v ([used_values] in place
+   of [unit_of_values]) in FlambdaReaperTypesCallsUsedSpec.v.
 
    What is left out:
    - The states within a wrapper of both runs, for the third run.
