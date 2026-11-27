@@ -41,7 +41,11 @@
    rebuilt unit as in FlambdaReaperUnboxingRefinesReach3Proofs.v, whose
    proof this repeats. The fragment of
    FlambdaReaperUnboxingRefinesReach3Spec.v is in this one
-   ([calls_unboxing_in_never_reach]). *)
+   ([calls_unboxing_in_never_reach]). The proof holds of the units with
+   the primitives of the heap ([rebuild_unbox_nr_ind_refines_cc_gen], if
+   [hb]): the three runs are read off the first rebuilt unit, which the
+   statement asks of [in_heap_fragment] already; the statement is its
+   instance without them. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -89,8 +93,42 @@ Qed.
 (* The statements                                                           *)
 (* ======================================================================== *)
 
-Theorem rebuild_unbox_nr_ind_refines_cc :
-  rebuild_unbox_nr_ind_refines_cc_statement.
+(* The statement, of the units of the fragment with the primitives of the
+   heap if [hb]. *)
+Lemma rebuild_unbox_nr_ind_refines_cc_gen (hb : bool) :
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T T1 : tables)
+    (cannot_change : list node) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool)
+    (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+    && distinct (static_names code_ids_of_binding e) = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    in_heap_fragment
+      (first_rebuild flag u e T cannot_change preserve_direct_calls)
+    = true ->
+    check_closed is_local
+      (traverse_unit flag u
+         (first_rebuild flag u e T cannot_change preserve_direct_calls))
+      T1
+    = true ->
+    check_local_reads_used is_local
+      (traverse_unit flag u
+         (first_rebuild flag u e T cannot_change preserve_direct_calls))
+      T1
+    = true ->
+    calls_unboxing_never_nr nr (traverse_unit flag u e) T cannot_change
+      (unit_code_deps flag u e) dominated to_unbox
+      (traverse_unit flag u
+         (first_rebuild flag u e T cannot_change preserve_direct_calls))
+      T1 e
+    = true ->
+    check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+    program_refines
+      (first_rebuild flag u e T cannot_change preserve_direct_calls)
+      (rebuild_unit_unbox_fixed (traverse_unit flag u e) T cannot_change
+         (unit_code_deps flag u e) dominated to_unbox preserve_direct_calls e).
 Proof.
   intros flag is_local u e T T1 cannot_change dominated to_unbox pdc nr
     Hslots Hfrag Hclosed Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck.
@@ -101,7 +139,7 @@ Proof.
   pose proof (check_closed_sound is_local _ _ Hclosed1) as Hc1.
   pose proof (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
                 is_local _ _ Hlrs1) as Hlr1.
-  apply (rebuild_unbox_modes_refines_cc_never flag is_local u e T
+  apply (rebuild_unbox_modes_refines_cc_never_gen hb flag is_local u e T
            cannot_change dominated to_unbox pdc nr (flow_reach2 F1 T1)
            (over_reach F1 T1) (rem_reach F1 T1) Hslots Hfrag Hclosed Hcalls
            Hcheck).
@@ -142,6 +180,14 @@ Proof.
       as Hrem.
     fold F1 in Hrem. unfold e1 in Hrem. rewrite Hrun in Hrem.
     exact (step_rem_ok_mono _ _ s (rem_used_reach F1 T1) Hrem).
+Qed.
+
+Theorem rebuild_unbox_nr_ind_refines_cc :
+  rebuild_unbox_nr_ind_refines_cc_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox pdc nr.
+  exact (rebuild_unbox_nr_ind_refines_cc_gen false flag is_local u e T T1
+           cannot_change dominated to_unbox pdc nr).
 Qed.
 
 Theorem rebuild_unbox_nr_ind_refines_observably_local :

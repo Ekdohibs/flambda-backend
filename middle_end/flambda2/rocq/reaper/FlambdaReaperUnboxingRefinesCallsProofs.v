@@ -135,7 +135,15 @@
    is bound once and the table is that of the unit ([tabled], in
    [names_ok]). [rebuild_unbox_modes_with_refines_cc_never] holds for any
    [types] of the kind, [rebuild_unbox_modes_refines_cc_never] is its
-   instance without types. *)
+   instance without types.
+   The construction holds of the units with the primitives of the heap
+   ([rebuild_uc_h], for the edges of the terms with them if [hprims]): a
+   [Let] of a variable that is not unboxed is related by [uc_let_heap],
+   of a primitive of the heap or not, both rebuilds making it alike.
+   [rebuild_unbox_modes_with_refines_cc_never_gen] and
+   [rebuild_unbox_modes_with_refines_cc_gen] are the statements of the
+   units of the fragment with the primitives of the heap if [hb]; those
+   without them are their instances. *)
 
 From Stdlib Require Import ZArith List Bool PeanoNat Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -345,6 +353,8 @@ Proof.
       try assumption.
     apply (exn_call_rel_agree K); [ | exact Hexn ].
     apply Hagree. simpl. right. left. reflexivity.
+  - intros K x kind d body body' Hx Hd _ IH K' Hagree.
+    apply uc_let_heap; [ exact Hx | exact Hd | apply IH, Hagree ].
   - intros K K' _. apply uc_handlers_nil.
   - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs Hsk' K'
       Hagree.
@@ -565,6 +575,8 @@ Proof.
     cbn [free_continuations_of_expr free_continuations_of_handler app].
     apply in_without_iff. split; [ right; left; exact He | ].
     intros [Heq | []]. exact (Hwe Heq).
+  - intros K x kind d body body' Hx Hd _ IH K' H.
+    apply uc_let_heap; [ exact Hx | exact Hd | apply IH, H ].
   - intros K K' _. apply uc_handlers_nil.
   - intros K k sh ps ps' md md' h h' hs hs' S Hps Hmd Hmd' _ IHh _ IHhs Hsk' K'
       H.
@@ -2114,6 +2126,22 @@ Definition names_ok_h (h : continuation_handler) : Prop :=
        k ∈ continuations_in_handler h -> k <> ff ∧ k <> ffu)
   ∧ tabled (handler_handlers_params h).
 
+(* The same, the primitives of the heap in the term if [hprims]. *)
+Definition rebuild_ok_expr_h (hprims : Prop) (e : expr) : Prop :=
+  ∀ (en : rebuild_env) (enu : unbox_env)
+    (C : finite_map (list pdesc * bool)) (ctx : option code_id)
+    (ce : finite_map (list node)),
+    cinv C en enu ->
+    calls_expr_n F sol cannot_change code_deps unit_code_ids codes unboxed
+      nr reach ovr rem
+      (env_kinds en) C e
+    = true ->
+    names_ok e ->
+    FlambdaReaperFlowProofs.expr_edges (graph_of_facts F) noted deps cds
+      kept_slots codes0 symbols True hprims ctx ce e ->
+    uc_result (K_of C) (live_conts F sol code_deps codes e) (cc_rebuild en e)
+      (u_rebuild enu e).
+
 Definition rebuild_ok_expr (e : expr) : Prop :=
   ∀ (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (ctx : option code_id)
@@ -2943,8 +2971,8 @@ Proof.
   exact (uc_never_shadow _ _ _ _ _ _ _ _ _ _ _ _ Huc (Hnr eq_refl)).
 Qed.
 
-Lemma code_rebuilt_nc (id : code_id) (c : code) :
-  rebuild_ok_expr (code_body c) ->
+Lemma code_rebuilt_nc_h (hprims : Prop) (id : code_id) (c : code) :
+  rebuild_ok_expr_h hprims (code_body c) ->
   calls_code_n F sol cannot_change code_deps unit_code_ids codes unboxed
     nr reach ovr rem id
     c
@@ -2953,7 +2981,7 @@ Lemma code_rebuilt_nc (id : code_id) (c : code) :
   (∀ k, k ∈ continuations_in_code c -> k <> ff ∧ k <> ffu) ->
   tabled (code_handlers_params c) ->
   FlambdaReaperFlowProofs.code_edges (graph_of_facts F) noted deps cds
-    kept_slots codes0 symbols True False id c ->
+    kept_slots codes0 symbols True hprims id c ->
   code_change_u sol cannot_change code_deps unit_code_ids unboxed id
     (metadata_of_code c)
   = Not_changing_u ->
@@ -3172,8 +3200,7 @@ Proof.
       apply in_without_iff. split; [ exact (IHincl k Hk) | exact Hne ].
 Qed.
 
-(* Code of the unit, as the two rebuilds make it. *)
-Lemma code_rebuilt (id : code_id) (c : code) :
+Lemma code_rebuilt_nc (id : code_id) (c : code) :
   rebuild_ok_expr (code_body c) ->
   calls_code_n F sol cannot_change code_deps unit_code_ids codes unboxed
     nr reach ovr rem id
@@ -3184,6 +3211,41 @@ Lemma code_rebuilt (id : code_id) (c : code) :
   tabled (code_handlers_params c) ->
   FlambdaReaperFlowProofs.code_edges (graph_of_facts F) noted deps cds
     kept_slots codes0 symbols True False id c ->
+  code_change_u sol cannot_change code_deps unit_code_ids unboxed id
+    (metadata_of_code c)
+  = Not_changing_u ->
+  let ccc :=
+    rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+      types
+      id c
+  in
+  let cu :=
+    rebuild_code_u true F sol cannot_change code_deps pdc unit_code_ids
+      codes unboxed ffu [] types id c
+  in
+  (∃ cs : code_shape,
+     code_frame unboxed dead CSf id ccc cu cs
+     ∧ uc unboxed dead CSf NRf RCHf OVf REMf (code_K_of NRf id ccc cs)
+         (code_body ccc) (code_body cu))
+  ∧ incl (free_continuations_of_code cu) (free_continuations_of_code ccc)
+  ∧ incl (free_continuations_of_code cu)
+      (live_conts_code F sol code_deps codes c).
+Proof.
+  exact (code_rebuilt_nc_h False id c).
+Qed.
+
+(* Code of the unit, as the two rebuilds make it. *)
+Lemma code_rebuilt_h (hprims : Prop) (id : code_id) (c : code) :
+  rebuild_ok_expr_h hprims (code_body c) ->
+  calls_code_n F sol cannot_change code_deps unit_code_ids codes unboxed
+    nr reach ovr rem id
+    c
+  = true ->
+  (∀ z, z ∈ variables_in_code c -> var_ok z) ->
+  (∀ k, k ∈ continuations_in_code c -> k <> ff ∧ k <> ffu) ->
+  tabled (code_handlers_params c) ->
+  FlambdaReaperFlowProofs.code_edges (graph_of_facts F) noted deps cds
+    kept_slots codes0 symbols True hprims id c ->
   let ccc :=
     rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
       types
@@ -3205,7 +3267,8 @@ Proof.
   destruct (code_change_u sol cannot_change code_deps unit_code_ids unboxed id
               (metadata_of_code c))
     eqn:Hch0;
-    [ exact (code_rebuilt_nc id c IH Hok Hvars Hconts Htab Hedges Hch0) | ].
+    [ exact (code_rebuilt_nc_h hprims id c IH Hok Hvars Hconts Htab Hedges
+               Hch0) | ].
   revert IH Hok Hvars Hconts Htab Hedges Hch0.
   destruct c as [params mc ret exn md body].
   intros IH Hok Hvars Hconts Htab Hedges Hch0. cbv zeta.
@@ -3452,6 +3515,37 @@ Proof.
       apply in_without_iff. split; [ exact (IHincl k Hk) | exact Hne ].
 Qed.
 
+Lemma code_rebuilt (id : code_id) (c : code) :
+  rebuild_ok_expr (code_body c) ->
+  calls_code_n F sol cannot_change code_deps unit_code_ids codes unboxed
+    nr reach ovr rem id
+    c
+  = true ->
+  (∀ z, z ∈ variables_in_code c -> var_ok z) ->
+  (∀ k, k ∈ continuations_in_code c -> k <> ff ∧ k <> ffu) ->
+  tabled (code_handlers_params c) ->
+  FlambdaReaperFlowProofs.code_edges (graph_of_facts F) noted deps cds
+    kept_slots codes0 symbols True False id c ->
+  let ccc :=
+    rebuild_code_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
+      types
+      id c
+  in
+  let cu :=
+    rebuild_code_u true F sol cannot_change code_deps pdc unit_code_ids
+      codes unboxed ffu [] types id c
+  in
+  (∃ cs : code_shape,
+     code_frame unboxed dead CSf id ccc cu cs
+     ∧ uc unboxed dead CSf NRf RCHf OVf REMf (code_K_of NRf id ccc cs)
+         (code_body ccc) (code_body cu))
+  ∧ incl (free_continuations_of_code cu) (free_continuations_of_code ccc)
+  ∧ incl (free_continuations_of_code cu)
+      (live_conts_code F sol code_deps codes c).
+Proof.
+  exact (code_rebuilt_h False id c).
+Qed.
+
 Lemma cc_rebuild_binding_code (en : rebuild_env) (id : code_id) (c : code) :
   rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids codes ff
     types
@@ -3525,10 +3619,10 @@ Proof.
 Qed.
 
 (* Static bindings, code included, as the two rebuilds make them. *)
-Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
+Lemma bindings_rebuilt_h (hprims : Prop) (en : rebuild_env) (enu : unbox_env)
     (C : finite_map (list pdesc * bool)) (bindings : list static_binding) :
   (∀ (id : code_id) (c : code),
-     Bind_code id c ∈ bindings -> rebuild_ok_expr (code_body c)) ->
+     Bind_code id c ∈ bindings -> rebuild_ok_expr_h hprims (code_body c)) ->
   cinv C en enu ->
   forallb
     (calls_binding_n F sol cannot_change code_deps unit_code_ids codes unboxed
@@ -3540,7 +3634,7 @@ Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
   tabled (flat_map binding_handlers_params bindings) ->
   every
     (FlambdaReaperFlowProofs.binding_edges (graph_of_facts F) noted deps cds
-       kept_slots codes0 symbols True False)
+       kept_slots codes0 symbols True hprims)
     bindings ->
   let bcc :=
     flat_map
@@ -3580,7 +3674,8 @@ Proof.
       rewrite cc_rebuild_binding_code, u_rebuild_binding_code.
       destruct (is_code_id_used sol id).
       * destruct Hb_edges as [_ Hcode_edges].
-        destruct (code_rebuilt id c (IHcode id c (or_introl eq_refl)) Hb)
+        destruct (code_rebuilt_h hprims id c
+                    (IHcode id c (or_introl eq_refl)) Hb)
           as ((cs & Hframe & Hcuc) & Hcfc & Hcincl).
         { intros z Hz. apply Hvars. cbn [flat_map variables_in_binding].
           apply in_or_app. left. exact Hz. }
@@ -3632,6 +3727,45 @@ Proof.
       * cbn [app live_conts_binding]. split; [ exact Hub | ].
         split; [ exact Hfc | split; [ exact Hbb | ] ].
         intros k Hk. exact (Hincl k Hk).
+Qed.
+
+Lemma bindings_rebuilt (en : rebuild_env) (enu : unbox_env)
+    (C : finite_map (list pdesc * bool)) (bindings : list static_binding) :
+  (∀ (id : code_id) (c : code),
+     Bind_code id c ∈ bindings -> rebuild_ok_expr (code_body c)) ->
+  cinv C en enu ->
+  forallb
+    (calls_binding_n F sol cannot_change code_deps unit_code_ids codes unboxed
+       nr reach ovr rem)
+    bindings
+  = true ->
+  (∀ z, z ∈ flat_map variables_in_binding bindings -> var_ok z) ->
+  (∀ k, k ∈ flat_map continuations_in_binding bindings -> k <> ff ∧ k <> ffu) ->
+  tabled (flat_map binding_handlers_params bindings) ->
+  every
+    (FlambdaReaperFlowProofs.binding_edges (graph_of_facts F) noted deps cds
+       kept_slots codes0 symbols True False)
+    bindings ->
+  let bcc :=
+    flat_map
+      (rebuild_binding_cc F sol cannot_change code_deps pdc unit_code_ids
+         codes ff types en)
+      bindings
+  in
+  let bu :=
+    flat_map
+      (rebuild_binding_u true F sol cannot_change code_deps pdc
+         unit_code_ids codes unboxed ffu [] types enu)
+      bindings
+  in
+  uc_bindings unboxed dead CSf NRf RCHf OVf REMf bcc bu
+  ∧ incl (flat_map free_continuations_of_binding bu)
+      (flat_map free_continuations_of_binding bcc)
+  ∧ existsb binding_binds bcc = existsb binding_binds bu
+  ∧ incl (flat_map free_continuations_of_binding bu)
+      (flat_map (live_conts_binding F sol code_deps codes) bindings).
+Proof.
+  exact (bindings_rebuilt_h False en enu C bindings).
 Qed.
 
 
@@ -7649,6 +7783,21 @@ Proof.
   split; [ exact Hfc | split; [ exact Hbs | exact Hincl ] ].
 Qed.
 
+(* The same, of a primitive of the heap or not. *)
+Lemma uc_result_let_heap (K : finite_map kshape) (x : variable)
+    (kind : flambda_kind) (d d' : named) (fc0 : list continuation)
+    (body body' : expr) :
+  plain2 unboxed dead x = true -> named_plain2 unboxed dead d = true ->
+  uc_result K fc0 body body' ->
+  d' = d ->
+  uc_result K fc0 (Let x kind d body) (Let x kind d' body').
+Proof.
+  intros Hx Hd (Huc & Hfc & Hbs & Hincl) ->.
+  split; [ apply uc_let_heap; assumption | ].
+  cbn [free_continuations_of_expr binds_statics].
+  split; [ exact Hfc | split; [ exact Hbs | exact Hincl ] ].
+Qed.
+
 Lemma ac_rel2_conts (K : finite_map kshape) (ac ac' : apply_cont) :
   ac_rel2 unboxed dead K ac ac' ->
   apply_cont_continuations ac' = apply_cont_continuations ac.
@@ -7780,8 +7929,8 @@ Proof.
     exact (decide_param_unused x kd keep kind Hdi).
 Qed.
 
-Lemma rebuild_uc :
-  (∀ e : expr, rebuild_ok_expr e)
+Lemma rebuild_uc_h (hprims : Prop) :
+  (∀ e : expr, rebuild_ok_expr_h hprims e)
   ∧ (∀ h : continuation_handler,
        ∀ (en : rebuild_env) (enu : unbox_env)
          (C : finite_map (list pdesc * bool)) (ctx : option code_id)
@@ -7795,7 +7944,7 @@ Lemma rebuild_uc :
          = true ->
          names_ok_h h ->
          FlambdaReaperFlowProofs.handler_edges (graph_of_facts F) noted deps
-           cds kept_slots codes0 symbols True False ctx ce h ->
+           cds kept_slots codes0 symbols True hprims ctx ce h ->
          ∀ dead_check : bool,
            ∃ (ps ps' : list (variable * flambda_kind))
              (md md' : handler_metadata) (hp hu : expr),
@@ -8028,22 +8177,16 @@ Proof.
         -- destruct (plain_binding_cases sol unboxed x kind _ Hbind')
              as [Hp | (p & y & f & fs & Heq & _)]; [ | discriminate Heq ].
            rewrite (rebuild_let_u_plain sol unboxed _ x kind _ _ Hp).
-           apply uc_result_let; [ | | | exact IH | reflexivity ].
+           apply uc_result_let_heap; [ | | exact IH | reflexivity ].
            ++ exact (plain2_of x kind Hx Hxf Hkind Hused).
            ++ apply named_plain2_rebuilt; [ exact Hkok | exact Hp ].
-           ++ apply rebuild_named_not_heap.
-              eapply FlambdaReaperFlowProofs.named_edges_not_heap.
-              exact Hnamed_edges.
         -- destruct (plain_binding_cases sol unboxed x kind _ Hbind')
              as [Hp | (p' & y & f & fs & Heq & Hread & Hreads & Hnamed & Hy
                        & Hfield)].
            ++ rewrite (rebuild_let_u_plain sol unboxed _ x kind _ _ Hp).
-              apply uc_result_let; [ | | | exact IH | reflexivity ].
+              apply uc_result_let_heap; [ | | exact IH | reflexivity ].
               ** exact (plain2_of x kind Hx Hxf Hkind Hused).
               ** apply named_plain2_rebuilt; [ exact Hkok | exact Hp ].
-              ** apply rebuild_named_not_heap.
-                 eapply FlambdaReaperFlowProofs.named_edges_not_heap.
-                 exact Hnamed_edges.
            ++ rewrite Heq in Hnamed, Hnamed_edges |- *.
               rewrite (Hnamed (ue_env enu)).
               assert (Hacc : g_accessor (graph_of_facts F) (Node_variable x) f
@@ -8119,7 +8262,7 @@ Proof.
         | exact (tabled_app_r _ _ Htab) ];
         apply in_or_app; right; assumption. }
     { exact Hbody_edges. }
-    destruct (bindings_rebuilt en enu C bindings IHcode Hci Hbs)
+    destruct (bindings_rebuilt_h hprims en enu C bindings IHcode Hci Hbs)
       as (Hub & Hbfc & Hbbs & Hbincl).
     { intros z Hz. apply Hvars, in_or_app. left. exact Hz. }
     { intros k Hk. apply Hconts, in_or_app. left. exact Hk. }
@@ -8657,6 +8800,54 @@ Proof.
     destruct (dead_check && _); [ exact (uc_result_invalid _ _) | ].
     split; [ exact IHuc | split; [ exact IHfc | split; [ exact IHbs | ] ] ].
     exact IHincl.
+Qed.
+
+Lemma rebuild_uc :
+  (∀ e : expr, rebuild_ok_expr e)
+  ∧ (∀ h : continuation_handler,
+       ∀ (en : rebuild_env) (enu : unbox_env)
+         (C : finite_map (list pdesc * bool)) (ctx : option code_id)
+         (ce : finite_map (list node)) (is_exn : bool),
+         cinv C en enu ->
+         calls_handler_n F sol cannot_change code_deps unit_code_ids codes
+           unboxed nr reach ovr rem (env_kinds en) C (handler_pdescs sol unboxed
+               is_exn
+             h)
+           h
+         = true ->
+         names_ok_h h ->
+         FlambdaReaperFlowProofs.handler_edges (graph_of_facts F) noted deps
+           cds kept_slots codes0 symbols True False ctx ce h ->
+         ∀ dead_check : bool,
+           ∃ (ps ps' : list (variable * flambda_kind))
+             (md md' : handler_metadata) (hp hu : expr),
+             rebuild_handler_cc F sol cannot_change code_deps pdc
+               unit_code_ids codes ff types en dead_check (handler_mask sol
+                 is_exn h)
+               h
+             = Handler (map fst ps) md hp
+             ∧ rebuild_handler_u true F sol cannot_change code_deps pdc
+                 unit_code_ids codes unboxed ffu [] types enu dead_check
+                 (handler_decisions true sol unboxed is_exn h) h
+               = Handler (map fst ps') md' hu
+             ∧ params_rel2 unboxed dead
+                 (flat_map pshape_of (handler_pdescs sol unboxed is_exn h))
+                 ps ps'
+             ∧ hm_params_kinds md = map snd ps
+             ∧ hm_params_kinds md' = map snd ps'
+             ∧ sks_follow2
+                 (flat_map pshape_of (handler_pdescs sol unboxed is_exn h))
+                 (hm_params_subkinds md) (hm_params_subkinds md')
+             ∧ map snd ps
+               = flat_map kept_kind (handler_pdescs sol unboxed is_exn h)
+             ∧ map pd_decision (handler_pdescs sol unboxed is_exn h)
+               = handler_decisions true sol unboxed is_exn h
+             ∧ map pd_keep (handler_pdescs sol unboxed is_exn h)
+               = handler_mask sol is_exn h
+             ∧ uc_result (K_of C) (live_conts_handler F sol code_deps codes h)
+                 hp hu).
+Proof.
+  exact (rebuild_uc_h False).
 Qed.
 
 End RebuildsCalls.
@@ -9631,8 +9822,11 @@ Qed.
    what the parameters kept state, the same for the two rebuilds, that
    states nothing of a node with no use and whose table is that of the
    unit, each continuation bound once
-   (FlambdaReaperRebuildProofs.conts_table_ok). *)
-Lemma rebuild_unbox_modes_with_refines_cc_never (types : subkinds_rewriting)
+   (FlambdaReaperRebuildProofs.conts_table_ok). With the primitives of the
+   heap if [hb]: the two runs make the same primitives of the heap on the
+   same values, and their heaps are one. *)
+Lemma rebuild_unbox_modes_with_refines_cc_never_gen (hb : bool)
+    (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
@@ -9644,7 +9838,8 @@ Lemma rebuild_unbox_modes_with_refines_cc_never (types : subkinds_rewriting)
      value_at S (st_rewrite t n ps) v = true) ->
   conts_table_ok types e ->
   is_local_slots_only is_local ->
-  in_flow_fragment e = true ->
+  flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e) = true ->
   check_closed is_local (traverse_unit flag u e) T = true ->
   calls_unboxing_reach_never_nr nr (traverse_unit flag u e) T cannot_change
     (unit_code_deps flag u e) dominated to_unbox reach ovr rem e
@@ -9711,7 +9906,7 @@ Proof.
     = []) by reflexivity.
   rewrite Hchanged.
   pose proof (check_closed_sound is_local F T Hclosed) as Hcl.
-  destruct (FlambdaReaperFlowProofs.traverse_unit_facts flag u e True
+  destruct (FlambdaReaperFlowProofs.traverse_unit_facts_gen flag u e True hb
               Hfragment (or_introl I))
     as (noted & deps & cds & Hedges & _).
   assert (Hfields_read :
@@ -9835,7 +10030,7 @@ Proof.
   { intros z Hz. apply among_In in Hz. unfold dead in Hz.
     apply filter_In in Hz as [_ Hz]. apply andb_true_iff in Hz as [Hz _].
     apply negb_true_iff in Hz. exact Hz. }
-  destruct (proj1 (rebuild_uc F (solution_of_tables T)
+  destruct (proj1 (rebuild_uc_h F (solution_of_tables T)
                      (fun n => mem_node n cannot_change)
                      (unit_code_deps flag u e) pdc
                      (static_names code_ids_bound e) (bound_code_metadata e)
@@ -9844,7 +10039,8 @@ Proof.
                      next dead noted deps cds (unit_kept e) (unit_codes e)
                      (static_names symbols_of_binding e) is_local nr reach
                      ovr rem types Hcl Hslots
-                     Hfields_read Hreads_found Hdead Hunused)
+                     Hfields_read Hreads_found Hdead Hunused
+                     (if hb then True else False))
               e empty_env empty_unbox_env [] None (unit_conts u))
     as (Huc & _).
   - split.
@@ -9874,6 +10070,96 @@ Proof.
              Hover Hrem).
 Qed.
 
+Lemma rebuild_unbox_modes_with_refines_cc_never (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
+    (nr : code_id -> bool) (reach : bool -> variable -> code_id -> bool)
+    (ovr rem : code_id -> bool) :
+  (∀ t : subkinds_types, types = Some t ->
+   ∀ (n : node) (ps : param_subkind) (S : static_env) (v : value),
+     s_has_usage (solution_of_tables T) n = false ->
+     value_at S (st_rewrite t n ps) v = true) ->
+  conts_table_ok types e ->
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  calls_unboxing_reach_never_nr nr (traverse_unit flag u e) T cannot_change
+    (unit_code_deps flag u e) dominated to_unbox reach ovr rem e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  flow_run (fun b f id => reach b f id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  over_run (fun id => ovr id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  rem_run (fun id => rem id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  program_refines
+    (rebuild_unit_cc_with types (traverse_unit flag u e)
+       (solution_of_tables T) (fun n => mem_node n cannot_change)
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode_with types true (fun _ => false)
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox [] pdc e).
+Proof.
+  exact (rebuild_unbox_modes_with_refines_cc_never_gen false types flag
+           is_local u e T cannot_change dominated to_unbox pdc nr reach ovr
+           rem).
+Qed.
+
+
+(* The same without types, with the primitives of the heap if [hb]. *)
+Lemma rebuild_unbox_modes_refines_cc_never_gen (hb : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
+    (nr : code_id -> bool) (reach : bool -> variable -> code_id -> bool)
+    (ovr rem : code_id -> bool) :
+  is_local_slots_only is_local ->
+  flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e) = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  calls_unboxing_reach_never_nr nr (traverse_unit flag u e) T cannot_change
+    (unit_code_deps flag u e) dominated to_unbox reach ovr rem e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  flow_run (fun b f id => reach b f id = true)
+    (State
+       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  over_run (fun id => ovr id = true)
+    (State
+       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  rem_run (fun id => rem id = true)
+    (State
+       (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  program_refines
+    (rebuild_unit_cc_from_tables (traverse_unit flag u e) T cannot_change
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode true (fun _ => false)
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox [] pdc e).
+Proof.
+  apply (rebuild_unbox_modes_with_refines_cc_never_gen hb None);
+    [ intros t Ht; discriminate Ht | apply no_types_conts ].
+Qed.
 
 (* The same without types. *)
 Lemma rebuild_unbox_modes_refines_cc_never
@@ -9911,8 +10197,8 @@ Lemma rebuild_unbox_modes_refines_cc_never
        (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
        dominated to_unbox [] pdc e).
 Proof.
-  apply (rebuild_unbox_modes_with_refines_cc_never None);
-    [ intros t Ht; discriminate Ht | apply no_types_conts ].
+  exact (rebuild_unbox_modes_refines_cc_never_gen false flag is_local u e T
+           cannot_change dominated to_unbox pdc nr reach ovr rem).
 Qed.
 
 (* The statement of the fix, for the fragment of
@@ -10166,6 +10452,61 @@ Qed.
 
 (* The statement of the fix with types: for any rewriting that states
    nothing of a node with no use, whose table is that of the unit. *)
+Lemma rebuild_unbox_modes_with_refines_cc_gen (hb : bool)
+    (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
+    (nr : code_id -> bool) :
+  (∀ t : subkinds_types, types = Some t ->
+   ∀ (n : node) (ps : param_subkind) (S : static_env) (v : value),
+     s_has_usage (solution_of_tables T) n = false ->
+     value_at S (st_rewrite t n ps) v = true) ->
+  conts_table_ok types e ->
+  is_local_slots_only is_local ->
+  flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e) = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  calls_unboxing_nr nr (traverse_unit flag u e) T cannot_change
+    (unit_code_deps flag u e) dominated to_unbox e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  program_refines
+    (rebuild_unit_cc_with types (traverse_unit flag u e)
+       (solution_of_tables T) (fun n => mem_node n cannot_change)
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode_with types true (fun _ => false)
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox [] pdc e).
+Proof.
+  intros Hunused Htable Hslots Hfrag Hclosed Hcalls Hcheck.
+  apply (rebuild_unbox_modes_with_refines_cc_never_gen hb types flag
+           is_local u e T cannot_change dominated to_unbox pdc nr
+           (reach2 (fun _ _ => true)) (fun _ => true) (fun _ => true)
+           Hunused Htable Hslots Hfrag Hclosed).
+  - exact (calls_unboxing_in_never_reach nr _ _ _ _ _ _ _ _ _ e
+             (calls_unboxing_in_over3_reach nr _ _ _ _ _ _ _ _ _
+                (fun _ => true) e (fun _ _ _ H => H)
+                (calls_unboxing_in_over2_reach nr _ _ _ _ _ _ _
+                   (fun _ => true) e
+                   (calls_unboxing_in_flow2_reach nr _ _ _ _ _ _ _ _ e
+                      (fun _ _ => eq_refl)
+                      (calls_unboxing_in_flow_reach nr _ _ _ _ _ _
+                         (fun _ _ => true) e
+                         (calls_unboxing_in_over1_nr nr _ _ _ _ _ _ e
+                            (calls_unboxing_in_over_nr nr _ _ _ _ _ _ e
+                               Hcalls))))))).
+  - exact Hcheck.
+  - intros n s _ ap f v id slots _ _ _. split; intros _; reflexivity.
+  - intros n s _.
+    exact (FlambdaReaperPartialGroupsProofs.step_over_ok_total _ s
+             (fun _ => eq_refl)).
+  - intros n s _.
+    exact (FlambdaReaperPartialGroupsProofs.step_rem_ok_total _ s
+             (fun _ => eq_refl)).
+Qed.
+
+(* The same, of the units without the primitives of the heap. *)
 Lemma rebuild_unbox_modes_with_refines_cc (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
@@ -10191,31 +10532,8 @@ Lemma rebuild_unbox_modes_with_refines_cc (types : subkinds_rewriting)
        (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
        dominated to_unbox [] pdc e).
 Proof.
-  intros Hunused Htable Hslots Hfrag Hclosed Hcalls Hcheck.
-  apply (rebuild_unbox_modes_with_refines_cc_never types flag is_local u e T
-           cannot_change dominated to_unbox pdc nr (reach2 (fun _ _ => true))
-           (fun _ => true) (fun _ => true) Hunused Htable Hslots Hfrag
-           Hclosed).
-  - exact (calls_unboxing_in_never_reach nr _ _ _ _ _ _ _ _ _ e
-             (calls_unboxing_in_over3_reach nr _ _ _ _ _ _ _ _ _
-                (fun _ => true) e (fun _ _ _ H => H)
-                (calls_unboxing_in_over2_reach nr _ _ _ _ _ _ _
-                   (fun _ => true) e
-                   (calls_unboxing_in_flow2_reach nr _ _ _ _ _ _ _ _ e
-                      (fun _ _ => eq_refl)
-                      (calls_unboxing_in_flow_reach nr _ _ _ _ _ _
-                         (fun _ _ => true) e
-                         (calls_unboxing_in_over1_nr nr _ _ _ _ _ _ e
-                            (calls_unboxing_in_over_nr nr _ _ _ _ _ _ e
-                               Hcalls))))))).
-  - exact Hcheck.
-  - intros n s _ ap f v id slots _ _ _. split; intros _; reflexivity.
-  - intros n s _.
-    exact (FlambdaReaperPartialGroupsProofs.step_over_ok_total _ s
-             (fun _ => eq_refl)).
-  - intros n s _.
-    exact (FlambdaReaperPartialGroupsProofs.step_rem_ok_total _ s
-             (fun _ => eq_refl)).
+  exact (rebuild_unbox_modes_with_refines_cc_gen false types flag is_local u
+           e T cannot_change dominated to_unbox pdc nr).
 Qed.
 
 Theorem rebuild_unbox_fixed_refines_cc_never_returns :

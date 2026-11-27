@@ -13165,8 +13165,54 @@ Module URR3 := FlambdaReaperUnboxingRefinesReach3Proofs.
 
 (* As FlambdaReaperUnboxingRefinesNeverProofs.rebuild_unbox_nr_ind_refines_cc,
    whose proof this repeats with the first rebuilt unit with types. *)
-Theorem rebuild_unbox_nr_ind_with_types_refines_cc :
-  rebuild_unbox_nr_ind_with_types_refines_cc_statement.
+(* The statement, of the units of the fragment with the primitives of the
+   heap if [hb]. *)
+Lemma rebuild_unbox_nr_ind_with_types_cc_gen (hb : bool) :
+  ∀ (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T T1 : tables)
+    (cannot_change : list node) (dominated : list (node * node))
+    (to_unbox : list node) (preserve_direct_calls : bool)
+    (nr : code_id -> bool),
+    is_local_slots_only is_local ->
+    flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+    && distinct (static_names code_ids_of_binding e) = true ->
+    distinct (FlambdaStaticsInScopeSpec.bound_continuations e) = true ->
+    check_closed is_local (traverse_unit flag u e) T = true ->
+    in_heap_fragment
+      (first_rebuild_with_types flag is_local u e T cannot_change
+         preserve_direct_calls)
+    = true ->
+    check_closed is_local
+      (traverse_unit flag u
+         (first_rebuild_with_types flag is_local u e T cannot_change
+            preserve_direct_calls))
+      T1
+    = true ->
+    check_local_reads_used is_local
+      (traverse_unit flag u
+         (first_rebuild_with_types flag is_local u e T cannot_change
+            preserve_direct_calls))
+      T1
+    = true ->
+    FlambdaReaperUnboxingRefinesNeverSpec.calls_unboxing_never_nr nr
+      (traverse_unit flag u e) T cannot_change
+      (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+      to_unbox
+      (traverse_unit flag u
+         (first_rebuild_with_types flag is_local u e T cannot_change
+            preserve_direct_calls))
+      T1 e
+    = true ->
+    FlambdaReaperUnboxingRefinesSpec.check_unboxed_reads
+      (traverse_unit flag u e) T dominated to_unbox
+    = true ->
+    FlambdaUnusedStaticsSpec.program_refines
+      (first_rebuild_with_types flag is_local u e T cannot_change
+         preserve_direct_calls)
+      (rebuild_unit_unbox_repr_fixed_with_types is_local
+         (traverse_unit flag u e) T cannot_change
+         (FlambdaReaperCallingConventions.unit_code_deps flag u e) dominated
+         to_unbox [] preserve_direct_calls e).
 Proof.
   intros flag is_local u e T T1 cannot_change dominated to_unbox pdc nr
     Hslots Hfrag Hdist Hclosed Hfrag1 Hclosed1 Hlrs1 Hcalls Hcheck.
@@ -13185,8 +13231,8 @@ Proof.
   pose proof (check_closed_sound is_local _ _ Hclosed1) as Hc1.
   pose proof (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
                 is_local _ _ Hlrs1) as Hlr1.
-  apply (URCP.rebuild_unbox_modes_with_refines_cc_never types flag is_local u
-           e T cannot_change dominated to_unbox pdc nr
+  apply (URCP.rebuild_unbox_modes_with_refines_cc_never_gen hb types flag
+           is_local u e T cannot_change dominated to_unbox pdc nr
            (FlambdaReaperUnboxingRefinesReach2Spec.flow_reach2 F1 T1)
            (FlambdaReaperUnboxingRefinesOver2Spec.over_reach F1 T1)
            (FlambdaReaperUnboxingRefinesReach3Spec.rem_reach F1 T1)
@@ -13235,6 +13281,14 @@ Proof.
       as Hrem.
     fold F1 in Hrem. fold e1 in Hrun. rewrite Hrun in Hrem.
     exact (URR3.step_rem_ok_mono _ _ s (URR3.rem_used_reach F1 T1) Hrem).
+Qed.
+
+Theorem rebuild_unbox_nr_ind_with_types_refines_cc :
+  rebuild_unbox_nr_ind_with_types_refines_cc_statement.
+Proof.
+  intros flag is_local u e T T1 cannot_change dominated to_unbox pdc nr.
+  exact (rebuild_unbox_nr_ind_with_types_cc_gen false flag is_local u e T T1
+           cannot_change dominated to_unbox pdc nr).
 Qed.
 
 Theorem rebuild_unbox_nr_ind_with_types_local :
