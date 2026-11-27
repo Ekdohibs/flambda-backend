@@ -506,6 +506,26 @@ Proof.
     (split; [ reflexivity | split; reflexivity ]).
 Qed.
 
+(* Code that the walk keeps keeps its convention. *)
+Lemma rebuild_code_cc_kept (id : code_id) (c : code) :
+  keeps_convention cannot_change code_deps unit_code_ids id = true ->
+  same_convention c (rebuild_c id c).
+Proof.
+  intros H. destruct c as [params my_closure ret exn metadata body].
+  cbn [rebuild_code_cc]. cbv zeta.
+  replace (code_calling_convention_change sol cannot_change code_deps
+             unit_code_ids id metadata)
+    with Not_changing_calling_convention.
+  2: { unfold keeps_convention in H. unfold code_calling_convention_change.
+       destruct (cannot_change_calling_convention cannot_change unit_code_ids
+                   id); [ reflexivity | ].
+       destruct (lookup id code_deps); [ discriminate H | reflexivity ]. }
+  unfold same_convention, kept_code_metadata.
+  destruct types as [t | ];
+    [ destruct (lookup id (st_code_deps t)) | ]; simpl;
+    (split; [ reflexivity | split; reflexivity ]).
+Qed.
+
 End Rebuilt.
 
 (* ======================================================================== *)
@@ -580,6 +600,145 @@ Proof.
            preserve_direct_calls e); [ | exact Hcut ].
   intros newer older Hl. apply cut_relation_link in Hl as (_ & Hn & Ho).
   auto.
+Qed.
+
+(* The chain of a walk: from [id], down the links of [rel] through codes
+   that [keep] does not keep, to one that it keeps. *)
+Inductive walk_chain (keep : code_id -> bool) (rel : Code_age_relation.t)
+    : code_id -> code_id -> Prop :=
+  | Walk_here (id : code_id) : keep id = true -> walk_chain keep rel id id
+  | Walk_step (id older id' : code_id) :
+      keep id = false ->
+      Code_age_relation.get_older_version_of rel id = Some older ->
+      walk_chain keep rel older id' ->
+      walk_chain keep rel id id'.
+
+Lemma bridge_walk_chain (keep : code_id -> bool) (rel : Code_age_relation.t)
+    (fuel : nat) :
+  ∀ id id' : code_id,
+    bridge_walk keep rel fuel id = Some id' -> walk_chain keep rel id id'.
+Proof.
+  induction fuel as [ | fuel IH]; intros id id' H; cbn [bridge_walk] in H;
+    destruct (keep id) eqn:Hk.
+  - injection H as <-. apply Walk_here. exact Hk.
+  - discriminate H.
+  - injection H as <-. apply Walk_here. exact Hk.
+  - destruct (Code_age_relation.get_older_version_of rel id) as [older | ]
+      eqn:Hl; [ | discriminate H ].
+    exact (Walk_step keep rel id older id' Hk Hl (IH older id' H)).
+Qed.
+
+Lemma walk_chain_kept (keep : code_id -> bool) (rel : Code_age_relation.t)
+    (id id' : code_id) :
+  walk_chain keep rel id id' -> keep id' = true.
+Proof. induction 1; assumption. Qed.
+
+(* Along a chain whose codes that change are bound by [codes], the
+   conventions of its ends agree, where they agree link by link. *)
+Lemma walk_chain_agree (keep : code_id -> bool) (rel : Code_age_relation.t)
+    (codes : list (code_id * code)) :
+  conventions_agree rel codes ->
+  (∀ id : code_id, keep id = false -> ∃ c : code, (id, c) ∈ codes) ->
+  ∀ id id' : code_id,
+    walk_chain keep rel id id' ->
+    ∀ (newer : code_id) (cn c' : code),
+      Code_age_relation.get_older_version_of rel newer = Some id ->
+      (newer, cn) ∈ codes ->
+      (id', c') ∈ codes ->
+      same_convention c' cn.
+Proof.
+  intros Hagree Hbound id id' Hw.
+  induction Hw as [id Hk | id older id' Hk Hl Hw IH];
+    intros newer cn c' Hn Hcn Hc'.
+  - exact (Hagree newer id c' cn Hn Hc' Hcn).
+  - destruct (Hbound id Hk) as (ci & Hci).
+    destruct (Hagree newer id ci cn Hn Hci Hcn) as (Hp1 & Hr1 & Ht1).
+    destruct (IH id ci c' Hl Hci Hc') as (Hp2 & Hr2 & Ht2).
+    unfold same_convention. split; [ congruence | split; congruence ].
+Qed.
+
+(* A link of the bridged relation is the link of a kept code in the
+   relation, with the end of the walk from its older code. *)
+Lemma bridge_relation_link (keep : code_id -> bool)
+    (rel : Code_age_relation.t) (newer older' : code_id) :
+  Code_age_relation.get_older_version_of (bridge_relation keep rel) newer
+  = Some older' ->
+  ∃ older : code_id,
+    Code_age_relation.get_older_version_of rel newer = Some older
+    ∧ keep newer = true
+    ∧ bridge_walk keep rel (length rel) older = Some older'.
+Proof.
+  intros H. unfold Code_age_relation.get_older_version_of in H.
+  unfold bridge_relation in H.
+  apply lookup_some_in, in_flat_map in H as ([n o] & _ & Hp).
+  cbn beta iota in Hp.
+  match type of Hp with
+  | context [if ?b then _ else _] => destruct b eqn:Hc; [ | destruct Hp ]
+  end.
+  destruct (bridge_walk keep rel (length rel) o) as [o' | ] eqn:Hw;
+    [ | destruct Hp ].
+  destruct Hp as [[= <- <-] | []].
+  apply andb_true_iff in Hc as [Hk Hl].
+  exists o. split; [ | split; [ exact Hk | exact Hw ] ].
+  destruct (Code_age_relation.get_older_version_of rel n) as [o0 | ];
+    [ | discriminate Hl ].
+  apply Pos.eqb_eq in Hl as ->. reflexivity.
+Qed.
+
+Theorem rebuild_cc_bridge_keeps_conventions :
+  rebuild_cc_bridge_keeps_conventions_statement.
+Proof.
+  intros types F sol cannot_change code_deps preserve_direct_calls e rel
+    Hdeps Hagree newer older' c c' Hl Hc Hc'.
+  unfold rebuild_unit_cc_with in Hc, Hc'.
+  set (uci := static_names code_ids_bound e) in Hl, Hc, Hc'.
+  set (cm := bound_code_metadata e) in Hc, Hc'.
+  set (ff := FlambdaNameAbstractionSpec.fresh_name
+               (FlambdaRenameApartSpec.names_of e)) in Hc, Hc'.
+  destruct (proj1 (unit_codes_rebuild_cc F sol cannot_change code_deps
+                     preserve_direct_calls uci cm ff types) e _ _ Hc)
+    as (id & c0 & Heq & Hc0).
+  injection Heq as <- ->.
+  destruct (proj1 (unit_codes_rebuild_cc F sol cannot_change code_deps
+                     preserve_direct_calls uci cm ff types) e _ _ Hc')
+    as (id & c0' & Heq & Hc0').
+  injection Heq as <- ->.
+  apply bridge_relation_link in Hl as (older & Hl & Hn & Hw).
+  apply bridge_walk_chain in Hw.
+  assert (Ho : keeps_convention cannot_change code_deps uci older' = true).
+  { exact (walk_chain_kept _ _ _ _ Hw). }
+  assert (Hbound : ∀ id : code_id,
+            keeps_convention cannot_change code_deps uci id = false ->
+            ∃ c1 : code, (id, c1) ∈ unit_codes e).
+  { intros id H. unfold keeps_convention in H.
+    apply orb_false_iff in H as [_ H].
+    destruct (lookup id code_deps) as [cd | ] eqn:Hcd;
+      [ exact (Hdeps id cd Hcd) | discriminate H ]. }
+  destruct (walk_chain_agree _ _ _ Hagree Hbound older older' Hw newer c0'
+              c0 Hl Hc0' Hc0)
+    as (Hp & Hr & Ht).
+  destruct (rebuild_code_cc_kept F sol cannot_change code_deps
+              preserve_direct_calls uci cm ff types older' c0 Ho)
+    as (Hp1 & Hr1 & Ht1).
+  destruct (rebuild_code_cc_kept F sol cannot_change code_deps
+              preserve_direct_calls uci cm ff types newer c0' Hn)
+    as (Hp2 & Hr2 & Ht2).
+  unfold same_convention. rewrite Hp1, Hr1, Ht1, Hp2, Hr2, Ht2.
+  split; [ exact Hp | split; [ exact Hr | exact Ht ] ].
+Qed.
+
+Theorem cut_in_bridge : cut_in_bridge_statement.
+Proof.
+  intros keep keep' rel [newer older] Hk Hp.
+  unfold cut_relation in Hp. apply filter_In in Hp as [Hin Hc].
+  cbn beta iota in Hc.
+  apply andb_true_iff in Hc as [Hc Hl].
+  apply andb_true_iff in Hc as [Hn Ho].
+  unfold bridge_relation. apply in_flat_map. exists (newer, older).
+  split; [ exact Hin | ]. cbn beta iota.
+  rewrite (Hk _ Hn), Hl. cbn [andb].
+  destruct (length rel) as [ | fuel ]; cbn [bridge_walk];
+    rewrite (Hk _ Ho); cbn iota; left; reflexivity.
 Qed.
 
 Lemma mem_node_app_l (n : node) (l l' : list node) :
@@ -1033,6 +1192,217 @@ Proof.
   { apply conventions_sound_for; vm_compute; reflexivity. }
   split; [ exact (refines_by_runs _ 2 2 _ _ _ _ _ _ _ H1 H2) | ].
   vm_compute. reflexivity.
+Qed.
+
+(* ======================================================================== *)
+(* The fix proposed for the compiler                                          *)
+(* ======================================================================== *)
+
+(* [conventions_agree] as a check: each two codes of [codes] that a link
+   of [rel] relates have the same arities and [is_tupled]. *)
+Definition conventions_agree_b (rel : Code_age_relation.t)
+    (codes : list (code_id * code)) : bool :=
+  forallb
+    (fun '(older, c) =>
+       forallb
+         (fun '(newer, c') =>
+            match Code_age_relation.get_older_version_of rel newer with
+            | Some older' =>
+              negb (Pos.eqb older' older)
+              || (arity_eqb (code_params_arity c') (code_params_arity c)
+                  && arity_eqb (code_result_arity c') (code_result_arity c)
+                  && Bool.eqb (code_is_tupled c') (code_is_tupled c))
+            | None => true
+            end)
+         codes)
+    codes.
+
+Lemma conventions_agree_of_b (rel : Code_age_relation.t)
+    (codes : list (code_id * code)) :
+  conventions_agree_b rel codes = true -> conventions_agree rel codes.
+Proof.
+  unfold conventions_agree_b. rewrite forallb_forall.
+  intros H newer older c c' Hl Hc Hc'.
+  specialize (H _ Hc). cbn beta iota in H. rewrite forallb_forall in H.
+  specialize (H _ Hc'). cbn beta iota in H.
+  rewrite Hl, Pos.eqb_refl in H. cbn [negb orb] in H.
+  apply andb_true_iff in H as [H Ht]. apply andb_true_iff in H as [Hp Hr].
+  apply FlambdaSemanticsProofs.arity_eqb_eq in Hp, Hr.
+  apply Bool.eqb_prop in Ht.
+  split; [ exact Hp | split; [ exact Hr | exact Ht ] ].
+Qed.
+
+(* Every code with a code dep is a code of [codes], as a check. *)
+Lemma code_deps_bound_of_check (code_deps : finite_map code_dep)
+    (codes : list (code_id * code)) :
+  forallb (fun '(id, _) => among id (map fst codes)) code_deps = true ->
+  ∀ (id : code_id) (cd : code_dep),
+    lookup id code_deps = Some cd -> ∃ c : code, (id, c) ∈ codes.
+Proof.
+  intros Hall id cd H. apply lookup_some_in in H.
+  rewrite forallb_forall in Hall. apply Hall in H. cbn beta iota in H.
+  apply among_In, in_map_iff in H as ([id' c] & Hid & Hin).
+  cbn [fst] in Hid. subst id'. exists c. exact Hin.
+Qed.
+
+Theorem conventions_bridge : conventions_bridge_statement.
+Proof.
+  cbv zeta.
+  split; [ apply code_deps_bound_of_check; vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  apply conventions_agree_of_b. vm_compute. reflexivity.
+Qed.
+
+(* The links of the relation of three versions. *)
+Lemma chain_links (newer older : code_id) :
+  Code_age_relation.get_older_version_of ChainExample.relation newer
+  = Some older ->
+  (newer = 52%positive ∧ older = 51%positive)
+  ∨ (newer = 51%positive ∧ older = 50%positive).
+Proof.
+  unfold Code_age_relation.get_older_version_of, ChainExample.relation,
+    Code_age_relation.add, Code_age_relation.empty.
+  cbn [lookup].
+  destruct (Pos.eqb_spec newer 52%positive) as [-> | _]; cbn iota.
+  - intros [= <-]. left. split; reflexivity.
+  - destruct (Pos.eqb_spec newer 51%positive) as [-> | _]; cbn iota;
+      [ | discriminate ].
+    intros [= <-]. right. split; reflexivity.
+Qed.
+
+(* The one link of the bridged relation. *)
+Lemma chain_bridge_link (newer older : code_id) :
+  Code_age_relation.get_older_version_of ChainExample.bridge newer
+  = Some older ->
+  newer = 52%positive ∧ older = 50%positive.
+Proof.
+  assert (Hb : ChainExample.bridge
+               = Code_age_relation.add Code_age_relation.empty 52%positive
+                   50%positive).
+  { vm_compute. reflexivity. }
+  rewrite Hb. apply one_link.
+Qed.
+
+Lemma chain_codes_refine (age_of : static_env -> Code_age_relation.t)
+    (statics : static_env) (v : value) :
+  code_refines_for age_of statics v ConventionsExample.newer
+    ChainExample.newest.
+Proof.
+  apply code_refines_for_steps; try reflexivity.
+  - split; [ reflexivity | split; reflexivity ].
+  - intros vs vars return_to exn_to hp rd Hb.
+    destruct vs as [ | a [ | b [ | ? ? ] ] ]; try discriminate Hb.
+    injection Hb as <-. eexists. split; [ reflexivity | ].
+    simpl. apply result_refines_by_refl.
+Qed.
+
+Lemma chain_ends_refine (age_of : static_env -> Code_age_relation.t)
+    (statics : static_env) (v : value) :
+  code_refines_for age_of statics v ConventionsExample.older
+    ChainExample.newest.
+Proof.
+  apply code_refines_for_steps; try reflexivity.
+  - split; [ reflexivity | split; reflexivity ].
+  - intros vs vars return_to exn_to hp rd Hb.
+    destruct vs as [ | a [ | b [ | ? ? ] ] ]; try discriminate Hb.
+    injection Hb as <-. eexists. split; [ reflexivity | ].
+    simpl. apply result_refines_by_refl.
+Qed.
+
+Theorem cut_loses_link : cut_loses_link_statement.
+Proof.
+  cbv zeta.
+  set (e := ChainExample.unit_expr).
+  assert (Hleast : least_solution Examples.no_local ChainExample.facts
+                     ChainExample.tables).
+  { apply (FlambdaReaperLeastProofs.compute_least_sound _ _ 40).
+    vm_compute. reflexivity. }
+  assert (Hnw : ~ behaves (State e [] [] empty_static_env empty_heap no_reads)
+                  Goes_wrong).
+  { apply (not_wrong_of_run_exit 10 _ 1%positive
+             [Value_block 0
+                [Value_const (Tagged_immediate 9);
+                 Value_closure_of_set 71%positive [(71%positive, 50%positive)]
+                   [];
+                 Value_symbol 81%positive]]
+             empty_heap no_reads).
+    vm_compute. reflexivity. }
+  assert (Hslots : is_local_slots_only Examples.no_local).
+  { intros f H. discriminate H. }
+  assert (Hlocal : (∀ f : field, Examples.no_local f = false)
+                   ∨ projection_free e = true).
+  { left. intros f. reflexivity. }
+  assert (H1 : run_aged (fun _ => ChainExample.relation) 2
+                 (ChainExample.client (unit_statics e) 50%positive)
+               = Exit 1%positive [Value_const (Tagged_immediate 5)]
+                   empty_heap no_reads).
+  { vm_compute. reflexivity. }
+  assert (H2 : run_aged (fun _ => ChainExample.relation) 2
+                 (ChainExample.client (unit_statics e) 52%positive)
+               = Exit 1%positive [Value_const (Tagged_immediate 5)]
+                   empty_heap no_reads).
+  { vm_compute. reflexivity. }
+  assert (H3 : run_aged (fun _ => ChainExample.bridge) 2
+                 (ChainExample.client (unit_statics ChainExample.rebuilt)
+                    50%positive)
+               = Exit 1%positive [Value_const (Tagged_immediate 5)]
+                   empty_heap no_reads).
+  { vm_compute. reflexivity. }
+  assert (H4 : run_aged (fun _ => ChainExample.bridge) 2
+                 (ChainExample.client (unit_statics ChainExample.rebuilt)
+                    52%positive)
+               = Exit 1%positive [Value_const (Tagged_immediate 5)]
+                   empty_heap no_reads).
+  { vm_compute. reflexivity. }
+  split; [ exact Hleast | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ exact Hnw | ].
+  split; [ vm_compute; reflexivity | ].
+  split.
+  { exact (FlambdaReaperLeastProofs.least_rebuild_cc_auto_refines_observably
+             Examples.no_local Examples.interface e ChainExample.tables true
+             Hslots Hlocal
+             ltac:(vm_compute; reflexivity) ltac:(vm_compute; reflexivity)
+             ltac:(vm_compute; reflexivity) ltac:(vm_compute; reflexivity)
+             ltac:(vm_compute; reflexivity) Hleast). }
+  split; [ apply code_deps_bound_of_check; vm_compute; reflexivity | ].
+  split.
+  { intros id older Hl Hs. apply same_or_newer_b_decides in Hs.
+    apply chain_links in Hl as [[-> ->] | [-> ->]];
+      vm_compute in Hs; discriminate Hs. }
+  split; [ apply conventions_agree_of_b; vm_compute; reflexivity | ].
+  split.
+  { intros H.
+    destruct (H 51%positive 50%positive ConventionsExample.older
+                ConventionsExample.newer_rebuilt eq_refl)
+      as (Hp & _ & _).
+    - in_computed.
+    - in_computed.
+    - vm_compute in Hp. discriminate Hp. }
+  split; [ vm_compute; reflexivity | ].
+  split; [ vm_compute; reflexivity | ].
+  split; [ apply conventions_agree_of_b; vm_compute; reflexivity | ].
+  split.
+  { intros newer older c c' _ Hl Hc Hc'.
+    apply chain_links in Hl as [[-> ->] | [-> ->]];
+      vm_compute in Hc, Hc'; injection Hc as <-; injection Hc' as <-.
+    - apply chain_codes_refine.
+    - apply conventions_codes_refine. }
+  split; [ exact H1 | ].
+  split; [ exact H2 | ].
+  split; [ exact (refines_by_runs _ 2 2 _ _ _ _ _ _ _ H1 H2) | ].
+  split; [ vm_compute; reflexivity | ].
+  split.
+  { intros newer older c c' _ Hl Hc Hc'.
+    apply chain_bridge_link in Hl as [-> ->].
+    vm_compute in Hc, Hc'. injection Hc as <-. injection Hc' as <-.
+    apply chain_ends_refine. }
+  split; [ exact H3 | ].
+  exact (refines_by_runs _ 2 2 _ _ _ _ _ _ _ H3 H4).
 Qed.
 
 (* ======================================================================== *)

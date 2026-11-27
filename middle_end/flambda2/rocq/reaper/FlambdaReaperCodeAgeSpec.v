@@ -28,13 +28,15 @@
 (* The reaper and the code age relation, on the machine of the core that
    is given one (FlambdaCodeAgeCallsSpec.step_aged): bug 12 of the
    report as a counterexample, what the reaper makes of a direct call of
-   a closure of a newer version of the code that it names, and the two
-   fixes that the report proposes.
+   a closure of a newer version of the code that it names, the two
+   fixes that the report proposes (the second of which is not one), and
+   the fix proposed for the compiler.
 
    This file is to be reviewed: [refines_observably_aged],
    [unit_statics], [same_convention], [sound_conventions_for],
-   [conventions_agree], [age_fixed_table], [cut_relation], the four
-   units and the statements. The proofs are in
+   [conventions_agree], [age_fixed_table], [cut_relation],
+   [keeps_convention], [bridge_walk], [bridge_relation], the five units
+   and the statements. The proofs are in
    FlambdaReaperCodeAgeProofs.v, which needs no review.
 
    The setting. The terms of the model do not say of which code their
@@ -110,8 +112,11 @@
       [refines_observably_aged_of_defined_statement]: such a unit makes
       no direct call of a closure of another code than the code named,
       and its runs and those of its rebuild are those of [step]. The
-      changes of representation of closures (FlambdaReaperUnboxing.v)
-      are not looked at here.
+      rebuilds with unboxing and changes of representation of closures
+      (FlambdaReaperUnboxing.v) are looked at in
+      FlambdaReaperCodeAgeUnboxingSpec.v (their statements on the
+      machine) and FlambdaReaperCodeAgeVersionsSpec.v (two versions that
+      they treat differently).
 
    3. The fixes. [age_fixed_table] adds every code of the relation to
       the table of [cannot_change_calling_convention]. It passes the check
@@ -129,9 +134,29 @@
       ([rebuild_cc_fixed_sound_conventions_statement]). [cut_relation]
       keeps the links between codes of the table, and the conventions
       agree for it in the rebuild, whatever the table
-      ([rebuild_cc_cut_keeps_conventions_statement]). Both fixes repair
-      the unit of the bug ([conventions_fixed_statement]).
-      What neither keeps is the rest of [sound_for], the refinement of
+      ([rebuild_cc_cut_keeps_conventions_statement]); but it is not a
+      fix: it also drops links that still hold. On the unit of the bug
+      it leaves no link, and so says nothing
+      ([conventions_fixed_statement]). With three versions [a], [b] and
+      [c], [c] the newest and [b] alone changing, it drops both links,
+      though [a] and [c] keep their conventions and a call naming [a] of
+      a closure of [c] runs in the rebuilt unit as it does in the unit:
+      with the cut, the machine finds that call undefined
+      ([cut_loses_link_statement]).
+      The fix proposed for the compiler (in reaper/unboxing_analysis.ml)
+      is [bridge_relation]: code that changes its calling convention has
+      no older version, and code that keeps it has for older version the
+      first code down its chain that keeps its convention or is not of
+      the unit. With the test of the
+      rebuild ([keeps_convention]), the conventions agree for it in the
+      rebuild where they agree in the unit, every code with a code dep
+      being a code of the unit
+      ([rebuild_cc_bridge_keeps_conventions_statement]); it contains the
+      cut ([cut_in_bridge_statement]); it is empty on the unit of the bug
+      ([conventions_bridge_statement]), and on the unit of three versions
+      it links [c] to [a], and the call naming [a] runs on the rebuilt
+      unit ([cut_loses_link_statement]).
+      What none of them keeps is the rest of [sound_for], the refinement of
       the older code by the newer for the closure.
       [sound_for_not_kept_statement] is a unit in which no code changes
       its calling convention, whose relation is sound for a closure in
@@ -145,7 +170,10 @@
    Found false: the refinement of the rebuild on the machine for a unit
    that makes a direct call of a closure of a newer version of the code
    named, under a relation sound for each closure so called
-   ([aged_call_sound_counterexample_statement]). Not reached: such a
+   ([aged_call_sound_counterexample_statement]); and the cut of the
+   relation as a fix of the bug: it drops links that still hold, and a
+   client's call that ran on the unit is undefined on the rebuilt unit
+   ([cut_loses_link_statement]). Not reached: such a
    statement under a premise that makes it hold. The rebuild makes each
    such call go by the code of its closure, the calls in the newer code
    too; a premise would have to speak of the runs in which every such
@@ -341,7 +369,9 @@ Definition age_fixed_table (rel : Code_age_relation.t)
 
 (* The second: the relation cut where code changes. A pair of [rel] is
    kept if it is the link of its newer code ([get_older_version_of]
-   finds it) and [keep] holds of both its codes. *)
+   finds it) and [keep] holds of both its codes. It keeps the conventions
+   in agreement, but drops links that still hold: it is not a fix
+   ([cut_loses_link_statement]). *)
 Definition cut_relation (keep : code_id -> bool) (rel : Code_age_relation.t)
     : Code_age_relation.t :=
   filter
@@ -353,8 +383,8 @@ Definition cut_relation (keep : code_id -> bool) (rel : Code_age_relation.t)
           end)
     rel.
 
-(* Where no code that a link relates is in the table, the rebuild keeps
-   the conventions of the linked codes that it binds. *)
+(* Where every code that a link relates is in the table, the rebuild
+   keeps the conventions of the linked codes that it binds. *)
 Definition rebuild_cc_keeps_conventions_statement : Prop :=
   ∀ (types : subkinds_rewriting) (F : facts) (sol : solution)
     (cannot_change : node -> bool) (code_deps : finite_map code_dep)
@@ -649,12 +679,16 @@ Definition conventions_client_statement : Prop :=
   ∧ ~ refines_aged age_of (ConventionsExample.client after 50%positive)
         (ConventionsExample.client after 51%positive).
 
-(* The two fixes on the unit. With the table of the fix, which passes the
-   check, no code changes, the rebuild refines the unit, the conventions
-   agree, the relation is sound for [s80] in the rebuilt unit, and the
-   call of the client naming [f51] refines the call naming [f50]. With
-   the least table and the relation cut where code changes, nothing is
-   left of the relation, which says nothing. *)
+(* The fix of the table on the unit, and the cut. With the table of the
+   fix, which passes the check, no code changes, the rebuild refines the
+   unit, the conventions agree, the relation is sound for [s80] in the
+   rebuilt unit, and the call of the client naming [f51] refines the call
+   naming [f50]. With the least table and the relation cut where code
+   changes, nothing is left of the relation: the conventions agree for
+   it, as they do for any cut relation, but it says nothing. The cut is
+   not a fix: it drops links that still hold, and a call that the
+   relation of the unit allows may be undefined with the cut relation on
+   the rebuilt unit ([cut_loses_link_statement]). *)
 Definition conventions_fixed_statement : Prop :=
   let e := ConventionsExample.unit_expr in
   let F := ConventionsExample.facts in
@@ -676,6 +710,279 @@ Definition conventions_fixed_statement : Prop :=
   ∧ cut_relation
       (fun id => mem_node (Node_code_id id) ConventionsExample.table) rel
     = [].
+
+(* ======================================================================== *)
+(* The fix proposed for the compiler: the relation bridged over changes       *)
+(* ======================================================================== *)
+
+(* The test of the walk of [rewrite_newer_version_of]
+   (reaper/unboxing_analysis.ml), as the rebuild with changes of calling
+   convention decides it: [code_calling_convention_change] keeps the
+   convention of [id], which is not a code of the unit, or is in the
+   table, or has no code dep. *)
+Definition keeps_convention (cannot_change : node -> bool)
+    (code_deps : finite_map code_dep) (unit_code_ids : list code_id)
+    (id : code_id) : bool :=
+  cannot_change_calling_convention cannot_change unit_code_ids id
+  || match lookup id code_deps with
+     | Some _ => false
+     | None => true
+     end.
+
+(* The walk from [id]: [id] if [keep] holds of it, else the walk from its
+   older version; [None] at the end of the chain, or after [fuel] steps.
+   The walk of the compiler has no fuel: it ends on a relation with no
+   cycle, as those of Simplify are, whose chains are no longer than the
+   relation, the fuel that [bridge_relation] gives. *)
+Fixpoint bridge_walk (keep : code_id -> bool) (rel : Code_age_relation.t)
+    (fuel : nat) (id : code_id) : option code_id :=
+  if keep id
+  then Some id
+  else
+    match fuel with
+    | O => None
+    | S fuel =>
+      match Code_age_relation.get_older_version_of rel id with
+      | Some older => bridge_walk keep rel fuel older
+      | None => None
+      end
+    end.
+
+(* The relation that the fix gives: code that does not keep its
+   convention has no older version; code that keeps it has the walk from
+   its older version. Each pair of [rel] that is the link of its newer
+   code ([get_older_version_of] finds it), [keep] holding of that code,
+   is kept with the end of the walk from its older code in the place of
+   that code; it is dropped where the walk finds none. *)
+Definition bridge_relation (keep : code_id -> bool)
+    (rel : Code_age_relation.t) : Code_age_relation.t :=
+  flat_map
+    (fun '(newer, older) =>
+       if keep newer
+          && match Code_age_relation.get_older_version_of rel newer with
+             | Some older' => Pos.eqb older' older
+             | None => false
+             end
+       then
+         match bridge_walk keep rel (length rel) older with
+         | Some older' => [(newer, older')]
+         | None => []
+         end
+       else [])
+    rel.
+
+(* The conventions agree for the bridged relation in the rebuild where
+   they agree for the relation in the unit, every code with a code dep
+   being a code of the unit: the two codes of a link of the bridged
+   relation keep their conventions, and the codes between them on the
+   chain of the relation are codes of the unit, which change, and whose
+   conventions agree along the chain. The relation may have cycles: the
+   walk stops at its fuel. *)
+Definition rebuild_cc_bridge_keeps_conventions_statement : Prop :=
+  ∀ (types : subkinds_rewriting) (F : facts) (sol : solution)
+    (cannot_change : node -> bool) (code_deps : finite_map code_dep)
+    (preserve_direct_calls : bool) (e : expr) (rel : Code_age_relation.t),
+    (∀ (id : code_id) (cd : code_dep),
+       lookup id code_deps = Some cd -> ∃ c : code, (id, c) ∈ unit_codes e) ->
+    conventions_agree rel (unit_codes e) ->
+    conventions_agree
+      (bridge_relation
+         (keeps_convention cannot_change code_deps
+            (static_names code_ids_bound e))
+         rel)
+      (unit_codes
+         (rebuild_unit_cc_with types F sol cannot_change code_deps
+            preserve_direct_calls e)).
+
+(* The cut is in the bridged relation, for a test of the bridge that
+   holds wherever that of the cut does: a link that the cut keeps relates
+   two codes that the bridge keeps, and the walk from the older stops at
+   it. The bridged relation has, besides, a link from each code kept to
+   the first code kept down its chain, where the cut drops it. *)
+Definition cut_in_bridge_statement : Prop :=
+  ∀ (keep keep' : code_id -> bool) (rel : Code_age_relation.t)
+    (p : code_id * code_id),
+    (∀ id : code_id, keep id = true -> keep' id = true) ->
+    p ∈ cut_relation keep rel ->
+    p ∈ bridge_relation keep' rel.
+
+(* On the unit of the bug, [f51] changes and has no older version: the
+   bridged relation is empty, as the cut is. Every code dep is of a code
+   of the unit. *)
+Definition conventions_bridge_statement : Prop :=
+  let e := ConventionsExample.unit_expr in
+  let keep :=
+    keeps_convention (fun n => mem_node n ConventionsExample.table)
+      ConventionsExample.code_deps (static_names code_ids_bound e)
+  in
+  (∀ (id : code_id) (cd : code_dep),
+     lookup id ConventionsExample.code_deps = Some cd ->
+     ∃ c : code, (id, c) ∈ unit_codes e)
+  ∧ bridge_relation keep ConventionsExample.relation = []
+  ∧ conventions_agree (bridge_relation keep ConventionsExample.relation)
+      (unit_codes ConventionsExample.rebuilt).
+
+(* Three versions of one code: [f52] is a newer version of [f51], a
+   newer version of [f50]; the three take two parameters and return the
+   first, and read nothing of their closure.
+
+     let code f50 x40 x42 my_closure x41 return k3 exn k4 = k3 x40 in
+     let code f51 x43 x45 my_closure x44 return k5 exn k6 = k5 x43 in
+     let code f52 x46 x48 my_closure x47 return k7 exn k8 = k7 x46 in
+     let symbol s80 = closure at 70 of { 70 = f51 } in
+     let symbol s81 = closure at 72 of { 72 = f52 } in
+     let x60 = closure at 71 of { 71 = f50 } in
+     let_cont k20 x30 = let x36 = [x30; x60; s81] in return x36 in
+     s80 9 7 return k20 exn k2                    (direct, to f51)
+
+   The closures of [f50] and [f52] escape, and those two codes keep their
+   calling conventions; [s80] is called by the direct call only, and
+   [f51] loses [x45], as in the unit of the bug. A client of the unit
+   that holds [s81] calls it directly naming [f50], with two arguments,
+   as FlambdaCodeAgeCallsSpec.step_aged allows where [f52] is a newer
+   version of [f50] ([client]). *)
+Module ChainExample.
+
+Local Open Scope positive_scope.
+Import FlambdaReaperCallingConventions.Examples.
+
+Definition newest : code :=
+  Code [46; 48] 47 7 8
+    (make_code_metadata [Singleton Value; Singleton Value] [Singleton Value])
+    (return_to 7 [Var 46]).
+
+Definition unit_expr : expr :=
+  Let_static
+    [Bind_code 50 ConventionsExample.older;
+     Bind_code 51 ConventionsExample.newer; Bind_code 52 newest;
+     Bind_symbol 80 (Static_const_closure_of_set 70 [(70, 80)] [(70, 51)] []);
+     Bind_symbol 81 (Static_const_closure_of_set 72 [(72, 81)] [(72, 52)] [])]
+    (Let 60 Value (Closure_of_set 71 [(71, 50)] [])
+       (Let_cont_non_recursive 20
+          (Handler [30] (make_handler_metadata [Value])
+             (Let 36 Value (make_block [Var 30; Var 60; Symbol 81])
+                (return_to 1 [Var 36])))
+          (Apply
+             {| ap_callee := Symbol 80; ap_call_kind := Direct 51;
+                ap_args :=
+                  [Const (Tagged_immediate 9); Const (Tagged_immediate 7)];
+                ap_continuation := 20; ap_exn_continuation := 2;
+                ap_exn_extra_args := [];
+                ap_args_arity := [Singleton Value; Singleton Value];
+                ap_return_arity := [Singleton Value] |}))).
+
+(* [f52] is a newer version of [f51], which is one of [f50]. *)
+Definition relation : Code_age_relation.t :=
+  Code_age_relation.add
+    (Code_age_relation.add Code_age_relation.empty 51 50) 52 51.
+
+Definition facts : facts := traverse_unit Auto interface unit_expr.
+
+Definition tables : tables :=
+  match FlambdaReaperLeast.compute_least no_local facts 40 with
+  | Some T => T
+  | None => FlambdaReaperLeast.empty_tables
+  end.
+
+Definition table : list node := derive_cannot_change facts tables.
+
+Definition code_deps : finite_map code_dep :=
+  unit_code_deps Auto interface unit_expr.
+
+Definition rebuilt : expr :=
+  rebuild_unit_cc_from_tables facts tables table code_deps true unit_expr.
+
+(* The relation cut at the code that changes, and bridged over it. *)
+Definition cut : Code_age_relation.t :=
+  cut_relation (fun id => mem_node (Node_code_id id) table) relation.
+
+Definition bridge : Code_age_relation.t :=
+  bridge_relation
+    (keeps_convention (fun n => mem_node n table) code_deps
+       (static_names code_ids_bound unit_expr))
+    relation.
+
+(* A client of a unit whose first step binds [statics]: it calls [s81]
+   directly, naming the code [id], with 5 and 7, and returns to the
+   continuation 1. *)
+Definition client (statics : static_env) (id : code_id) : state :=
+  State
+    (Apply
+       {| ap_callee := Symbol 81; ap_call_kind := Direct id;
+          ap_args := [Const (Tagged_immediate 5); Const (Tagged_immediate 7)];
+          ap_continuation := 1; ap_exn_continuation := 2;
+          ap_exn_extra_args := [];
+          ap_args_arity := [Singleton Value; Singleton Value];
+          ap_return_arity := [Singleton Value] |})
+    [] [(1, Outer 1); (2, Outer 2)] statics empty_heap no_reads.
+
+End ChainExample.
+
+(* The unit meets the premises of
+   FlambdaReaperLeastSpec.least_rebuild_cc_auto_refines_observably_statement
+   and does not go wrong; its rebuild changes the calling convention of
+   [f51] alone, and refines it. The conventions agree in the unit for the
+   relation, and in the rebuilt unit for neither the relation (bug 12)
+   nor the cut, which is empty; they agree for the bridged relation,
+   which links [f52] to [f50]. Each relation is that of the unit, or of
+   the rebuilt unit, on the machine. The relation is sound for [s81] in
+   the unit, and the client's call naming [f50] exits with 5, as the one
+   naming [f52] does, which refines it. In the rebuilt unit, with the cut,
+   the call naming [f50] is undefined: [f52] is not a newer version of
+   [f50] there. With the bridged relation it exits with 5, the relation is
+   sound for [s81], and the call naming [f52] refines it. So the cut drops
+   a link that still holds, and the client's call that ran on the unit
+   does not on the rebuilt unit; the bridge keeps it. *)
+Definition cut_loses_link_statement : Prop :=
+  let e := ChainExample.unit_expr in
+  let F := ChainExample.facts in
+  let T := ChainExample.tables in
+  let rel := ChainExample.relation in
+  let e' := ChainExample.rebuilt in
+  let before := unit_statics e in
+  let after := unit_statics e' in
+  let five :=
+    Exit 1%positive [Value_const (Tagged_immediate 5)] empty_heap no_reads
+  in
+  least_solution Examples.no_local F T
+  ∧ in_flow_fragment e = true ∧ any_kind_arguments e = true
+  ∧ results_kinded [] [] e = true
+  ∧ well_formed_unit Examples.interface e = true
+  ∧ exits_one_value Examples.interface e = true
+  ∧ ~ behaves (State e [] [] empty_static_env empty_heap no_reads) Goes_wrong
+  ∧ unit_calling_convention_changes T ChainExample.table
+      ChainExample.code_deps e
+    = [(50%positive, Not_changing_calling_convention);
+       (51%positive,
+        Changing_calling_convention [Keep Value; Delete] [Keep Value]);
+       (52%positive, Not_changing_calling_convention)]
+  ∧ program_refines_observably e e'
+  ∧ (∀ (id : code_id) (cd : code_dep),
+       lookup id ChainExample.code_deps = Some cd ->
+       ∃ c : code, (id, c) ∈ unit_codes e)
+  ∧ well_formed rel
+  ∧ conventions_agree rel (unit_codes e)
+  ∧ ~ conventions_agree rel (unit_codes e')
+  ∧ ChainExample.cut = []
+  ∧ ChainExample.bridge = [(52%positive, 50%positive)]
+  ∧ conventions_agree ChainExample.bridge (unit_codes e')
+  ∧ sound_for (fun _ => rel) before (Value_symbol 81%positive)
+  ∧ run_aged (fun _ => rel) 2 (ChainExample.client before 50%positive)
+    = five
+  ∧ run_aged (fun _ => rel) 2 (ChainExample.client before 52%positive)
+    = five
+  ∧ refines_aged (fun _ => rel) (ChainExample.client before 50%positive)
+      (ChainExample.client before 52%positive)
+  ∧ run_aged (fun _ => ChainExample.cut) 1
+      (ChainExample.client after 50%positive)
+    = Undefined
+  ∧ sound_for (fun _ => ChainExample.bridge) after (Value_symbol 81%positive)
+  ∧ run_aged (fun _ => ChainExample.bridge) 2
+      (ChainExample.client after 50%positive)
+    = five
+  ∧ refines_aged (fun _ => ChainExample.bridge)
+      (ChainExample.client after 50%positive)
+      (ChainExample.client after 52%positive).
 
 (* ======================================================================== *)
 (* A direct call of a closure of a newer version, within the unit           *)
