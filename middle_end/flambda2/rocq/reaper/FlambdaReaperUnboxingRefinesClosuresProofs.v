@@ -4062,12 +4062,11 @@ Proof.
   exact (proj1 (w_within_r _ _ _ _ _ _ _ _ _ _ reach) e [] [] H).
 Qed.
 
-(* The statement of the fix, for any rewriting of what the parameters
-   kept state, the same for the two rebuilds: the handlers and the code of
-   the fragment keep their parameters alike in the two, and state the
-   same. A call whose code is not known calls code that the flow of the
-   run of the first rebuilt unit brings to its callee, as [reach] says. *)
-Lemma rebuild_repr_reach_modes_with_refines_cc (types : subkinds_rewriting)
+(* The two rebuilt units of the fragment, for any rewriting of what the
+   parameters kept state, are related by [rr], with the flow of the run of
+   the first as [reach] says: the proof of the statement below up to its
+   last step. *)
+Lemma rebuild_repr_reach_modes_with_rr (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
@@ -4079,21 +4078,23 @@ Lemma rebuild_repr_reach_modes_with_refines_cc (types : subkinds_rewriting)
     cannot_change (unit_code_deps flag u e) dominated to_unbox tcr reach e
   = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-  flow_run (fun b f id => reach b f id = true)
-    (State
-       (rebuild_unit_cc_with types (traverse_unit flag u e)
-          (solution_of_tables T) (fun n => mem_node n cannot_change)
-          (unit_code_deps flag u e) pdc e)
-       [] [] empty_static_env empty_heap no_reads) ->
-  program_refines
-    (rebuild_unit_cc_with types (traverse_unit flag u e)
-       (solution_of_tables T) (fun n => mem_node n cannot_change)
-       (unit_code_deps flag u e) pdc e)
-    (rebuild_unit_unbox_repr_mode_with types true is_local
-       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
-       dominated to_unbox tcr pdc e).
+  ∃ (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr)
+    (CS : code_id -> option code_info),
+    distinct (field_variables M) = true
+    ∧ (∀ (x : variable) (r : closure_repr),
+         CH x = Some r -> fields_of M x = Some [])
+    ∧ (∀ (x : variable) (r : closure_repr),
+         CH x = Some r -> among x (field_variables M) = false)
+    ∧ rr M CH CS (fun b f id => reach b f id = true) []
+        (rebuild_unit_cc_with types (traverse_unit flag u e)
+           (solution_of_tables T) (fun n => mem_node n cannot_change)
+           (unit_code_deps flag u e) pdc e)
+        (rebuild_unit_unbox_repr_mode_with types true is_local
+           (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+           dominated to_unbox tcr pdc e).
 Proof.
-  intros Hslots Hfragment Hclosed Hrepr Hcheck Hflow.
+  intros Hslots Hfragment Hclosed Hrepr Hcheck.
   set (F := traverse_unit flag u e) in *.
   unfold repr_reach_unboxing_nr in Hrepr.
   apply andb_true_iff in Hrepr as [Hrepr Huses].
@@ -4249,12 +4250,11 @@ Proof.
                        reach Hcl Hslots Hfields_read Hreads_found Hmc)
                 e empty_env empty_unbox_env [] None (unit_conts u))
     as Hrr.
-  apply (rr_refines_flow (M' unboxed changed)) in Hrr.
-  all: try exact Hflow.
-  - exact Hrr.
-  - rewrite field_variables_M'. exact Hdistinct.
-  - exact (CHf_M unboxed changed).
-  - exact (CHf_fresh unboxed changed).
+  exists (M' unboxed changed), (CHf unboxed changed). eexists.
+  split; [ rewrite field_variables_M'; exact Hdistinct | ].
+  split; [ exact (CHf_M unboxed changed) | ].
+  split; [ exact (CHf_fresh unboxed changed) | ].
+  apply Hrr.
   - split; try reflexivity.
     + intros k ds b H. discriminate H.
     + intros k _. split; reflexivity.
@@ -4268,6 +4268,45 @@ Proof.
     unfold FlambdaNameAbstractionSpec.fresh_name in Hnext' |- *.
     split; intros ->; lia.
   - intros k [].
+Qed.
+
+(* The statement of the fix, for any rewriting of what the parameters
+   kept state, the same for the two rebuilds: the handlers and the code of
+   the fragment keep their parameters alike in the two, and state the
+   same. A call whose code is not known calls code that the flow of the
+   run of the first rebuilt unit brings to its callee, as [reach] says. *)
+Lemma rebuild_repr_reach_modes_with_refines_cc (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox tcr : list node) (pdc : bool)
+    (nr : code_id -> bool) (reach : bool -> variable -> code_id -> bool) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  repr_reach_unboxing_nr nr is_local (traverse_unit flag u e) T
+    cannot_change (unit_code_deps flag u e) dominated to_unbox tcr reach e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  flow_run (fun b f id => reach b f id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  program_refines
+    (rebuild_unit_cc_with types (traverse_unit flag u e)
+       (solution_of_tables T) (fun n => mem_node n cannot_change)
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode_with types true is_local
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox tcr pdc e).
+Proof.
+  intros Hslots Hfragment Hclosed Hrepr Hcheck Hflow.
+  destruct (rebuild_repr_reach_modes_with_rr types flag is_local u e T
+              cannot_change dominated to_unbox tcr pdc nr reach Hslots
+              Hfragment Hclosed Hrepr Hcheck)
+    as (M & CH & CS & Hdistinct & HCM & HCf & Hrr).
+  exact (rr_refines_flow M Hdistinct CH HCM HCf CS _ _ _ Hrr Hflow).
 Qed.
 
 (* The same for the fragment of
