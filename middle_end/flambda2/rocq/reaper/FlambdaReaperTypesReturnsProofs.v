@@ -157,12 +157,12 @@ Qed.
 (* At a return of code that the unit binds, the node of the result of
    rank [i] is an alias of the argument of that rank, the node of every
    constant has any source, and every symbol of the return is an
-   allocation of its own. *)
-Lemma return_alias (flag : reaper_preserve_direct_calls)
+   allocation of its own; with the primitives of the heap if [hb]. *)
+Lemma return_alias_gen (hb : bool) (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (id : code_id) (c : code) (ac : apply_cont) (i : nat) (arg : simple)
     (r : node) :
-  in_flow_fragment e = true ->
+  RP.in_fragment hb e = true ->
   closed is_local (graph_of_facts (traverse_unit flag u e))
     (solution_of_tables T) ->
   (id, c) ∈ unit_codes e ->
@@ -177,7 +177,7 @@ Lemma return_alias (flag : reaper_preserve_direct_calls)
         (Node_symbol sym).
 Proof.
   intros Hfrag Hc Hin Hac Harg Hrn.
-  destruct (RP.traverse_unit_keeps flag u e True false Hfrag (or_introl I))
+  destruct (RP.traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & _ & Hdeps & Hnd
         & Hkeys & _ & Hcds_eq).
   subst cds.
@@ -186,7 +186,8 @@ Proof.
   set (cds := unit_code_deps flag u e) in *.
   pose proof (proj1 (FlambdaReaperWrapperProofs.unit_codes_edges G noted deps
                        cds (unit_kept e) (unit_codes e)
-                       (static_names symbols_of_binding e) True False)
+                       (static_names symbols_of_binding e) True
+                       (if hb then True else False))
                 e None (unit_conts u) He id c Hin) as Hcode.
   pose proof (any_source_input _ _ _ Hc _ Hconsts) as Has.
   unfold result_node in Hrn. fold cds in Hrn.
@@ -201,16 +202,17 @@ Proof.
                = Some (cd_return cd')).
   { rewrite lookup_other; [ apply lookup_head | exact (fun H => Hne H) ]. }
   split; [ | split; [ exact Has | ] ].
-  { exact (DF.applies_to_edges G noted deps _ _ _ _ True False ret
+  { exact (DF.applies_to_edges G noted deps _ _ _ _ True _ ret
              (cd_return cd') body _ _ Hbody Hk ac Hac r arg
              (DF.combine_nth_in _ _ i r arg Hrn Harg)). }
   intros sym ->.
-  pose proof (applies_to_noted G noted deps _ _ _ _ True False ret body _ _
+  pose proof (applies_to_noted G noted deps _ _ _ _ True _ ret body _ _
                 Hbody ac Hac (Symbol sym) (nth_error_In _ _ Harg))
     as Hnoted.
   cbn [simple_noted] in Hnoted.
   pose proof (static_names_edges G noted deps cds (unit_kept e)
-                (unit_codes e) (static_names symbols_of_binding e) True False)
+                (unit_codes e) (static_names symbols_of_binding e) True
+                (if hb then True else False))
     as [Hnames _].
   destruct (Hnames e None (unit_conts u) He) as [Hsym_names Hcode_names].
   assert (Hcds : ∀ (id' : code_id) (cd : code_dep),
@@ -248,6 +250,25 @@ Proof.
   - apply (may_come_from_self is_local G sol _ Hc).
     exact (any_source_input _ _ _ Hc _ (Himported sym Hnoted Hunit)).
 Qed.
+
+Lemma return_alias (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
+    (id : code_id) (c : code) (ac : apply_cont) (i : nat) (arg : simple)
+    (r : node) :
+  in_flow_fragment e = true ->
+  closed is_local (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) ->
+  (id, c) ∈ unit_codes e ->
+  ac ∈ applies_to (code_return_continuation c) (code_body c) ->
+  nth_error (ac_args ac) i = Some arg ->
+  result_node flag u e id i = Some r ->
+  g_alias (graph_of_facts (traverse_unit flag u e)) r (node_of_simple arg)
+  ∧ s_any_source (solution_of_tables T) Node_all_constants = true
+  ∧ ∀ sym : symbol,
+      arg = Symbol sym ->
+      may_come_from (solution_of_tables T) (Node_symbol sym)
+        (Node_symbol sym).
+Proof. exact (return_alias_gen false flag is_local u e T id c ac i arg r). Qed.
 
 (* ======================================================================== *)
 (* The type at the node of a result                                         *)

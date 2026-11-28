@@ -68,7 +68,9 @@ From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaReaperTypesProofs FlambdaReaperTypesTraversalProofs
   FlambdaReaperTypesHeapProofs FlambdaReaperTypesTraversalHeapProofs
   FlambdaReaperTypesCallsExitProofs FlambdaReaperTypesCallsProofs
-  FlambdaReaperTypesUsedValuesProofs FlambdaReaperLeastProofs.
+  FlambdaReaperTypesUsedValuesProofs FlambdaReaperLeastProofs
+  FlambdaReaperTypesHeapExitProofs FlambdaReaperTypesCcSetsProofs
+  FlambdaClosuresSpec FlambdaClosuresProofs.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeMeaningSpec FlambdaTypingEnv FlambdaTypingEnvSpec
   FlambdaEnvAliases.
@@ -168,6 +170,35 @@ Proof.
   - exists en. exact Hexpr.
 Qed.
 
+(* FlambdaReaperTypesProofs.statics_rel_whole, of the static environments
+   related with the primitives of the heap. *)
+Lemma statics_rel_whole_heap (G : graph) (sol : solution)
+    (keep : value_slot -> bool) (L : location -> option node)
+    (statics statics' : static_env) :
+  FlambdaReaperTypesHeapExitProofs.exit_statics_rel_heap G sol keep L statics
+    statics' ->
+  FlambdaClosuresSpec.static_sets_bound statics ->
+  FlambdaClosuresSpec.static_sets_bound statics' ->
+  static_sets_whole sol statics statics'.
+Proof.
+  intros (cds & F & b & ids & ff & cc & cdeps & cmds & ty & _ & _ & Honly
+          & _)
+    Hbound Hbound' s slot syms decls vs Hl Hhu.
+  destruct (Hbound s slot syms decls vs Hl) as [Hslot Hset].
+  split; [ exact Hslot | ].
+  destruct (Honly s _ Hl)
+    as [(tag & fields & Heq)
+       | [(slot0 & syms0 & decls0 & vs0 & Heq & Htarget & Hbinds)
+         | (Ho & _)]];
+    [ discriminate Heq | | destruct Ho ].
+  injection Heq as <- <- <- <-.
+  destruct Htarget as [Hn | (vs' & Hls' & _)]; [ destruct (Hbinds Hhu Hn) | ].
+  exists vs'. intros g s_g Hg.
+  split; [ exact (Hset g s_g (lookup_in _ _ _ Hg)) | ].
+  exact (proj2 (Hbound' s slot syms decls vs' Hls') g s_g
+           (lookup_in _ _ _ Hg)).
+Qed.
+
 (* The states of the run of a unit of [in_heap_fragment] and of its
    rebuild with changes of calling convention, for any table closed under
    the rules, the static blocks of the symbols with a use holding values:
@@ -175,8 +206,9 @@ Qed.
    related to one that the second comes to as the statements of types
    with the heap ask, for a correspondence [β] of the locations, the
    rebuild of a [Let] of a variable with a use is a [Let] or [Invalid],
-   and an exit of the first is one of the second through the same
-   continuation, the two observed equal up to the heap. *)
+   an exit of the first is one of the second through the same
+   continuation, the two observed equal up to the heap, and the static
+   sets are kept whole. *)
 Lemma cc_states_heap (flag : reaper_preserve_direct_calls)
     (is_local : field -> bool) (u : unit_interface) (e : expr) (T : tables)
     (cc ccw : node -> bool) (code_deps : finite_map code_dep) (b : bool) :
@@ -242,7 +274,9 @@ Lemma cc_states_heap (flag : reaper_preserve_direct_calls)
            step s = Exit k vs hp rd ->
            ∃ (vs' : list value) (hp' : heap) (rd' : read_record),
              step t = Exit k vs' hp' rd'
-             ∧ exits_observed_equal vs hp vs' hp').
+             ∧ exits_observed_equal vs hp vs' hp')
+      ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+          (state_statics t).
 Proof.
   intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce
     Hvals Hccc Hwid Hcid Hcd n s Hrun Hs.
@@ -268,13 +302,19 @@ Proof.
   exists (RP.kept_beta (solution_of_tables T) True L), m, t.
   split; [ exact Hm | ].
   split; [ exact Hst | split; [ exact Halloc | split; [ exact Hvars | ] ] ].
-  split.
+  split; [ | split ].
   - intros y kind d body Hse Hhu. rewrite Hexpr, Hse.
     exact (CP.rebuild_let_used _ _ _ _ _ _ _ _ _ en y kind d body Hhu).
   - intros k vs hp rd Hstep. unfold RP.answered_h in Hans.
     rewrite Hstep in Hans.
     destruct Hans as (vs' & hp' & rd' & Ht & HE).
     exists vs', hp', rd'. split; [ exact Ht | exact (proj1 HE) ].
+  - destruct Hrel as [_ (ctx & en' & ce & rets & _ & _ & _ & _ & Hsr & _)].
+    apply (statics_rel_whole_heap _ _ _ _ _ _
+             ltac:(do 9 eexists; exact Hsr)).
+    + exact (FlambdaClosuresProofs.well_formed_sets_bound u e n s Hwf Hrun).
+    + exact (FlambdaReaperTypesCcSetsProofs.cc_rebuilt_sets_bound _ _ _ _ _ b
+               u e m t Hwf Hm).
 Qed.
 
 (* ======================================================================== *)
@@ -475,6 +515,8 @@ Lemma calls_states_heap (local : bool) (flag : reaper_preserve_direct_calls)
         (solution_of_tables T) β (state_statics s)
         (CP.values_only (state_statics t))
     ∧ statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+        (CP.values_only (state_statics t))
     ∧ ∀ (x : variable) (v : value),
         lookup x (state_vars s) = Some v ->
         s_has_usage (solution_of_tables T) (Node_variable x) = true ->
@@ -509,7 +551,7 @@ Proof.
               (unit_code_deps flag u e) b Hlocal Hfrag Hdc Hrk Hwf Hexits
               Hcheck Hlrs Hcheck_exact Honce Hvals Hcl Hw Hc
               (fun _ _ => eq_refl) n s Hrun Hs)
-    as (β & m & t & Hm & Hst & Halloc & Hvars & Hlets & _).
+    as (β & m & t & Hm & Hst & Halloc & Hvars & Hlets & _ & Hwhole).
   assert (Ht : step t <> Undefined).
   { intros Hu. apply Hng.
     destruct (CCP.rebuild_cc_refines_up_to_heap_local flag is_local u e T
@@ -538,6 +580,8 @@ Proof.
   split; [ apply (statics_rebuilt_heap_values _ _ _ _ (state_statics t));
            [ exact Hv | exact Hst ] | ].
   split; [ exact Halloc | ].
+  split; [ apply (CP.static_sets_whole_values _ _ (state_statics t));
+           [ exact Hv | exact Hwhole ] | ].
   intros x v Hx Hhux.
   destruct (Hvars x v Hx Hhux) as (v_mid & Hx_t & Hrv).
   exists v_mid. split; [ exact Hrv | split ].
@@ -578,7 +622,9 @@ Lemma calls_exit_heap (local : bool) (flag : reaper_preserve_direct_calls)
     ∧ statics_rebuilt_heap (graph_of_facts (traverse_unit flag u e))
         (solution_of_tables T) β (state_statics s)
         (CP.values_only (state_statics t))
-    ∧ statics_allocated (solution_of_tables T) (state_statics s).
+    ∧ statics_allocated (solution_of_tables T) (state_statics s)
+    ∧ static_sets_whole (solution_of_tables T) (state_statics s)
+        (CP.values_only (state_statics t)).
 Proof.
   intros Hprem (Hccc & Hwid & Hcalls & Hreads) Hrun Hexit.
   pose proof Hprem as (Hlocal & Hleast & Hfrag & Hdc & Hrk & Hwf & Hexits
@@ -592,7 +638,7 @@ Proof.
               Hcheck Hlrs Hcheck_exact Honce Hvals Hcl Hw Hc
               (fun _ _ => eq_refl) n s Hrun
               ltac:(rewrite Hexit; discriminate))
-    as (β & m & t & Hm & Hst & Halloc & _ & _ & Hex).
+    as (β & m & t & Hm & Hst & Halloc & _ & _ & Hex & Hwhole).
   destruct (Hex k vs hp rd Hexit) as (vs' & hp' & rd' & Ht & Hobs).
   destruct (CX.uc_of_calls_gen true flag is_local u e T cannot_change
               dominated to_unbox b nr Hlocal Hfrag Hcheck Hcalls Hreads)
@@ -603,9 +649,11 @@ Proof.
     as (m3 & t3 & rd3 & Hm3 & Ht3 & Hrel).
   exists β, m3, t3, vs', hp', rd3.
   split; [ exact Hm3 | split; [ exact Ht3 | split; [ exact Hobs | ] ] ].
-  split; [ | exact Halloc ].
-  apply (statics_rebuilt_heap_values _ _ _ _ (state_statics t));
-    [ exact (CP.uc_values _ _ _ _ _ _ _ _ _ Hrel) | exact Hst ].
+  split; [ | split; [ exact Halloc | ] ].
+  - apply (statics_rebuilt_heap_values _ _ _ _ (state_statics t));
+      [ exact (CP.uc_values _ _ _ _ _ _ _ _ _ Hrel) | exact Hst ].
+  - apply (CP.static_sets_whole_values _ _ (state_statics t));
+      [ exact (CP.uc_values _ _ _ _ _ _ _ _ _ Hrel) | exact Hwhole ].
 Qed.
 
 (* ======================================================================== *)
@@ -623,7 +671,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (calls_exit_heap local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s k vs hp rd Hprem Hcalls Hrun Hexit)
-    as (β & m & t & vs' & hp' & rd' & Hm & Ht & Hobs & Hst & Halloc).
+    as (β & m & t & vs' & hp' & rd' & Hm & Ht & Hobs & Hst & Halloc & _).
   exists m, t, vs', hp', rd'.
   split; [ exact Hm | split; [ exact Ht | split; [ exact Hobs | ] ] ].
   apply (CP.type_satisfied_values_only (state_statics t)); [ reflexivity | ].
@@ -670,7 +718,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (calls_states_heap local flag is_local u e T cannot_change
               dominated to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
-    as (β & m & t & Hm & Hst & Halloc & Hvars).
+    as (β & m & t & Hm & Hst & Halloc & _ & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & Hplain & _).
   exists m, t, v_mid.
   split; [ exact Hm | split; [ exact (Hplain Hin Hnone) | ] ].
@@ -725,7 +773,7 @@ Proof.
   apply andb_true_iff in Hcalls_nr as [_ Huses].
   destruct (calls_states_heap local flag is_local u e T cannot_change
               dominated to_unbox b nr sets n s Hprem Hcalls Hng Hrun Hlet)
-    as (β & m & t & Hm & Hst & Halloc & Hvars).
+    as (β & m & t & Hm & Hst & Halloc & _ & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & _ & Hunb).
   destruct (CP.fields_hold_values _ _ _ (Hunb fields Hfields))
     as (ws & Hws & Hvals).
