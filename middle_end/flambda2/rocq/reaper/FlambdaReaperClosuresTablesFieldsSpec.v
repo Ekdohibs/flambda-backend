@@ -95,21 +95,22 @@
    What is left as checks ([repr_field_frag_ok]): that [vs] has the slot
    of the field, holding a plain simple ([plain_c]) for a field not
    unboxed, and a variable unboxed alike ([unboxed_field_pairs]) for a
-   field unboxed. That the slot is one of the set would need an invariant
-   of the traversal on the value slots of the sets
-   (FlambdaReaperClosuresExactProofs.sg_ok does not keep them). That the
-   simple is not unboxed would need the inversion of the rules of a least
-   solution (the reads of the slot of an unboxed name would be dominated
-   by its allocation, and the field unboxed). Above, [plain_c] is false
-   of the construction. That the variable is unboxed alike would need,
-   besides that inversion (the variable dominated by the one source of
-   the slot, which is to unbox), that the compiler's recursion end
-   (where it does not, the slot and the variable are cut at two depths:
-   FlambdaReaperUnboxingFuelSpec.v, [loop_field_statement]), that the
-   uses of the reads of the slot be among those of the variable, and
-   that no field of the block be read into names some to be unboxed and
-   some not (a fatal error of the compiler, which the rules do not rule
-   out: FlambdaReaperUnboxingSpec.v, [mixed_mutable_field]).
+   field unboxed. That the slot is one of the set is derived in
+   FlambdaReaperClosuresTablesSlotsSpec.v, and that the simple is not
+   unboxed in FlambdaReaperClosuresTablesPlainSpec.v. Above, [plain_c]
+   is false of the construction. That the variable is unboxed alike
+   would need, besides the inversion of a least solution (the variable
+   dominated by the one source of the slot, which is to unbox), that the
+   compiler's recursion end (where it does not, the slot and the
+   variable are cut at two depths: FlambdaReaperUnboxingFuelSpec.v,
+   [loop_field_statement]), that no field of the block be read into
+   names some to be unboxed and some not (a fatal error of the compiler,
+   which the rules do not rule out: FlambdaReaperUnboxingSpec.v,
+   [mixed_mutable_field]), and that the uses that the unboxing of the
+   variable reads through function slots be those of closures that hold
+   the slot: FlambdaReaperClosuresTablesAlikeSpec.v has a unit where the
+   recursions end with no fatal error and a function slot projected off
+   a block makes the two differ.
 
    [repr_unboxing_frag2_sound_statement]: for such a unit and tables,
    [repr_unboxing_frag2_nr] implies

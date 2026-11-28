@@ -61,18 +61,11 @@
      statements of FlambdaReaperClosuresTablesFieldsSpec.v with
      [repr_unboxing_frag3_nr].
 
-   Left as a check: that the simple of a field not unboxed is not
-   unboxed ([plain_simple] in [plain_c]). If it were, dominated by an
-   allocation to unbox: a field read with any usage would give the
-   simple any usage, and so its allocation (an inversion of [sources] in
-   a least solution), which is then not to be unboxed; a field whose
-   reads are all dominated has one source, that allocation, and is
-   unboxed. The case left is a field whose reads have known uses, one of
-   which is dominated by no allocation to unbox: that needs the facts
-   that put something into the variable of a projection of a value slot
-   to be its read only, an invariant of the traversal that
-   FlambdaReaperTypesTraversalUnaliasedProofs.named_tgt does not give
-   (it asks nothing of such a variable). *)
+   That the simple of a field not unboxed is not unboxed ([plain_simple]
+   in [plain_c]) is derived in FlambdaReaperClosuresTablesPlainSpec.v,
+   with an invariant of the traversal on the variables of the
+   projections of value slots (FlambdaReaperTraversalSlotsSpec.v); the
+   fragment there, [changed_set_frag4_ok], no longer asks it. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
