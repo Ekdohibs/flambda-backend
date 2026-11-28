@@ -53,7 +53,12 @@
    field. The two rebuilt terms agree but where the second unboxes, as in
    FlambdaReaperUnboxingRefinesProofs.v, at a set whose representation
    changes, whose new slots are those of [new_slots] ([changed_slots]),
-   and at the reads of its slots. Calls and continuations are the same in
+   and at the reads of its slots. No code of these fragments has a
+   parameter unboxed: [CSf] gives every code the shapes of plain
+   parameters ([CSf_plain]), so that the frames of code and the calls are
+   those of the relation with the same parameters and arguments in both
+   rebuilds ([code_frame_plain], [call_ok_c_plain], [rr_call_plain]).
+   Calls and continuations are the same in
    both rebuilds: the arguments kept by the decisions of the callee
    ([get_args_with_kinds_c]) or, for code that keeps its calling
    convention, at the same mask in both ([kept_args_ok]); the extra
@@ -400,6 +405,68 @@ End Names.
 (* The two rebuilds of a unit of the fragment                               *)
 (* ======================================================================== *)
 
+(* A call of code none of whose parameters is unboxed. *)
+Lemma call_ok_c_plain (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr) (CS : code_id -> option code_info)
+    (ap : apply_expr) (id : code_id) (ci : code_info) :
+  plain_shapes (ci_params ci) = true ->
+  ap_call_kind ap = Direct id ∧ CS id = Some ci
+  ∧ callee_ok M CH ci (ap_callee ap)
+  ∧ forallb (plain_simple M) (ap_args ap) = true
+  ∧ forallb (plain_simple M) (exn_extra_simples ap) = true
+  ∧ length (ap_args_arity ap) = ci_nparams ci ->
+  call_ok_c M CH CS ap id ci.
+Proof.
+  intros Hp (H1 & H2 & H3 & H4 & H5 & H6).
+  exact (conj H1 (conj H2 (conj H3 (conj H4 (conj H5 (conj H6 Hp)))))).
+Qed.
+
+(* The frame of code none of whose parameters is unboxed. *)
+Lemma code_frame_plain (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr) (CS : code_id -> option code_info)
+    (id : code_id) (c c' : code) (ci : code_info) :
+  plain_shapes (ci_params ci) = true ->
+  CS id = Some ci
+  ∧ code_params c' = code_params c
+  ∧ code_my_closure c' = code_my_closure c
+  ∧ code_return_continuation c' = code_return_continuation c
+  ∧ code_exn_continuation c' = code_exn_continuation c
+  ∧ code_params_arity c' = code_params_arity c
+  ∧ code_result_arity c' = code_result_arity c
+  ∧ code_is_tupled c = false ∧ code_is_tupled c' = false
+  ∧ length (code_params_arity c) = ci_nparams ci
+  ∧ forallb (plain_variable M) (code_params c) = true
+  ∧ my_closure_ok M CH ci (code_my_closure c)
+  ∧ code_params_subkinds c' = code_params_subkinds c ->
+  code_frame M CH CS id c c' ci.
+Proof.
+  intros Hp (H1 & H2 & H3 & H4 & H5 & H6 & H7 & H8 & H9 & H10 & H11 & H12
+             & H13).
+  unfold code_frame, params_frame. rewrite Hp.
+  exact (conj H1 (conj (conj H2 (conj H6 (conj H11 H13)))
+                    (conj H3 (conj H4 (conj H5 (conj H7 (conj H8
+                       (conj H9 (conj H10 H12))))))))).
+Qed.
+
+(* A call of [rr_call] with the same arguments in both terms. *)
+Lemma rr_call_plain (M : list (node * unboxed_fields))
+    (CH : variable -> option closure_repr) (CS : code_id -> option code_info)
+    (RCH : bool -> variable -> code_id -> Prop) (W : variable -> Prop)
+    (REM : code_id -> Prop) (D : list continuation) (ap : apply_expr)
+    (id : code_id) (ci : code_info) :
+  call_ok_c M CH CS ap id ci ->
+  ap_continuation ap ∉ D -> ap_exn_continuation ap ∉ D ->
+  rr M CH CS RCH W REM D (Apply ap) (Apply ap).
+Proof.
+  intros (H1 & H2 & H3 & H4 & H5 & H6 & H7) Hk Hke.
+  assert (Ha : args_frame M ci ap (ap_args ap) (ap_args_arity ap)).
+  { unfold args_frame. rewrite H7.
+    split; [ reflexivity | split; [ reflexivity | exact H4 ] ]. }
+  pose proof (rr_call M CH CS RCH W REM D ap id ci (ap_args ap)
+                (ap_args_arity ap) H1 H2 H3 Ha H5 H6 Hk Hke) as H.
+  rewrite with_args_same in H. exact H.
+Qed.
+
 Section Rebuilds.
 
 Variable F : facts.
@@ -465,9 +532,17 @@ Abbreviation live e := (live_conts F sol code_deps codes e).
 Definition CSf (id : code_id) : option code_info :=
   match lookup id codes, lookup id my_closures with
   | Some md, Some mc =>
-    Some (Code_info (CH mc) (length (cm_params_arity md)) (nr id))
+    Some (Code_info (CH mc) (length (cm_params_arity md)) (nr id) [] [])
   | _, _ => None
   end.
+
+Lemma CSf_plain (id : code_id) (ci : code_info) :
+  CSf id = Some ci -> plain_shapes (ci_params ci) = true.
+Proof.
+  unfold CSf. destruct (lookup id codes); [ | discriminate ].
+  destruct (lookup id my_closures); [ | discriminate ].
+  intros H. injection H as <-. reflexivity.
+Qed.
 
 (* The code that the flow may bring to the callee of a call. *)
 Definition RCHf (b : bool) (f : variable) (id : code_id) : Prop :=
@@ -1465,7 +1540,7 @@ Proof.
   assert (Hplain := plain_cs_M' (ap_args ap) Hargs Hargz).
   assert (Hfnu : unboxed_of_node unboxed (Node_variable f) = None)
     by (destruct (fields_of unboxed f) eqn:E; [ discriminate Hfu | exact E ]).
-  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id)).
+  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id) [] []).
   assert (HCS : CSf id = Some ci)
     by (unfold CSf; rewrite Hmd, Hmc; reflexivity).
   assert (Hcok : callee_ok MM CH ci (Var f)).
@@ -1559,7 +1634,8 @@ Proof.
                    ap_args_arity := ap_args_arity ap;
                    ap_return_arity := ap_return_arity ap |}).
     assert (Hok : call_ok_c MM CH CSf ap1 id ci).
-    { split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
+    { apply call_ok_c_plain; [ reflexivity | ].
+    split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
       split; [ exact HCS | ].
       split; [ exact Hcok | ].
       split; [ exact (mask_arguments_plain en _ Hplain mask_u) | ].
@@ -1604,8 +1680,8 @@ Proof.
                  (map Keep (unarize (ap_return_arity ap)))
                  (unarize (ap_return_arity ap)) _
                  (Nat.eq_le_incl _ _ (length_map _ _)) Hd).
-      destruct Hok as (Hk1 & Hk2 & Hk3 & Hk4 & Hk5 & Hk6).
-      apply (rr_call MM CH CSf RCHf Wf REMf D ap1 id ci); try assumption.
+      apply (rr_call_plain MM CH CSf RCHf Wf REMf D ap1 id ci Hok);
+        try assumption.
       exact (Hlive_k Hnr_ap).
   - (* Code that changes its calling convention. *)
     apply andb_true_iff in Hch as [Hch Hret].
@@ -1677,7 +1753,8 @@ Proof.
     assert (Hlen_ks : length rd_cc <= length (unarize (ap_return_arity ap)))
       by (rewrite Hra, Hrlen; lia).
     assert (Hok : call_ok_c MM CH CSf ap' id ci).
-    { split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
+    { apply call_ok_c_plain; [ reflexivity | ].
+    split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
       split; [ exact HCS | ].
       split; [ exact Hcok | ].
       split.
@@ -1746,8 +1823,8 @@ Proof.
            rewrite Hd. cbn beta iota. rewrite Hn. exact Hret.
          - destruct (ci_out _ _ _ Hci _ HC) as (Hd & _). rewrite Hd.
            exact Hret. }
-    destruct Hok as (Hk1 & Hk2 & Hk3 & Hk4 & Hk5 & Hk6).
-    apply (rr_call MM CH CSf RCHf Wf REMf D ap' id ci); try assumption.
+    apply (rr_call_plain MM CH CSf RCHf Wf REMf D ap' id ci Hok);
+      try assumption.
     exact (Hlive_k Hnr_ap).
 Qed.
 
@@ -1915,6 +1992,7 @@ Proof.
         apply andb_true_iff in Hkind as [Hone Hall].
         apply Nat.eqb_eq in Hone. split; [ exact Hone | ].
         intros id ci Hr Hci'.
+        unfold ci_plain.
         destruct (Hcode id ci Hci') as (md & mc & Hin & Hmc & -> & -> & ->).
         pose proof (proj1 (forallb_forall _ _) Hall (id, md) Hin) as H.
         cbn beta iota in H. unfold RCHf in Hr. rewrite Hr in H.
@@ -1922,15 +2000,20 @@ Proof.
         apply andb_true_iff in H as [H Hn].
         apply andb_true_iff in H as [Hp _].
         apply andb_true_iff in Hn as [Hn Hl]. apply Nat.eqb_eq in Hl.
-        split; [ exact (Hplain_mc id mc Hmc Hp) | split; assumption ].
+        split; [ | split; assumption ].
+        split; [ exact (Hplain_mc id mc Hmc Hp)
+               | exact (CSf_plain id ci Hci') ].
       - destruct Hrk as (ids & ->).
         intros id ci Hr Hci'.
+        unfold ci_plain.
         destruct (Hcode id ci Hci') as (md & mc & Hin & Hmc & -> & _ & ->).
         pose proof (proj1 (forallb_forall _ _) Hkind (id, md) Hin) as H.
         cbn beta iota in H. unfold RCHf in Hr. rewrite Hr in H.
         cbn [negb orb] in H.
         apply andb_true_iff in H as [Hp Hn].
-        split; [ exact (Hplain_mc id mc Hmc Hp) | exact Hn ]. }
+        split; [ | exact Hn ].
+        split; [ exact (Hplain_mc id mc Hmc Hp)
+               | exact (CSf_plain id ci Hci') ]. }
     unfold make_apply_wrapper_u. cbv zeta. cbn [andb].
     unfold make_apply_wrapper.
     destruct (lookup (ap_continuation ap1) (env_conts en)) as [mask0 | ];
@@ -1974,22 +2057,25 @@ Proof.
       apply andb_true_iff in Hkind as [Hone Hall].
       apply Nat.eqb_eq in Hone. split; [ exact Hone | ].
       intros id ci Hr Hci'.
+      unfold ci_plain.
       destruct (Hcode id ci Hci') as (md & mc & Hin & Hmc & -> & -> & _).
       pose proof (proj1 (forallb_forall _ _) Hall (id, md) Hin) as H.
       cbn beta iota in H. unfold RCHf in Hr. rewrite Hr in H.
       cbn [negb orb] in H.
       apply andb_true_iff in H as [H _].
       apply andb_true_iff in H as [Hp Hn].
-      split; [ exact (Hplain_mc id mc Hmc Hp) | ].
+      split; [ split; [ exact (Hplain_mc id mc Hmc Hp)
+                      | exact (CSf_plain id ci Hci') ] | ].
       intros He. rewrite He in Hn. discriminate Hn.
     + destruct Hrk as (ids & ->).
       intros id ci Hr Hci'.
+      unfold ci_plain.
       destruct (Hcode id ci Hci') as (md & mc & Hin & Hmc & -> & _ & _).
       pose proof (proj1 (forallb_forall _ _) Hkind (id, md) Hin) as H.
       cbn beta iota in H. unfold RCHf in Hr. rewrite Hr in H.
       cbn [negb orb] in H.
       apply andb_true_iff in H as [Hp _].
-      exact (Hplain_mc id mc Hmc Hp).
+      split; [ exact (Hplain_mc id mc Hmc Hp) | exact (CSf_plain id ci Hci') ].
 Qed.
 
 (* ------------------------------------------------------------------------ *)
@@ -2157,7 +2243,7 @@ Proof.
   assert (Hplain := plain_cs_M' (ap_args ap) Hargs Hargz).
   assert (Hfnu : unboxed_of_node unboxed (Node_variable f) = None)
     by (destruct (fields_of unboxed f) eqn:E; [ discriminate Hfu | exact E ]).
-  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id)).
+  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id) [] []).
   assert (HCS : CSf id = Some ci)
     by (unfold CSf; rewrite Hmd, Hmc; reflexivity).
   assert (Hcok : callee_ok MM CH ci (Var f)).
@@ -2260,7 +2346,8 @@ Proof.
   assert (Hlen_ks : length rd_cc = length ks)
     by (unfold ks; rewrite Hra, Hrlen; reflexivity).
   assert (Hok : call_ok_c MM CH CSf ap' id ci).
-  { split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
+  { apply call_ok_c_plain; [ reflexivity | ].
+    split; [ exact (rewrite_call_kind_c ap id Hcalled) | ].
     split; [ exact HCS | ].
     split; [ exact Hcok | ].
     split.
@@ -2348,8 +2435,8 @@ Proof.
               (combine L (combine rd_cc ks)))
     eqn:Htest.
   - (* Neither makes a wrapper. *)
-    destruct Hok as (Hk1 & Hk2 & Hk3 & Hk4 & Hk5 & Hk6).
-    apply (rr_call MM CH CSf RCHf Wf REMf D ap' id ci); assumption.
+    apply (rr_call_plain MM CH CSf RCHf Wf REMf D ap' id ci Hok);
+      assumption.
   - (* Both make one. *)
     rewrite (UW.wrapper_args_firstn (combine rd_cc ks) L ff
              : wrapper_args ff (firstn n L) _ = _).
@@ -2550,7 +2637,8 @@ Proof.
   destruct (lookup id codes) as [md | ] eqn:Hmd; [ | discriminate Hci' ].
   destruct (lookup id my_closures) as [mc | ] eqn:Hmc;
     [ | discriminate Hci' ].
-  injection Hci' as <-. cbn [ci_my_closure].
+  injection Hci' as <-. unfold ci_plain. cbn [ci_my_closure ci_params].
+  split; [ | reflexivity ].
   pose proof (proj1 (forallb_forall _ _) Hcodes (id, md)
                 (lookup_in _ _ _ Hmd))
     as H.
@@ -3123,7 +3211,7 @@ Proof.
   assert (Hmcf : fresh mc) by (apply Hnames; left; reflexivity).
   assert (Hpf : ∀ x, x ∈ params -> fresh x)
     by (intros x Hx; apply Hnames; right; apply in_or_app; left; exact Hx).
-  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id)).
+  set (ci := Code_info (CH mc) (length (cm_params_arity md)) (nr id) [] []).
   assert (HCS : CSf id = Some ci)
     by (unfold CSf; rewrite Hmd, Hmc; reflexivity).
   assert (Hmcok : my_closure_ok MM CH ci mc).
@@ -3180,7 +3268,8 @@ Proof.
     cbn [rebuild_code_cc rebuild_code_u]. rewrite Hncc, Hch.
     unfold code_continuation_decisions. rewrite Hcdid.
     exists ci. split.
-    + split; [ exact HCS | ].
+    + apply code_frame_plain; [ reflexivity | ].
+      split; [ exact HCS | ].
       cbn [code_params code_my_closure code_return_continuation
            code_exn_continuation code_params_arity code_result_arity
            code_is_tupled code_params_subkinds].
@@ -3274,6 +3363,7 @@ Proof.
              [ | reflexivity ].
            cbn [app]. rewrite (param_decisions_at_decided params pd_cc Hlen).
            rewrite !decisions_subkinds_decided. reflexivity. }
+      apply code_frame_plain; [ reflexivity | ].
       split; [ exact HCS | ].
       cbn [code_params code_my_closure code_return_continuation
            code_exn_continuation code_params_arity code_result_arity
