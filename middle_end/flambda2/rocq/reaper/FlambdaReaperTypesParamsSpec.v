@@ -113,16 +113,11 @@
    compiler drops its type: [Delete] in [rewrite_result_types]), and the
    check [params_aliased].
 
+   The traversal of every unit of the fragment whose variables are bound
+   once passes [params_aliased], and the statements here hold without it
+   (FlambdaReaperTypesParamsTraversalSpec.v).
+
    What is left out:
-   - That the traversal of every unit whose variables are bound once
-     passes [params_aliased]: the traversal puts into the node of a
-     parameter of code only the alias of [traverse_code], and reads the
-     node of the code dep, which [prepare_code] makes, only there (the
-     witnesses of the calls put the arguments into it). The like is
-     proved of the [my_closure] of code and of its node in
-     FlambdaReaperUnusedCodeTraversalProofs.v, whose invariant counts the
-     parameters of code among the variables into which any fact may put
-     something.
    - The parameters that the unboxing across calls unboxes: the compiler
      rewrites their types into the types of their fields
      (FlambdaReaperTypesCallsSpec

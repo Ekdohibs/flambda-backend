@@ -98,7 +98,10 @@
    type the compiler drops ([Delete] in [rewrite_result_types]).
 
    The parameters of code at the nodes of [code_dep.params] are in
-   FlambdaReaperTypesParamsSpec.v.
+   FlambdaReaperTypesParamsSpec.v, and the statements here with the wider
+   check of static blocks of FlambdaReaperTypesUsedValuesSpec.v
+   ([used_values] in place of [unit_of_values]) in
+   FlambdaReaperTypesReturnsUsedSpec.v.
 
    What is left out:
    - The unboxing across calls: its simulation relates the states within

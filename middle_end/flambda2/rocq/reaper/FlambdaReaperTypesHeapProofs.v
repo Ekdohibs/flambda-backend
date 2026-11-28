@@ -56,7 +56,7 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperFlowSpec FlambdaReaperLeastSpec FlambdaReaperLeastProofs
   FlambdaReaperLocalFields FlambdaReaperTypes FlambdaReaperTypesSpec
   FlambdaReaperTypesProofs FlambdaReaperTypesTermSpec
-  FlambdaReaperTypesHeapSpec.
+  FlambdaReaperTypesHeapSpec FlambdaReaperTypesUsedValuesSpec.
 From OxCamlFlambda2Types Require Import FlambdaTypeGrammar
   FlambdaTypeGrammarProofs FlambdaTypeMeaningSpec FlambdaTypeMeaningProofs
   FlambdaTypingEnv FlambdaTypingEnvSpec FlambdaEnvAliases
@@ -1361,22 +1361,23 @@ Qed.
 
 End Exit_heap.
 
-(* The static environments that the simulation relates where the unit
-   exits, with the heap ([HE.exit_statics_rel_heap]), are related by
-   [statics_rebuilt_heap] for the correspondence of the simulation, if
-   the static values of the first are of the fragment. *)
-Lemma statics_rel_rebuilt_heap (is_local : field -> bool) (G : graph)
+(* The static environments that the simulation relates, with the heap
+   ([HE.exit_statics_rel_heap]), are related by [statics_rebuilt_heap]
+   for the correspondence of the simulation, if the static values of the
+   symbols with a use of the first are of the fragment. *)
+Lemma statics_rel_rebuilt_heap_used (is_local : field -> bool) (G : graph)
     (sol : solution) (keep : value_slot -> bool) (L : location -> option node)
     (statics statics' : static_env) :
   closed is_local G sol -> field_used_exact is_local G sol ->
   HE.exit_statics_rel_heap G sol keep L statics statics' ->
-  statics_of_values statics ->
+  statics_of_used_values (fun s => s_has_usage sol (Node_symbol s))
+    statics ->
   statics_rebuilt_heap G sol (RBP.kept_beta sol True L) statics statics'.
 Proof.
   intros Hc Hexact (cds & F & b & ids & ff & cc & cdeps & cmds & ty
                     & Hnone & Hblocks & Honly & _)
     Hvals s allocated Hl Hhu.
-  pose proof (Hvals s allocated Hl) as Hval.
+  pose proof (Hvals s allocated Hl Hhu) as Hval.
   destruct (Honly s allocated Hl)
     as [(tag & fields & ->)
        | [(slot & syms & decls & vs & -> & Htarget & Hbound)
@@ -1428,6 +1429,22 @@ Proof.
     + destruct Ho as [Hn | (elements' & Hls' & _)];
         [ destruct (Hbound Hhu Hn) | ].
       exists elements'. exact Hls'.
+Qed.
+
+(* The same, if the static values of the first are of the fragment where
+   the unit exits. *)
+Lemma statics_rel_rebuilt_heap (is_local : field -> bool) (G : graph)
+    (sol : solution) (keep : value_slot -> bool) (L : location -> option node)
+    (statics statics' : static_env) :
+  closed is_local G sol -> field_used_exact is_local G sol ->
+  HE.exit_statics_rel_heap G sol keep L statics statics' ->
+  statics_of_values statics ->
+  statics_rebuilt_heap G sol (RBP.kept_beta sol True L) statics statics'.
+Proof.
+  intros Hc Hexact Hrel Hvals.
+  apply (statics_rel_rebuilt_heap_used is_local G sol keep L statics statics'
+           Hc Hexact Hrel).
+  intros s allocated Hl _. exact (Hvals s allocated Hl).
 Qed.
 
 (* The static sets kept whole, as [statics_rel_whole] has them. *)

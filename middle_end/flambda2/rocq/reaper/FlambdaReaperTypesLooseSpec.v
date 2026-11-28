@@ -87,7 +87,10 @@
      changes of calling convention.
 
    No premise is added: [static_sets_whole] of each pair of runs follows
-   from the premises of the statements named (from [well_formed_unit]). *)
+   from the premises of the statements named (from [well_formed_unit]).
+   The statements here with the wider check of static blocks of
+   FlambdaReaperTypesUsedValuesSpec.v ([used_values] in place of
+   [unit_of_values]) are in FlambdaReaperTypesLooseUsedSpec.v. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

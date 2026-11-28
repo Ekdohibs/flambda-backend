@@ -117,7 +117,8 @@
    argument is to go through: [β] relates only locations whose allocation
    the rebuild keeps, to cells of the same mutability and tag. The
    statements of the unboxing and of the changes of representation with
-   the heap are in FlambdaReaperTypesTraversalHeapSpec.v. *)
+   the heap are in FlambdaReaperTypesTraversalHeapSpec.v, and those of
+   the unboxing across calls in FlambdaReaperTypesCallsHeapSpec.v. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.

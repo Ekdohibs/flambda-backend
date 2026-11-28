@@ -31,7 +31,10 @@
    (FlambdaReaperTypesCallsProofs.cc_states, [calls_states],
    [calls_exit], [repr_exit], by FlambdaReaperTypesCcSetsProofs.v); the
    proofs are those of FlambdaReaperTypesCallsProofs.v and
-   FlambdaReaperTypesReturnsProofs.v in the fragment [loose]. *)
+   FlambdaReaperTypesReturnsProofs.v in the fragment [loose]. The proofs
+   are those of the statements of FlambdaReaperTypesLooseUsedSpec.v, with
+   the wider check of static blocks (each [_used]); the statements of
+   FlambdaReaperTypesLooseSpec.v are their instances. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -44,7 +47,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec
   FlambdaReaperTypes FlambdaReaperTypesSpec FlambdaReaperTypesTermSpec
   FlambdaReaperTypesCallsSpec FlambdaReaperTypesReturnsSpec
-  FlambdaReaperTypesLooseSpec FlambdaRenameApartSpec.
+  FlambdaReaperTypesLooseSpec FlambdaReaperTypesUsedValuesSpec
+  FlambdaReaperTypesCallsUsedSpec FlambdaReaperTypesLooseUsedSpec
+  FlambdaRenameApartSpec.
 From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaNameAbstractionSpec FlambdaReaperTypesProofs
   FlambdaReaperTypesCallsProofs FlambdaReaperTypesReturnsProofs
@@ -144,7 +149,7 @@ Lemma cc_result_loose_gen (local : bool) (fx : fixes)
     (valuation valuation' : env) (n : nat) (s : state)
     (code_var type_var : variable) (v : value) :
   TP.fixes_sound fx ->
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   cc_hyps flag u e T cc ccw code_deps ->
   unaliased_result_premises (traverse_unit flag u e) T e n s tenv canon
     valuation valuation' code_var type_var v ->
@@ -166,9 +171,9 @@ Proof.
     (Hrun & Hs & Hx & Hhu & Henv & Hfr & Hcopies & Hfind & Hl).
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
-  destruct (CP.cc_states flag is_local u e T cc ccw code_deps b Hlocal Hfrag
-              Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals Hccc
-              Hwid Hcid Hcd n s Hrun Hs)
+  destruct (CP.cc_states_used flag is_local u e T cc ccw code_deps b Hlocal
+              Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals
+              Hccc Hwid Hcid Hcd n s Hrun Hs)
     as (m & t & Hm & Hst & Halloc & Hvars & _ & _ & Hwhole).
   destruct (Hvars code_var v Hx Hhu) as (v' & Hx' & Hrv).
   exists m, t, v'. split; [ exact Hm | split; [ exact Hx' | ] ].
@@ -179,8 +184,8 @@ Proof.
   intros _. exact Hwhole.
 Qed.
 
-Lemma plain_result_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> unaliased_result_type_end_to_end_with local fx.
+Lemma plain_result_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unaliased_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T b sets tenv canon valuation valuation' n s
     code_var type_var v Hprem Hres.
@@ -191,6 +196,10 @@ Proof.
   exists m, t, v'. rewrite <- plain_is_cc.
   split; [ exact Hm | split; [ exact Hx | exact Hsat ] ].
 Qed.
+
+Lemma plain_result_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unaliased_result_type_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (plain_result_loose_used local fx Hfx). Qed.
 
 Theorem unaliased_result_type_end_to_end :
   unaliased_result_type_end_to_end_statement.
@@ -208,8 +217,8 @@ Theorem unaliased_result_type_end_to_end_local_landed :
   unaliased_result_type_end_to_end_local_landed_statement.
 Proof. exact (plain_result_loose true landed_fixes TP.landed_fixes_sound). Qed.
 
-Lemma cc_result_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> cc_unaliased_result_type_end_to_end_with local fx.
+Lemma cc_result_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_unaliased_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change b sets tenv canon valuation
     valuation' n s code_var type_var v Hprem Hccc Hwid Hres.
@@ -219,6 +228,10 @@ Proof.
            canon valuation valuation' n s code_var type_var v Hfx Hprem Hh
            Hres).
 Qed.
+
+Lemma cc_result_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_unaliased_result_type_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (cc_result_loose_used local fx Hfx). Qed.
 
 Theorem cc_unaliased_result_type_end_to_end :
   cc_unaliased_result_type_end_to_end_statement.
@@ -248,7 +261,7 @@ Lemma cc_return_loose_gen (local : bool) (fx : fixes)
     (valuation valuation' : env) (n : nat) (s : state) (id : code_id)
     (i : nat) (arg : simple) (r : node) (type_var : variable) (v : value) :
   TP.fixes_sound fx ->
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   cc_hyps flag u e T cc ccw code_deps ->
   return_premises true flag u e T n s id i arg r tenv canon valuation
     valuation' type_var v ->
@@ -271,9 +284,9 @@ Proof.
      & Hfr & Hcopies & Hfind & Hl).
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
-  destruct (CP.cc_states flag is_local u e T cc ccw code_deps b Hlocal Hfrag
-              Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals Hccc
-              Hwid Hcid Hcd n s Hrun Hs)
+  destruct (CP.cc_states_used flag is_local u e T cc ccw code_deps b Hlocal
+              Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals
+              Hccc Hwid Hcid Hcd n s Hrun Hs)
     as (m & t & Hm & Hst & Halloc & Hvars & _ & _ & Hwhole).
   destruct (RT.return_rebuilt flag is_local u e T sets (state_vars s)
               (state_vars t) id c ac i arg r v Hfrag
@@ -288,8 +301,8 @@ Proof.
   intros _. exact Hwhole.
 Qed.
 
-Lemma plain_return_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> unaliased_code_result_end_to_end_with local fx.
+Lemma plain_return_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unaliased_code_result_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T b sets tenv canon valuation valuation' n s
     id i arg r type_var v Hprem Hres.
@@ -300,6 +313,10 @@ Proof.
   exists m, t, v'. rewrite <- plain_is_cc.
   split; [ exact Hm | split; [ exact Hx | exact Hsat ] ].
 Qed.
+
+Lemma plain_return_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> unaliased_code_result_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (plain_return_loose_used local fx Hfx). Qed.
 
 Theorem unaliased_code_result_end_to_end :
   unaliased_code_result_end_to_end_statement.
@@ -317,8 +334,8 @@ Theorem unaliased_code_result_end_to_end_local_landed :
   unaliased_code_result_end_to_end_local_landed_statement.
 Proof. exact (plain_return_loose true landed_fixes TP.landed_fixes_sound). Qed.
 
-Lemma cc_return_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> cc_unaliased_code_result_end_to_end_with local fx.
+Lemma cc_return_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_unaliased_code_result_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change b sets tenv canon valuation
     valuation' n s id i arg r type_var v Hprem Hccc Hwid Hres.
@@ -328,6 +345,10 @@ Proof.
            canon valuation valuation' n s id i arg r type_var v Hfx Hprem Hh
            Hres).
 Qed.
+
+Lemma cc_return_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_unaliased_code_result_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (cc_return_loose_used local fx Hfx). Qed.
 
 Theorem cc_unaliased_code_result_end_to_end :
   cc_unaliased_code_result_end_to_end_statement.
@@ -349,8 +370,8 @@ Proof. exact (cc_return_loose true landed_fixes TP.landed_fixes_sound). Qed.
 (* The unit rebuilt with unboxing across calls                              *)
 (* ======================================================================== *)
 
-Lemma calls_types_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> calls_unaliased_types_end_to_end_with local fx.
+Lemma calls_types_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_types_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox b nr sets
     tenv canon valuation valuation' n s k vs hp rd sym allocated Hprem
@@ -360,7 +381,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (CP.calls_exit local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s k vs hp rd
-              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hrun Hexit)
+              Hprem Hcalls Hrun Hexit)
     as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & Hwhole).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (CP.type_satisfied_values_only (state_statics t)); [ reflexivity | ].
@@ -370,6 +391,10 @@ Proof.
     try assumption.
   intros _. exact Hwhole.
 Qed.
+
+Lemma calls_types_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_types_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (calls_types_loose_used local fx Hfx). Qed.
 
 Theorem calls_unaliased_types_end_to_end :
   calls_unaliased_types_end_to_end_statement.
@@ -387,8 +412,8 @@ Theorem calls_unaliased_types_end_to_end_local_landed :
   calls_unaliased_types_end_to_end_local_landed_statement.
 Proof. exact (calls_types_loose true landed_fixes TP.landed_fixes_sound). Qed.
 
-Lemma calls_result_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> calls_unaliased_result_end_to_end_with local fx.
+Lemma calls_result_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_result_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox b nr sets
     tenv canon valuation valuation' n s code_var type_var v Hprem Hcalls
@@ -399,7 +424,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (CP.calls_states local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s
-              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hng Hrun
+              Hprem Hcalls Hng Hrun
               Hlet)
     as (m & t & Hm & Hst & Halloc & Hwhole & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & Hplain & _).
@@ -412,6 +437,10 @@ Proof.
     try assumption.
   intros _. exact Hwhole.
 Qed.
+
+Lemma calls_result_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_result_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (calls_result_loose_used local fx Hfx). Qed.
 
 Theorem calls_unaliased_result_end_to_end :
   calls_unaliased_result_end_to_end_statement.
@@ -429,8 +458,8 @@ Theorem calls_unaliased_result_end_to_end_local_landed :
   calls_unaliased_result_end_to_end_local_landed_statement.
 Proof. exact (calls_result_loose true landed_fixes TP.landed_fixes_sound). Qed.
 
-Lemma calls_unboxed_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> calls_unaliased_unboxed_end_to_end_with local fx.
+Lemma calls_unboxed_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_unboxed_end_to_end_used_with local fx.
 Proof.
   intros (Hb & Hal & Hr & Hn) flag is_local u e T cannot_change dominated
     to_unbox b nr sets tenv canon valuation valuation' n s code_var type_var
@@ -445,7 +474,7 @@ Proof.
   apply andb_true_iff in Hcalls_nr as [_ Huses].
   destruct (CP.calls_states local flag is_local u e T cannot_change dominated
               to_unbox b nr sets n s
-              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hcalls Hng Hrun
+              Hprem Hcalls Hng Hrun
               Hlet)
     as (m & t & Hm & Hst & Halloc & Hwhole & Hvars).
   destruct (Hvars code_var v Hx Hhu) as (v_mid & Hrv & _ & Hunb).
@@ -468,6 +497,12 @@ Proof.
     [ | exact IH ].
   exact (CP.type_satisfied_values_only (state_statics t) (state_statics t) _
            _ _ eq_refl Hw).
+Qed.
+
+Lemma calls_unboxed_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> calls_unaliased_unboxed_end_to_end_with local fx.
+Proof.
+  intros Hfx. CP.used_instance (calls_unboxed_loose_used local fx Hfx).
 Qed.
 
 Theorem calls_unaliased_unboxed_end_to_end :
@@ -494,8 +529,8 @@ Qed.
 (* With changes of representation                                           *)
 (* ======================================================================== *)
 
-Lemma repr_types_loose (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> repr_unaliased_types_end_to_end_with local fx.
+Lemma repr_types_loose_used (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> repr_unaliased_types_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change dominated to_unbox tcr b nr
     sets tenv canon valuation valuation' n s k vs hp rd sym allocated Hprem
@@ -505,7 +540,7 @@ Proof.
     as (Hle & _ & _ & _).
   destruct (CP.repr_exit local flag is_local u e T cannot_change dominated
               to_unbox tcr b nr sets n s k vs hp rd
-              (CP.unit_premises_used _ _ _ _ _ _ _ Hprem) Hrepr Hrun Hexit)
+              Hprem Hrepr Hrun Hexit)
     as (m & t & vs' & rd' & Hm & Ht & Hst & Halloc & Hwhole).
   exists m, t, vs', rd'. split; [ exact Hm | split; [ exact Ht | ] ].
   apply (CP.type_satisfied_values_only (state_statics t)); [ reflexivity | ].
@@ -515,6 +550,10 @@ Proof.
     try assumption.
   intros _. exact Hwhole.
 Qed.
+
+Lemma repr_types_loose (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> repr_unaliased_types_end_to_end_with local fx.
+Proof. intros Hfx. CP.used_instance (repr_types_loose_used local fx Hfx). Qed.
 
 Theorem repr_unaliased_types_end_to_end :
   repr_unaliased_types_end_to_end_statement.

@@ -38,7 +38,13 @@
    the result ([rebuilt_value_alias]); the states are those of
    FlambdaReaperTypesCallsProofs.cc_states, and the type is rewritten as
    FlambdaReaperTypesProofs.rewrite_result_type_sound_in rewrites it, at
-   the node of the result ([rewrite_result_type_at_sound_in]). *)
+   the node of the result ([rewrite_result_type_at_sound_in]).
+
+   The proofs are those of the statements of
+   FlambdaReaperTypesReturnsUsedSpec.v, with the wider check of static
+   blocks (each [_used_gen], by FlambdaReaperTypesCallsProofs
+   .cc_states_used); the statements of FlambdaReaperTypesReturnsSpec.v
+   are their instances. *)
 
 From Stdlib Require Import ZArith List Bool Lia.
 From OxCamlStdlib Require Import OxCamlLogic OxCamlList.
@@ -51,7 +57,9 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaModel
   FlambdaReaperCallingConventions FlambdaReaperCallingConventionsSpec
   FlambdaReaperTypes FlambdaReaperTypesSpec FlambdaReaperTypesTermSpec
   FlambdaReaperTypesCallsSpec FlambdaReaperDeadFramesSpec
-  FlambdaReaperTypesReturnsSpec FlambdaRenameApartSpec.
+  FlambdaReaperTypesReturnsSpec FlambdaReaperTypesUsedValuesSpec
+  FlambdaReaperTypesCallsUsedSpec FlambdaReaperTypesReturnsUsedSpec
+  FlambdaRenameApartSpec.
 From OxCamlFlambda2 Require FlambdaReaperRebuildProofs
   FlambdaReaperWrapperProofs FlambdaReaperDeadFramesProofs
   FlambdaNameAbstractionSpec
@@ -362,7 +370,7 @@ Lemma cc_return_gen (local : bool) (fx : fixes)
     (valuation valuation' : env) (n : nat) (s : state) (id : code_id)
     (i : nat) (arg : simple) (r : node) (type_var : variable) (v : value) :
   TP.fixes_sound fx ->
-  unit_premises local flag is_local u e T sets ->
+  used_premises local flag is_local u e T sets ->
   cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
     ccw cc ->
   (∀ (id : code_id) (a a' n y : node),
@@ -406,8 +414,8 @@ Proof.
      & Hfr & Hcopies & Hfind & Hl).
   destruct (CP.least_with_checks local flag is_local u e T Hlocal Hleast)
     as (Hle & Hcheck & Hlrs & Hcheck_exact).
-  destruct (CP.cc_states flag is_local u e T cc ccw code_deps b Hlocal Hfrag
-              Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals Hccc
+  destruct (CP.cc_states_used flag is_local u e T cc ccw code_deps b Hlocal
+              Hfrag Hdc Hrk Hwf Hexits Hcheck Hlrs Hcheck_exact Honce Hvals Hccc
               Hwid Hcid Hcd n s Hrun Hs)
     as (m & t & Hm & Hst & Halloc & Hvars & _ & _).
   destruct (return_rebuilt flag is_local u e T sets (state_vars s)
@@ -423,8 +431,8 @@ Proof.
   intros H. discriminate H.
 Qed.
 
-Lemma plain_return_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> code_result_type_end_to_end_with local fx.
+Lemma plain_return_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> code_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T b sets tenv canon valuation valuation' n s
     id i arg r type_var v Hprem Hres.
@@ -445,6 +453,12 @@ Proof.
   exact Hm.
 Qed.
 
+Lemma plain_return_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> code_result_type_end_to_end_with local fx.
+Proof.
+  intros Hfx. CP.used_instance (plain_return_used_gen local fx Hfx).
+Qed.
+
 Theorem code_result_type_end_to_end : code_result_type_end_to_end_statement.
 Proof. exact (plain_return_gen false all_fixes TP.all_fixes_sound). Qed.
 
@@ -460,8 +474,8 @@ Theorem code_result_type_end_to_end_local_landed :
   code_result_type_end_to_end_local_landed_statement.
 Proof. exact (plain_return_gen true landed_fixes TP.landed_fixes_sound). Qed.
 
-Lemma cc_return_type_gen (local : bool) (fx : fixes) :
-  TP.fixes_sound fx -> cc_code_result_type_end_to_end_with local fx.
+Lemma cc_return_type_used_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_code_result_type_end_to_end_used_with local fx.
 Proof.
   intros Hfx flag is_local u e T cannot_change b sets tenv canon valuation
     valuation' n s id i arg r type_var v Hprem Hccc Hwid Hres.
@@ -470,6 +484,12 @@ Proof.
   exact (cc_return_gen local fx flag is_local u e T _ ccw _ b sets tenv canon
            valuation valuation' n s id i arg r type_var v Hfx Hprem Hcl Hw Hc
            (fun _ _ => eq_refl) Hres).
+Qed.
+
+Lemma cc_return_type_gen (local : bool) (fx : fixes) :
+  TP.fixes_sound fx -> cc_code_result_type_end_to_end_with local fx.
+Proof.
+  intros Hfx. CP.used_instance (cc_return_type_used_gen local fx Hfx).
 Qed.
 
 Theorem cc_code_result_type_end_to_end :

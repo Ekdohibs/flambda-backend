@@ -151,7 +151,10 @@
    here in the fragment [loose] (closure types that are not aliases) in
    FlambdaReaperTypesLooseSpec.v, and with the wider check of static
    blocks of FlambdaReaperTypesUsedValuesSpec.v ([used_values] in place
-   of [unit_of_values]) in FlambdaReaperTypesCallsUsedSpec.v.
+   of [unit_of_values]) in FlambdaReaperTypesCallsUsedSpec.v, and of the
+   units with the primitives of the heap (all but those of the changes
+   of representation, whose simulation is of the flow fragment) in
+   FlambdaReaperTypesCallsHeapSpec.v.
 
    What is left out:
    - The states within a wrapper of both runs, for the third run.

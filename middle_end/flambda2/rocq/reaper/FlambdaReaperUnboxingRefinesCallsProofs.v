@@ -10434,17 +10434,14 @@ Proof.
   exact (proj1 (calls_in_over _ _ _ _ _ _ _ nr) e [] [] H1).
 Qed.
 
-(* The statement of the fix, for the fragment of
-   FlambdaReaperUnboxingRefinesNeverSpec.v, where the flow of the first run
-   is as [reach] says, it over-applies only code of [ovr], and what is left
-   of an over-application calls only code of [rem]; for any rewriting of
-   what the parameters kept state, the same for the two rebuilds, that
-   states nothing of a node with no use and whose table is that of the
-   unit, each continuation bound once
-   (FlambdaReaperRebuildProofs.conts_table_ok). With the primitives of the
-   heap if [hb]: the two runs make the same primitives of the heap on the
-   same values, and their heaps are one. *)
-Lemma rebuild_unbox_modes_with_refines_cc_never_gen (hb : bool)
+(* The two rebuilt terms of the fragment of
+   FlambdaReaperUnboxingRefinesNeverSpec.v are related by [uc], for some
+   parameters that the second run may give anything ([dead], none with a
+   use), for any rewriting of what the parameters kept state, the same for
+   the two rebuilds, that states nothing of a node with no use and whose
+   table is that of the unit, each continuation bound once. With the
+   primitives of the heap if [hb]. *)
+Lemma rebuild_unbox_modes_uc_gen (hb : bool)
     (types : subkinds_rewriting)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
@@ -10464,34 +10461,28 @@ Lemma rebuild_unbox_modes_with_refines_cc_never_gen (hb : bool)
     (unit_code_deps flag u e) dominated to_unbox reach ovr rem e
   = true ->
   check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
-  flow_run (fun b f id => reach b f id = true)
-    (State
-       (rebuild_unit_cc_with types (traverse_unit flag u e)
-          (solution_of_tables T) (fun n => mem_node n cannot_change)
-          (unit_code_deps flag u e) pdc e)
-       [] [] empty_static_env empty_heap no_reads) ->
-  over_run (fun id => ovr id = true)
-    (State
-       (rebuild_unit_cc_with types (traverse_unit flag u e)
-          (solution_of_tables T) (fun n => mem_node n cannot_change)
-          (unit_code_deps flag u e) pdc e)
-       [] [] empty_static_env empty_heap no_reads) ->
-  rem_run (fun id => rem id = true)
-    (State
-       (rebuild_unit_cc_with types (traverse_unit flag u e)
-          (solution_of_tables T) (fun n => mem_node n cannot_change)
-          (unit_code_deps flag u e) pdc e)
-       [] [] empty_static_env empty_heap no_reads) ->
-  program_refines
-    (rebuild_unit_cc_with types (traverse_unit flag u e)
-       (solution_of_tables T) (fun n => mem_node n cannot_change)
-       (unit_code_deps flag u e) pdc e)
-    (rebuild_unit_unbox_repr_mode_with types true (fun _ => false)
-       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
-       dominated to_unbox [] pdc e).
+  ∃ (dead : list variable) (CS : code_id -> option code_shape)
+    (NR : code_id -> bool),
+    (∀ z : variable,
+       among z dead = true ->
+       s_has_usage (solution_of_tables T) (Node_variable z) = false)
+    ∧ distinct
+        (field_variables
+           (fst (unit_unboxed_fields (traverse_unit flag u e) T dominated
+                   to_unbox e)))
+      = true
+    ∧ uc (fst (unit_unboxed_fields (traverse_unit flag u e) T dominated
+                 to_unbox e))
+        dead CS NR (fun b f id => reach b f id = true)
+        (fun id => ovr id = true) (fun id => rem id = true) []
+        (rebuild_unit_cc_with types (traverse_unit flag u e)
+           (solution_of_tables T) (fun n => mem_node n cannot_change)
+           (unit_code_deps flag u e) pdc e)
+        (rebuild_unit_unbox_repr_mode_with types true (fun _ => false)
+           (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+           dominated to_unbox [] pdc e).
 Proof.
-  intros Hunused Htable Hslots Hfragment Hclosed Hcalls Hcheck Hflow Hover
-    Hrem.
+  intros Hunused Htable Hslots Hfragment Hclosed Hcalls Hcheck.
   assert (Htabled : ∀ t : subkinds_types, types = Some t ->
             ∀ (k : continuation) (params : list (node * param_subkind)),
               (k, params) ∈ handlers_params e ->
@@ -10510,8 +10501,7 @@ Proof.
                 (FlambdaNameAbstractionSpec.fresh_name (names_of e)))
     as Hnext.
   cbv zeta in Hnext. destruct Hnext as (Hnext & _ & _).
-  unfold rebuild_unit_unbox_repr_mode_with, rebuild_unit_cc_with
-    in Hflow, Hover, Hrem |- *.
+  unfold rebuild_unit_unbox_repr_mode_with, rebuild_unit_cc_with.
   destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
     eqn:Hunboxed.
   cbn [fst] in Hcalls, Huses, Hdistinct, Hfresh.
@@ -10685,8 +10675,74 @@ Proof.
       split; intros ->; lia.
     + exact Htabled.
   - exact Hedges.
-  - exact (uc_refines_flow unboxed Hdistinct dead _ _ _ _ _ _ _ Huc Hflow
-             Hover Hrem).
+  - exists dead. do 2 eexists.
+    split; [ exact Hdead | split; [ exact Hdistinct | exact Huc ] ].
+Qed.
+
+(* The statement of the fix, for the fragment of
+   FlambdaReaperUnboxingRefinesNeverSpec.v, where the flow of the first run
+   is as [reach] says, it over-applies only code of [ovr], and what is left
+   of an over-application calls only code of [rem]; for any rewriting of
+   what the parameters kept state, the same for the two rebuilds, that
+   states nothing of a node with no use and whose table is that of the
+   unit, each continuation bound once
+   (FlambdaReaperRebuildProofs.conts_table_ok). With the primitives of the
+   heap if [hb]: the two runs make the same primitives of the heap on the
+   same values, and their heaps are one. *)
+Lemma rebuild_unbox_modes_with_refines_cc_never_gen (hb : bool)
+    (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (dominated : list (node * node)) (to_unbox : list node) (pdc : bool)
+    (nr : code_id -> bool) (reach : bool -> variable -> code_id -> bool)
+    (ovr rem : code_id -> bool) :
+  (∀ t : subkinds_types, types = Some t ->
+   ∀ (n : node) (ps : param_subkind) (S : static_env) (v : value),
+     s_has_usage (solution_of_tables T) n = false ->
+     value_at S (st_rewrite t n ps) v = true) ->
+  conts_table_ok types e ->
+  is_local_slots_only is_local ->
+  flow_fragment hb (unit_codes e) (static_names symbols_of_binding e) e
+  && distinct (static_names code_ids_of_binding e) = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  calls_unboxing_reach_never_nr nr (traverse_unit flag u e) T cannot_change
+    (unit_code_deps flag u e) dominated to_unbox reach ovr rem e
+  = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  flow_run (fun b f id => reach b f id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  over_run (fun id => ovr id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  rem_run (fun id => rem id = true)
+    (State
+       (rebuild_unit_cc_with types (traverse_unit flag u e)
+          (solution_of_tables T) (fun n => mem_node n cannot_change)
+          (unit_code_deps flag u e) pdc e)
+       [] [] empty_static_env empty_heap no_reads) ->
+  program_refines
+    (rebuild_unit_cc_with types (traverse_unit flag u e)
+       (solution_of_tables T) (fun n => mem_node n cannot_change)
+       (unit_code_deps flag u e) pdc e)
+    (rebuild_unit_unbox_repr_mode_with types true (fun _ => false)
+       (traverse_unit flag u e) T cannot_change (unit_code_deps flag u e)
+       dominated to_unbox [] pdc e).
+Proof.
+  intros Hunused Htable Hslots Hfragment Hclosed Hcalls Hcheck Hflow Hover
+    Hrem.
+  destruct (rebuild_unbox_modes_uc_gen hb types flag is_local u e T
+              cannot_change dominated to_unbox pdc nr reach ovr rem Hunused
+              Htable Hslots Hfragment Hclosed Hcalls Hcheck)
+    as (dead & CS & NR & _ & Hdistinct & Huc).
+  exact (uc_refines_flow _ Hdistinct dead _ _ _ _ _ _ _ Huc Hflow Hover
+           Hrem).
 Qed.
 
 Lemma rebuild_unbox_modes_with_refines_cc_never (types : subkinds_rewriting)
