@@ -20417,37 +20417,40 @@ Definition types_sound_all (G : graph) (sol : solution) (F : facts)
     types_sound G sol cds keep heap_prims F b ids ff exact sets_exact cc
       code_deps code_metadatas types located.
 
-Lemma rebuild_with_refines_checked_local (hb ex : bool)
+(* With local fields, any solution closed under the rules, of which the
+   fix and the post-processing hold, given as propositions, and any first
+   fresh name [ff] that no continuation of the unit is. *)
+Lemma rebuild_with_refines_gen (hb ex : bool)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
-    (u : unit_interface) (e : expr) (T : tables)
-    (preserve_direct_calls : bool) (types : subkinds_rewriting) :
+    (u : unit_interface) (e : expr) (sol : solution)
+    (preserve_direct_calls : bool) (types : subkinds_rewriting)
+    (ff : positive) :
   is_local_slots_only is_local ->
   in_fragment hb e = true ->
   checked ex (unit_codes e) e = true ->
   calls_kinded [] e = true ->
   well_formed_unit u e = true ->
   exits_one_value u e = true ->
-  check_closed is_local (traverse_unit flag u e) T = true ->
-  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
-  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
-  types_sound_all (graph_of_facts (traverse_unit flag u e))
-    (solution_of_tables T) (traverse_unit flag u e) types ->
+  closed is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  local_reads_used is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  field_used_exact is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  among ff (continuations_of e) = false ->
+  types_sound_all (graph_of_facts (traverse_unit flag u e)) sol
+    (traverse_unit flag u e) types ->
   (∀ t : subkinds_types,
      types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   conts_table_ok types e ->
   (ex = false -> results_kinded [] [] e = true) ->
   refines_heap_with (exits_rel (if hb then True else False) ex)
     (State e [] [] empty_static_env empty_heap no_reads)
-    (State (rebuild_unit_with types (traverse_unit flag u e)
-              (solution_of_tables T) preserve_direct_calls e)
+    (State (rebuild_expr (traverse_unit flag u e) sol preserve_direct_calls
+              (static_names code_ids_bound e) ff types
+              FlambdaReaperRebuild.empty_env e)
        [] [] empty_static_env empty_heap no_reads).
 Proof.
-  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hc Hlrs Hexact Hfresh
     Htypes Htypes_deps0 Htypes_conts Hrk_ex.
   rename preserve_direct_calls into b.
-  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
-  pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
-    as Hexact.
   destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & Hcds_eq).
@@ -20458,17 +20461,10 @@ Proof.
     as Hscr.
   set (F := traverse_unit flag u e) in *.
   set (G := graph_of_facts F) in *.
-  set (sol := solution_of_tables T) in *.
   assert (Hclosed : code_closed e = true).
   { unfold well_formed_unit in Hwf.
     destruct (code_closed e); [ reflexivity | ].
     rewrite andb_false_r in Hwf. discriminate Hwf. }
-  assert (Hfresh : among (fresh_name (names_of e)) (continuations_of e)
-                   = false).
-  { apply not_true_iff_false. intros E. apply among_In in E.
-    pose proof (fresh_name_fresh (names_of e)) as Hff.
-    apply not_true_iff_false in Hff. apply Hff. apply among_In.
-    unfold names_of. apply in_or_app. right. exact E. }
   assert (Hagree0 : kinds_agree [] (env_conts FlambdaReaperRebuild.empty_env)
                       [] []).
   { intros k m Hl. discriminate Hl. }
@@ -20495,8 +20491,7 @@ Proof.
   assert (Hxagree0 : exn_agree (env_conts FlambdaReaperRebuild.empty_env)
                        []).
   { intros k. exact I. }
-  pose proof (proj1 (unit_codes_checked G ex (unit_codes e)
-                       (fresh_name (names_of e))) e None
+  pose proof (proj1 (unit_codes_checked G ex (unit_codes e) ff) e None
                 [] [] Hscr Hcf Hraises Hclosed Hkinded Hfresh)
     as Hcode_checks.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
@@ -20576,15 +20571,12 @@ Proof.
     by (intros id params mc ret exn md body Hex;
         exact (code_rets_of_unit u e Hwf (Hrk_ex Hex) id params mc ret exn md
                  body)).
-  unfold rebuild_unit_with.
   (* The rebuild where no code changes its calling convention. *)
   rewrite <- (rebuild_expr_cc_unchanged F sol (fun _ => true) [] b
                 (static_names code_ids_bound e) (bound_code_metadata e)
-                (fresh_name (names_of e)) types (fun _ _ => eq_refl)).
+                ff types (fun _ _ => eq_refl)).
   assert (Hslots_read : True -> local_reads_used is_local G sol)
-    by (intros _;
-        exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
-                 is_local _ _ Hlrs)).
+    by (intros _; exact Hlrs).
   eapply (unit_refines is_local G sol noted deps cds (unit_kept e)
             (unit_codes e) (static_names symbols_of_binding e) u
             (if hb then True else False) True F b);
@@ -20603,6 +20595,54 @@ Proof.
                                            (conj Hraises Hxagree0))
                                      Htab0)))
                                (fun r K H => rets_nil_any _ r K H)))))).
+Qed.
+
+(* The first fresh name of a unit is none of its continuations. *)
+Lemma fresh_name_not_continuation (e : expr) :
+  among (fresh_name (names_of e)) (continuations_of e) = false.
+Proof.
+  apply not_true_iff_false. intros E. apply among_In in E.
+  pose proof (fresh_name_fresh (names_of e)) as Hff.
+  apply not_true_iff_false in Hff. apply Hff. apply among_In.
+  unfold names_of. apply in_or_app. right. exact E.
+Qed.
+
+Lemma rebuild_with_refines_checked_local (hb ex : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (preserve_direct_calls : bool) (types : subkinds_rewriting) :
+  is_local_slots_only is_local ->
+  in_fragment hb e = true ->
+  checked ex (unit_codes e) e = true ->
+  calls_kinded [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  types_sound_all (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
+  conts_table_ok types e ->
+  (ex = false -> results_kinded [] [] e = true) ->
+  refines_heap_with (exits_rel (if hb then True else False) ex)
+    (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_unit_with types (traverse_unit flag u e)
+              (solution_of_tables T) preserve_direct_calls e)
+       [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+    Htypes Htypes_deps0 Htypes_conts Hrk_ex.
+  exact (rebuild_with_refines_gen hb ex flag is_local u e
+           (solution_of_tables T) preserve_direct_calls types
+           (fresh_name (names_of e)) Hlocal Hfrag Hcf Hkinded Hwf Hexits
+           (check_closed_sound is_local _ _ Hcheck)
+           (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+              is_local _ _ Hlrs)
+           (check_field_used_exact_sound is_local _ _ Hcheck_exact)
+           (fresh_name_not_continuation e) Htypes Htypes_deps0 Htypes_conts
+           Hrk_ex).
 Qed.
 
 Lemma rebuild_refines_checked_local (hb ex : bool)
@@ -20692,33 +20732,36 @@ Qed.
 
 (* The unit and its rebuild with changes of calling convention, for a
    table [code_deps] that agrees with the traversal where code changes
-   its calling convention, and a premise [sets_exact] of the closures:
-   the hypotheses of the section [Run] hold, so that the simulation
-   [related] relates the first states, whatever the allocations of the
-   locations, and answers each step of the first run that allocates as
-   they say. *)
-Lemma rebuild_cc_with_related_checked_local (hb ex : bool)
+   its calling convention, a premise [sets_exact] of the closures, any
+   solution closed under the rules, of which the fix of local fields and
+   the post-processing hold, given as propositions, and any first fresh
+   name [ff] that no continuation of the unit is: the hypotheses of the
+   section [Run] hold, so that the simulation [related] relates the first
+   states, whatever the allocations of the locations, and answers each
+   step of the first run that allocates as they say. *)
+Lemma rebuild_cc_with_related_gen (hb ex : bool)
     (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
-    (u : unit_interface) (e : expr) (T : tables)
+    (u : unit_interface) (e : expr) (sol : solution)
     (cannot_change cannot_change_witness : node -> bool)
     (code_deps : finite_map code_dep) (preserve_direct_calls : bool)
-    (types : subkinds_rewriting) (sets_exact : Prop) :
+    (types : subkinds_rewriting) (sets_exact : Prop) (ff : positive) :
   is_local_slots_only is_local ->
   in_fragment hb e = true ->
   checked ex (unit_codes e) e = true ->
   calls_kinded [] e = true ->
   well_formed_unit u e = true ->
   exits_one_value u e = true ->
-  check_closed is_local (traverse_unit flag u e) T = true ->
-  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
-  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
-  types_sound_all (graph_of_facts (traverse_unit flag u e))
-    (solution_of_tables T) (traverse_unit flag u e) types ->
+  closed is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  local_reads_used is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  field_used_exact is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  among ff (continuations_of e) = false ->
+  types_sound_all (graph_of_facts (traverse_unit flag u e)) sol
+    (traverse_unit flag u e) types ->
   (∀ t : subkinds_types,
      types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
   conts_table_ok types e ->
   results_kinded [] [] e = true ->
-  cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+  cc_closed (graph_of_facts (traverse_unit flag u e)) sol
     cannot_change_witness cannot_change ->
   (∀ (id : code_id) (a a' n y : node),
      cannot_change (Node_code_id id) = false ->
@@ -20726,10 +20769,8 @@ Lemma rebuild_cc_with_related_checked_local (hb ex : bool)
        (Field_call_witness Known_arity_code_pointer) n ->
      g_accessor (graph_of_facts (traverse_unit flag u e)) a'
        (Field_call_witness Known_arity_code_pointer) n ->
-     (s_any_source (solution_of_tables T) a' = true ->
-      s_any_source (solution_of_tables T) a = true)
-     ∧ (s_sources (solution_of_tables T) a' y = true ->
-        s_sources (solution_of_tables T) a y = true)) ->
+     (s_any_source sol a' = true -> s_any_source sol a = true)
+     ∧ (s_sources sol a' y = true -> s_sources sol a y = true)) ->
   (∀ (id id' : code_id) (w : node),
      cannot_change (Node_code_id id) = false ->
      g_constructor (graph_of_facts (traverse_unit flag u e)) w
@@ -20746,44 +20787,40 @@ Lemma rebuild_cc_with_related_checked_local (hb ex : bool)
   ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
     (cds : finite_map code_dep),
     (∀ L : location -> option node,
-       related (graph_of_facts (traverse_unit flag u e))
-         (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
-         (static_names symbols_of_binding e) u (if hb then True else False)
-         True (traverse_unit flag u e) preserve_direct_calls
-         (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+       related (graph_of_facts (traverse_unit flag u e)) sol noted deps cds
+         (unit_kept e) (unit_codes e) (static_names symbols_of_binding e) u
+         (if hb then True else False) True (traverse_unit flag u e)
+         preserve_direct_calls (static_names code_ids_bound e) ff ex
          sets_exact cannot_change code_deps (bound_code_metadata e) types L
          (State e [] [] empty_static_env empty_heap no_reads)
          (State
-            (rebuild_unit_cc_with types (traverse_unit flag u e)
-               (solution_of_tables T) cannot_change code_deps
-               preserve_direct_calls e)
+            (rebuild_expr_cc (traverse_unit flag u e) sol cannot_change
+               code_deps preserve_direct_calls (static_names code_ids_bound e)
+               (bound_code_metadata e) ff types FlambdaReaperRebuild.empty_env
+               e)
             [] [] empty_static_env empty_heap no_reads))
     ∧ ∀ (L : location -> option node) (i : nat) (s t : state),
         run i (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
         alloc_ok L s ->
-        related (graph_of_facts (traverse_unit flag u e))
-          (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
-          (static_names symbols_of_binding e) u (if hb then True else False)
-          True (traverse_unit flag u e) preserve_direct_calls
-          (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+        related (graph_of_facts (traverse_unit flag u e)) sol noted deps cds
+          (unit_kept e) (unit_codes e) (static_names symbols_of_binding e) u
+          (if hb then True else False) True (traverse_unit flag u e)
+          preserve_direct_calls (static_names code_ids_bound e) ff ex
           sets_exact cannot_change code_deps (bound_code_metadata e) types L
           s t ->
         answered_h (exits_rel (if hb then True else False) ex) measure
-          (related (graph_of_facts (traverse_unit flag u e))
-             (solution_of_tables T) noted deps cds (unit_kept e)
-             (unit_codes e) (static_names symbols_of_binding e) u
+          (related (graph_of_facts (traverse_unit flag u e)) sol noted deps
+             cds (unit_kept e) (unit_codes e)
+             (static_names symbols_of_binding e) u
              (if hb then True else False) True (traverse_unit flag u e)
-             preserve_direct_calls (static_names code_ids_bound e)
-             (fresh_name (names_of e)) ex sets_exact cannot_change code_deps
-             (bound_code_metadata e) types L)
+             preserve_direct_calls (static_names code_ids_bound e) ff ex
+             sets_exact cannot_change code_deps (bound_code_metadata e) types
+             L)
           s t.
 Proof.
-  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hc Hlrs Hexact Hfresh
     Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid' Hcid' Hcode_deps0 Hxe.
   rename preserve_direct_calls into b.
-  pose proof (check_closed_sound is_local _ _ Hcheck) as Hc.
-  pose proof (check_field_used_exact_sound is_local _ _ Hcheck_exact)
-    as Hexact.
   destruct (traverse_unit_keeps flag u e True hb Hfrag (or_introl I))
     as (noted & deps & cds & He & Hconsts & Himported & Hunit & Hdeps & Hnd
         & Hkeys & Hkeep_alive & Hcds_eq).
@@ -20794,17 +20831,10 @@ Proof.
     as Hscr.
   set (F := traverse_unit flag u e) in *.
   set (G := graph_of_facts F) in *.
-  set (sol := solution_of_tables T) in *.
   assert (Hclosed : code_closed e = true).
   { unfold well_formed_unit in Hwf.
     destruct (code_closed e); [ reflexivity | ].
     rewrite andb_false_r in Hwf. discriminate Hwf. }
-  assert (Hfresh : among (fresh_name (names_of e)) (continuations_of e)
-                   = false).
-  { apply not_true_iff_false. intros E. apply among_In in E.
-    pose proof (fresh_name_fresh (names_of e)) as Hff.
-    apply not_true_iff_false in Hff. apply Hff. apply among_In.
-    unfold names_of. apply in_or_app. right. exact E. }
   assert (Hagree0 : kinds_agree [] (env_conts FlambdaReaperRebuild.empty_env)
                       [] []).
   { intros k m Hl. discriminate Hl. }
@@ -20831,8 +20861,7 @@ Proof.
   assert (Hxagree0 : exn_agree (env_conts FlambdaReaperRebuild.empty_env)
                        []).
   { intros k. exact I. }
-  pose proof (proj1 (unit_codes_checked G ex (unit_codes e)
-                       (fresh_name (names_of e))) e None
+  pose proof (proj1 (unit_codes_checked G ex (unit_codes e) ff) e None
                 [] [] Hscr Hcf Hraises Hclosed Hkinded Hfresh)
     as Hcode_checks.
   (* What FlambdaReaperFlowProofs.flow_sound derives of the graph. *)
@@ -20922,11 +20951,8 @@ Proof.
     by (intros id c Hin _;
         exact (lookup_bound_code_metadata e id c (unit_codes_nodup hb e Hfrag)
                  Hin)).
-  unfold rebuild_unit_cc_with.
   assert (Hslots_read : True -> local_reads_used is_local G sol)
-    by (intros _;
-        exact (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
-                 is_local _ _ Hlrs)).
+    by (intros _; exact Hlrs).
   exists noted, deps, cds. split.
   - intros L.
     eapply (initial_related is_local G sol noted deps cds (unit_kept e)
@@ -20951,6 +20977,103 @@ Proof.
     intros Hse.
     exact (proj1 (run_exact G (unit_kept e) i _ s1
                     (initial_exact G (unit_kept e) e (Hxe Hse)) Hrun1)).
+Qed.
+
+(* The same for the tables passing the checks, and the first fresh name
+   of the unit. *)
+Lemma rebuild_cc_with_related_checked_local (hb ex : bool)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables)
+    (cannot_change cannot_change_witness : node -> bool)
+    (code_deps : finite_map code_dep) (preserve_direct_calls : bool)
+    (types : subkinds_rewriting) (sets_exact : Prop) :
+  is_local_slots_only is_local ->
+  in_fragment hb e = true ->
+  checked ex (unit_codes e) e = true ->
+  calls_kinded [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  check_closed is_local (traverse_unit flag u e) T = true ->
+  check_local_reads_used is_local (traverse_unit flag u e) T = true ->
+  check_field_used_exact is_local (traverse_unit flag u e) T = true ->
+  types_sound_all (graph_of_facts (traverse_unit flag u e))
+    (solution_of_tables T) (traverse_unit flag u e) types ->
+  (∀ t : subkinds_types,
+     types = Some t -> st_code_deps t = unit_code_deps flag u e) ->
+  conts_table_ok types e ->
+  results_kinded [] [] e = true ->
+  cc_closed (graph_of_facts (traverse_unit flag u e)) (solution_of_tables T)
+    cannot_change_witness cannot_change ->
+  (∀ (id : code_id) (a a' n y : node),
+     cannot_change (Node_code_id id) = false ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a
+       (Field_call_witness Known_arity_code_pointer) n ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a'
+       (Field_call_witness Known_arity_code_pointer) n ->
+     (s_any_source (solution_of_tables T) a' = true ->
+      s_any_source (solution_of_tables T) a = true)
+     ∧ (s_sources (solution_of_tables T) a' y = true ->
+        s_sources (solution_of_tables T) a y = true)) ->
+  (∀ (id id' : code_id) (w : node),
+     cannot_change (Node_code_id id) = false ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id) ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id') ->
+     id' = id) ->
+  (∀ id : code_id,
+     cannot_change (Node_code_id id) = false ->
+     lookup id code_deps = lookup id (unit_code_deps flag u e)) ->
+  (sets_exact ->
+   closures_exact (graph_of_facts (traverse_unit flag u e)) (unit_kept e)
+     e) ->
+  ∃ (noted : symbol -> Prop) (deps : closure_dep -> Prop)
+    (cds : finite_map code_dep),
+    (∀ L : location -> option node,
+       related (graph_of_facts (traverse_unit flag u e))
+         (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
+         (static_names symbols_of_binding e) u (if hb then True else False)
+         True (traverse_unit flag u e) preserve_direct_calls
+         (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+         sets_exact cannot_change code_deps (bound_code_metadata e) types L
+         (State e [] [] empty_static_env empty_heap no_reads)
+         (State
+            (rebuild_unit_cc_with types (traverse_unit flag u e)
+               (solution_of_tables T) cannot_change code_deps
+               preserve_direct_calls e)
+            [] [] empty_static_env empty_heap no_reads))
+    ∧ ∀ (L : location -> option node) (i : nat) (s t : state),
+        run i (State e [] [] empty_static_env empty_heap no_reads) = Step s ->
+        alloc_ok L s ->
+        related (graph_of_facts (traverse_unit flag u e))
+          (solution_of_tables T) noted deps cds (unit_kept e) (unit_codes e)
+          (static_names symbols_of_binding e) u (if hb then True else False)
+          True (traverse_unit flag u e) preserve_direct_calls
+          (static_names code_ids_bound e) (fresh_name (names_of e)) ex
+          sets_exact cannot_change code_deps (bound_code_metadata e) types L
+          s t ->
+        answered_h (exits_rel (if hb then True else False) ex) measure
+          (related (graph_of_facts (traverse_unit flag u e))
+             (solution_of_tables T) noted deps cds (unit_kept e)
+             (unit_codes e) (static_names symbols_of_binding e) u
+             (if hb then True else False) True (traverse_unit flag u e)
+             preserve_direct_calls (static_names code_ids_bound e)
+             (fresh_name (names_of e)) ex sets_exact cannot_change code_deps
+             (bound_code_metadata e) types L)
+          s t.
+Proof.
+  intros Hlocal Hfrag Hcf Hkinded Hwf Hexits Hcheck Hlrs Hcheck_exact
+    Htypes Htypes_deps0 Htypes_conts Hrk Hccc Hwid' Hcid' Hcode_deps0 Hxe.
+  exact (rebuild_cc_with_related_gen hb ex flag is_local u e
+           (solution_of_tables T) cannot_change cannot_change_witness
+           code_deps preserve_direct_calls types sets_exact
+           (fresh_name (names_of e)) Hlocal Hfrag Hcf Hkinded Hwf Hexits
+           (check_closed_sound is_local _ _ Hcheck)
+           (FlambdaReaperLocalFieldsProofs.check_local_reads_used_sound
+              is_local _ _ Hlrs)
+           (check_field_used_exact_sound is_local _ _ Hcheck_exact)
+           (fresh_name_not_continuation e) Htypes Htypes_deps0 Htypes_conts
+           Hrk Hccc Hwid' Hcid' Hcode_deps0 Hxe).
 Qed.
 
 (* The same for the rebuild with changes of calling convention, given

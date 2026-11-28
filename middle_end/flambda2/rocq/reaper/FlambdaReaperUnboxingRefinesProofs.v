@@ -5526,6 +5526,206 @@ End Rebuilds.
 Lemma uinv_empty : uinv empty_unbox_env.
 Proof. split; reflexivity. Qed.
 
+(* A solution [sol] apart from the tables [T]: it has what [T] has, and
+   the same of the variables, of their sources and of the usages; it may
+   have more usages of other nodes. *)
+Record coherent (T : tables) (sol : solution) : Prop := {
+  co_has_usage : ∀ n : node,
+    mem_node n (t_has_usage T) = true -> s_has_usage sol n = true;
+  co_any_usage : ∀ n : node,
+    mem_node n (t_any_usage T) = true -> s_any_usage sol n = true;
+  co_has_usage_var : ∀ x : variable,
+    s_has_usage sol (Node_variable x)
+    = mem_node (Node_variable x) (t_has_usage T);
+  co_any_usage_var : ∀ x : variable,
+    s_any_usage sol (Node_variable x)
+    = mem_node (Node_variable x) (t_any_usage T);
+  co_has_source : ∀ n : node,
+    s_has_source sol n = mem_node n (t_has_source T);
+  co_usages : ∀ n n' : node,
+    s_usages sol n n' = mem_pair n n' (t_usages T)
+}.
+
+Lemma coherent_tables (T : tables) : coherent T (solution_of_tables T).
+Proof. split; intros; first [ assumption | reflexivity ]. Qed.
+
+(* The rebuild with unboxing refines the plain rebuild, for a solution
+   [sol] apart from the tables [T] that the unboxed fields are read off
+   ([coherent]), the variables of the fields named from any first name
+   [n0] above every name of the unit, and any first fresh name [ff] of
+   the plain rebuild. *)
+Lemma rebuild_unbox_refines_rebuild_sol (types : subkinds_rewriting)
+    (flag : reaper_preserve_direct_calls) (is_local : field -> bool)
+    (u : unit_interface) (e : expr) (T : tables) (sol : solution)
+    (cannot_change : node -> bool) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node) (b : bool)
+    (ff n0 next : positive) (unboxed : list (node * unboxed_fields)) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  closed is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  coherent T sol ->
+  (fresh_name (names_of e) <= n0)%positive ->
+  unboxed_fields_of_names (traverse_unit flag u e) T
+    (bound_code_my_closures e) dominated to_unbox n0
+  = (unboxed, next) ->
+  FlambdaReaperUnboxingRefinesSpec.local_expr unboxed sol [] [] e = true ->
+  check_unboxed_reads (traverse_unit flag u e) T dominated to_unbox = true ->
+  program_refines
+    (rebuild_expr (traverse_unit flag u e) sol b
+       (static_names code_ids_bound e) ff types empty_env e)
+    (rebuild_expr_u false (traverse_unit flag u e) sol cannot_change
+       code_deps b (static_names code_ids_bound e) (bound_code_metadata e)
+       unboxed next [] types empty_unbox_env e).
+Proof.
+  intros Hslots Hfragment Hcl Hco Hn0 Hunboxed Hloc Hcheck.
+  set (F := traverse_unit flag u e) in *.
+  destruct (unboxed_fields_of_names_fresh F T (bound_code_my_closures e)
+              dominated to_unbox n0)
+    as (_ & Hnd & Hrange).
+  rewrite Hunboxed in Hnd, Hrange. cbn [fst snd] in Hnd, Hrange.
+  assert (Hdistinct : distinct (field_variables unboxed) = true)
+    by (apply distinct_NoDup, Hnd).
+  assert (Hfresh : ∀ z : variable,
+            z ∈ variables_of e -> among z (field_variables unboxed)
+                                  = false).
+  { intros z Hz. destruct (among z _) eqn:Hamong; [ | reflexivity ].
+    apply among_In in Hamong. destruct (Hrange z Hamong) as [Hle _].
+    assert (Hnames : z ∈ names_of e)
+      by (unfold names_of; apply in_or_app; left; exact Hz).
+    apply fold_max_le in Hnames. unfold fresh_name in Hn0. lia. }
+  pose proof (closure_free_reads_blocks flag u e
+                (proj1 (local_closure_free unboxed sol) e [] [] Hloc))
+    as Hreads.
+  apply (proj1 (strong_local unboxed sol) e [] [] Hloc) in Hfresh.
+  rename Hfresh into Hloc'.
+  destruct (FlambdaReaperFlowProofs.traverse_unit_facts flag u e True
+              Hfragment (or_introl I))
+    as (noted & deps & cds & Hedges & _).
+  assert (Hfields_read :
+    ∀ (x : variable) (fields : unboxed_fields) (f : field)
+      (v : unboxed_field),
+      fields_of unboxed x = Some fields -> (f, v) ∈ fields ->
+      ∃ w base : node,
+        g_accessor (graph_of_facts F) w f base
+        ∧ s_usages sol (Node_variable x) base = true
+        ∧ s_has_usage sol w = true).
+  { intros x fields f v Hx Hin. apply (fields_of_in unboxed) in Hx.
+    assert (Hx' : (Node_variable x, fields)
+                  ∈ fst (unboxed_fields_of_names F T (bound_code_my_closures e)
+                           dominated to_unbox n0))
+      by (rewrite Hunboxed; exact Hx).
+    destruct (unboxed_fields_of_names_in F T _ dominated to_unbox _ _ _
+                Hx')
+      as (a & next' & ->).
+    destruct (mk_unboxed_fields_in F T _ dominated to_unbox _ a _ next' f
+                _ Hin)
+      as (use & Huse).
+    destruct (get_fields_in F T _ f use Huse)
+      as (w & base & Hacc & Hbase & Hw).
+    rewrite (add_usages_none F T _ Hreads) in Hbase.
+    apply mem_node_In in Hbase.
+    destruct (get_direct_usages_in T _ _ Hbase) as [Hus _].
+    exists w, base. split; [ exact Hacc | split ].
+    - rewrite (co_usages _ _ Hco). exact Hus.
+    - destruct Hw as [Hw | Hw]; [ | exact (co_has_usage _ _ Hco _ Hw) ].
+      exact (has_usage_any _ _ _ Hcl _ (co_any_usage _ _ Hco _ Hw)). }
+  assert (Hreads_found :
+    ∀ (x y : variable) (kind : flambda_kind) (f : field)
+      (fields : unboxed_fields),
+      fields_of unboxed x = None -> fields_of unboxed y = Some fields ->
+      g_accessor (graph_of_facts F) (Node_variable x) f (Node_variable y) ->
+      is_dead_var sol x kind = false ->
+      is_var_used sol x kind = true ->
+      kind = Value ∨ (∃ nk : naked_number_kind, kind = Naked_number nk) ->
+      ∃ v : variable,
+        Keyed.lookup field_eqb f fields = Some (Not_unboxed v)).
+  { intros x y kind f fields Hx Hy Hacc Hdead Hused Hkind.
+    assert (Hsx : mem_node (Node_variable x) (t_has_source T) = true).
+    { unfold is_dead_var in Hdead. rewrite <- (co_has_source _ _ Hco).
+      destruct Hkind as [-> | (nk & ->)]; simpl in Hdead;
+        apply negb_false_iff in Hdead; exact Hdead. }
+    assert (Hsux : s_has_usage sol (Node_variable x) = true).
+    { unfold is_var_used in Hused.
+      destruct Hkind as [-> | (nk & ->)]; exact Hused. }
+    assert (Hux : mem_node (Node_variable x) (t_has_usage T) = true)
+      by (rewrite <- (co_has_usage_var _ _ Hco); exact Hsux).
+    assert (Hhx : has_to_be_unboxed dominated to_unbox (Node_variable x)
+                  = false).
+    { destruct (has_to_be_unboxed dominated to_unbox (Node_variable x))
+        eqn:Hh; [ | reflexivity ].
+      unfold has_to_be_unboxed in Hh.
+      apply existsb_exists in Hh as ([a x'] & Hin & Htest).
+      apply andb_true_iff in Htest as [Hx' Ha].
+      apply node_eqb_eq in Hx'. subst x'.
+      pose proof (unboxed_fields_of_names_bound F T
+                    (bound_code_my_closures e) dominated to_unbox n0 a
+                    (Node_variable x) Hin Ha)
+        as Hb.
+      rewrite Hunboxed in Hb. cbn [fst] in Hb. unfold fields_of in Hx.
+      exfalso.
+      exact (keyed_lookup_none_not_in node_eqb node_eqb_decides _ _ Hx
+               Hb). }
+    apply (fields_of_in unboxed) in Hy.
+    assert (Hy' : (Node_variable y, fields)
+                  ∈ fst (unboxed_fields_of_names F T
+                           (bound_code_my_closures e) dominated to_unbox n0))
+      by (rewrite Hunboxed; exact Hy).
+    destruct (unboxed_fields_of_names_dom F T _ dominated to_unbox _ _ _
+                Hy')
+      as (a & next' & Hdom & Ha & ->).
+    unfold check_unboxed_reads in Hcheck. rewrite forallb_forall in Hcheck.
+    specialize (Hcheck _ Hacc). cbn beta iota in Hcheck.
+    rewrite Hsx, Hux, Hhx in Hcheck. simpl in Hcheck.
+    rewrite forallb_forall in Hcheck. specialize (Hcheck _ Hdom).
+    cbn beta iota in Hcheck. rewrite node_eqb_refl, Ha in Hcheck.
+    simpl in Hcheck. apply andb_true_iff in Hcheck as [Hnau Hsrc].
+    apply negb_true_iff in Hnau.
+    assert (Hblock : is_block_like_field f = true).
+    { rewrite forallb_forall in Hreads. exact (Hreads _ Hacc). }
+    assert (Hfs : is_function_slot f = false)
+      by (destruct f; try discriminate Hblock; reflexivity).
+    assert (Hdata : is_data_field f = true)
+      by (destruct f; try discriminate Hblock; reflexivity).
+    assert (Hnau' : s_any_usage sol (Node_variable y) = false)
+      by (rewrite (co_any_usage_var _ _ Hco); exact Hnau).
+    assert (Hus : mem_pair (Node_variable y) (Node_variable y) (t_usages T)
+                  = true).
+    { rewrite <- (co_usages _ _ Hco).
+      exact (usages_accessor _ _ _ Hcl _ _ _ Hacc Hnau'). }
+    assert (Hhu : mem_node (Node_variable y) (t_has_usage T) = true).
+    { rewrite <- (co_has_usage_var _ _ Hco).
+      exact (has_usage_accessor _ _ _ Hcl _ _ _ Hsux Hacc). }
+    assert (Huses : mem_node (Node_variable y)
+                      (add_usages_through_function_slots F T
+                         (bound_code_my_closures e) true
+                         (get_direct_usages T [Node_variable y]))
+                    = true).
+    { rewrite (add_usages_none F T _ Hreads). apply mem_node_In.
+      apply get_direct_usages_self; assumption. }
+    destruct (get_fields_found F T _ _ _ _ Hacc Huses Hfs Hux)
+      as [Hex Hall].
+    apply (mk_unboxed_fields_lookup F T _ dominated to_unbox _ a f
+             Hdata).
+    - intros Hno. rewrite Hno in Hsrc. discriminate Hsrc.
+    - exact Hex.
+    - intros use Hin.
+      destruct (Hall use Hin) as [-> | (flow_to & -> & Hw)];
+        [ left; reflexivity | right ].
+      exists flow_to. split; [ reflexivity | ].
+      destruct (forallb _ flow_to) eqn:Hft; [ | reflexivity ].
+      rewrite forallb_forall in Hft. rewrite (Hft _ Hw) in Hhx.
+      discriminate Hhx. }
+  destruct (proj1 (rebuild_ub F sol cannot_change code_deps b
+                     (static_names code_ids_bound e) (bound_code_metadata e)
+                     unboxed ff next types noted deps cds (unit_kept e)
+                     (unit_codes e) (static_names symbols_of_binding e)
+                     is_local Hcl Hslots Hfields_read Hreads_found)
+              e empty_unbox_env [] (unit_conts u) uinv_empty
+              (Forall2_nil _) Hloc' Hedges)
+    as (Hub & _ & _).
+  exact (ub_refines unboxed Hdistinct _ _ Hub).
+Qed.
+
 (* The same for any [types], the same in both rebuilds: the rebuild with
    unboxing states of a parameter that it keeps and does not unbox what
    the plain rebuild states, and nothing of the fields of one that it
@@ -5547,148 +5747,24 @@ Lemma rebuild_unbox_with_refines_rebuild (types : subkinds_rewriting)
        code_deps dominated to_unbox preserve_direct_calls e).
 Proof.
   intros Hslots Hfragment Hclosed Hlocal Hcheck.
-  set (F := traverse_unit flag u e) in *.
   unfold local_unboxing in Hlocal.
-  pose proof (unit_unboxed_fields_fresh F T dominated to_unbox e)
-    as [Hdistinct Hfresh].
-  unfold rebuild_unit_unbox_with, rebuild_unit_unbox_repr_mode_with.
-  destruct (unit_unboxed_fields F T dominated to_unbox e) as [unboxed next]
-    eqn:Hunboxed.
-  cbn [fst] in Hlocal, Hdistinct, Hfresh.
-  rename Hlocal into Hloc.
-  pose proof (closure_free_reads_blocks flag u e
-                (proj1 (local_closure_free unboxed (solution_of_tables T))
-                   e [] [] Hloc))
-    as Hreads.
-  apply (proj1 (strong_local unboxed (solution_of_tables T)) e [] [] Hloc)
-    in Hfresh.
-  rename Hfresh into Hloc'.
+  unfold rebuild_unit_with, rebuild_unit_unbox_with,
+    rebuild_unit_unbox_repr_mode_with.
   assert (Hchanged :
-    unit_changed_representations (fun _ => false) F T dominated to_unbox [] e
+    unit_changed_representations (fun _ => false) (traverse_unit flag u e) T
+      dominated to_unbox [] e
     = []) by reflexivity.
   rewrite Hchanged.
-  pose proof (check_closed_sound is_local F T Hclosed) as Hcl.
-  destruct (FlambdaReaperFlowProofs.traverse_unit_facts flag u e True
-              Hfragment (or_introl I))
-    as (noted & deps & cds & Hedges & _).
-  assert (Hfields_read :
-    ∀ (x : variable) (fields : unboxed_fields) (f : field)
-      (v : unboxed_field),
-      fields_of unboxed x = Some fields -> (f, v) ∈ fields ->
-      ∃ w base : node,
-        g_accessor (graph_of_facts F) w f base
-        ∧ s_usages (solution_of_tables T) (Node_variable x) base = true
-        ∧ s_has_usage (solution_of_tables T) w = true).
-  { intros x fields f v Hx Hin. apply (fields_of_in unboxed) in Hx.
-    unfold unit_unboxed_fields in Hunboxed.
-    assert (Hx' : (Node_variable x, fields)
-                  ∈ fst (unboxed_fields_of_names F T (bound_code_my_closures e)
-                           dominated to_unbox (fresh_name (names_of e))))
-      by (rewrite Hunboxed; exact Hx).
-    destruct (unboxed_fields_of_names_in F T _ dominated to_unbox _ _ _ Hx')
-      as (a & next' & ->).
-    destruct (mk_unboxed_fields_in F T _ dominated to_unbox _ a _ next' f _
-                Hin)
-      as (use & Huse).
-    destruct (get_fields_in F T _ f use Huse)
-      as (w & base & Hacc & Hbase & Hw).
-    rewrite (add_usages_none F T _ Hreads) in Hbase.
-    apply mem_node_In in Hbase.
-    destruct (get_direct_usages_in T _ _ Hbase) as [Hus _].
-    exists w, base. split; [ exact Hacc | split; [ exact Hus | ] ].
-    destruct Hw as [Hw | Hw]; [ | exact Hw ].
-    exact (has_usage_any _ _ _ Hcl _ Hw). }
-  assert (Hreads_found :
-    ∀ (x y : variable) (kind : flambda_kind) (f : field)
-      (fields : unboxed_fields),
-      fields_of unboxed x = None -> fields_of unboxed y = Some fields ->
-      g_accessor (graph_of_facts F) (Node_variable x) f (Node_variable y) ->
-      is_dead_var (solution_of_tables T) x kind = false ->
-      is_var_used (solution_of_tables T) x kind = true ->
-      kind = Value ∨ (∃ nk : naked_number_kind, kind = Naked_number nk) ->
-      ∃ v : variable,
-        Keyed.lookup field_eqb f fields = Some (Not_unboxed v)).
-  { intros x y kind f fields Hx Hy Hacc Hdead Hused Hkind.
-    assert (Hsx : mem_node (Node_variable x) (t_has_source T) = true).
-    { unfold is_dead_var in Hdead.
-      destruct Hkind as [-> | (nk & ->)]; simpl in Hdead;
-        apply negb_false_iff in Hdead; exact Hdead. }
-    assert (Hux : mem_node (Node_variable x) (t_has_usage T) = true).
-    { unfold is_var_used in Hused.
-      destruct Hkind as [-> | (nk & ->)]; exact Hused. }
-    unfold unit_unboxed_fields in Hunboxed.
-    assert (Hhx : has_to_be_unboxed dominated to_unbox (Node_variable x)
-                  = false).
-    { destruct (has_to_be_unboxed dominated to_unbox (Node_variable x))
-        eqn:Hh; [ | reflexivity ].
-      unfold has_to_be_unboxed in Hh.
-      apply existsb_exists in Hh as ([a x'] & Hin & Htest).
-      apply andb_true_iff in Htest as [Hx' Ha].
-      apply node_eqb_eq in Hx'. subst x'.
-      pose proof (unboxed_fields_of_names_bound F T
-                    (bound_code_my_closures e) dominated to_unbox
-                    (fresh_name (names_of e)) a (Node_variable x) Hin Ha)
-        as Hb.
-      rewrite Hunboxed in Hb. cbn [fst] in Hb. unfold fields_of in Hx.
-      exfalso.
-      exact (keyed_lookup_none_not_in node_eqb node_eqb_decides _ _ Hx Hb). }
-    apply (fields_of_in unboxed) in Hy.
-    assert (Hy' : (Node_variable y, fields)
-                  ∈ fst (unboxed_fields_of_names F T
-                           (bound_code_my_closures e) dominated to_unbox
-                           (fresh_name (names_of e))))
-      by (rewrite Hunboxed; exact Hy).
-    destruct (unboxed_fields_of_names_dom F T _ dominated to_unbox _ _ _ Hy')
-      as (a & next' & Hdom & Ha & ->).
-    unfold check_unboxed_reads in Hcheck. rewrite forallb_forall in Hcheck.
-    specialize (Hcheck _ Hacc). cbn beta iota in Hcheck.
-    rewrite Hsx, Hux, Hhx in Hcheck. simpl in Hcheck.
-    rewrite forallb_forall in Hcheck. specialize (Hcheck _ Hdom).
-    cbn beta iota in Hcheck. rewrite node_eqb_refl, Ha in Hcheck.
-    simpl in Hcheck. apply andb_true_iff in Hcheck as [Hnau Hsrc].
-    apply negb_true_iff in Hnau.
-    assert (Hblock : is_block_like_field f = true).
-    { rewrite forallb_forall in Hreads. exact (Hreads _ Hacc). }
-    assert (Hfs : is_function_slot f = false)
-      by (destruct f; try discriminate Hblock; reflexivity).
-    assert (Hdata : is_data_field f = true)
-      by (destruct f; try discriminate Hblock; reflexivity).
-    assert (Hus : mem_pair (Node_variable y) (Node_variable y) (t_usages T)
-                  = true)
-      by exact (usages_accessor _ _ _ Hcl _ _ _ Hacc Hnau).
-    assert (Hhu : mem_node (Node_variable y) (t_has_usage T) = true)
-      by exact (has_usage_accessor _ _ _ Hcl _ _ _ Hux Hacc).
-    assert (Huses : mem_node (Node_variable y)
-                      (add_usages_through_function_slots F T
-                         (bound_code_my_closures e) true
-                         (get_direct_usages T [Node_variable y]))
-                    = true).
-    { rewrite (add_usages_none F T _ Hreads). apply mem_node_In.
-      apply get_direct_usages_self; assumption. }
-    destruct (get_fields_found F T _ _ _ _ Hacc Huses Hfs Hux)
-      as [Hex Hall].
-    apply (mk_unboxed_fields_lookup F T _ dominated to_unbox _ a f Hdata).
-    - intros Hno. rewrite Hno in Hsrc. discriminate Hsrc.
-    - exact Hex.
-    - intros use Hin.
-      destruct (Hall use Hin) as [-> | (flow_to & -> & Hw)];
-        [ left; reflexivity | right ].
-      exists flow_to. split; [ reflexivity | ].
-      destruct (forallb _ flow_to) eqn:Hft; [ | reflexivity ].
-      rewrite forallb_forall in Hft. rewrite (Hft _ Hw) in Hhx.
-      discriminate Hhx. }
-  destruct (proj1 (rebuild_ub F (solution_of_tables T)
-                     (fun n => mem_node n cannot_change) code_deps
-                     preserve_direct_calls (static_names code_ids_bound e)
-                     (bound_code_metadata e) unboxed
-                     (fresh_name (names_of e)) next types noted deps cds
-                     (unit_kept e) (unit_codes e)
-                     (static_names symbols_of_binding e) is_local Hcl Hslots
-                     Hfields_read Hreads_found)
-              e empty_unbox_env [] (unit_conts u) uinv_empty (Forall2_nil _)
-              Hloc' Hedges)
-    as (Hub & _ & _).
-  exact (ub_refines unboxed Hdistinct _ _ Hub).
+  destruct (unit_unboxed_fields (traverse_unit flag u e) T dominated to_unbox
+              e)
+    as [unboxed next] eqn:Hunboxed.
+  cbn [fst] in Hlocal.
+  exact (rebuild_unbox_refines_rebuild_sol types flag is_local u e T
+           (solution_of_tables T) (fun n => mem_node n cannot_change)
+           code_deps dominated to_unbox preserve_direct_calls
+           (fresh_name (names_of e)) (fresh_name (names_of e)) next unboxed
+           Hslots Hfragment (check_closed_sound is_local _ T Hclosed)
+           (coherent_tables T) (Pos.le_refl _) Hunboxed Hlocal Hcheck).
 Qed.
 
 Theorem rebuild_unbox_refines_rebuild :

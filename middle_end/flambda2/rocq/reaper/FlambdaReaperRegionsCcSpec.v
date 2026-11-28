@@ -32,8 +32,8 @@
    This file is to be reviewed: the fragment [regions_cc_plain], the
    example and the statements. FlambdaReaperRegionsCcProofs.v proves them,
    with the lemmas of FlambdaReaperRegionsCcRebuildProofs.v (the
-   commutation), FlambdaReaperRegionsCcBaseProofs.v (the refinement of the
-   rebuild for any first fresh name) and
+   commutation), FlambdaReaperRebuildProofs.rebuild_cc_with_related_gen
+   (the refinement of the rebuild for any first fresh name) and
    FlambdaReaperRegionsKeepsProofs.v (what the rebuild keeps), which need
    no review.
 

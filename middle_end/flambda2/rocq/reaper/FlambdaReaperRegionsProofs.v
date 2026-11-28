@@ -40,13 +40,13 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaReaperLocalFieldsSpec FlambdaRegionsSpec FlambdaRegionsErasureSpec
   FlambdaRegionsCheckSpec FlambdaRegionsCheckSoundSpec
   FlambdaReaperRegionsSpec FlambdaReaperRegionsRebuildProofs
-  FlambdaReaperRegionsTraverseProofs FlambdaReaperRegionsBaseProofs.
+  FlambdaReaperRegionsTraverseProofs.
 From OxCamlFlambda2 Require FlambdaSemanticsProofs
   FlambdaReaperSolutionProofs FlambdaReaperLeastProofs FlambdaReaperFlowProofs
   FlambdaReaperLocalFieldsProofs FlambdaRegionsErasureProofs
   FlambdaRegionsCheckSoundProofs FlambdaNameAbstractionProofs
   FlambdaRegionsCallsProofs FlambdaRegionsCheckProofs
-  FlambdaReaperRegionsKeepsProofs.
+  FlambdaReaperRegionsKeepsProofs FlambdaReaperRebuildProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -670,6 +670,47 @@ Proof.
     + right. left. exists fuel, fault. exact Hf.
     + left. exists fuel, vs, rs, us, us'. repeat split; assumption.
   - intros fuel' fault Hf. apply H3. exact (Hsafe fuel' fault Hf).
+Qed.
+
+(* The refinement up to observation of the plain rebuild, for any
+   solution closed under the rules, of which the fix of local fields and
+   the post-processing hold, given as propositions, and any first fresh
+   name that no continuation of the unit is
+   (FlambdaReaperRebuildProofs.rebuild_with_refines_gen). *)
+Lemma rebuild_refines_observably_gen (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr)
+    (sol : solution) (b : bool) (ff : positive) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  any_kind_arguments e = true ->
+  results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  closed is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  local_reads_used is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  field_used_exact is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  among ff (continuations_of e) = false ->
+  refines_observably (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_expr (traverse_unit flag u e) sol b
+              (static_names code_ids_bound e) ff None
+              FlambdaReaperRebuild.empty_env e)
+       [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hc Hlrs Hexact Hfresh.
+  assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
+  { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
+             [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  pose proof (proj1 (FlambdaReaperRebuildProofs.any_kind_arguments_checked
+                       (unit_codes e)) e Hdc) as Hcf.
+  exact (proj1 (FlambdaReaperRebuildProofs.exits_rel_flow false _ _
+                  (FlambdaReaperRebuildProofs.rebuild_with_refines_gen false
+                     false flag is_local u e sol b None ff Hlocal Hfrag Hcf
+                     Hkinded Hwf Hexits Hc Hlrs Hexact Hfresh
+                     (fun _ _ _ _ _ _ _ _ _ _ _ _ => I)
+                     (FlambdaReaperRebuildProofs.no_types_deps _)
+                     (FlambdaReaperRebuildProofs.no_types_conts e)
+                     (fun _ => Hrk)))).
 Qed.
 
 Theorem least_rebuild_regions_refines :

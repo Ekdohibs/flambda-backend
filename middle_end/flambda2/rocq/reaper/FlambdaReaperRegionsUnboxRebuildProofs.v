@@ -312,10 +312,10 @@ Hypothesis Hleaves : ∀ (n : node) (fields : unboxed_fields),
   (n, fields) ∈ ub -> forallb kind_not_region (map snd (fields_leaves fields))
                       = true.
 
-Lemma handler_decisions_plain (s0 : solution) (is_exn : bool)
+Lemma handler_decisions_plain (fx : bool) (s0 : solution) (is_exn : bool)
     (h : continuation_handler) :
   forallb kind_not_region (handler_kinds h) = true ->
-  forallb decision_plain (handler_decisions false s0 ub is_exn h) = true.
+  forallb decision_plain (handler_decisions fx s0 ub is_exn h) = true.
 Proof.
   destruct h as [params md hbody]. cbn [handler_kinds handler_decisions].
   intros Hk. pose proof (with_kinds_plain params _ Hk) as Hb.
@@ -330,8 +330,9 @@ Proof.
     apply (Hleaves (Node_variable x)).
     exact (keyed_lookup_in node_eqb
              FlambdaReaperUnboxingRefinesProofs.node_eqb_decides _ _ _ Hu).
-  - cbn [andb]. destruct keep; unfold decision_plain; cbn;
-      rewrite ?Hkind; reflexivity.
+  - destruct (fx && keep && negb (is_var_used s0 x kind));
+      [ unfold decision_plain; cbn; rewrite Hkind; reflexivity | ].
+    destruct keep; unfold decision_plain; cbn; rewrite ?Hkind; reflexivity.
 Qed.
 
 End Decisions.
@@ -364,12 +365,13 @@ Lemma hfu_u :
   = s_field_used (solution_without_unboxed sol ub).
 Proof. exact Hfu. Qed.
 
-Lemma handler_decisions_eq (is_exn : bool) (h : continuation_handler) :
-  handler_decisions false sol' ub is_exn h
-  = handler_decisions false sol ub is_exn h.
+Lemma handler_decisions_eq (fx is_exn : bool) (h : continuation_handler) :
+  handler_decisions fx sol' ub is_exn h
+  = handler_decisions fx sol ub is_exn h.
 Proof.
   destruct h as [params md hbody]. cbn [handler_decisions].
-  rewrite (params_to_keep_eq sol sol' Hu). reflexivity.
+  rewrite (params_to_keep_eq sol sol' Hu). apply map_ext.
+  intros [[x kind] keep]. rewrite (var_used_eq sol sol' Hu). reflexivity.
 Qed.
 
 Section Env.
@@ -507,14 +509,15 @@ End Parts.
 
 Section Unfold.
 
+Variable fx : bool.
 Variables (F0 : facts) (s0 : solution) (cc0 : node -> bool)
   (cds0 : finite_map code_dep) (b0 : bool) (u0 : list code_id)
   (c0 : finite_map code_metadata) (ub0 : list (node * unboxed_fields))
   (n0 : positive).
 
-Abbreviation RU0 := (rebuild_expr_u false F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 []
+Abbreviation RU0 := (rebuild_expr_u fx F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 []
                        None).
-Abbreviation RH0 := (rebuild_handler_u false F0 s0 cc0 cds0 b0 u0 c0 ub0 n0
+Abbreviation RH0 := (rebuild_handler_u fx F0 s0 cc0 cds0 b0 u0 c0 ub0 n0
                        [] None).
 
 Lemma ru_let_other (en : unbox_env) (x : variable) (kind : flambda_kind)
@@ -542,7 +545,7 @@ Lemma ru_let_static (en : unbox_env) (bindings : list static_binding)
     (body : expr) :
   RU0 en (Let_static bindings body)
   = Let_static
-      (flat_map (rebuild_binding_u false F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 []
+      (flat_map (rebuild_binding_u fx F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 []
                    None en) bindings)
       (RU0 (ubind_variables en []) body).
 Proof. reflexivity. Qed.
@@ -553,20 +556,20 @@ Lemma ru_let_cont (en : unbox_env) (k : continuation)
   = if among k
          (free_continuations_of_expr
             (RU0 (ubind_continuations en
-                    [(k, handler_decisions false s0 ub0
+                    [(k, handler_decisions fx s0 ub0
                            (handler_is_exn_handler h) h)])
                body))
     then
       Let_cont_non_recursive k
         (RH0 en true
-           (handler_decisions false s0 ub0 (handler_is_exn_handler h) h) h)
+           (handler_decisions fx s0 ub0 (handler_is_exn_handler h) h) h)
         (RU0 (ubind_continuations en
-                [(k, handler_decisions false s0 ub0
+                [(k, handler_decisions fx s0 ub0
                        (handler_is_exn_handler h) h)])
            body)
     else
       RU0 (ubind_continuations en
-             [(k, handler_decisions false s0 ub0
+             [(k, handler_decisions fx s0 ub0
                     (handler_is_exn_handler h) h)])
         body.
 Proof. reflexivity. Qed.
@@ -579,12 +582,12 @@ Lemma ru_let_cont_rec (en : unbox_env)
          (fun '(k, h) =>
             (k, RH0 (ubind_continuations en
                        (map (fun '(k, h) =>
-                               (k, handler_decisions false s0 ub0 false h))
+                               (k, handler_decisions fx s0 ub0 false h))
                           handlers))
-                  false (handler_decisions false s0 ub0 false h) h))
+                  false (handler_decisions fx s0 ub0 false h) h))
          handlers)
       (RU0 (ubind_continuations en
-              (map (fun '(k, h) => (k, handler_decisions false s0 ub0 false h))
+              (map (fun '(k, h) => (k, handler_decisions fx s0 ub0 false h))
                  handlers))
          body).
 Proof. reflexivity. Qed.
@@ -632,12 +635,12 @@ Proof.
     first [ exact Hr | right; exact Hr ].
 Qed.
 
-Lemma handler_decisions_erase (s0 : solution)
+Lemma handler_decisions_erase (fx : bool) (s0 : solution)
     (ub : list (node * unboxed_fields)) (is_exn : bool)
     (h : continuation_handler) (c : region_conts) :
   forallb kind_not_region (handler_kinds h) = true ->
-  handler_decisions false s0 ub is_exn (erase_handler c h)
-  = handler_decisions false s0 ub is_exn h.
+  handler_decisions fx s0 ub is_exn (erase_handler c h)
+  = handler_decisions fx s0 ub is_exn h.
 Proof.
   destruct h as [params md hbody]. intros H. cbn [handler_kinds] in H.
   rewrite (erase_handler_no_region c params md hbody H). reflexivity.
@@ -685,7 +688,7 @@ Qed.
 
 (* The places of the regions of a handler that the rebuild with unboxing
    makes. *)
-Lemma rebuilt_u_handler_places (F0 : facts) (s0 : solution)
+Lemma rebuilt_u_handler_places (fx : bool) (F0 : facts) (s0 : solution)
     (cc0 : node -> bool) (cds0 : finite_map code_dep) (b0 : bool)
     (u0 : list code_id) (c0 : finite_map code_metadata)
     (ub0 : list (node * unboxed_fields)) (n0 : positive) (en : unbox_env)
@@ -694,7 +697,7 @@ Lemma rebuilt_u_handler_places (F0 : facts) (s0 : solution)
   forallb decision_plain ds = true ->
   forallb negb
     (region_params
-       (rebuild_handler_u false F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 [] None en dc
+       (rebuild_handler_u fx F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 [] None en dc
           ds h))
   = true.
 Proof.
@@ -705,7 +708,7 @@ Proof.
   apply with_kinds_plain. exact Hk.
 Qed.
 
-Lemma rebuilt_u_handler_plain (F0 : facts) (s0 : solution)
+Lemma rebuilt_u_handler_plain (fx : bool) (F0 : facts) (s0 : solution)
     (cc0 : node -> bool) (cds0 : finite_map code_dep) (b0 : bool)
     (u0 : list code_id) (c0 : finite_map code_metadata)
     (ub0 : list (node * unboxed_fields)) (n0 : positive) (en : unbox_env)
@@ -714,7 +717,7 @@ Lemma rebuilt_u_handler_plain (F0 : facts) (s0 : solution)
   forallb decision_plain ds = true ->
   forallb kind_not_region
     (handler_kinds
-       (rebuild_handler_u false F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 [] None en dc
+       (rebuild_handler_u fx F0 s0 cc0 cds0 b0 u0 c0 ub0 n0 [] None en dc
           ds h))
   = true.
 Proof.
@@ -736,6 +739,7 @@ Section Commute.
    the rebuild of a term with no closure, call or code reads none of the
    facts, code ids or metadata, and the solutions differ by the usages of
    the constants at most. *)
+Variable fx : bool.
 Variables F F' : facts.
 Variables sol sol' : solution.
 Variable cc : node -> bool.
@@ -755,13 +759,13 @@ Hypothesis Hleaves : ∀ (n : node) (fields : unboxed_fields),
   (n, fields) ∈ ub -> forallb kind_not_region (map snd (fields_leaves fields))
                       = true.
 
-Abbreviation RU := (rebuild_expr_u false F sol cc cds b ucids codes ub next []
+Abbreviation RU := (rebuild_expr_u fx F sol cc cds b ucids codes ub next []
                       None).
-Abbreviation RU' := (rebuild_expr_u false F' sol' cc cds b ucids' codes' ub
+Abbreviation RU' := (rebuild_expr_u fx F' sol' cc cds b ucids' codes' ub
                        next [] None).
-Abbreviation RH := (rebuild_handler_u false F sol cc cds b ucids codes ub next
+Abbreviation RH := (rebuild_handler_u fx F sol cc cds b ucids codes ub next
                       [] None).
-Abbreviation RH' := (rebuild_handler_u false F' sol' cc cds b ucids' codes' ub
+Abbreviation RH' := (rebuild_handler_u fx F' sol' cc cds b ucids' codes' ub
                        next [] None).
 
 (* The variables of the regions are not unboxed. *)
@@ -791,7 +795,7 @@ Proof.
     cbn [closure_free] in Hcf. apply andb_true_iff in Hcf as [Hcd Hcb].
     assert (Hset : named_is_set d = false)
       by (destruct d; try discriminate Hcd; reflexivity).
-    rewrite (ru_let_other F sol cc cds b ucids codes ub next en x kind d body
+    rewrite (ru_let_other fx F sol cc cds b ucids codes ub next en x kind d body
                (pending_plain en x d Hpe) Hset).
     destruct (region_prim_of d) as [[p args] | ] eqn:Hrp.
     + apply region_prim_of_some in Hrp. subst d.
@@ -828,7 +832,7 @@ Proof.
         assert (Hbk' : begins_kept (region_binders body))
           by (intros r Hr; apply Hbk, region_binders_let, Hr).
         cbn [erase erase_region_primitive].
-        rewrite (ru_let_other F' sol' cc cds b ucids' codes' ub next en' x
+        rewrite (ru_let_other fx F' sol' cc cds b ucids' codes' ub next en' x
                    kind (Simple unit_simple) (erase [] body)
                    (pending_plain_rel en en' x _ Hen Hpe) eq_refl).
         rewrite (dead_var_eq sol sol' Hsrc), (var_used_eq sol sol' Hu).
@@ -849,7 +853,7 @@ Proof.
         assert (Hbk' : begins_kept (region_binders body))
           by (intros r Hr; apply Hbk, region_binders_let, Hr).
         cbn [erase erase_region_primitive].
-        rewrite (ru_let_other F' sol' cc cds b ucids' codes' ub next en' x
+        rewrite (ru_let_other fx F' sol' cc cds b ucids' codes' ub next en' x
                    kind (Prim (Unary (Opaque_identity Value)) [unit_simple])
                    (erase [] body) (pending_plain_rel en en' x _ Hen Hpe)
                    eq_refl).
@@ -874,7 +878,7 @@ Proof.
       assert (Hbk' : begins_kept (region_binders body))
         by (intros r Hr; apply Hbk, region_binders_let, Hr).
       rewrite (erase_let_plain _ _ _ _ _ Hrp).
-      rewrite (ru_let_other F' sol' cc cds b ucids' codes' ub next en' x kind
+      rewrite (ru_let_other fx F' sol' cc cds b ucids' codes' ub next en' x kind
                  d (erase [] body) (pending_plain_rel en en' x d Hen Hpe)
                  Hset).
       rewrite (dead_var_eq sol sol' Hsrc), (var_used_eq sol sol' Hu).
@@ -902,7 +906,7 @@ Proof.
             (d' := Prim (Region_primitive Local_allocation) (Var x :: rs));
             [ reflexivity | exact Hb' | exact Hcb | exact Hbk''
             | apply uenv_rel_twice, Hen | apply uenv_plain_bind ]. }
-        rewrite (ru_let_other F sol cc cds b ucids codes ub next en1 x kind
+        rewrite (ru_let_other fx F sol cc cds b ucids codes ub next en1 x kind
                    (Prim (Region_primitive Local_allocation) (Var x :: rs))
                    body' (pending_plain en1 x _ (uenv_plain_bind _ _))
                    eq_refl).
@@ -976,11 +980,11 @@ Proof.
                   conts_plain_nil)).
     rewrite !ru_let_cont.
     rewrite (handler_exn_erase h [] Hhk),
-      (handler_decisions_erase _ _ _ h [] Hhk),
+      (handler_decisions_erase _ _ _ _ h [] Hhk),
       (handler_decisions_eq sol sol' ub Hu).
-    set (ds := handler_decisions false sol ub (handler_is_exn_handler h) h).
+    set (ds := handler_decisions fx sol ub (handler_is_exn_handler h) h).
     assert (Hds : forallb decision_plain ds = true)
-      by exact (handler_decisions_plain ub Hleaves sol _ h Hhk).
+      by exact (handler_decisions_plain ub Hleaves fx sol _ h Hhk).
     assert (IHb : erase [] (RU (ubind_continuations en [(k, ds)]) body)
                   = RU' (ubind_continuations en' [(k, ds)]) (erase [] body))
       by (apply IH; [ exact Hb | exact Hcb
@@ -1008,32 +1012,32 @@ Proof.
       by (intros k h Hin; exact (handler_kinds_plain _ _ (Hhs (k, h) Hin))).
     rewrite ru_let_cont_rec. cbn [erase]. rewrite ru_let_cont_rec.
     assert (Hds_eq :
-      map (fun '(k, h) => (k, handler_decisions false sol' ub false h))
+      map (fun '(k, h) => (k, handler_decisions fx sol' ub false h))
         (map (fun '(k, h) =>
                 (k, erase_handler
                       (map (fun '(k0, h0) => (k0, region_params h0)) handlers
                        ++ []) h)) handlers)
-      = map (fun '(k, h) => (k, handler_decisions false sol ub false h))
+      = map (fun '(k, h) => (k, handler_decisions fx sol ub false h))
           handlers).
     { rewrite map_map. apply map_ext_in. intros [k h] Hin. cbn beta iota.
-      rewrite (handler_decisions_erase _ _ _ h _ (Hplain k h Hin)),
+      rewrite (handler_decisions_erase _ _ _ _ h _ (Hplain k h Hin)),
         (handler_decisions_eq sol sol' ub Hu). reflexivity. }
     rewrite Hds_eq.
     set (en1 := ubind_continuations en
                   (map (fun '(k, h) =>
-                          (k, handler_decisions false sol ub false h))
+                          (k, handler_decisions fx sol ub false h))
                      handlers)).
     set (en1' := ubind_continuations en'
                    (map (fun '(k, h) =>
-                           (k, handler_decisions false sol ub false h))
+                           (k, handler_decisions fx sol ub false h))
                       handlers)).
     assert (Hen1 : uenv_rel en1 en1') by (apply uenv_rel_conts, Hen).
     f_equal.
     + rewrite !map_map. apply map_ext_in.
       intros [k h] Hin. cbn beta iota.
       assert (Hds : forallb decision_plain
-                      (handler_decisions false sol ub false h) = true)
-        by exact (handler_decisions_plain ub Hleaves sol _ h
+                      (handler_decisions fx sol ub false h) = true)
+        by exact (handler_decisions_plain ub Hleaves fx sol _ h
                     (Hplain k h Hin)).
       rewrite (erase_handler_plain _ h)
         by (apply conts_plain_map; intros [k0 h0] Hin0; cbn;
@@ -1043,9 +1047,9 @@ Proof.
         by (apply conts_plain_map; intros [k0 h0] Hin0; cbn;
             apply rebuilt_u_handler_places;
             [ exact (Hplain k0 h0 Hin0)
-            | exact (handler_decisions_plain ub Hleaves sol _ h0
+            | exact (handler_decisions_plain ub Hleaves fx sol _ h0
                        (Hplain k0 h0 Hin0)) ]).
-      rewrite (handler_decisions_erase _ _ _ h [] (Hplain k h Hin)),
+      rewrite (handler_decisions_erase _ _ _ _ h [] (Hplain k h Hin)),
         (handler_decisions_eq sol sol' ub Hu).
       f_equal. apply (IHh k h Hin); [ exact (Hhs (k, h) Hin)
                                      | exact (Hhc (k, h) Hin)
@@ -1064,7 +1068,7 @@ Proof.
            apply in_map_iff in Hin as [[k0 h0] [Heq Hin]].
            injection Heq as <- <-. apply rebuilt_u_handler_places;
              [ exact (Hplain k0 h0 Hin)
-             | exact (handler_decisions_plain ub Hleaves sol _ h0
+             | exact (handler_decisions_plain ub Hleaves fx sol _ h0
                         (Hplain k0 h0 Hin)) ]. }
       apply IH; [ exact Hb | exact Hcb
                 | intros r Hr; apply Hbk; cbn [region_binders];

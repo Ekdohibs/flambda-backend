@@ -43,10 +43,10 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
   FlambdaReaperRegionsSpec FlambdaReaperRegionsCcSpec
   FlambdaReaperRegionsRebuildProofs FlambdaReaperRegionsTraverseProofs
   FlambdaReaperRegionsKeepsProofs FlambdaReaperRegionsCcRebuildProofs
-  FlambdaReaperRegionsCcBaseProofs FlambdaReaperRegionsProofs.
+  FlambdaReaperRegionsProofs.
 From OxCamlFlambda2 Require FlambdaReaperSolutionProofs
   FlambdaReaperLeastProofs FlambdaReaperFlowProofs
-  FlambdaReaperCallingConventionsProofs.
+  FlambdaReaperCallingConventionsProofs FlambdaReaperRebuildProofs.
 Import ListNotations.
 
 (* ======================================================================== *)
@@ -401,6 +401,71 @@ Qed.
 (* ======================================================================== *)
 (* The refinement on the machine of regions                                 *)
 (* ======================================================================== *)
+
+(* The refinement up to observation of the rebuild with changes of
+   calling convention, for any solution closed under the rules, of which
+   the fix of local fields and the post-processing hold, given as
+   propositions, and any first fresh name that no continuation of the
+   unit is (FlambdaReaperRebuildProofs.rebuild_cc_with_related_gen). *)
+Lemma rebuild_cc_refines_observably_gen (flag : reaper_preserve_direct_calls)
+    (is_local : field -> bool) (u : unit_interface) (e : expr)
+    (sol : solution) (cannot_change cannot_change_witness : node -> bool)
+    (b : bool) (ff : positive) :
+  is_local_slots_only is_local ->
+  in_flow_fragment e = true ->
+  any_kind_arguments e = true ->
+  results_kinded [] [] e = true ->
+  well_formed_unit u e = true ->
+  exits_one_value u e = true ->
+  closed is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  local_reads_used is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  field_used_exact is_local (graph_of_facts (traverse_unit flag u e)) sol ->
+  among ff (continuations_of e) = false ->
+  cc_closed (graph_of_facts (traverse_unit flag u e)) sol
+    cannot_change_witness cannot_change ->
+  (∀ a a' n y : node,
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a
+       (Field_call_witness Known_arity_code_pointer) n ->
+     g_accessor (graph_of_facts (traverse_unit flag u e)) a'
+       (Field_call_witness Known_arity_code_pointer) n ->
+     (s_any_source sol a' = true -> s_any_source sol a = true)
+     ∧ (s_sources sol a' y = true -> s_sources sol a y = true)) ->
+  (∀ (w : node) (id id' : code_id),
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id) ->
+     g_constructor (graph_of_facts (traverse_unit flag u e)) w
+       Field_code_id_of_call_witness (Node_code_id id') ->
+     id' = id) ->
+  refines_observably (State e [] [] empty_static_env empty_heap no_reads)
+    (State (rebuild_expr_cc (traverse_unit flag u e) sol cannot_change
+              (unit_code_deps flag u e) b (static_names code_ids_bound e)
+              (bound_code_metadata e) ff None FlambdaReaperRebuild.empty_env
+              e)
+       [] [] empty_static_env empty_heap no_reads).
+Proof.
+  intros Hlocal Hfrag Hdc Hrk Hwf Hexits Hc Hlrs Hexact Hfresh Hccc Hwid
+    Hcid.
+  assert (Hkinded : FlambdaReaperRebuildProofs.calls_kinded [] e = true).
+  { apply (proj1 FlambdaReaperRebuildProofs.calls_kinded_of_results e [] []
+             [] Hrk).
+    intros k l Hl. discriminate Hl. }
+  pose proof (proj1 (FlambdaReaperRebuildProofs.any_kind_arguments_checked
+                       (unit_codes e)) e Hdc) as Hcf.
+  destruct (FlambdaReaperRebuildProofs.rebuild_cc_with_related_gen false
+              false flag is_local u e sol cannot_change cannot_change_witness
+              (unit_code_deps flag u e) b None False ff Hlocal Hfrag Hcf
+              Hkinded Hwf Hexits Hc Hlrs Hexact Hfresh
+              (fun _ _ _ _ _ _ _ _ _ _ _ _ => I)
+              (FlambdaReaperRebuildProofs.no_types_deps _)
+              (FlambdaReaperRebuildProofs.no_types_conts e) Hrk Hccc
+              (fun id a a' n y _ => Hwid a a' n y)
+              (fun id id' w _ => Hcid w id id') (fun _ _ => eq_refl)
+              (fun Hf : False => False_ind _ Hf))
+    as (noted & deps & cds & H0 & Hans).
+  exact (proj1 (FlambdaReaperRebuildProofs.exits_rel_flow false _ _
+                  (FlambdaReaperRebuildProofs.located_refines _ _ e _ H0
+                     Hans))).
+Qed.
 
 Theorem least_rebuild_cc_regions_refines :
   least_rebuild_cc_regions_refines_statement.

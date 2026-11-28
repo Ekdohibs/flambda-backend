@@ -33,8 +33,8 @@
    [regions_not_unboxed]), the example and the statements.
    FlambdaReaperRegionsUnboxProofs.v proves them, with the lemmas of
    FlambdaReaperRegionsUnboxRebuildProofs.v (the commutation),
-   FlambdaReaperRegionsUnboxBaseProofs.v (the local refinement for any
-   first fresh name and a solution apart from the tables),
+   FlambdaReaperRegionsUnboxBaseProofs.v (the fragment read off the
+   shapes of the fields),
    FlambdaReaperRegionsUnboxTraverseProofs.v (what the graph of the unit
    has) and FlambdaReaperRegionsUnboxKeepsProofs.v (what the rebuild
    keeps), which need no review.
@@ -102,8 +102,8 @@
    the tuples that the erasure adds (the constants have every usage), and
    that by its rebuild with unboxing with that solution and the unboxed
    fields of the tables, whose variables are named after every name of
-   the unit with its regions (the proof of
-   FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_with_refines_rebuild
+   the unit with its regions
+   (FlambdaReaperUnboxingRefinesProofs.rebuild_unbox_refines_rebuild_sol,
    with the first fresh name and the solution left free; the solution
    agrees with the tables on the variables, the sources and the usages).
    By the commutation that rebuild is the erasure of the rebuilt unit.
@@ -132,6 +132,8 @@
      regions is not in a unit that ends a region (it has not the alias of
      the variable of the end to the constants, which the erased graph
      has; [regions_unbox_example_statement] says it of [local_pair]).
+     FlambdaReaperRegionsFixedSpec.v applies them with the tables
+     completed by those aliases, on the fragment here.
    - That the rebuilt unit passes the check of regions wherever the unit
      does: false for the plain rebuild already
      (FlambdaReaperRegionsSpec.region_check_not_kept_statement), and the

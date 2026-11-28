@@ -99,6 +99,7 @@ Qed.
 
 Section KeepsU.
 
+Variable fx : bool.
 Variable P : simple -> bool.
 Variable Q : symbol -> bool.
 Variable H : list flambda_kind -> bool.
@@ -119,9 +120,9 @@ Hypothesis Hkinds : ∀ (n : node) (fields : unboxed_fields),
 
 Abbreviation SO := (simples_ok P Q H).
 Abbreviation solu := (solution_without_unboxed sol ub).
-Abbreviation RU := (rebuild_expr_u false F sol cc cds b ucids codes ub next []
+Abbreviation RU := (rebuild_expr_u fx F sol cc cds b ucids codes ub next []
                       None).
-Abbreviation RH := (rebuild_handler_u false F sol cc cds b ucids codes ub next
+Abbreviation RH := (rebuild_handler_u fx F sol cc cds b ucids codes ub next
                       [] None).
 
 Definition so_opt (o : option expr) : Prop :=
@@ -388,7 +389,7 @@ Proof.
       by (destruct d; try discriminate Hcd; reflexivity).
     cbn [simples_ok] in Hso, Hk. apply andb_true_iff in Hso as [Hd Hb].
     apply andb_true_iff in Hk as [_ Hkb].
-    rewrite (ru_let_other F sol cc cds b ucids codes ub next en x kind d body
+    rewrite (ru_let_other fx F sol cc cds b ucids codes ub next en x kind d body
                (pending_plain en x d Hpe) Hset).
     assert (IHb : SO (RU (ubind_variables en [(x, kind)]) body) = true)
       by (apply IH; [ exact Hcb | apply uenv_plain_bind | exact Hb
@@ -435,7 +436,7 @@ Proof.
     destruct (among k _); [ | apply IHb ].
     cbn [simples_ok]. rewrite IHb, andb_true_r.
     apply IHh; [ exact Hhc | exact Hh | exact Hkh | ].
-    exact (handler_decisions_plain ub hleaves sol _ h Hhk).
+    exact (handler_decisions_plain ub hleaves fx sol _ h Hhk).
   - (* Let_cont_recursive *)
     intros handlers body IHh IH en Hcf Hpe Hso Hk.
     cbn [closure_free] in Hcf. apply andb_true_iff in Hcf as [Hhc Hcb].
@@ -451,7 +452,7 @@ Proof.
       cbn in Hkh |- *. apply andb_true_iff in Hkh as [Hkh _]. exact Hkh. }
     apply (IHh k h Hin); [ exact (Hhc _ Hin) | exact (Hhs _ Hin)
                          | exact (Hkh _ Hin) | ].
-    exact (handler_decisions_plain ub hleaves sol _ h Hhk).
+    exact (handler_decisions_plain ub hleaves fx sol _ h Hhk).
   - (* Apply *)
     intros ap en Hcf. discriminate Hcf.
   - (* Apply_cont *)
@@ -481,7 +482,9 @@ End KeepsU.
 (* The unit rebuilt                                                         *)
 (* ======================================================================== *)
 
-Lemma rebuild_unbox_keeps_simples (flag : reaper_preserve_direct_calls)
+(* In either mode of the rebuild with unboxing. *)
+Lemma rebuild_unbox_mode_keeps_simples (fx : bool)
+    (flag : reaper_preserve_direct_calls)
     (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
     (code_deps : finite_map code_dep) (dominated : list (node * node))
     (to_unbox : list node) (b : bool) (P : simple -> bool)
@@ -491,14 +494,13 @@ Lemma rebuild_unbox_keeps_simples (flag : reaper_preserve_direct_calls)
   (∀ l : list flambda_kind, forallb kind_not_region l = true -> H l = true) ->
   regions_local e = true -> simples_ok P Q H e = true ->
   simples_ok P Q H
-    (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change code_deps
-       dominated to_unbox b e)
+    (rebuild_unit_unbox_repr_mode fx (fun _ => false) (traverse_unit flag u e)
+       T cannot_change code_deps dominated to_unbox [] b e)
   = true.
 Proof.
   intros HP_var HP_const HH_plain Hloc Hso.
   unfold regions_local in Hloc. apply andb_true_iff in Hloc as [Hpl Hcf].
-  unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
-    rebuild_unit_unbox_repr_mode, unit_unboxed_fields.
+  unfold rebuild_unit_unbox_repr_mode, unit_unboxed_fields.
   change (unit_changed_representations (fun _ => false)
             (traverse_unit flag u e) T dominated to_unbox [] e)
     with (@nil (node * closure_repr)).
@@ -514,7 +516,7 @@ Proof.
              (fresh_name (names_of e)) n fields
              (closure_free_reads_plain flag u e Hcf)).
     rewrite Hub. exact Hin. }
-  exact (proj1 (rebuild_u_simples P Q H HP_var HP_const HH_plain
+  exact (proj1 (rebuild_u_simples fx P Q H HP_var HP_const HH_plain
                   (traverse_unit flag u e) (solution_of_tables T)
                   (fun n => mem_node n cannot_change) code_deps b
                   (static_names code_ids_bound e) (bound_code_metadata e) ub
@@ -522,6 +524,52 @@ Proof.
            e empty_unbox_env Hcf (conj eq_refl eq_refl) Hso
            (proj1 calls_plain_handlers e []
               (proj1 regions_plain_calls e [] Hpl))).
+Qed.
+
+Lemma rebuild_unbox_keeps_simples (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (b : bool) (P : simple -> bool)
+    (Q : symbol -> bool) (H : list flambda_kind -> bool) :
+  (∀ x : variable, P (Var x) = true) ->
+  (∀ c : const, const_no_region_poison c = true -> P (Const c) = true) ->
+  (∀ l : list flambda_kind, forallb kind_not_region l = true -> H l = true) ->
+  regions_local e = true -> simples_ok P Q H e = true ->
+  simples_ok P Q H
+    (rebuild_unit_unbox (traverse_unit flag u e) T cannot_change code_deps
+       dominated to_unbox b e)
+  = true.
+Proof.
+  exact (rebuild_unbox_mode_keeps_simples false flag u e T cannot_change
+           code_deps dominated to_unbox b P Q H).
+Qed.
+
+Lemma rebuild_unbox_mode_erasable (fx : bool)
+    (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (b : bool) :
+  regions_local e = true -> erasable e empty_static_env = true ->
+  erasable
+    (rebuild_unit_unbox_repr_mode fx (fun _ => false) (traverse_unit flag u e)
+       T cannot_change code_deps dominated to_unbox [] b e)
+    empty_static_env
+  = true.
+Proof.
+  intros Hloc He. pose proof Hloc as Hloc'. unfold regions_local in Hloc'.
+  apply andb_true_iff in Hloc' as [Hpl Hcf].
+  unfold erasable in He |- *.
+  apply andb_true_iff in He as [He _]. apply andb_true_iff in He as [_ Hp].
+  rewrite (proj1 calls_return_simples _ [] conts_plain_nil).
+  2: { apply rebuild_unbox_mode_keeps_simples; try reflexivity.
+       - intros l Hl. exact Hl.
+       - exact Hloc.
+       - exact (proj1 calls_plain_handlers e []
+                  (proj1 regions_plain_calls e [] Hpl)). }
+  rewrite (proj1 no_region_poison_simples) in Hp |- *.
+  rewrite (rebuild_unbox_mode_keeps_simples fx flag u e T cannot_change
+             code_deps dominated to_unbox b); try reflexivity; try assumption.
+  intros c Hc. exact Hc.
 Qed.
 
 Lemma rebuild_unbox_erasable (flag : reaper_preserve_direct_calls)
@@ -535,20 +583,28 @@ Lemma rebuild_unbox_erasable (flag : reaper_preserve_direct_calls)
     empty_static_env
   = true.
 Proof.
-  intros Hloc He. pose proof Hloc as Hloc'. unfold regions_local in Hloc'.
-  apply andb_true_iff in Hloc' as [Hpl Hcf].
-  unfold erasable in He |- *.
-  apply andb_true_iff in He as [He _]. apply andb_true_iff in He as [_ Hp].
-  rewrite (proj1 calls_return_simples _ [] conts_plain_nil).
-  2: { apply rebuild_unbox_keeps_simples; try reflexivity.
-       - intros l Hl. exact Hl.
-       - exact Hloc.
-       - exact (proj1 calls_plain_handlers e []
-                  (proj1 regions_plain_calls e [] Hpl)). }
-  rewrite (proj1 no_region_poison_simples) in Hp |- *.
-  rewrite (rebuild_unbox_keeps_simples flag u e T cannot_change code_deps
-             dominated to_unbox b); try reflexivity; try assumption.
-  intros c Hc. exact Hc.
+  exact (rebuild_unbox_mode_erasable false flag u e T cannot_change
+           code_deps dominated to_unbox b).
+Qed.
+
+Lemma rebuild_unbox_mode_fresh (fx : bool)
+    (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (T : tables) (cannot_change : list node)
+    (code_deps : finite_map code_dep) (dominated : list (node * node))
+    (to_unbox : list node) (b : bool) (base : symbol) :
+  regions_local e = true ->
+  region_names_fresh base e empty_static_env = true ->
+  region_names_fresh base
+    (rebuild_unit_unbox_repr_mode fx (fun _ => false) (traverse_unit flag u e)
+       T cannot_change code_deps dominated to_unbox [] b e)
+    empty_static_env
+  = true.
+Proof.
+  intros Hloc Hf. unfold region_names_fresh in Hf |- *.
+  apply andb_true_iff in Hf as [Hf _]. apply andb_true_iff in Hf as [Hb _].
+  rewrite (proj1 (expr_below_simples base)) in Hb |- *.
+  rewrite (rebuild_unbox_mode_keeps_simples fx flag u e T cannot_change
+             code_deps dominated to_unbox b); try reflexivity; assumption.
 Qed.
 
 Lemma rebuild_unbox_fresh (flag : reaper_preserve_direct_calls)
@@ -563,9 +619,6 @@ Lemma rebuild_unbox_fresh (flag : reaper_preserve_direct_calls)
     empty_static_env
   = true.
 Proof.
-  intros Hloc Hf. unfold region_names_fresh in Hf |- *.
-  apply andb_true_iff in Hf as [Hf _]. apply andb_true_iff in Hf as [Hb _].
-  rewrite (proj1 (expr_below_simples base)) in Hb |- *.
-  rewrite (rebuild_unbox_keeps_simples flag u e T cannot_change code_deps
-             dominated to_unbox b); try reflexivity; assumption.
+  exact (rebuild_unbox_mode_fresh false flag u e T cannot_change code_deps
+           dominated to_unbox b base).
 Qed.

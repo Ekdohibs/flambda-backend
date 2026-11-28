@@ -48,8 +48,8 @@ From OxCamlFlambda2 Require Import FlambdaKindModel FlambdaPrimitiveModel
 From OxCamlFlambda2 Require FlambdaReaperSolutionProofs
   FlambdaReaperLeastProofs FlambdaReaperFlowProofs
   FlambdaReaperUnboxingRefinesProofs FlambdaReaperRegionsProofs
-  FlambdaReaperRegionsCcProofs FlambdaReaperRegionsBaseProofs
-  FlambdaReaperRegionsUnboxKeepsProofs FlambdaReaperRebuildProofs.
+  FlambdaReaperRegionsCcProofs FlambdaReaperRegionsUnboxKeepsProofs
+  FlambdaReaperRebuildProofs.
 Import ListNotations.
 
 Module URP := FlambdaReaperUnboxingRefinesProofs.
@@ -264,6 +264,52 @@ Qed.
 
 (* The commutation, for a solution of the erased unit that differs at the
    usages of the constants at most. *)
+Lemma rebuild_unbox_mode_erase_commutes_with (fx : bool)
+    (flag : reaper_preserve_direct_calls)
+    (u : unit_interface) (e : expr) (T : tables) (sol' : solution)
+    (cannot_change : list node) (code_deps : finite_map code_dep)
+    (dominated : list (node * node)) (to_unbox : list node) (b : bool)
+    (ub : list (node * unboxed_fields)) (next : positive) :
+  regions_local e = true ->
+  regions_not_unboxed dominated to_unbox e = true ->
+  (∀ n : node, n <> Node_all_constants ->
+     s_has_usage sol' n = s_has_usage (solution_of_tables T) n) ->
+  s_has_source sol' = s_has_source (solution_of_tables T) ->
+  s_field_used sol' = s_field_used (solution_of_tables T) ->
+  unboxed_fields_of_names (traverse_unit flag u e) T
+    (bound_code_my_closures e) dominated to_unbox (fresh_name (names_of e))
+  = (ub, next) ->
+  erase []
+    (rebuild_unit_unbox_repr_mode fx (fun _ => false) (traverse_unit flag u e)
+       T cannot_change code_deps dominated to_unbox [] b e)
+  = rebuild_expr_u fx (traverse_unit flag u (erase [] e)) sol'
+      (fun n => mem_node n cannot_change) code_deps b
+      (static_names code_ids_bound (erase [] e))
+      (bound_code_metadata (erase [] e)) ub next [] None empty_unbox_env
+      (erase [] e).
+Proof.
+  intros Hloc Hnu Hu Hsrc Hfu Hub.
+  pose proof Hloc as Hloc'. unfold regions_local in Hloc'.
+  apply andb_true_iff in Hloc' as [Hpl Hcf].
+  unfold rebuild_unit_unbox_repr_mode, unit_unboxed_fields.
+  rewrite Hub.
+  change (unit_changed_representations (fun _ => false)
+            (traverse_unit flag u e) T dominated to_unbox [] e)
+    with (@nil (node * closure_repr)).
+  exact (proj1 (rebuild_u_erase_commutes fx (traverse_unit flag u e)
+                  (traverse_unit flag u (erase [] e)) (solution_of_tables T)
+                  sol' (fun n => mem_node n cannot_change) code_deps b
+                  (static_names code_ids_bound e)
+                  (static_names code_ids_bound (erase [] e))
+                  (bound_code_metadata e) (bound_code_metadata (erase [] e))
+                  ub next Hu Hsrc Hfu
+                  (leaves_of flag u e T _ dominated to_unbox _ ub next Hcf
+                     Hub))
+           e empty_unbox_env empty_unbox_env Hpl Hcf
+           (begins_kept_of _ _ _ _ _ _ _ _ e Hub Hnu)
+           (uenv_rel_refl _) (conj eq_refl eq_refl)).
+Qed.
+
 Lemma rebuild_unbox_erase_commutes_with (flag : reaper_preserve_direct_calls)
     (u : unit_interface) (e : expr) (T : tables) (sol' : solution)
     (cannot_change : list node) (code_deps : finite_map code_dep)
@@ -287,27 +333,8 @@ Lemma rebuild_unbox_erase_commutes_with (flag : reaper_preserve_direct_calls)
       (bound_code_metadata (erase [] e)) ub next [] None empty_unbox_env
       (erase [] e).
 Proof.
-  intros Hloc Hnu Hu Hsrc Hfu Hub.
-  pose proof Hloc as Hloc'. unfold regions_local in Hloc'.
-  apply andb_true_iff in Hloc' as [Hpl Hcf].
-  unfold rebuild_unit_unbox, rebuild_unit_unbox_repr,
-    rebuild_unit_unbox_repr_mode, unit_unboxed_fields.
-  rewrite Hub.
-  change (unit_changed_representations (fun _ => false)
-            (traverse_unit flag u e) T dominated to_unbox [] e)
-    with (@nil (node * closure_repr)).
-  exact (proj1 (rebuild_u_erase_commutes (traverse_unit flag u e)
-                  (traverse_unit flag u (erase [] e)) (solution_of_tables T)
-                  sol' (fun n => mem_node n cannot_change) code_deps b
-                  (static_names code_ids_bound e)
-                  (static_names code_ids_bound (erase [] e))
-                  (bound_code_metadata e) (bound_code_metadata (erase [] e))
-                  ub next Hu Hsrc Hfu
-                  (leaves_of flag u e T _ dominated to_unbox _ ub next Hcf
-                     Hub))
-           e empty_unbox_env empty_unbox_env Hpl Hcf
-           (begins_kept_of _ _ _ _ _ _ _ _ e Hub Hnu)
-           (uenv_rel_refl _) (conj eq_refl eq_refl)).
+  exact (rebuild_unbox_mode_erase_commutes_with false flag u e T sol'
+           cannot_change code_deps dominated to_unbox b ub next).
 Qed.
 
 Theorem rebuild_unbox_erase_commutes :
@@ -559,7 +586,8 @@ Lemma check_unboxed_reads_reads (F : facts) (T : tables)
 Proof. reflexivity. Qed.
 
 Lemma coherent_consts_used (T : tables) :
-  coherent T (FlambdaReaperRegionsProofs.consts_used (solution_of_tables T)).
+  URP.coherent T
+    (FlambdaReaperRegionsProofs.consts_used (solution_of_tables T)).
 Proof.
   split; try reflexivity.
   - intros [ | | | | ] H; first [ reflexivity | exact H ].
@@ -668,14 +696,14 @@ Proof.
                        (fresh_name (names_of e)) None
                        FlambdaReaperRebuild.empty_env (erase [] e))
                 [] [] empty_static_env empty_heap no_reads)).
-    + exact (FlambdaReaperRegionsBaseProofs.rebuild_refines_observably_gen
+    + exact (FlambdaReaperRegionsProofs.rebuild_refines_observably_gen
                flag is_local u (erase [] e) sol' b (fresh_name (names_of e))
                Hslots Hfrag
                (FlambdaReaperRebuildProofs.static_constants_any_kind_arguments
                   _ _ Hstatic)
                Hrk Hwf Hexits Hc' Hlrs' Hexact'
                (FlambdaReaperRegionsProofs.fresh_name_erase e)).
-    + exact (rebuild_unbox_refines_rebuild_sol None flag is_local u
+    + exact (URP.rebuild_unbox_refines_rebuild_sol None flag is_local u
                (erase [] e) T sol'
                (fun n => mem_node n
                            (derive_cannot_change (traverse_unit flag u e) T))

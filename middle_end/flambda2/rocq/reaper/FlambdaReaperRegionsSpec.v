@@ -33,8 +33,8 @@
    statements. FlambdaReaperRegionsProofs.v proves them, with the lemmas
    of FlambdaReaperRegionsRebuildProofs.v (the commutation),
    FlambdaReaperRegionsTraverseProofs.v (the two traversals) and
-   FlambdaReaperRegionsBaseProofs.v (the refinement of the plain rebuild
-   for any first fresh name), which need no review.
+   FlambdaReaperRebuildProofs.rebuild_with_refines_gen (the refinement of
+   the plain rebuild for any first fresh name), which need no review.
 
    WHY
 
