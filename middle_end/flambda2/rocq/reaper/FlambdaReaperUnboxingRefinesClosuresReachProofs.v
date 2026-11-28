@@ -105,9 +105,12 @@ Lemma first_flow (flag : reaper_preserve_direct_calls)
   check_local_reads_used is_local (traverse_unit flag u e1) T1 = true ->
   RSP.flow_run
     (fun b f id => flow_reach2 (traverse_unit flag u e1) T1 b f id = true)
+    (fun _ : code_id => true = true)
     (State e1 [] [] empty_static_env empty_heap no_reads).
 Proof.
-  intros Hslots Hfrag1 Hclosed1 Hlrs1 n s Hrun ap f v _ _ Hf.
+  intros Hslots Hfrag1 Hclosed1 Hlrs1 n s Hrun.
+  split; [ | apply RSP.PGP.step_rem_ok_total; intros id; reflexivity ].
+  intros ap f v _ _ Hf.
   set (F1 := traverse_unit flag u e1) in *.
   pose proof (check_closed_sound is_local _ _ Hclosed1) as Hc1.
   destruct (R2P.run_flows_called2 flag is_local u e1 T1 n Hslots Hfrag1 Hc1

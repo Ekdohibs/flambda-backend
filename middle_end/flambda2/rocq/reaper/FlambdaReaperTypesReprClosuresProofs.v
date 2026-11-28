@@ -53,7 +53,10 @@
    them (FlambdaReaperTypesCallsProofs.cc_states), the third related to
    the second by [rr] with its names those of the unit
    (FlambdaReaperUnboxingRefinesClosuresProofs
-   .rebuild_repr_reach_modes_with_rr_names), its run well-kinded
+   .rebuild_repr_reach_modes_with_rr_names), whose environments are
+   related at the variables of the unit, which are not names of the
+   parameters of wrappers ([W], FlambdaReaperUnboxingRefinesClosuresSimProofs
+   .related_env), its run well-kinded
    (FlambdaWellKindedProofs.run_well_kinded). The statements are then
    FlambdaReaperTypesTraversalUnaliasedProofs.changed_type_sound_full and
    [stored_type_sound_full] applied to them. *)
@@ -473,10 +476,12 @@ Hypothesis CH_fresh : ∀ (x : variable) (r : U.closure_repr),
   CH x = Some r -> among x (URP.field_variables M) = false.
 Variable CS : code_id -> option SIM.code_info.
 Variable RCH : bool -> variable -> code_id -> Prop.
+Variable W : variable -> Prop.
+Variable REM : code_id -> Prop.
 
 (* The static bindings that [rr] relates bind static blocks and code. *)
 Lemma eval_bindings_blocks (bs bs' : list static_binding) :
-  SIM.rr_bindings M CH CS RCH bs bs' ->
+  SIM.rr_bindings M CH CS RCH W REM bs bs' ->
   ∀ (vars : env) (S S' : static_env),
     statics_blocks S -> eval_static_bindings vars bs S = Some S' ->
     statics_blocks S'.
@@ -503,18 +508,16 @@ Qed.
 
 (* The first run of [rr] keeps a static environment of blocks. *)
 Lemma step_blocks (s t s1 : state) :
-  SIM.related M CH CS RCH s t -> statics_blocks (state_statics s) ->
+  SIM.related M CH CS RCH W REM s t -> statics_blocks (state_statics s) ->
   step s = Step s1 -> statics_blocks (state_statics s1).
 Proof.
-  intros (D & Hrr & _) HS Hstep.
+  intros Hr HS Hstep.
   destruct (state_expr s) as [ | bs body | | | | | | ] eqn:He;
     try (rewrite (step_statics_same s s1
                     ltac:(intros bs0 body0; rewrite He; discriminate) Hstep);
          exact HS).
-  inversion Hrr; subst.
-  match goal with
-  | H : SIM.rr_bindings _ _ _ _ bs ?bs' |- _ => rename H into Hbs
-  end.
+  destruct (SIM.related_let_static M CH CS RCH W REM s t bs body Hr He)
+    as (bs' & Hbs).
   rewrite (state_eta s), He, step_let_static in Hstep.
   destruct (eval_static_bindings _ bs _) as [S' | ] eqn:Hev;
     [ | discriminate Hstep ].
@@ -525,44 +528,51 @@ Qed.
 (* [rr], with the invariant of the flow, and the static environment of
    the first run of blocks. *)
 Definition rr_blocks (s t : state) : Prop :=
-  RX.rr_rel M CH CS RCH s t ∧ statics_blocks (state_statics s).
+  SIM.related M CH CS RCH W REM s t ∧ SIM.flow_run RCH REM s
+  ∧ statics_blocks (state_statics s).
 
 Lemma rr_blocks_answered (s t : state) :
   rr_blocks s t -> answered rr_blocks eq measure s t.
 Proof.
-  intros [Hr HS].
-  pose proof (RX.rr_rel_answered M M_distinct CH CH_M CH_fresh CS RCH s t Hr)
+  intros (Hr & Hfl0 & HS).
+  pose proof (SIM.related_answered M M_distinct CH CH_M CH_fresh CS RCH W REM
+                s t Hr (proj1 (Hfl0 0 s eq_refl)) (proj2 (Hfl0 0 s eq_refl)))
     as Ha.
   unfold answered in Ha |- *.
   destruct (step s) as [s1 | k vs hp rd1 | ] eqn:Hs; [ | exact Ha | exact I ].
-  pose proof (step_blocks s t s1 (proj1 Hr) HS Hs) as HS1.
+  assert (Hfl1 : SIM.flow_run RCH REM s1).
+  { intros n s2 Hn. apply (Hfl0 (S n)). rewrite run_succ, Hs. exact Hn. }
+  pose proof (step_blocks s t s1 Hr HS Hs) as HS1.
   destruct Ha
     as [H | [(t1 & Ht & Hr1) | [(Hlt & Hr1) | (t1 & n & Ht & Hr1)]]].
   - left. exact H.
-  - right. left. exists t1. exact (conj Ht (conj Hr1 HS1)).
-  - right. right. left. exact (conj Hlt (conj Hr1 HS1)).
-  - right. right. right. exists t1, n. exact (conj Ht (conj Hr1 HS1)).
+  - right. left. exists t1. exact (conj Ht (conj Hr1 (conj Hfl1 HS1))).
+  - right. right. left. exact (conj Hlt (conj Hr1 (conj Hfl1 HS1))).
+  - right. right. right. exists t1, n.
+    exact (conj Ht (conj Hr1 (conj Hfl1 HS1))).
 Qed.
 
 (* Each state that the first run comes to, and from which it steps, is
    related to one that the second comes to, and binds static blocks
    only. *)
 Lemma rr_reach_blocks (p q : expr) :
-  SIM.rr M CH CS RCH [] p q ->
-  SIM.flow_run RCH (State p [] [] empty_static_env empty_heap no_reads) ->
+  SIM.rr M CH CS RCH W REM [] p q ->
+  SIM.flow_run RCH REM (State p [] [] empty_static_env empty_heap no_reads)
+  ->
   ∀ (n : nat) (t : state),
     run n (State p [] [] empty_static_env empty_heap no_reads) = Step t ->
     step t <> Undefined ->
     ∃ (m : nat) (t' : state),
       run m (State q [] [] empty_static_env empty_heap no_reads) = Step t'
-      ∧ SIM.related M CH CS RCH t t' ∧ statics_blocks (state_statics t).
+      ∧ SIM.related M CH CS RCH W REM t t' ∧ statics_blocks (state_statics t).
 Proof.
   intros Hrr Hfl n t Hrun Ht.
   destruct (CX.shrinking_reaches rr_blocks eq measure rr_blocks_answered n
-              _ _ t (conj (RX.rr_initial M CH CS RCH p q Hrr Hfl)
-                       statics_blocks_empty)
+              _ _ t
+              (conj (SIM.related_initial M CH CS RCH W REM p q Hrr)
+                 (conj Hfl statics_blocks_empty))
               Hrun Ht)
-    as (m & t' & Hm & [[Hr _] HS]).
+    as (m & t' & Hm & (Hr & _ & HS)).
   exists m, t'. split; [ exact Hm | split; [ exact Hr | exact HS ] ].
 Qed.
 
@@ -725,16 +735,18 @@ Proof.
               (CP.repr_calls_within_reach_unit nr is_local _ T cannot_change
                  _ dominated to_unbox tcr (fun _ _ _ => true) e Hcalls)
               Hreads)
-    as (CS & Hdist & Hrr).
+    as (CS & W & Hdist & HWe & Hrr).
   destruct (URP.unit_unboxed_fields_fresh F T dominated to_unbox e)
     as [_ Hfresh].
   destruct (rr_reach_blocks _ Hdist _ (CP.CHf_M _ _) (CP.CHf_fresh _ _) CS
-              _ _ _ Hrr
-              ltac:(apply SIM.flow_run_total; intros b f id; reflexivity)
+              _ W _ _ _ Hrr
+              ltac:(apply SIM.flow_run_total;
+                    [ intros b f id | intros id ]; reflexivity)
               m2 t2 Hm2 Ht2)
     as (m3 & t3 & Hm3 & Hrel & HS2).
-  pose proof (RX.rr_values _ _ _ _ _ _ Hrel) as Hv3.
-  destruct Hrel as (D & _ & Henv & _).
+  pose proof (SIM.related_static_values _ _ _ _ _ _ _ _ Hrel) as Hv3.
+  pose proof (SIM.related_env _ _ _ _ _ _ _ _ Hrel) as Henv.
+  pose proof (HWe x Hin) as HWx.
   exists m2, t2, v_mid, m3, t3.
   split; [ exact Hm2' | split; [ exact Hx2 | split; [ exact Hrv | ] ] ].
   split; [ exact Hm3 | ].
@@ -745,7 +757,7 @@ Proof.
   - intros r Hr.
     assert (Hch : CP.CHf unboxed reprs x = Some r).
     { rewrite (CP.CHf_var _ _ x (Hfresh x Hin)). exact Hr. }
-    destruct (proj2 Henv x r v_mid Hch Hx2) as (v' & Hx3 & Hcrel).
+    destruct (proj2 Henv x r v_mid HWx Hch Hx2) as (v' & Hx3 & Hcrel).
     exists v'. split; [ exact Hx3 | ].
     destruct Hkinds as [Hwk Hvals3].
     pose proof (WKP.run_well_kinded slots _ m3 _ t3
@@ -770,7 +782,7 @@ Proof.
     { rewrite CP.plain_variable_M'. unfold URP.plain_variable.
       unfold Keyed.is_bound. rewrite Hnu, (Hfresh x Hin).
       unfold U.changed_of_node. rewrite Hnone. reflexivity. }
-    rewrite <- (proj1 (proj1 Henv) x Hplain). exact Hx2.
+    rewrite <- (proj1 Henv x HWx Hplain). exact Hx2.
 Qed.
 
 End Runs.

@@ -130,10 +130,10 @@
    its rebuild raise the same exception; and the rebuilt unit refines the
    unit up to observation.
 
-   What is left out of the fragment, above, is in the S7 log; that the
-   relation of the proofs, whose shape a file of the types reads
-   (FlambdaReaperTypesReprExitProofs.v), has no state within a wrapper of
-   both runs keeps wrappers of calls that return out. *)
+   What is left out of the fragment, above, is in the S7 log; the wrappers
+   of calls that return of code that changes its calling convention are
+   in the wider fragment of
+   FlambdaReaperUnboxingRefinesClosuresWrapsSpec.v. *)
 
 From Stdlib Require Import ZArith List Bool.
 From OxCamlStdlib Require Import OxCamlLogic.
